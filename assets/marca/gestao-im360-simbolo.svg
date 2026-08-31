@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Gestão IM360">
+  <title>Gestão IM360 — símbolo</title>
+  <rect width="128" height="128" rx="28" fill="#171C26"/>
+  <!-- arco 360: anel aberto, giro incompleto = ciclo do aluno em curso -->
+  <circle cx="64" cy="64" r="44" fill="none" stroke="#E2620F" stroke-width="9"
+          stroke-linecap="round" stroke-dasharray="214 62"/>
+  <text x="64" y="64" fill="#FFFFFF" font-family="Inter, 'Segoe UI', Arial, sans-serif"
+        font-size="42" font-weight="700" letter-spacing="-1"
+        text-anchor="middle" dominant-baseline="central">IM</text>
+</svg>
