@@ -15,6 +15,7 @@ O sistema **Gestão IM360** (Flutter + Supabase + Cloudflare) substituirá a pla
 | `script-extracao-planilha.md` | Protótipo Python (openpyxl) de extração da planilha — base da ferramenta de migração da fase 8/9 do board | protótipo |
 | `modelagem-dados-ddl.md` | DDL detalhado (31 tabelas, funções de infraestrutura, padrão de RLS) e mapa DDL → card das fases 3 a 8. **Fonte das migrações** | vigente |
 | `identidade-visual.md` | Marca, paleta (com contrastes WCAG verificados), tipografia, badges de status e tokens Dart. **Fonte do design system (card 2.7)**. Arquivos em `assets/marca/` | vigente |
+| `regras-negocio-funcoes.md` | Card 2.2: onde vive cada regra da seção 6 do plano (restrição, trigger, função de aplicação ou rotina `pg_cron`) e a assinatura de cada objeto; catálogo de erros, de pendências e mapa função → card | vigente |
 
 A planilha original (`Gestão Interativo.xlsx`, snapshot 29/08/2026) está no projeto do Claude.ai, não neste repositório.
 
