@@ -13,6 +13,12 @@ O sistema **Gestão IM360** (Flutter + Supabase + Cloudflare) substituirá a pla
 | `plano-projeto-sistema.md` | Plano v1.0: visão, escopo, permissões, arquitetura, modelo de dados, regras, telas, migração, fases, riscos. As decisões do cap. 11 foram respondidas em 31/08/2026 — ver Decisões vigentes | referência |
 | `analise-planilha-entendimento.md` | Entendimento funcional da planilha, 18 dúvidas respondidas, mapa técnico de colunas | concluído |
 | `script-extracao-planilha.md` | Protótipo Python (openpyxl) de extração da planilha — base da ferramenta de migração da fase 8/9 do board | protótipo |
+| `regras-negocio-funcoes.md` | Card 2.2: onde vive cada regra da seção 6 do plano (restrição, trigger, função de aplicação ou rotina `pg_cron`) e a assinatura de cada objeto; catálogo de erros, de pendências e mapa função → card | concluído |
+
+⚠️ **Faltam no repositório** dois entregáveis dados como concluídos no board: `docs/modelagem-dados-ddl.md`
+(card 2.1) e `docs/identidade-visual.md` + `assets/marca/` (card 1.9). Foram produzidos em sessão do
+Claude.ai e nunca commitados — o repositório tem só o commit de bootstrap. Precisam ser trazidos
+para cá antes das migrações da Fase 3.
 
 A planilha original (`Gestão Interativo.xlsx`, snapshot 29/08/2026) está no projeto do Claude.ai, não neste repositório.
 
