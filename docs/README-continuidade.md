@@ -14,6 +14,7 @@ O sistema **Gestão IM360** (Flutter + Supabase + Cloudflare) substituirá a pla
 | `analise-planilha-entendimento.md` | Entendimento funcional da planilha, 18 dúvidas respondidas, mapa técnico de colunas | concluído |
 | `script-extracao-planilha.md` | Protótipo Python (openpyxl) de extração da planilha — base da ferramenta de migração da fase 8/9 do board | protótipo |
 | `modelagem-dados-ddl.md` | DDL detalhado (31 tabelas, funções de infraestrutura, padrão de RLS) e mapa DDL → card das fases 3 a 8. **Fonte das migrações** | vigente |
+| `identidade-visual.md` | Marca, paleta (com contrastes WCAG verificados), tipografia, badges de status e tokens Dart. **Fonte do design system (card 2.7)**. Arquivos em `assets/marca/` | vigente |
 
 A planilha original (`Gestão Interativo.xlsx`, snapshot 29/08/2026) está no projeto do Claude.ai, não neste repositório.
 
@@ -23,10 +24,11 @@ A planilha original (`Gestão Interativo.xlsx`, snapshot 29/08/2026) está no pr
 - 30/08/2026 — board no Notion (11 fases) e página Decisões vigentes criados; plano v1.1 (Word) enviado ao dono do produto.
 - 31/08/2026 — dono do produto respondeu as 9 questões do cap. 11; decisões técnicas fechadas com Irineu; projetos Supabase dev/prod criados; repositório inicializado com este bootstrap. Planilha de conferência de alunos sem turma entregue ao pedagógico (20 alunos + 2 códigos divergentes).
 - 31/08/2026 — board reconciliado com as decisões já tomadas e **card 2.1 concluído**: DDL detalhado em `modelagem-dados-ddl.md`. Card 2.5 criado para o critério objetivo da virada REP pontual → contínuo.
+- 31/08/2026 — **card 1.9 concluído**: identidade visual fechada em `identidade-visual.md` + SVGs em `assets/marca/`. Paleta inspirada no Instituto Mix sem copiar (o sistema é de um franqueado, não é produto da franqueadora): laranja de marca, estrutura em grafite-azulado, vermelho reservado a erro. Destrava os cards 2.6 (wireframes) e 2.7 (design system).
 
 ## Decisões-chave (resumo — detalhe na página Decisões vigentes)
 
-- Nome **Gestão IM360**; domínio `gestaoim360.com`; app id `com.gestaoim360.app` (cadastro nas lojas pendente — avisar Irineu na fase de Publicação).
+- Nome **Gestão IM360**; domínio `gestaoim360.com`; app id `com.gestaoim360.app` (cadastro nas lojas pendente — avisar Irineu na fase de Publicação). Identidade visual definida internamente em 31/08/2026 (card 1.9), sem depender do dono do produto.
 - Ambientes: Supabase **dev** `ncdfolxdupbbfvtydngx` e **prod** `aqfuawrygxsiopyppjza` (sa-east-1). Migrações **somente via CI/CD** (`develop` → dev; `main` → prod).
 - Entrega sem estoque: não bloqueia — entrega a próxima apostila da trilha com estoque, reordenando a trilha (registrado no histórico); se **nenhuma** tiver estoque, bloqueia e gera pendência de compra.
 - Parâmetros iniciais: projeção 60 dias; alerta STANDBY 30 dias.
