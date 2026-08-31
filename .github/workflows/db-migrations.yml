@@ -1,0 +1,45 @@
+# Migrações de banco via CI/CD (padrão análogo ao app Entrelares)
+# - push em `develop` com mudanças em supabase/migrations/ -> aplica no projeto DEV
+# - push/merge em `main` com mudanças em supabase/migrations/ -> aplica no projeto PROD
+#
+# Secrets necessários (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_ACCESS_TOKEN     token pessoal (supabase.com/dashboard/account/tokens)
+#   SUPABASE_DB_PASSWORD_DEV  senha do banco do projeto GestaoIM360DevDB
+#   SUPABASE_DB_PASSWORD_PROD senha do banco do projeto GestaoIM360ProdDB
+
+name: db-migrations
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'supabase/migrations/**'
+  workflow_dispatch:
+
+concurrency:
+  group: db-migrations-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ github.ref_name == 'main' && 'aqfuawrygxsiopyppjza' || 'ncdfolxdupbbfvtydngx' }}
+      SUPABASE_DB_PASSWORD: ${{ github.ref_name == 'main' && secrets.SUPABASE_DB_PASSWORD_PROD || secrets.SUPABASE_DB_PASSWORD_DEV }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Vincular ao projeto (${{ github.ref_name == 'main' && 'PROD' || 'DEV' }})
+        run: supabase link --project-ref "$PROJECT_REF"
+
+      - name: Aplicar migrações
+        run: supabase db push
+
+      - name: Resumo
+        run: echo "Migrações aplicadas em $PROJECT_REF (branch ${GITHUB_REF_NAME})." >> "$GITHUB_STEP_SUMMARY"

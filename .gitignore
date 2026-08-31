@@ -1,0 +1,22 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+
+# Segredos e ambiente
+.env
+.env.*
+*.key
+
+# SO / editor
+.DS_Store
+.vscode/
+node_modules/
