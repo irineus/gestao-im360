@@ -82,9 +82,18 @@ enabled = true
 # quebra o login: quebra o LINK do convite e o da recuperação de senha, que é
 # construído a partir dela.
 site_url = "http://127.0.0.1:3000"
+# ⚠️ Medido em 01/09/2026 (card 3.8): destino fora desta lista **não dá erro** —
+# o Auth manda a pessoa para a Site URL e o link some sem rastro. E a lista casa
+# por **igualdade**, não por prefixo: `http://localhost:3000` NÃO autoriza
+# `http://localhost:3000/redefinir-senha`; quem autoriza caminho é o curinga
+# `/**`. Caminho sob a **Site URL** é a única exceção — esse já vale sozinho.
+# É a mesma lista que precisa ser preenchida no painel dos dois projetos
+# remotos (docs/deploy-web.md §4).
 additional_redirect_urls = [
   "http://127.0.0.1:3000",
+  "http://127.0.0.1:3000/**",
   "http://localhost:3000",
+  "http://localhost:3000/**",
 ]
 
 # 1 hora. Vale a pena saber o que este número significa neste sistema: desativar
