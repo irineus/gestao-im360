@@ -16,7 +16,7 @@
 -- =============================================================================
 
 begin;
-select plan(29);
+select plan(30);
 
 -- ===========================================================================
 -- 1. O portão: a fixture está em dia com o schema?
@@ -34,10 +34,13 @@ select ok(
 -- ===========================================================================
 -- 2. Camada `acesso` — o conteúdo que o card 2.8 §4.2 pede
 -- ===========================================================================
+-- Três unidades, e a terceira não é da fixture: MATRIZ vem da MIGRAÇÃO do card
+-- 3.6 e existe em todo ambiente, inclusive neste. Asserir isso aqui é barato e
+-- pega de graça o dia em que alguém acrescentar unidade ao seed de produção.
 select is(
   (select string_agg(codigo, ',' order by codigo) from public.unidade),
-  'ESCOLA_A,ESCOLA_B',
-  'duas unidades: a segunda existe so para provar isolamento');
+  'ESCOLA_A,ESCOLA_B,MATRIZ',
+  'duas unidades de fixture (a segunda prova isolamento) mais a unidade real do seed');
 
 select is(
   (select count(*)::bigint from public.perfil where unidade_id = tests.unidade('ESCOLA_A')),
@@ -50,33 +53,43 @@ select is(
   1::bigint,
   'exatamente um perfil desativado — e o que prova o filtro perfil.ativo');
 
+-- A fixture NÃO tem catálogo próprio desde o card 3.6: as duas unidades chamam
+-- public.fn_seed_acesso(), a mesma função da migração. Um catálogo escrito aqui
+-- seria uma segunda fonte da verdade, e o teste de paridade do card 2.8 §6.3
+-- compararia a tela real contra ela e passaria.
 select is(
   (select count(*)::bigint from public.permissao where unidade_id = tests.unidade('ESCOLA_A')),
-  7::bigint,
-  'catalogo com as sete permissoes citadas pelas politicas das migracoes 3.3/3.4');
+  50::bigint,
+  'catalogo completo do card 2.4 §3 mais o 50º código do card 2.9');
 
--- O catálogo da fixture não pode citar código que nenhuma política exige: seria
--- uma segunda fonte da verdade, e é exatamente o que a camada acesso_seed_real
--- existe para eliminar quando o card 3.6 chegar.
 select is(
   (select count(*)::bigint from public.permissao
     where unidade_id = tests.unidade('ESCOLA_B')),
-  7::bigint,
+  50::bigint,
   'a segunda unidade recebe o MESMO catalogo — isolamento comparavel, nao assimetrico');
+
+-- Prova de fonte única: o conjunto de códigos da fixture é IDÊNTICO ao da
+-- unidade real. Contagem igual com códigos diferentes passaria; esta não.
+select is(
+  (select string_agg(codigo, ',' order by codigo) from public.permissao
+    where unidade_id = tests.unidade('ESCOLA_A')),
+  (select string_agg(codigo, ',' order by codigo) from public.permissao
+    where unidade_id = (select id from public.unidade where codigo = 'MATRIZ')),
+  'fixture e unidade real tem exatamente os mesmos codigos — uma fonte so');
 
 select is(
   (select count(*)::bigint from public.perfil_permissao pp
      join public.perfil pe on pe.id = pp.perfil_id
     where pe.unidade_id = tests.unidade('ESCOLA_A') and pe.codigo = 'DIRECAO'),
-  7::bigint,
-  'direcao de A tem os sete codigos (matriz de docs/permissoes-matriz.md §5)');
+  50::bigint,
+  'direcao de A tem os 50 codigos (matriz de docs/permissoes-matriz.md §5)');
 
 select is(
   (select count(*)::bigint from public.perfil_permissao pp
      join public.perfil pe on pe.id = pp.perfil_id
     where pe.unidade_id = tests.unidade('ESCOLA_A') and pe.codigo = 'MONITOR'),
-  1::bigint,
-  'monitor tem so unidades.ler — a matriz nao abre admin.ler para ele');
+  14::bigint,
+  'monitor tem os 13 codigos do card 2.4 §5 mais salas.acessar_credencial (card 2.9)');
 
 select is(
   (select count(*)::bigint from public.usuario where unidade_id = tests.unidade('ESCOLA_A')),
@@ -119,6 +132,10 @@ select is(current_user::text, 'authenticated',
 select is(auth.uid(), (select id from public.usuario where email = 'monitor@escola-a.test'),
   'as claims sao as do usuario pedido — e isso que o PostgREST monta');
 
+-- `(select id from public.unidade)` devolve uma linha só porque a sessão está
+-- autenticada e a RLS já reduziu as três unidades à do monitor. Rodar isto como
+-- `postgres` daria "more than one row" — e seria o teste avisando que a
+-- comparação perdeu o sentido.
 select is(public.fn_unidade_atual(), (select id from public.unidade),
   'fn_unidade_atual enxerga a unidade do usuario autenticado pelo helper');
 

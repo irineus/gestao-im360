@@ -71,10 +71,15 @@ select is(public.fn_unidade_atual(), (select id from public.unidade),
 reset role;
 select tests.autenticar(tests.uid('monitor@escola-a.test'));
 
+-- A lista literal, e não a contagem: é a camada de sessão do card 3.7 que vive
+-- disto, e uma permissão a mais aqui é um botão a mais na tela do monitor.
+-- `collate "C"` para a ordenação não depender do locale do cluster.
 select is(
-  (select string_agg(c, ',' order by c) from public.fn_minhas_permissoes() c),
-  'unidades.ler',
-  'fn_minhas_permissoes devolve exatamente as permissoes do monitor');
+  (select string_agg(c, ',' order by c collate "C") from public.fn_minhas_permissoes() c),
+  'alunos.ler,certificados.criar,certificados.ler,certificados.marcar_financeiro,'
+  'estoque.lancar_saida,estoque.ler,materiais.ler,pendencias.ler,professores.ler,'
+  'salas.acessar_credencial,salas.ler,salas.registrar_manutencao,turmas.ler,unidades.ler',
+  'fn_minhas_permissoes devolve exatamente as 14 permissoes do monitor (card 2.4 §5 + 2.9)');
 
 reset role;
 select tests.autenticar(tests.uid('semperfil@escola-a.test'));
@@ -93,8 +98,8 @@ select tests.autenticar(tests.uid('direcao@escola-a.test'));
 select is((select count(*) from public.unidade)::bigint, 1::bigint,
   'direcao de A ve apenas a propria unidade');
 
-select is((select count(*) from public.permissao)::bigint, 7::bigint,
-  'direcao ve o catalogo de permissoes da propria unidade');
+select is((select count(*) from public.permissao)::bigint, 50::bigint,
+  'direcao ve o catalogo de 50 permissoes da propria unidade, e so o dela');
 
 select is((select count(*) from public.usuario)::bigint, 7::bigint,
   'direcao ve os sete usuarios da unidade A, e nenhum da B');
@@ -136,9 +141,12 @@ select throws_ok(
 reset role;
 select tests.autenticar(tests.uid('direcao@escola-a.test'));
 
+-- Chave que o seed NÃO cria: desde o card 3.6 as 15 chaves das regras já estão
+-- na tabela, e reinserir uma delas bateria em parametro_chave_uk antes de a RLS
+-- opinar — o teste passaria a medir a unique, não a política.
 select lives_ok(
   $$ insert into public.parametro (unidade_id, chave, valor, tipo)
-     select id, 'standby_alerta_dias', '30', 'INTEIRO' from public.unidade $$,
+     select id, 'parametro_criado_na_tela', '1', 'INTEIRO' from public.unidade $$,
   'direcao com parametros.gerir insere parametro');
 
 select throws_ok(
