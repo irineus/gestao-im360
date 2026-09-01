@@ -63,8 +63,12 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 ## Executar
 
 1. Marcar o card como **Em andamento** ao começar.
-2. Criar branch a partir de `develop`: `git switch develop && git pull && git switch -c tarefa/<fase>-<ordem>-<slug>` (ex.: `tarefa/2-2-regras-negocio`). Nunca trabalhar direto em `main` nem em `develop`.
-   - **Em sessão na nuvem isso não vale:** a sessão já vem com uma branch designada (`claude/<algo>`), e o *push protection* do proxy só aceita push contra a branch de trabalho da sessão. Usar a branch designada, reapontada para `origin/develop` (`git checkout -B <branch-designada> origin/develop`), e abrir o PR a partir dela. Se o PR anterior dessa branch já foi mergeado, reapontar de novo — nunca empilhar em cima de história já mergeada.
+2. Criar a branch de tarefa **sempre a partir de `origin/develop`**, seja qual for a branch designada da sessão:
+   `git fetch origin develop && git checkout -B tarefa/<fase>-<ordem>-<slug> origin/develop` (ex.: `tarefa/2-2-regras-negocio`). Nunca trabalhar direto em `main` nem em `develop`.
+   - **De `develop`, nunca de `main`** (acordo de 01/09/2026). Irineu passou a abrir as sessões com `main` como branch designada, e `main` só recebe conteúdo na promoção: enquanto houver tarefa mergeada em `develop` e ainda não promovida, uma branch criada a partir de `main` nasce **sem os documentos mais recentes** — e a tarefa seguinte é escrita em cima de uma base velha. Foi exatamente o que aconteceu em 31/08 (a sessão clonou só a `main` e concluiu, errado, que os entregáveis dos cards 2.1 e 1.9 nunca tinham sido commitados). `git checkout -B <branch> origin/develop` funciona igual em qualquer sessão e resolve.
+   - **Em sessão na nuvem, criar branch nova funciona** (verificado em 01/09/2026, card 2.4: `git push -u origin tarefa/2-4-permissoes-matriz` foi aceito numa sessão cuja branch designada era `develop`). A instrução anterior dizia que o *push protection* do proxy só aceitava push contra a branch de trabalho da sessão, e isso está errado para **criação** de branch — o que o proxy recusa de forma determinística é **apagar** ref de outra branch (ver "Limpeza de branch depois do merge"). Então vale a regra normal: branch `tarefa/<fase>-<ordem>-<slug>` e PR contra `develop`.
+   - Se a branch designada da sessão for uma `claude/<algo>` e o push da branch nova for recusado mesmo assim, aí sim usar a designada reapontada para `origin/develop` (`git checkout -B <branch-designada> origin/develop`) e abrir o PR a partir dela. Se o PR anterior dessa branch já foi mergeado, reapontar de novo — nunca empilhar em cima de história já mergeada.
+   - Quando a branch designada da sessão é a própria `develop` **ou a `main`**, **não commitar nela**: fazer o commit na branch de tarefa e devolver a local ao remoto (`git branch -f develop origin/develop`), senão a próxima sessão clona uma branch com commit que não passou por PR. Aconteceu em 01/09/2026 no card de Ordem 5: a sessão tinha `develop` designada e o entregável foi empurrado direto, sem PR.
 3. Executar respeitando as regras do `CLAUDE.md`: migrações só via CI/CD; regras de negócio no banco; RLS em toda tabela; nomes em português snake_case; credenciais nunca em texto puro.
 4. Se a nota do card divergir do que faz sentido (ex.: pedir um entregável que já é de outro card), **não seguir em silêncio nem inventar escopo**: fazer o que é coerente, registrar a divergência e o motivo na subpágina de resultado e nas Notas.
 
@@ -75,17 +79,44 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 3. **Decisões vigentes**, se a tarefa gerou decisão (arquitetura, schema, regra, parâmetro, risco): `update_content` na seção correspondente (**nunca** `replace_content`) + linha no Histórico com data e card de origem. Decisão revogada vai para "Decisões superadas" com o motivo.
 4. **Continuidade**: atualizar `docs/README-continuidade.md` (tabela de documentos, marcos) quando a tarefa criar documento novo ou mudar o estado do projeto.
 5. **Status = Concluído.**
-6. **Fechar o ciclo do Git — faz parte da tarefa, não é extra.**
+6. **Fechar o ciclo do Git — faz parte da tarefa, não é extra.** São duas perguntas clicáveis a Irineu, na ordem: PR + merge em `develop`, depois promoção para `main`.
 
-## Ciclo do Git ao concluir
+## Ciclo do Git ao concluir — acordo de 01/09/2026
 
-Commit e PR são obrigatórios ao concluir a tarefa; o merge **não**.
+**Nenhum merge acontece sem Irineu clicar, e nenhuma tarefa termina sem as duas perguntas serem
+feitas.** O acordo existe porque as duas falhas que já aconteceram foram de esquecimento, não de
+julgamento: PR não aberto (card de Ordem 5) e merge feito antes do OK. Pergunta em texto solto no
+resumo final não resolve — ela se perde no meio do relatório. As duas são **`AskUserQuestion`**.
 
 1. Commit em português, mensagem descrevendo a tarefa do board (ex.: `Card 2.1: modelagem de dados detalhada (DDL Postgres)`).
-2. Push da branch e **abrir o PR contra `develop`** (`gh pr create --base develop`). Corpo do PR: o que foi entregue, link do card e o que ficou em aberto. Em sessões do Claude Code na web o `gh` **não** existe — usar as ferramentas MCP do GitHub (`create_pull_request`) em vez de tentar instalar o CLI.
-3. **Nunca fazer o merge sem OK explícito de Irineu.** A exceção é ele dispensar o OK na própria sessão ("pode mergear direto", "não precisa pedir") — dispensa vale só para a sessão em que foi dada, não para as seguintes.
-4. Branch empurrada sem PR some. Se houver PR de tarefa anterior ainda não mergeado, dizer no resumo final.
-5. Promoção para produção (`develop` → `main`) é PR próprio e **sempre** exige OK — merge em `main` aplica migração no banco de produção.
+2. Push da branch de tarefa: `git push -u origin tarefa/<fase>-<ordem>-<slug>`.
+3. **Pergunta 1 — PR e merge em `develop`.** Assim que o entregável do card estiver pronto e
+   empurrado (antes do resumo final, não depois), perguntar com **`AskUserQuestion`**:
+   - *Abrir o PR contra `develop` e mergear com o CI verde* — **recomendada**, é o caminho normal;
+   - *Só abrir o PR, sem mergear* — quando Irineu quiser revisar antes;
+   - *Nem abrir o PR agora.*
+
+   Corpo do PR: o que foi entregue, link do card e o que ficou em aberto. Em sessões do Claude Code
+   na web o `gh` **não** existe — usar as ferramentas MCP do GitHub (`create_pull_request`,
+   `merge_pull_request`).
+4. **CI antes do merge.** Hoje o único workflow é o `db-migrations`, e ele só dispara quando o push
+   toca `supabase/migrations/**` — a maioria dos PRs de documento não tem check nenhum, e aí a
+   autorização da pergunta 1 já basta. Havendo check: esperar ficar verde; **vermelho não se
+   mergeia** — corrigir, empurrar de novo e só então mergear.
+5. **Pergunta 2 — promoção para produção.** Depois do merge em `develop` (e do CI verde, se houver),
+   perguntar com **`AskUserQuestion`**:
+   - *Promover `develop` → `main` agora* — abre o PR de promoção e mergeia;
+   - *Ainda não — acumular mais tarefas em `develop`.*
+
+   ⚠️ Merge em `main` **aplica migração no banco de produção**. Esta pergunta é sempre feita e nunca
+   é respondida pelo Claude: sem clique, não há promoção. Se a promoção levar migração, dizer isso
+   **dentro da pergunta**, com o nome do arquivo — é a última chance de alguém reparar.
+6. **Nunca mergear sem o clique.** A única dispensa é Irineu dizer na própria sessão "pode mergear
+   direto" / "não precisa pedir" — e vale só naquela sessão, não nas seguintes.
+7. Branch empurrada sem PR some. Se houver PR de tarefa anterior ainda não mergeado, dizer no
+   resumo final.
+8. Se a sessão acabar sem resposta às perguntas, o resumo final tem de dizer **em que ponto do ciclo
+   a tarefa parou** (branch empurrada? PR aberto? mergeado?) — a sessão seguinte começa daí.
 
 ### Limpeza de branch depois do merge
 
