@@ -13,7 +13,7 @@ O sistema **Gestão IM360** (Flutter + Supabase + Cloudflare) substituirá a pla
 | `plano-projeto-sistema.md` | Plano v1.0: visão, escopo, permissões, arquitetura, modelo de dados, regras, telas, migração, fases, riscos. As decisões do cap. 11 foram respondidas em 31/08/2026 — ver Decisões vigentes | referência |
 | `analise-planilha-entendimento.md` | Entendimento funcional da planilha, 18 dúvidas respondidas, mapa técnico de colunas | concluído |
 | `script-extracao-planilha.md` | Protótipo Python (openpyxl) de extração da planilha — base da ferramenta de migração da fase 8/9 do board | protótipo |
-| `modelagem-dados-ddl.md` | DDL detalhado (31 tabelas, funções de infraestrutura, padrão de RLS) e mapa DDL → card das fases 3 a 8. **Fonte das migrações** | vigente |
+| `modelagem-dados-ddl.md` | DDL detalhado (33 tabelas, funções de infraestrutura, padrão de RLS) e mapa DDL → card das fases 3 a 8. **Fonte das migrações** | vigente |
 | `identidade-visual.md` | Marca, paleta (com contrastes WCAG verificados), tipografia, badges de status e tokens Dart. **Fonte do design system (card 2.7)**. Arquivos em `assets/marca/` | vigente |
 | `regras-negocio-funcoes.md` | Card 2.2: onde vive cada regra da seção 6 do plano (restrição, trigger, função de aplicação ou rotina `pg_cron`) e a assinatura de cada objeto; catálogo de erros, de pendências, ajustes que o DDL precisa receber e mapa função → card | vigente |
 
