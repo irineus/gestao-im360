@@ -131,7 +131,14 @@ select is(
             -- duas gravam a partir do que o Auth já tem e a terceira compara e
             -- recusa — por isso não carregam filtro de unidade no corpo.
             'fn_usuario_espelhar', 'fn_usuario_email_sincronizar',
-            'fn_usuario_espelho_coerente'
+            'fn_usuario_espelho_coerente',
+            -- card 3.6 — o trigger do bootstrap da direção. Dispara DENTRO da
+            -- transação do espelho, que é do supabase_auth_admin: precisa ler
+            -- `parametro` e escrever `usuario_perfil`, as duas com RLS forçada e
+            -- nenhuma política a favor de quem convida. Filtra unidade no corpo
+            -- (`new.unidade_id`), como manda a correção do card 2.3. As seis
+            -- fn_seed_* NÃO são definer: rodam na migração, como `postgres`.
+            'fn_usuario_direcao_inicial'
             -- card 5.2:  'fn_capacidade_efetiva', 'fn_ocupacao_bloco'
             -- card 4.3:  'fn_pc_credencial_ler', 'fn_pc_credencial_gravar'
           )),

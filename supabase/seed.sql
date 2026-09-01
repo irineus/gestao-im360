@@ -63,14 +63,14 @@ comment on table tests.fixture_camada is
 insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota) values
   ('acesso', 10, '3.4.5',
    $$to_regclass('public.usuario_perfil') is not null$$, true,
-   'Duas unidades, cinco perfis, catálogo e matriz das permissões citadas pelas políticas, oito usuários.'),
+   'Duas unidades, cinco perfis (quatro do seed real mais ARQUIVADO) e oito usuários. Catálogo, matriz e parâmetros vêm da camada acesso_seed_real.'),
 
   ('acesso_seed_real', 20, '3.6',
    $$exists (select 1
                from public.permissao p
                join public.unidade u on u.id = p.unidade_id
-              where u.codigo not in ('ESCOLA_A','ESCOLA_B'))$$, false,
-   'O seed do card 3.6 passa a ser a fonte do catálogo, da matriz e dos parâmetros. A fixture deve consumir a MESMA fonte para ESCOLA_A/ESCOLA_B, senão o teste de paridade compara a tela real com uma matriz de mentira e passa.'),
+              where u.codigo not in ('ESCOLA_A','ESCOLA_B'))$$, true,
+   'APLICADA no card 3.6: as duas unidades da fixture chamam public.fn_seed_acesso(), a mesma função que a migração chama para a unidade real. Nada de catálogo nem de matriz é escrito na fixture — se fosse, o teste de paridade compararia a tela real com uma matriz de mentira e passaria.'),
 
   ('catalogo_curricular', 30, '4.1',
    $$to_regclass('public.material') is not null$$, false,
@@ -354,65 +354,38 @@ insert into public.unidade (codigo, nome) values
   ('ESCOLA_B', 'Escola B (fixture)')
 on conflict (codigo) do nothing;
 
--- Catálogo de permissões — as SETE citadas pelas políticas das migrações
--- 3.3/3.4, nem uma a mais. Código sem consumidor não entra (card 2.4 (a)), e um
--- catálogo inventado aqui viraria uma segunda fonte da verdade que ninguém
--- reconcilia. As outras 43 chegam com a camada `acesso_seed_real` (card 3.6).
+-- Catálogo, perfis, matriz e parâmetros NÃO são escritos aqui. As duas unidades
+-- da fixture chamam `public.fn_seed_acesso()` — exatamente a função que a
+-- migração do card 3.6 chama para a unidade real: 50 permissões, os quatro
+-- perfis do plano, a matriz de docs/permissoes-matriz.md §5 e os 15 parâmetros.
 --
--- As duas unidades recebem o mesmo catálogo: é o que torna a asserção de
--- isolamento comparável (mesmos números dos dois lados, e mesmo assim zero
--- vazamento).
-insert into public.permissao (unidade_id, codigo, descricao, dominio)
-select u.id, c.codigo, c.descricao, c.dominio
-  from public.unidade u
- cross join (values
-    ('admin.ler',            'Ler usuario, perfil, permissao, perfil_permissao, usuario_perfil', 'admin'),
-    ('admin.gerir_usuarios', 'Criar/editar usuario; atribuir e remover perfis',                  'admin'),
-    ('admin.gerir_perfis',   'Criar/editar perfil; marcar e desmarcar a matriz',                 'admin'),
-    ('unidades.ler',         'Ler unidade',                                                      'unidades'),
-    ('unidades.gerir',       'Criar/editar unidade',                                             'unidades'),
-    ('parametros.ler',       'Ler parametro na tela de Administracao',                           'parametros'),
-    ('parametros.gerir',     'Criar/editar parametro',                                           'parametros')
- ) as c(codigo, descricao, dominio)
- where u.codigo in ('ESCOLA_A', 'ESCOLA_B')
-on conflict (unidade_id, codigo) do nothing;
+-- É o ponto inteiro da camada `acesso_seed_real`. Enquanto o seed real não
+-- existia, esta seção declarava um catálogo mínimo próprio (as sete permissões
+-- citadas pelas políticas das migrações 3.3/3.4); mantê-lo agora seria uma
+-- segunda matriz ao lado da real, parecida com ela e livre para divergir — e o
+-- teste de paridade do card 2.8 §6.3, que compara contagem entre perfis,
+-- passaria comparando a tela contra a mentira.
+--
+-- As duas unidades recebem o mesmo seed: é o que torna a asserção de isolamento
+-- comparável (mesmos números dos dois lados, e mesmo assim zero vazamento).
+select public.fn_seed_acesso(tests.unidade('ESCOLA_A'));
+select public.fn_seed_acesso(tests.unidade('ESCOLA_B'));
 
--- Cinco perfis em A. Os quatro do plano, mais ARQUIVADO — desativado, e com a
--- MESMA permissão do monitor. Sem ele nada prova o filtro `perfil.ativo` que o
--- card 3.4 acrescentou a tem_permissao, e desativar um perfil na tela de
--- Administração voltaria a ser uma ação sem efeito nenhum.
+-- O quinto perfil de A é da fixture, não do seed: ARQUIVADO, desativado e com a
+-- mesma permissão de leitura que a matriz dá a todos. Sem ele nada prova o
+-- filtro `perfil.ativo` que o card 3.4 acrescentou a tem_permissao, e desativar
+-- um perfil na tela de Administração voltaria a ser uma ação sem efeito nenhum.
 insert into public.perfil (unidade_id, codigo, nome, ativo)
-select tests.unidade('ESCOLA_A'), p.codigo, p.nome, p.ativo
-  from (values
-    ('DIRECAO',    'Direção',           true),
-    ('PEDAGOGICO', 'Pedagógico',        true),
-    ('SECRETARIA', 'Secretaria',        true),
-    ('MONITOR',    'Monitor',           true),
-    ('ARQUIVADO',  'Perfil desativado', false)
- ) as p(codigo, nome, ativo)
+values (tests.unidade('ESCOLA_A'), 'ARQUIVADO', 'Perfil desativado', false)
 on conflict (unidade_id, codigo) do nothing;
-
-insert into public.perfil (unidade_id, codigo, nome, ativo)
-values (tests.unidade('ESCOLA_B'), 'DIRECAO', 'Direção', true)
-on conflict (unidade_id, codigo) do nothing;
-
--- Matriz inicial, copiada de docs/permissoes-matriz.md §5 para os sete códigos
--- desta camada: direção tem os sete; os outros três perfis têm só
--- `unidades.ler`, que a matriz abre para todos porque sem ela ninguém lê o nome
--- da própria escola no cabeçalho.
-insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
-select pe.unidade_id, pe.id, pm.id
-  from public.perfil    pe
-  join public.permissao pm on pm.unidade_id = pe.unidade_id
- where pe.codigo = 'DIRECAO'
-on conflict (perfil_id, permissao_id) do nothing;
 
 insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
 select pe.unidade_id, pe.id, pm.id
   from public.perfil    pe
   join public.permissao pm on pm.unidade_id = pe.unidade_id
                           and pm.codigo     = 'unidades.ler'
- where pe.codigo in ('PEDAGOGICO', 'SECRETARIA', 'MONITOR', 'ARQUIVADO')
+ where pe.unidade_id = tests.unidade('ESCOLA_A')
+   and pe.codigo     = 'ARQUIVADO'
 on conflict (perfil_id, permissao_id) do nothing;
 
 -- Oito usuários. Os cinco do card 2.8 §4.2 (um por perfil + um sem perfil
@@ -428,14 +401,11 @@ select tests.criar_usuario('desativado@escola-a.test', 'DIRECAO',   null, false)
 select tests.criar_usuario('arquivado@escola-a.test',  'ARQUIVADO');
 select tests.criar_usuario('direcao@escola-b.test',    'DIRECAO', tests.unidade('ESCOLA_B'));
 
--- Um parâmetro só: o suficiente para provar que fn_param_int/txt leem para quem
--- NÃO tem `parametros.ler` (o ajuste bloqueante do card 2.4 #4). Os outros
--- chegam com a camada `acesso_seed_real`, junto do seed do card 3.6, que é a
--- fonte de verdade deles.
-insert into public.parametro (unidade_id, chave, valor, tipo, descricao)
-values (tests.unidade('ESCOLA_A'), 'projecao_horizonte_dias', '60', 'INTEIRO',
-        'Horizonte da projeção de demanda, em dias')
-on conflict (unidade_id, chave) do nothing;
+-- Nenhum parâmetro escrito aqui: os 15 vêm de `fn_seed_parametros()`, chamada
+-- acima. `projecao_horizonte_dias` continua sendo o que prova que fn_param_int
+-- lê para quem NÃO tem `parametros.ler` (ajuste bloqueante do card 2.4 #4) — a
+-- diferença é que agora ele vale 60 pela mesma linha que fará valer 60 em
+-- produção.
 
 -- =============================================================================
 -- 4. Fecho: nada em `tests` alcançável por quem não é `postgres`

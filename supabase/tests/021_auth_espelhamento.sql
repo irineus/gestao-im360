@@ -59,8 +59,11 @@ select ok(
 -- ===========================================================================
 -- É o fluxo da v1 (docs/acesso-autenticacao.md §3). O nome vira a parte local do
 -- e-mail, obviamente provisório, e a direção corrige na tela de Administração.
--- Precisa de UMA unidade ativa: a fixture tem duas, então ESCOLA_B sai de cena.
-update public.unidade set ativo = false where codigo = 'ESCOLA_B';
+-- Precisa de UMA unidade ativa. O banco tem três: as duas da fixture e a
+-- unidade real, que a migração do card 3.6 passou a criar — e é justamente por
+-- ela que o fallback funciona em dev e em produção, onde MATRIZ é a única. Aqui
+-- todas as outras saem de cena.
+update public.unidade set ativo = false where codigo <> 'ESCOLA_A';
 
 insert into auth.users (id, email, aud, role, encrypted_password,
                         email_confirmed_at, created_at, updated_at)
@@ -73,7 +76,7 @@ select is(
   'caio.souza|' || tests.unidade('ESCOLA_A')::text,
   'sem metadado: nome e a parte local do e-mail e a unidade e a unica ativa');
 
-update public.unidade set ativo = true where codigo = 'ESCOLA_B';
+update public.unidade set ativo = true where codigo <> 'ESCOLA_A';
 
 -- ===========================================================================
 -- 3. As três formas de o espelho não saber em que unidade pôr a pessoa
@@ -81,8 +84,8 @@ update public.unidade set ativo = true where codigo = 'ESCOLA_B';
 -- Todas recusam o convite inteiro, em vez de criar um auth.users sem espelho —
 -- que seria alguém capaz de autenticar e ver todas as telas vazias, sem erro.
 --
--- A recusa por ambiguidade é o fallback da v1 se fechando sozinho: hoje a
--- fixture tem duas unidades ativas, como a escola terá na Fase 11.
+-- A recusa por ambiguidade é o fallback da v1 se fechando sozinho: aqui há três
+-- unidades ativas, como a escola terá mais de uma na Fase 11.
 select is(
   tests.codigo_do_erro($$
     insert into auth.users (id, email, aud, role, encrypted_password,
