@@ -63,9 +63,17 @@ porque as duas telas são idênticas.
 | | Homologação | Produção |
 |---|---|---|
 | Projeto | `gestao-im360-homolog` | `gestao-im360` |
+| Endereço público | `homolog.gestaoim360.com` | `app.gestaoim360.com` |
+| Endereço do Pages (sempre existe) | `gestao-im360-homolog.pages.dev` | `gestao-im360.pages.dev` |
 | Branch de produção do projeto | `develop` | `main` |
 | Diretório de saída | `app/build/web` | `app/build/web` |
 | Supabase | dev | prod |
+
+O domínio `gestaoim360.com` foi registrado em 01/09/2026 e está na mesma conta Cloudflare, então o
+`Custom domains` de cada projeto cria o DNS sozinho. O `APP_URL_BASE` de cada ambiente é o
+**endereço público**, não o `pages.dev` — os dois continuam servindo o app, mas é do `APP_URL_BASE`
+que sai o `redirectTo` do e-mail, e link de recuperação apontando para `pages.dev` numa escola que
+conhece o app por `app.gestaoim360.com` parece phishing.
 
 **Dois projetos, não dois ambientes de um projeto.** O Pages tem "Preview" e "Production" dentro do
 mesmo projeto, e seria tentador usar `develop` como preview de `gestao-im360`. Não: as URLs de
@@ -233,17 +241,26 @@ devolver o `index.html` para qualquer caminho. No Pages isso é de graça.
 
 ## 7. Domínio
 
-`gestaoim360.com` está decidido como base dos identificadores (card 3.2), **mas o registro do
-domínio ainda não foi feito** — enquanto isso, os endereços são os `*.pages.dev` dos dois projetos.
-Quando o domínio existir:
+`gestaoim360.com` foi **registrado em 01/09/2026** e está na conta Cloudflare, ao lado de
+`entrelares.app` e `guardacompartilhada.com`. Divisão: `app.gestaoim360.com` para produção,
+`homolog.gestaoim360.com` para homologação.
 
-1. `app.gestaoim360.com` → projeto de produção; `homolog.gestaoim360.com` → homologação;
-2. rebuildar cada ambiente com o `APP_URL_BASE` novo (o valor entra em *build time*);
-3. trocar **Site URL** e acrescentar `<domínio>/**` às Redirect URLs, nos dois projetos;
-4. só então desligar o endereço antigo — link de recuperação já enviado continua apontando para ele.
+Em cada projeto de Pages, **Custom domains → Set up a custom domain**. Como a zona já está na conta,
+o registro DNS é criado automaticamente e o certificado sai em minutos.
 
-A ordem importa: trocar a Site URL antes de o build novo estar no ar deixa uma janela em que o link
-do e-mail leva a um app que ainda monta `redirectTo` com o endereço velho.
+A ordem importa, e é esta:
+
+1. **rebuildar** o ambiente com o `APP_URL_BASE` do endereço definitivo (o valor entra em *build
+   time*);
+2. publicar esse build;
+3. anexar o custom domain ao projeto;
+4. só então trocar a **Site URL** no Supabase e acrescentar `https://<endereço>/**` às Redirect URLs.
+
+Inverter 1 e 4 abre uma janela em que a Site URL nova manda a pessoa para um app que ainda monta o
+`redirectTo` com o endereço velho — e o link de recuperação morre no meio do caminho, sem erro.
+
+O endereço `*.pages.dev` **não deixa de funcionar** depois do custom domain: os dois servem o mesmo
+deploy. Ele deixa de ser o endereço divulgado, e é só o `APP_URL_BASE` que precisa ser o público.
 
 ---
 

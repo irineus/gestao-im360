@@ -198,9 +198,12 @@ uma pergunta que vai aparecer.
 1. **Sign In / Providers → Email**: provedor **habilitado**; **Allow new users to sign up
    DESABILITADO** (é o `enable_signup` de `[auth]`); confirmação de e-mail habilitada; senha mínima 8
    com letras e dígitos; `Secure password change` habilitado.
-2. **URL Configuration → Site URL**: a URL do Cloudflare Pages daquele ambiente. **Redirect URLs**:
-   `<url pública>/**`. O card 3.8 fechou o formato exato e a razão de cada linha —
-   `docs/deploy-web.md` §4 é a lista de conferência do painel.
+2. **URL Configuration → Site URL**: a URL pública daquele ambiente — `https://app.gestaoim360.com`
+   em prod, `https://homolog.gestaoim360.com` em dev. **Redirect URLs**: `<url pública>/**`. O card
+   3.8 fechou o formato exato e a razão de cada linha — `docs/deploy-web.md` §4 é a lista de
+   conferência do painel. ⚠️ Projeto Supabase novo já vem com `http://localhost:3000` na Site URL e
+   nas Redirect URLs: **em prod, tirar as duas** — produção não autoriza redirecionamento para a
+   máquina de ninguém. Em dev, o localhost pode ficar (serve o `flutter run`).
 3. ⚠️ **SMTP próprio** (pendência): sem ele o Supabase usa o serviço interno, com teto de poucos
    e-mails por hora e **sem garantia de entrega** — e o convite e a recuperação de senha vivem de
    e-mail. Um provedor transacional (Resend, por exemplo) resolve. Fica **só no painel**, nunca neste
