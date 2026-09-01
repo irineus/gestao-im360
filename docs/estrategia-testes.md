@@ -140,15 +140,30 @@ Isso tem duas consequências, e a segunda é a que engana:
 Daí o primeiro entregável de infraestrutura de teste: **helpers que reproduzem exatamente o contexto
 que o PostgREST monta** — papel `authenticated` e `request.jwt.claims` com o `sub`.
 
-### 4.1 Os helpers (SQL completo no Apêndice A)
+### 4.1 Os helpers
+
+> **Implementados no card 3.4.5** (01/09/2026). O SQL vigente está em `supabase/seed.sql` — este
+> parágrafo descreve o contrato; o Apêndice A registra o que mudou em relação ao desenho original e
+> por quê.
 
 ```sql
-tests.criar_usuario(p_email text, p_perfil text, p_unidade uuid default null) returns uuid
+tests.criar_usuario(p_email text, p_perfil text,
+                    p_unidade uuid default null, p_ativo boolean default true) returns uuid
+tests.uid(p_email text) returns uuid               -- chave natural → id, sem UUID literal em teste
+tests.unidade(p_codigo text) returns uuid
 tests.autenticar(p_usuario uuid) returns void      -- vira 'authenticated' com o sub no JWT
 tests.como_anonimo() returns void                  -- papel 'anon', sem claims
+tests.como_rotina(p_unidade uuid) returns void     -- contexto de rotina por GUC (card 2.2 §2.2)
 tests.encerrar_sessao() returns void               -- reset role + claims (voltar a postgres)
 tests.conta_como(p_usuario uuid, p_sql text) returns bigint  -- conta linhas na pele do usuário
+tests.codigo_do_erro(p_sql text, p_usuario uuid default null) returns text  -- `codigo` do DETAIL
 ```
+
+**A regra que organiza o uso: `tests.*` só é alcançável a partir do papel `postgres`.** O schema é
+fechado para `anon` e `authenticated` (fail-closed, como toda a superfície deste projeto), então
+depois de `tests.autenticar(...)` a sessão está em `authenticated` e não alcança mais o schema. Para
+trocar de usuário, `reset role;` — comando SQL puro, sempre disponível — e autenticar de novo.
+Esquecer a linha dá `permission denied for schema tests`: erro alto, não silêncio.
 
 Três detalhes que, errados, produzem suíte verde e sistema quebrado:
 
@@ -178,6 +193,38 @@ determinismo.
 
 A fixture é **datada em relativo** (`fn_hoje() - interval 'N days'`), nunca em datas absolutas: uma
 fixture com `'2026-09-01'` começa a falhar sozinha em janeiro.
+
+#### A fixture nasce em camadas, e o portão impede que ela fique para trás (card 3.4.5)
+
+Quatro dos seis elementos do quadro acima moram em tabelas que **ainda não existem**: `material`,
+`aluno`, `sala`/`pc` e `bloco_horario`/`bloco_aluno` nascem nos cards 4.1, 4.2, 4.3, 5.1 e 6.1.
+Escrevê-los agora derrubaria `supabase db reset` no primeiro `insert`; deixá-los comentados
+produziria o artefato que este documento inteiro combate — algo que existe no papel e não exercita
+nada.
+
+A saída é declarar cada camada com a **condição que a torna devida**, em `tests.fixture_camada`:
+
+| Camada | Card | Devida quando |
+|---|---|---|
+| `acesso` | 3.4.5 | ✅ aplicada |
+| `acesso_seed_real` | 3.6 | existir permissão em unidade que não é da fixture |
+| `catalogo_curricular` | 4.1 | existir `public.material` |
+| `alunos` | 4.2 | existir `public.aluno` |
+| `infra_fisica` | 4.3 | existir `public.pc` |
+| `turmas` | 5.1 | existir `public.bloco_aluno` |
+| `trilha_estoque` | 6.1 | existir `public.movimento_estoque` |
+
+`001_infra_teste.sql` reprova a suíte quando uma camada devida continua sem ser escrita — ou seja, o
+card 4.1 **não fecha verde** sem trazer a camada de catálogo junto. E o próprio portão tem asserção
+de que reprova: o teste cria a tabela sentinela dentro da própria transação e confere que a camada é
+acusada. Portão que nunca foi visto vermelho é decoração.
+
+A camada `acesso_seed_real` é a que evita o pior desses casos. Enquanto o card 3.6 não existe, a
+fixture declara ela mesma o catálogo e a matriz — só as sete permissões que as políticas das
+migrações 3.3/3.4 citam, porque código sem consumidor não entra (card 2.4 (a)). No dia em que o
+3.6 seedar as 50 de verdade, a fixture passa a ter uma matriz **de mentira** ao lado da real, e o
+teste de paridade do §6.3 compararia a tela contra ela e passaria. Daí a camada existir e o portão
+acusá-la sozinho.
 
 ### 4.3 Isolamento
 
@@ -703,9 +750,9 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 |---|---|---|---|---|
 | 1 | Workflow `testes.yml` em **todo PR** (jobs `banco` e `app`) e job de suíte **antes** do `db push` no `db-migrations` | `.github/workflows/` | 3.9 | **bloqueante** para o portão — sem ele a suíte existe e não reprova nada |
 | 2 | `supabase/setup-cli` com **versão fixa** no lugar de `latest` | `db-migrations.yml` | 3.9 | **bloqueante** — CLI novo quebra o pipeline sem mudança no repositório (pendência 2(d)) |
-| 3 | `major_version` do Postgres em `supabase/config.toml`, igual ao dos projetos remotos | `supabase/config.toml` | 3.9 | alta — testar em versão diferente da que aplica |
+| 3 | `major_version` do Postgres em `supabase/config.toml`, igual ao dos projetos remotos | `supabase/config.toml` | 3.9 | alta — testar em versão diferente da que aplica. *(Medido em 01/09/2026, card 3.4.5: sem a chave, `supabase start` subiu `supabase/postgres:17.6.1.165` e o dev remoto é `17.6.1.166` — hoje o default coincide, o que é sorte e não garantia: fixar mesmo assim.)* |
 | 4 | **Constante de contrato sempre literal** na chamada (tipo de pendência, código de permissão, `codigo` de erro): nunca variável, concatenação ou `format()` | convenções do 2.2 §1.1 | todos os cards de função | alta — sem isso C10/C11/C12 cegam em silêncio |
-| 5 | `create extension pgtap`, schema `tests` e `seed.sql` **nunca** em `supabase/migrations/`; `supabase db reset --linked` proibido | — | 3.4.5 | **bloqueante** — extensão de teste em produção, ou fixture escrita em dev |
+| 5 | ~~`create extension pgtap`, schema `tests` e `seed.sql` **nunca** em `supabase/migrations/`; `supabase db reset --linked` proibido~~ | — | 3.4.5 | ✅ **feito em 01/09/2026** — tudo em `supabase/seed.sql`, nada em `migrations/`; `.claude/settings.json` já nega `supabase db reset` e `psql` |
 | 6 | Seed do card 3.6 é **migração** (dado de catálogo, precisa existir em prod), não `seed.sql` | nota do card 3.6 | 3.6 | alta — confusão previsível entre os dois "seeds" |
 | 7 | Suíte de concorrência de duas sessões é entregável dos cards de admissão e entrega | notas dos cards | 5.3 e 6.3 | **bloqueante** para o marco 2 (§15.2) |
 | 8 | `required reviewer` no environment `prod` do GitHub | Settings do repositório | 3.9 | alta — portão humano da migração de produção (pendência 2(c)) |
@@ -718,7 +765,8 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 
 | Suíte / arquivo | Card que cria | Fase |
 |---|---|---|
-| `seed.sql` (pgTAP, schema `tests`, helpers, escola-fixture) | **3.4.5** (criado por este card) | 3 |
+| `seed.sql` (pgTAP, schema `tests`, helpers, escola-fixture) | 3.3 (bootstrap) → **3.4.5** (helpers e camada `acesso`) → cresce em 3.6, 4.1, 4.2, 4.3, 5.1 e 6.1 | 3+ |
+| `001_infra_teste` (helpers, fixture e o portão das camadas) | **3.4.5** | 3 |
 | `010_catalogo_rls`, `011_catalogo_convencoes` | 3.3 (nasce) → cresce em toda migração | 3+ |
 | `012_catalogo_contratos` (C10, C11, C12, C13) | 3.6 (precisa do seed de permissões) | 3 |
 | `020_acesso_tem_permissao` | 3.4 | 3 |
@@ -749,108 +797,39 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 3. **Dados de teste realistas para a projeção** — a escola-fixture é pequena de propósito. A
    avaliação séria da cascata só acontece sobre o recorte importado (M3) e sobre o histórico real
    (cards 9.5 e 11.2).
-4. **Quem roda a suíte de concorrência localmente** depende do `supabase start`, que exige Docker.
-   Se a máquina de Irineu não o tiver, essa suíte roda só no CI — decidir no card 3.9.
+4. ~~**Quem roda a suíte de concorrência localmente** depende do `supabase start`, que exige
+   Docker.~~ — **resolvido em parte no card 3.4.5 (01/09/2026):** `supabase start` + `supabase test
+   db` rodaram ponta a ponta **nesta sessão na nuvem**, com pgTAP 1.3.2 de verdade e a imagem
+   `supabase/pg_prove:3.36`, sem stub e sem shim. Ou seja, a suíte tem onde rodar mesmo que a máquina
+   de Irineu não tenha Docker: basta uma sessão do Claude Code na nuvem. Continua sendo do card 3.9
+   decidir o portão do CI e se a suíte de concorrência (dois `psql` simultâneos, §7) roda também
+   localmente.
 
 ---
 
 ## Apêndice A — helpers de teste (`supabase/seed.sql`, card 3.4.5)
 
-> Vai em `supabase/seed.sql`. **Nunca** em `supabase/migrations/`.
+> **Implementado em 01/09/2026.** O SQL vigente é `supabase/seed.sql`, e é ele a fonte — não este
+> apêndice. O que segue é o registro do que mudou em relação ao desenho original e por quê, para que
+> a diferença não pareça descuido depois.
 
-```sql
--- ---------------------------------------------------------------------------
--- Infraestrutura de teste. Aplicada apenas por `supabase db reset` (local/CI).
--- ---------------------------------------------------------------------------
-create extension if not exists pgtap with schema extensions;
+**O que se confirmou.** `tests.autenticar` está certo como foi escrito: `set local role` dentro de
+função com cláusula `set search_path` **persiste** depois do retorno (a cláusula `SET` salva e
+restaura só as variáveis que nomeia). Verificado no card 3.4 e novamente aqui, com a suíte inteira
+dependendo disso.
 
-create schema if not exists tests;
-revoke all on schema tests from public, anon, authenticated;
+**O que mudou.**
 
--- Cria usuário em auth.users + usuario + usuario_perfil.
--- security definer: auth.users pertence a supabase_auth_admin e usuario tem RLS.
-create or replace function tests.criar_usuario(
-  p_email   text,
-  p_perfil  text,
-  p_unidade uuid default null
-) returns uuid
-language plpgsql
-security definer
-set search_path = public, pg_temp
-as $$
-declare
-  v_uid     uuid := gen_random_uuid();
-  v_unidade uuid := coalesce(p_unidade, (select id from unidade where codigo = 'ESCOLA_A'));
-begin
-  insert into auth.users (id, email, aud, role, encrypted_password,
-                          email_confirmed_at, created_at, updated_at)
-  values (v_uid, p_email, 'authenticated', 'authenticated', '', now(), now(), now());
+| # | Mudança | Motivo |
+|---|---|---|
+| 1 | `tests.conta_como` **não** termina com `perform tests.encerrar_sessao()` | Nessa altura a sessão já está em `authenticated`, que não tem `USAGE` no schema `tests`: a chamada morreria com `permission denied for schema tests` e derrubaria toda paridade. A volta ao papel do chamador é feita com SQL puro dentro da função. |
+| 2 | `tests.criar_usuario` ganhou `p_ativo` e virou **idempotente por e-mail** | `usuario.email` é `unique`, e o desenho original repetia `gen_random_uuid()` a cada chamada: reexecutar o seed derrubava o `db reset`. O `on conflict (id) do update` também sobrevive ao trigger de espelhamento `auth.users → usuario` do card 3.5, que passará a criar a linha antes deste `insert` chegar nela. |
+| 3 | Nasceram `tests.uid(email)` e `tests.unidade(codigo)`, ambos `security definer` | Sem eles todo arquivo de teste carrega UUID literal — que foi exatamente o que o `020` fazia antes. `definer` porque as duas tabelas têm RLS. |
+| 4 | Nasceu `tests.como_rotina(unidade)` | O contexto de rotina do card 2.2 §2.2 é setado em três GUCs; repetir isso em cada suíte de rotina (cards 5.5 e 8.1) convida ao erro de esquecer uma. |
+| 5 | `tests.codigo_do_erro(sql, usuario)` substitui o `pg_temp.codigo_do_erro` que o `020` definia | O par canônico de asserção é `throws_ok` para o SQLSTATE **e** este helper para o `codigo` — o texto da mensagem nunca é contrato (card 2.2 §1.2). Ele devolve `null`, e não erro de cast, quando o `DETAIL` vem vazio: erro sem `codigo` é falha de contrato, e quem tem de acusá-la é a asserção. |
+| 6 | `tests.encerrar_sessao` limpa também `app.rotina` e `app.rotina_unidade` | Contexto de rotina vazando para o teste seguinte deixaria `tem_permissao` sempre verdadeira — suíte verde sem exercitar permissão nenhuma. |
+| 7 | O schema `tests` continua **fechado** para `anon` e `authenticated` | A alternativa era conceder `USAGE` para que `encerrar_sessao` fosse chamável de dentro do papel autenticado. Fechado + `reset role;` explícito no arquivo de teste custa uma linha e mantém o mesmo padrão de todo o resto do projeto. |
 
-  insert into usuario (id, unidade_id, email, nome, ativo, criado_por)
-  values (v_uid, v_unidade, p_email, p_email, true, v_uid);
-
-  if p_perfil is not null then
-    insert into usuario_perfil (usuario_id, perfil_id, unidade_id, criado_por)
-    select v_uid, p.id, v_unidade, v_uid from perfil p where p.codigo = p_perfil;
-  end if;
-
-  return v_uid;
-end $$;
-
--- Reproduz o contexto que o PostgREST monta para um usuário logado.
--- Claims ANTES do set role; is_local = true para o efeito morrer no rollback.
-create or replace function tests.autenticar(p_usuario uuid) returns void
-language plpgsql
-set search_path = public, pg_temp
-as $$
-begin
-  perform set_config(
-    'request.jwt.claims',
-    json_build_object('sub', p_usuario::text, 'role', 'authenticated')::text,
-    true);
-  set local role authenticated;
-end $$;
-
-create or replace function tests.como_anonimo() returns void
-language plpgsql
-set search_path = public, pg_temp
-as $$
-begin
-  perform set_config('request.jwt.claims', null, true);
-  set local role anon;
-end $$;
-
-create or replace function tests.encerrar_sessao() returns void
-language plpgsql
-set search_path = public, pg_temp
-as $$
-begin
-  reset role;
-  perform set_config('request.jwt.claims', null, true);
-end $$;
-
--- Conta linhas de um SELECT na pele de um usuário — base do teste de paridade (§6.3).
-create or replace function tests.conta_como(p_usuario uuid, p_sql text)
-returns bigint
-language plpgsql
-set search_path = public, pg_temp
-as $$
-declare v_n bigint;
-begin
-  perform tests.autenticar(p_usuario);
-  execute format('select count(*) from (%s) t', p_sql) into v_n;
-  perform tests.encerrar_sessao();
-  return v_n;
-end $$;
-
--- ---------------------------------------------------------------------------
--- Escola-fixture (§4.2) — datas SEMPRE relativas a fn_hoje().
--- ... unidades ESCOLA_A/ESCOLA_B, salas 10 e 6 PCs, 3 blocos (0/9/10),
---     6 materiais (saldos 0,0,1,n,n,n), 12 alunos cobrindo os 4 degraus
---     da cascata, 1 em FIM, 1 em STANDBY antigo, 1 com débito REP na borda.
--- Detalhamento no card 3.4.5, quando as tabelas existirem.
--- ---------------------------------------------------------------------------
-```
 
 ## Apêndice B — `.github/workflows/testes.yml` (card 3.9)
 
@@ -910,48 +889,54 @@ jobs:
 
 ## Apêndice C — anatomia de um arquivo de teste
 
+Atualizado no card 3.4.5 para o contrato real dos helpers: nenhuma fixture local (a escola-fixture
+do §4.2 já traz usuários, blocos e alunos), nenhum UUID literal, e `reset role;` sempre que a sessão
+precisa voltar a alcançar `tests.*`.
+
 ```sql
--- supabase/tests/040_vagas_admissao.test.sql
+-- supabase/tests/040_vagas_admissao.sql
 begin;
 select plan(6);
 
--- fixture nomeada por chave natural, nunca por UUID literal (§11)
-select tests.criar_usuario('secretaria@teste.local', 'secretaria') as u_sec \gset
-
 -- camada 3: a função, no caminho normal
-select tests.autenticar(:'u_sec');
+select tests.autenticar(tests.uid('secretaria@escola-a.test'));
 select is(
-  (fn_bloco_admitir(<aluno>, <bloco_com_9>, 'REM', null)).status, 'ADMITIDO',
+  (public.fn_bloco_admitir(<aluno>, <bloco_com_9>, 'REM', null)).status, 'ADMITIDO',
   'admissão em bloco com vaga devolve ADMITIDO');
 
 -- camada 3: a mesma função, sem vaga
 select throws_ok(
-  $$ select fn_bloco_admitir(<outro_aluno>, <bloco_com_10>, 'REM', null) $$,
+  $$ select public.fn_bloco_admitir(<outro_aluno>, <bloco_com_10>, 'REM', null) $$,
   'PT409', null, 'bloco lotado devolve PT409');
 
 -- camada 2: o trigger, escrevendo DIRETO na tabela (o que o PostgREST faria)
 select throws_ok(
-  $$ insert into bloco_aluno (aluno_id, bloco_id, tipo, unidade_id)
+  $$ insert into public.bloco_aluno (aluno_id, bloco_id, tipo, unidade_id)
      values (<outro_aluno>, <bloco_com_10>, 'REM', <unidade>) $$,
   'PT409', null, 'o trigger barra o insert direto, sem passar pela função');
 
--- permissão: o monitor não aloca
-select tests.encerrar_sessao();
-select tests.criar_usuario('monitor@teste.local', 'monitor') as u_mon \gset
-select tests.autenticar(:'u_mon');
+-- permissão: o monitor não aloca. `reset role;` primeiro — de dentro de
+-- `authenticated` o schema `tests` é inalcançável, de propósito (§4.1).
+reset role;
+select tests.autenticar(tests.uid('monitor@escola-a.test'));
 select throws_ok(
-  $$ select fn_bloco_admitir(<aluno>, <bloco_vazio>, 'REM', null) $$,
+  $$ select public.fn_bloco_admitir(<aluno>, <bloco_vazio>, 'REM', null) $$,
   'PT403', null, 'monitor sem turmas.alocar recebe PT403');
 
--- isolamento de unidade
-select tests.encerrar_sessao();
-select tests.criar_usuario('dir_b@teste.local', 'direcao', <unidade_b>) as u_b \gset
-select is(tests.conta_como(:'u_b', 'select 1 from bloco_aluno'), 0::bigint,
-          'usuário da ESCOLA_B não enxerga alocação da ESCOLA_A');
+-- isolamento de unidade: conta_como troca de papel por dentro, então é chamado
+-- a partir de `postgres`.
+reset role;
+select is(tests.conta_como(tests.uid('direcao@escola-b.test'),
+                           'select 1 from public.bloco_aluno'),
+          0::bigint, 'usuário da ESCOLA_B não enxerga alocação da ESCOLA_A');
 
-select is(tests.conta_como(:'u_sec', 'select 1 from bloco_aluno where bloco_id = <bloco_com_10>'),
+select is(tests.conta_como(tests.uid('secretaria@escola-a.test'),
+                           'select 1 from public.bloco_aluno where bloco_id = <bloco_com_10>'),
           10::bigint, 'e o bloco continua com 10, nunca 11');
 
 select * from finish();
 rollback;
 ```
+
+Os blocos e alunos citados como `<...>` vêm das camadas `turmas` e `alunos` da fixture, que os cards
+5.1 e 4.2 escrevem — o portão do §4.2 cobra as duas quando as tabelas existirem.

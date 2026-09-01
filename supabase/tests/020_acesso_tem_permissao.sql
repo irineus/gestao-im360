@@ -5,149 +5,46 @@
 -- fn_minhas_permissoes, fn_param_int/txt, fn_exige_permissao, o contexto de
 -- rotina e as políticas das sete tabelas do card 3.3.
 --
--- Esta suíte monta a PRÓPRIA fixture e faz a troca de papel no topo do script,
--- sem os helpers tests.* do Apêndice A do card 2.8 — eles são do card 3.4.5 e
--- ainda não existem.
+-- Reescrito no card 3.4.5 para consumir a escola-fixture e os helpers tests.*
+-- de supabase/seed.sql. Antes montava a própria fixture, com as mesmas duas
+-- unidades — e a partir do 3.4.5 isso deixou de ser só duplicação: `ESCOLA_A`
+-- passou a existir no seed, e `unidade_codigo_uk` derrubaria este arquivo no
+-- primeiro insert.
 --
--- Verificado em 01/09/2026 (Postgres 17, container local): o helper do Apêndice
--- A está CORRETO. `set local role` dentro de uma função com cláusula
--- `set search_path` persiste depois da saída — o Postgres salva e restaura só as
--- variáveis nomeadas na cláusula, não o nível de GUC inteiro. Quem restaura tudo
--- é `security definer`, e ali o `set role` nem chega a passar: dá erro explícito
--- ("cannot set parameter role within security-definer function"). Não há modo de
--- falha silencioso nesse desenho — o que havia era uma suspeita, agora descartada.
+-- Regra de ouro dos helpers: `tests.*` só é alcançável a partir do papel
+-- `postgres`. Depois de `tests.autenticar(...)` a sessão está em
+-- `authenticated`, que não tem USAGE no schema `tests` — para trocar de usuário,
+-- `reset role;` primeiro.
 --
 -- O setup roda como `postgres`, que tem BYPASSRLS (achado do card 3.3): a RLS
--- não atrapalha a montagem da fixture. Tudo dentro de begin/rollback.
+-- não atrapalha a leitura da fixture. Tudo dentro de begin/rollback.
 -- =============================================================================
 
 begin;
 select plan(32);
 
--- ---------------------------------------------------------------------------
--- Fixture — duas unidades; a segunda existe só para provar isolamento.
--- UUIDs fixos para que as claims JWT possam ser literais no script.
--- ---------------------------------------------------------------------------
-insert into public.unidade (id, codigo, nome) values
-  ('11111111-1111-4111-8111-111111111111', 'ESCOLA_A', 'Escola A'),
-  ('22222222-2222-4222-8222-222222222222', 'ESCOLA_B', 'Escola B');
-
-insert into public.permissao (unidade_id, codigo, descricao, dominio) values
-  ('11111111-1111-4111-8111-111111111111', 'admin.ler',        'Ler administração', 'admin'),
-  ('11111111-1111-4111-8111-111111111111', 'unidades.ler',     'Ler unidade',       'unidades'),
-  ('11111111-1111-4111-8111-111111111111', 'parametros.ler',   'Ler parâmetros',    'parametros'),
-  ('11111111-1111-4111-8111-111111111111', 'parametros.gerir', 'Gerir parâmetros',  'parametros'),
-  ('22222222-2222-4222-8222-222222222222', 'unidades.ler',     'Ler unidade',       'unidades');
-
-insert into public.perfil (id, unidade_id, codigo, nome, ativo) values
-  ('aaaa0000-0000-4000-8000-00000000000a', '11111111-1111-4111-8111-111111111111',
-   'DIRECAO',   'Direção',  true),
-  ('aaaa0000-0000-4000-8000-00000000000b', '11111111-1111-4111-8111-111111111111',
-   'MONITOR',   'Monitor',  true),
-  ('aaaa0000-0000-4000-8000-00000000000c', '11111111-1111-4111-8111-111111111111',
-   'ARQUIVADO', 'Perfil desativado', false),
-  ('aaaa0000-0000-4000-8000-00000000000d', '22222222-2222-4222-8222-222222222222',
-   'DIRECAO',   'Direção',  true);
-
--- direção da unidade A: as quatro permissões de A.
-insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
-  select '11111111-1111-4111-8111-111111111111',
-         'aaaa0000-0000-4000-8000-00000000000a', p.id
-    from public.permissao p
-   where p.unidade_id = '11111111-1111-4111-8111-111111111111';
-
--- monitor: só unidades.ler. Sem admin.ler e sem parametros.ler — é dele que sai
--- a prova de que fn_param_int funciona mesmo assim.
-insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
-  select '11111111-1111-4111-8111-111111111111',
-         'aaaa0000-0000-4000-8000-00000000000b', p.id
-    from public.permissao p
-   where p.unidade_id = '11111111-1111-4111-8111-111111111111'
-     and p.codigo = 'unidades.ler';
-
--- perfil desativado com a MESMA permissão da direção: se `pe.ativo` não fosse
--- filtrado, o usuário abaixo passaria em tudo.
-insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
-  select '11111111-1111-4111-8111-111111111111',
-         'aaaa0000-0000-4000-8000-00000000000c', p.id
-    from public.permissao p
-   where p.unidade_id = '11111111-1111-4111-8111-111111111111'
-     and p.codigo = 'unidades.ler';
-
-insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
-  select '22222222-2222-4222-8222-222222222222',
-         'aaaa0000-0000-4000-8000-00000000000d', p.id
-    from public.permissao p
-   where p.unidade_id = '22222222-2222-4222-8222-222222222222';
-
-insert into auth.users (id, email, aud, role, encrypted_password,
-                        email_confirmed_at, created_at, updated_at)
-values
-  ('cccc0000-0000-4000-8000-000000000001', 'direcao@ex.com',   'authenticated', 'authenticated', '', now(), now(), now()),
-  ('cccc0000-0000-4000-8000-000000000002', 'monitor@ex.com',   'authenticated', 'authenticated', '', now(), now(), now()),
-  ('cccc0000-0000-4000-8000-000000000003', 'semperfil@ex.com', 'authenticated', 'authenticated', '', now(), now(), now()),
-  ('cccc0000-0000-4000-8000-000000000004', 'inativo@ex.com',   'authenticated', 'authenticated', '', now(), now(), now()),
-  ('cccc0000-0000-4000-8000-000000000005', 'arquivado@ex.com', 'authenticated', 'authenticated', '', now(), now(), now()),
-  ('cccc0000-0000-4000-8000-000000000006', 'direcaob@ex.com',  'authenticated', 'authenticated', '', now(), now(), now());
-
-insert into public.usuario (id, unidade_id, nome, email, ativo) values
-  ('cccc0000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'Direção A',   'direcao@ex.com',   true),
-  ('cccc0000-0000-4000-8000-000000000002', '11111111-1111-4111-8111-111111111111', 'Monitor A',   'monitor@ex.com',   true),
-  ('cccc0000-0000-4000-8000-000000000003', '11111111-1111-4111-8111-111111111111', 'Sem perfil',  'semperfil@ex.com', true),
-  ('cccc0000-0000-4000-8000-000000000004', '11111111-1111-4111-8111-111111111111', 'Desativado',  'inativo@ex.com',   false),
-  ('cccc0000-0000-4000-8000-000000000005', '11111111-1111-4111-8111-111111111111', 'Arquivado',   'arquivado@ex.com', true),
-  ('cccc0000-0000-4000-8000-000000000006', '22222222-2222-4222-8222-222222222222', 'Direção B',   'direcaob@ex.com',  true);
-
-insert into public.usuario_perfil (unidade_id, usuario_id, perfil_id) values
-  ('11111111-1111-4111-8111-111111111111', 'cccc0000-0000-4000-8000-000000000001', 'aaaa0000-0000-4000-8000-00000000000a'),
-  ('11111111-1111-4111-8111-111111111111', 'cccc0000-0000-4000-8000-000000000002', 'aaaa0000-0000-4000-8000-00000000000b'),
-  -- desativado, mas com o perfil de direção intacto
-  ('11111111-1111-4111-8111-111111111111', 'cccc0000-0000-4000-8000-000000000004', 'aaaa0000-0000-4000-8000-00000000000a'),
-  -- ativo, mas o perfil é que está desativado
-  ('11111111-1111-4111-8111-111111111111', 'cccc0000-0000-4000-8000-000000000005', 'aaaa0000-0000-4000-8000-00000000000c'),
-  ('22222222-2222-4222-8222-222222222222', 'cccc0000-0000-4000-8000-000000000006', 'aaaa0000-0000-4000-8000-00000000000d');
-
-insert into public.parametro (unidade_id, chave, valor, tipo, descricao) values
-  ('11111111-1111-4111-8111-111111111111', 'projecao_horizonte_dias', '60', 'INTEIRO',
-   'Horizonte da projeção de demanda, em dias');
-
--- Captura o `codigo` do DETAIL de um erro — o contrato que o Flutter lê
--- (card 2.2 §1.2). Substituído por tests.ultimo_erro_detail() no card 3.4.5.
-create function pg_temp.codigo_do_erro(p_sql text) returns text
-language plpgsql as $$
-declare v_detail text;
-begin
-  execute p_sql;
-  return null;
-exception when others then
-  get stacked diagnostics v_detail = pg_exception_detail;
-  return v_detail::json ->> 'codigo';
-end $$;
-
 -- ===========================================================================
 -- 1. tem_permissao — quem tem, quem não tem, e os três estados que negam
 -- ===========================================================================
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000001","role":"authenticated"}', true);
-set local role authenticated;
+select tests.autenticar(tests.uid('direcao@escola-a.test'));
 
 select ok(public.tem_permissao('unidades.ler'),
   'direcao tem unidades.ler');
 
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('monitor@escola-a.test'));
 
 select ok(not public.tem_permissao('admin.ler'),
   'monitor NAO tem admin.ler');
 
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('semperfil@escola-a.test'));
 
 select ok(not public.tem_permissao('unidades.ler'),
   'usuario sem perfil nao tem permissao nenhuma');
 
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('desativado@escola-a.test'));
 
 select ok(not public.tem_permissao('unidades.ler'),
   'usuario DESATIVADO nao tem permissao, mesmo com perfil de direcao');
@@ -155,8 +52,8 @@ select ok(not public.tem_permissao('unidades.ler'),
 select is(public.fn_unidade_atual(), null::uuid,
   'usuario desativado nao tem unidade — e unidade null nega toda politica');
 
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000005","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('arquivado@escola-a.test'));
 
 select ok(not public.tem_permissao('unidades.ler'),
   'perfil DESATIVADO nao concede, mesmo com a linha de perfil_permissao intacta');
@@ -164,23 +61,23 @@ select ok(not public.tem_permissao('unidades.ler'),
 -- ===========================================================================
 -- 2. fn_unidade_atual e fn_minhas_permissoes
 -- ===========================================================================
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('direcao@escola-a.test'));
 
-select is(public.fn_unidade_atual(),
-  '11111111-1111-4111-8111-111111111111'::uuid,
+-- Comparação com SQL puro: a direção enxerga exatamente uma unidade, a sua.
+select is(public.fn_unidade_atual(), (select id from public.unidade),
   'fn_unidade_atual devolve a unidade do usuario autenticado');
 
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('monitor@escola-a.test'));
 
 select is(
   (select string_agg(c, ',' order by c) from public.fn_minhas_permissoes() c),
   'unidades.ler',
   'fn_minhas_permissoes devolve exatamente as permissoes do monitor');
 
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('semperfil@escola-a.test'));
 
 select is(
   (select count(*) from public.fn_minhas_permissoes())::bigint, 0::bigint,
@@ -190,26 +87,26 @@ select is(
 -- 3. Políticas de select — inclusive a redução silenciosa, que é o modo de
 --    falha que o card 2.3 §3.4 documentou
 -- ===========================================================================
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('direcao@escola-a.test'));
 
 select is((select count(*) from public.unidade)::bigint, 1::bigint,
   'direcao de A ve apenas a propria unidade');
 
-select is((select count(*) from public.permissao)::bigint, 4::bigint,
+select is((select count(*) from public.permissao)::bigint, 7::bigint,
   'direcao ve o catalogo de permissoes da propria unidade');
 
-select is((select count(*) from public.usuario)::bigint, 5::bigint,
-  'direcao ve os cinco usuarios da unidade A, e nenhum da B');
+select is((select count(*) from public.usuario)::bigint, 7::bigint,
+  'direcao ve os sete usuarios da unidade A, e nenhum da B');
 
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000006","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('direcao@escola-b.test'));
 
 select is((select string_agg(codigo, ',') from public.unidade), 'ESCOLA_B',
   'direcao de B ve apenas a unidade B — isolamento por unidade');
 
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('monitor@escola-a.test'));
 
 select is((select count(*) from public.permissao)::bigint, 0::bigint,
   'monitor sem admin.ler le ZERO linhas de permissao — a RLS reduz, nao acusa');
@@ -223,24 +120,31 @@ select is((select count(*) from public.parametro)::bigint, 0::bigint,
 -- ===========================================================================
 -- 4. Políticas de escrita
 -- ===========================================================================
+-- O id da unidade alheia vai para uma GUC enquanto a sessão ainda é `postgres`:
+-- a direção de A **não enxerga** a linha de B, então um subselect dentro do
+-- insert não acharia nada e o teste passaria pelo motivo errado.
+reset role;
+select set_config('tests.unidade_b', tests.unidade('ESCOLA_B')::text, true);
+select tests.autenticar(tests.uid('monitor@escola-a.test'));
+
 select throws_ok(
   $$ insert into public.parametro (unidade_id, chave, valor, tipo)
-     values ('11111111-1111-4111-8111-111111111111', 'hack', '1', 'INTEIRO') $$,
+     select id, 'hack', '1', 'INTEIRO' from public.unidade $$,
   '42501', null,
   'monitor sem parametros.gerir nao insere parametro');
 
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('direcao@escola-a.test'));
 
 select lives_ok(
   $$ insert into public.parametro (unidade_id, chave, valor, tipo)
-     values ('11111111-1111-4111-8111-111111111111', 'standby_alerta_dias', '30', 'INTEIRO') $$,
+     select id, 'standby_alerta_dias', '30', 'INTEIRO' from public.unidade $$,
   'direcao com parametros.gerir insere parametro');
 
 select throws_ok(
   $$ insert into public.parametro (unidade_id, chave, valor, tipo)
-     values ('22222222-2222-4222-8222-222222222222', 'invasao', '1', 'INTEIRO') $$,
-  '42501',  null,
+     values (current_setting('tests.unidade_b')::uuid, 'invasao', '1', 'INTEIRO') $$,
+  '42501', null,
   'ninguem escreve na unidade alheia, mesmo com a permissao do proprio dominio');
 
 -- `permissao` não tem política de update: o catálogo só muda por migração
@@ -256,8 +160,8 @@ select is((select count(*) from u)::bigint, 0::bigint,
 -- ===========================================================================
 -- 5. fn_param_* — o ajuste BLOQUEANTE do card 2.4 (#4) / Ordem 5 (§11)
 -- ===========================================================================
-select set_config('request.jwt.claims',
-  '{"sub":"cccc0000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+reset role;
+select tests.autenticar(tests.uid('monitor@escola-a.test'));
 
 -- O monitor acabou de ler ZERO linhas de `parametro` (asserção acima). Se
 -- fn_param_int fosse security invoker, esta chamada devolveria
@@ -276,23 +180,33 @@ select throws_ok(
   'PT422', null,
   'fn_param_int sem valor nem default levanta PT422');
 
+reset role;
+
 select is(
-  pg_temp.codigo_do_erro($$ select public.fn_param_int('inexistente') $$),
+  tests.codigo_do_erro($$ select public.fn_param_int('inexistente') $$,
+                       tests.uid('monitor@escola-a.test')),
   'PARAMETRO_AUSENTE',
   'e o codigo estavel no DETAIL e PARAMETRO_AUSENTE');
 
 -- ===========================================================================
 -- 6. fn_exige_permissao
 -- ===========================================================================
+select tests.autenticar(tests.uid('monitor@escola-a.test'));
+
 select throws_ok(
   $$ select public.fn_exige_permissao('admin.ler') $$,
   'PT403', null,
   'fn_exige_permissao levanta PT403 para quem nao tem o codigo');
 
+reset role;
+
 select is(
-  pg_temp.codigo_do_erro($$ select public.fn_exige_permissao('admin.ler') $$),
+  tests.codigo_do_erro($$ select public.fn_exige_permissao('admin.ler') $$,
+                       tests.uid('monitor@escola-a.test')),
   'SEM_PERMISSAO',
   'e o codigo estavel no DETAIL e SEM_PERMISSAO');
+
+select tests.autenticar(tests.uid('monitor@escola-a.test'));
 
 select lives_ok(
   $$ select public.fn_exige_permissao('unidades.ler') $$,
@@ -301,8 +215,8 @@ select lives_ok(
 -- ===========================================================================
 -- 7. Anônimo não vê nada: toda política é `to authenticated`
 -- ===========================================================================
-select set_config('request.jwt.claims', null, true);
-set local role anon;
+reset role;
+select tests.como_anonimo();
 
 select is((select count(*) from public.unidade)::bigint, 0::bigint,
   'anon nao le unidade — nenhuma politica e concedida a anon');
@@ -312,19 +226,15 @@ reset role;
 -- ===========================================================================
 -- 8. Contexto de rotina (card 2.2 §2.2)
 -- ===========================================================================
-select set_config('request.jwt.claims', null, true);
-select set_config('app.rotina', 'on', true);
-select set_config('app.rotina_unidade',
-  '11111111-1111-4111-8111-111111111111', true);
+select tests.como_rotina(tests.unidade('ESCOLA_A'));
 
 select ok(public.tem_permissao('qualquer.codigo_que_nao_existe'),
   'em contexto de rotina tem_permissao e sempre verdadeira');
 
-select is(public.fn_unidade_atual(),
-  '11111111-1111-4111-8111-111111111111'::uuid,
+select is(public.fn_unidade_atual(), tests.unidade('ESCOLA_A'),
   'em contexto de rotina fn_unidade_atual vem da GUC, nao de auth.uid()');
 
-select set_config('app.rotina', '', true);
+select tests.encerrar_sessao();
 
 -- ===========================================================================
 -- 9. fn_hoje() não depende do fuso da sessão (card 2.3 §3.3)
