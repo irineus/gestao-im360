@@ -1,0 +1,774 @@
+# Design system Flutter — card 2.7
+
+> **Fonte do design system.** O card 1.9 fechou a identidade (paleta, tipografia, badges no tema
+> claro); o card 2.6 fechou a estrutura das 13 telas. Este card fecha **a aplicação**: tokens
+> completos nos dois temas (inclusive os badges no escuro, que o 1.9 não definiu), o `ThemeData`
+> Material 3, o catálogo de componentes reutilizáveis, os **textos finais de erro e de estado
+> vazio** (delegação explícita do 2.6 §1) e os breakpoints como código. Os cards de tela das
+> Fases 3–9 consomem este documento e não redecideram nada disto.
+
+Data: 01/09/2026. Base: `docs/identidade-visual.md`, `docs/wireframes.md`,
+`docs/regras-negocio-funcoes.md` (§1.2, §6.1, §12), `docs/views-leitura.md` (§4.1),
+`docs/permissoes-matriz.md` §6. Contrastes WCAG 2.1 recalculados para todo par novo deste
+documento (mesmo método do card 1.9); valores anotados onde aparecem.
+
+---
+
+## 1. Escopo
+
+**Neste documento:** tokens Dart prontos para `lib/theme/`, mapeamento para `ThemeData` (Material 3),
+os componentes que o card 2.6 mandou componentizar uma vez (badges, tabela com filtros, formulários,
+cards de dashboard, os quatro estados de tela), a hierarquia de botões com a regra
+ocultar × desabilitar, e os textos em português de erros e estados vazios.
+
+**Não está aqui, de propósito:**
+
+| Assunto | Dono |
+|---|---|
+| Criação do projeto Flutter e empacotamento da fonte Inter | card 3.7 (esqueleto do app) |
+| Ícone do app, splash e favicon nos tamanhos das lojas | fase de build (Fase 3) — `assets/marca/gestao-im360-simbolo.svg` é a fonte |
+| Layout interno de cada tela (que região mostra o quê) | `docs/wireframes.md`, fechado |
+| Views e funções que alimentam os componentes | cards 2.2/2.3, fechados |
+
+O código Dart do apêndice (§10) é **especificação executável**: o card 3.7 copia os arquivos para
+`lib/theme/` como estão; divergência encontrada na implementação volta como correção aqui, não como
+decisão local.
+
+---
+
+## 2. Fundações
+
+### 2.1 Cor — tema claro
+
+Tokens do card 1.9, sem alteração. Papéis de uso (o componente referencia o **papel**, nunca o hex):
+
+| Papel | Token | Hex |
+|---|---|---|
+| Fundo da aplicação | `grafite-50` | `#F6F7F9` |
+| Superfície (card, tabela) | branco | `#FFFFFF` |
+| Superfície secundária / cabeçalho de tabela | `grafite-100` | `#ECEEF2` |
+| Borda e divisor | `grafite-200` | `#D9DDE5` |
+| Texto primário | `grafite-900` | `#171C26` |
+| Texto de corpo | `grafite-700` | `#3A4252` |
+| Texto secundário | `grafite-500` | `#656F82` |
+| Desabilitado / placeholder | `grafite-400` | `#8B94A6` (só ≥ 18 pt como texto informativo) |
+| Ação principal / link | `laranja-600` | `#BE4E08` (4,90:1) |
+| Ação hover/pressed | `laranja-700` | `#973E09` |
+| Marca (nunca texto, nunca botão) | `laranja-500` | `#E2620F` |
+| Seleção / realce de linha | `laranja-50` / `laranja-100` | `#FFF4EC` / `#FFE3D0` |
+| Sucesso / Atenção / Erro / Info | — | `#1E7A46` / `#8A5A06` / `#B42318` / `#1B5FA8` (fundos tonais no card 1.9 §3.3) |
+| FORMADO (violeta própria) | — | `#4C3FA8` |
+| Barra lateral / cabeçalho | `grafite-800` | `#262D3A` |
+
+### 2.2 Cor — tema escuro
+
+Tokens do card 1.9 §3.4, completados aqui com os que faltavam (seleção, hover e os badges do §2.4):
+
+| Papel | Hex |
+|---|---|
+| Fundo da aplicação | `#12161F` |
+| Superfície | `#1B2130` |
+| Superfície elevada / cabeçalho de tabela | `#262D3A` |
+| Borda e divisor | `#333B4B` |
+| Texto primário | `#E7EAF0` (15,02:1) |
+| Texto secundário | `#A7B0C0` (8,29:1) |
+| Desabilitado / placeholder | `#5D6678` (decorativo; nunca portador único de informação) |
+| Ação principal / link | `#F2803F` (6,84:1); texto sobre ela `#171C26` (6,45:1) |
+| Ação hover/pressed | `#FBA36F` |
+| Seleção / realce de linha | `#33241A` (mistura de laranja sobre superfície; decorativo, sempre acompanhada de estado) |
+| Sucesso / Atenção / Erro / Info | `#5FD08C` / `#E5B65C` / `#F87A6E` / `#7FB4F0` |
+| FORMADO | `#B3A6F2` |
+
+O tema segue o sistema operacional por padrão; o menu do usuário (card 2.6 §3.1) permite fixar
+claro/escuro, persistido localmente (`shared_preferences`) — preferência de exibição não é dado de
+negócio e não vai ao banco.
+
+### 2.3 Badges de status (preenchido tonal) — dois temas
+
+Regra do card 1.9 §6, que este documento não altera: **status do aluno = preenchido tonal; tipo na
+turma = contorno**. O que faltava era o tema escuro; contrastes calculados neste card:
+
+| Status | Claro: texto / fundo | Escuro: texto / fundo | Contraste escuro |
+|---|---|---|---|
+| ATIVO | `#1E7A46` / `#E6F4EC` | `#5FD08C` / `#1C3535` | 6,76:1 |
+| ACELERAR | `#973E09` / `#FFF0E4` | `#F5A468` / `#3A2826` | 6,88:1 |
+| STANDBY | `#8A5A06` / `#FCF3E0` | `#E5B65C` / `#332E27` | 7,16:1 |
+| TRANCADO | `#3A4252` / `#ECEEF2` | `#A7B0C0` / `#262D3A` | 6,33:1 |
+| CANCELADO | `#B42318` / `#FEF3F2` | `#F87A6E` / `#3D212B` | 5,51:1 |
+| FORMADO | `#4C3FA8` / `#EEEBFA` | `#B3A6F2` / `#27284E` | 6,44:1 |
+
+### 2.4 Badges de tipo (contorno) — dois temas
+
+| Tipo | Claro (borda e texto) | Escuro (borda e texto) | Contraste escuro sobre superfície |
+|---|---|---|---|
+| NOVO | `#1E7A46` | `#5FD08C` | 8,33:1 |
+| REM | `#656F82` | `#A7B0C0` | 7,36:1 |
+| PRE | `#1B5FA8` | `#7FB4F0` | 7,41:1 |
+| REP | `#8A5A06` | `#E5B65C` | 8,55:1 |
+
+### 2.5 Tipografia
+
+Inter variável, empacotada como asset (card 3.7), família única. Escala fechada no card 1.9 §4,
+aqui mapeada para estilos nomeados — os componentes usam **o nome**, nunca tamanho avulso:
+
+| Estilo | Tamanho/altura | Peso | Uso |
+|---|---|---|---|
+| `titulo` | 24/32 | 700 | título de tela |
+| `subtitulo` | 20/28 | 600 | título de seção, cabeçalho de diálogo |
+| `corpo` | 16/24 | 400 | formulário, texto corrido — 16 evita zoom automático no iOS |
+| `corpoTabela` | 14/20 | 400 | célula de tabela e lista densa |
+| `rotulo` | 14/20 | 500 | rótulo de campo, item de menu, botão |
+| `cabecalhoTabela` | 14/20 | 600 | cabeçalho de tabela |
+| `apoio` | 12/16 | 400 | legenda, texto de apoio, metadado ("por Débora, 30/08") |
+| `numero` | herda | herda + `tnum` | **toda** célula numérica, grade, saldo, contador |
+
+`numero` não é um tamanho: é a obrigação de `FontFeature.tabularFigures()` em tabela, grade de
+vagas e valor de estoque (card 1.9 §4). No apêndice, `Tipografia.numero(TextStyle)` aplica o
+feature a qualquer estilo.
+
+### 2.6 Espaçamento, raios, elevação, ícones, movimento
+
+- **Espaçamento** em múltiplos de 4: `4 / 8 / 12 / 16 / 24 / 32`. Padding de tela: 24 desktop,
+  16 mobile. Espaço entre campos de formulário: 16. Entre cards: 16.
+- **Raios:** 6 badge e chip de filtro; 8 botão, campo e card; 12 diálogo e folha inferior.
+  Nada de pílula (raio total): num sistema de tabelas, cantos levemente arredondados leem melhor.
+- **Elevação:** o sistema é **plano com bordas** — card e tabela com borda `1 px` na cor de
+  divisor, sem sombra. Sombra só em o que flutua de verdade: menu aberto, diálogo, folha inferior
+  (elevações 2/6/8 do Material). Motivo: sombra em dezenas de linhas e cards vira ruído em tela
+  densa e não sobrevive ao tema escuro.
+- **Ícones:** Material Symbols (rounded), a família que o Flutter embarca — nenhum pacote de ícone
+  de terceiro. Tamanhos 20 (em linha/tabela) e 24 (navegação, botões). Ícone nunca sem rótulo ou
+  tooltip, exceto os consagrados do shell (fechar, buscar).
+- **Movimento:** transições padrão do Material 3; duração curta (150–250 ms). Skeleton pulsa
+  suavemente (§5.6); nenhuma animação carrega significado sozinha.
+
+---
+
+## 3. Breakpoints e shell
+
+As três faixas do card 2.6 §2.1, como código. A faixa é derivada **da largura disponível**
+(`LayoutBuilder`), nunca da plataforma — um navegador estreitado vira `mobile` e é assim que se
+testa a ergonomia do monitor no desktop.
+
+```dart
+enum Faixa { mobile, tablet, desktop }
+
+Faixa faixaDe(double largura) => largura >= 1024
+    ? Faixa.desktop
+    : largura >= 600 ? Faixa.tablet : Faixa.mobile;
+```
+
+| Faixa | Largura | Shell |
+|---|---|---|
+| `desktop` | ≥ 1024 | menu lateral fixo 240 px (`NavigationDrawer` permanente) |
+| `tablet` | 600–1023 | trilho de ícones 72 px (`NavigationRail`) com tooltips |
+| `mobile` | < 600 | `NavigationBar` inferior — Alunos · Turmas · Pendências · Mais — + gaveta "Mais" |
+
+- O shell é **um componente** (`ShellIm360`), dono da navegação, do cabeçalho (logotipo + nome da
+  unidade) e do menu do usuário; as telas só entregam conteúdo. Itens de navegação filtrados pelo
+  conjunto mínimo de cada rota (card 2.4 §6) — item sem permissão não é renderizado.
+- Contador de Pendências: badge numérico no item, só severidade ALTA aberta (card 2.6 decisão 5).
+- Largura máxima de conteúdo: 1440 px, centrado — em monitor ultrawide a tabela não vira uma tira
+  de 3 000 px.
+- **Degradação por prioridade de coluna** (card 2.6 decisão 7): cada tabela declara a prioridade
+  das colunas; abaixo de um limiar por coluna, as marcadas `†` deixam de ser renderizadas e o
+  conteúdo delas migra para a linha secundária do cartão (mobile) ou some (tablet). Rolagem
+  horizontal de página é proibida; rolagem horizontal **dentro** de uma tabela específica só como
+  último recurso e com sombra indicadora de corte.
+
+---
+
+## 4. Tema Flutter (Material 3)
+
+`useMaterial3: true`, dois `ThemeData` completos gerados dos tokens (§10.4). Decisões de mapeamento
+— o que difere do Material padrão e por quê:
+
+1. **`ColorScheme` não é gerado por `ColorScheme.fromSeed`.** Seed geraria tons harmônicos mas
+   não os hex verificados do card 1.9; o esquema é montado à mão com os tokens. `primary` =
+   ação (`#BE4E08` claro / `#F2803F` escuro), **nunca** a cor de marca `#E2620F`, que reprova AA
+   (card 1.9 §3.1) e no tema fica restrita ao logotipo.
+2. **Densidade:** `VisualDensity.compact` no desktop/tablet, padrão no mobile — no balcão a
+   secretaria quer linhas; no laboratório o monitor quer alvo de 44 px. A densidade vem da faixa,
+   junto com o shell.
+3. **Botões** (`FilledButton`/`FilledButton.tonal`/`TextButton`/vermelho destrutivo): altura mínima
+   40 px desktop, 48 px mobile; raio 8; rótulo peso 500. Sem `ElevatedButton` — plano com bordas.
+4. **Campos** (`InputDecorationTheme`): `filled: true` com a superfície secundária, borda 1 px na
+   cor de divisor, borda de foco 2 px na cor de ação, borda de erro 2 px na cor de erro; rótulo
+   flutuante; texto de apoio/erro em `apoio`. Corpo 16 px sempre (§2.5).
+5. **Foco:** anel de 2 px com 2 px de deslocamento em todo controle — `grafite-700` no claro,
+   `#F2803F` no escuro (card 1.9 §7). Implementado uma vez no tema (`FocusThemeData` +
+   `WidgetState.focused` nos componentes), nunca `outline: none` sem substituto.
+6. **`DataTableTheme`:** cabeçalho `cabecalhoTabela` sobre superfície secundária; linha 44 px
+   (48 mobile); divisor 1 px; zebra desligada (o realce é de estado, não decorativo); linha
+   selecionada/hover com a cor de seleção.
+7. **`SnackBar`:** flutuante, raio 8, no desktop ancorada embaixo à esquerda (fora do caminho do
+   mouse na tabela). Só para confirmação efêmera (§5.8); erro que exige leitura não vai em snackbar.
+8. **Diálogo e folha inferior:** raio 12; no mobile, confirmações de fluxo (resultado de entrega,
+   virada REP) são `BottomSheet`, não diálogo central (card 2.6 §6.3).
+9. **`Tooltip`:** obrigatório em ícone sem rótulo e no motivo de botão desabilitado; delay 500 ms.
+
+---
+
+## 5. Catálogo de componentes
+
+Cada componente nasce em `lib/widgets/` no card da primeira tela que o usa (§9) e **não é
+duplicado** depois. Assinaturas indicativas; o contrato é o comportamento descrito.
+
+### 5.1 `BadgeStatus` e `BadgeTipo`
+
+```dart
+BadgeStatus(StatusAluno status)   // preenchido tonal — §2.3
+BadgeTipo(TipoTurma tipo)         // contorno 1.5 px, fundo transparente — §2.4
+```
+
+- Sempre com o rótulo em texto (cor nunca é o único portador — card 1.9 §7); `rotulo` 12/16
+  peso 500, caixa alta, `letterSpacing 0.4`; padding 2×8; raio 6.
+- As duas formas **nunca** se misturam (card 1.9 §6): um status não aparece em contorno nem um
+  tipo em preenchido, mesmo onde só um dos vocabulários está presente.
+- `BadgeTipo` aceita sufixo "pontual" (reposição do dia, card 2.6 §7.2) como texto de apoio ao
+  lado, fora do badge.
+
+### 5.2 `TabelaIm360` — tabela com filtros
+
+O componente central do sistema (9 das 13 telas). Envolve a tabela, a barra de filtros e os quatro
+estados (§5.6) num contrato único:
+
+```dart
+TabelaIm360<T>(
+  colunas: [ColunaIm360(titulo, prioridade, numerica, larguraMin, ...)],
+  linhas: AsyncValue<List<T>>,          // Riverpod: data / loading / error
+  filtros: [...],                       // dropdowns, busca, checkbox — §5.3
+  aoTocarLinha: (T) => ...,             // navegação — toda referência é clicável (card 2.6 §3.3)
+  estadoVazio: EstadoVazio(...),        // texto específico da tela — §7.2
+)
+```
+
+- **Colunas numéricas**: alinhadas à direita, `numero` (tnum). Coluna com `prioridade` baixa é a
+  `†` do wireframe — some primeiro na degradação (§3).
+- **Mobile**: a mesma `TabelaIm360` renderiza **cartões** (título, linha secundária, badge) quando
+  a faixa é `mobile` e a tela declara o mapeamento linha→cartão; filtros migram para folha inferior
+  com botão "Filtrar (n)" mostrando quantos estão ativos.
+- **Linha em alerta**: fundo tonal de atenção/erro **mais ícone** na primeira célula (cor nunca
+  sozinha). Saldo negativo usa o par de erro e nunca é ocultado (card 2.3 §4.1).
+- **Ordenação** por coluna onde a view permite; indicador no cabeçalho; sem paginação até 500
+  linhas (escala da escola) — acima disso, o card da tela decide.
+
+### 5.3 Filtros
+
+- Dropdowns (`[método v] [status v]`) como `DropdownMenu` compacto; busca como campo com ícone e
+  limpeza; checkbox de filtro ("só abaixo do mínimo") como `FilterChip`.
+- **Filtro é estado da tela, desligável e visível** — a view devolve tudo; quem esconde é a tela
+  (card 2.3 §2.3(h)). O estado vazio com filtros ativos sempre oferece "Limpar filtros" (§7.2).
+- Filtros ativos sobrevivem à navegação de ida e volta dentro da sessão (estado no provider da
+  tela), não à troca de sessão.
+
+### 5.4 Formulários
+
+- Rótulo em cima (nunca placeholder como rótulo); apoio embaixo; obrigatórios marcados com `*` e a
+  legenda "\* obrigatório" uma vez no rodapé.
+- **Validação local só de formato** (obrigatório, e-mail, número, data): a tela **nunca**
+  pré-verifica regra de negócio (card 2.6 decisão 2) — submete e trata o erro pelo `codigo` (§7.1).
+  Erro de regra chega como banner no topo do formulário + realce do campo quando o código aponta um
+  (`MOTIVO_OBRIGATORIO` → campo motivo).
+- Botões no rodapé: primário à direita, "Cancelar" (`TextButton`) à esquerda; em execução, o
+  primário mostra progresso e trava reenvio (duplo clique não lança duas entregas).
+- Desktop: uma coluna, largura máxima 560 px — formulário largo demais separa rótulo do campo.
+  Mobile: tela cheia ou folha inferior, botão primário fixado no rodapé, ≥ 44 px.
+- Avisos de consequência (mudar combo, sair de ATIVO, override de capacidade) aparecem **dentro
+  do formulário/diálogo**, no par tonal de atenção, antes do botão — texto em §7.3.
+
+### 5.5 `CardDashboard`
+
+- Superfície com borda (sem sombra), raio 8, padding 16; título `rotulo` em texto secundário;
+  valor principal `titulo` (24/700, tnum); linhas secundárias `corpoTabela` com badge/ícone de
+  atenção quando houver (`9 standby ⚠`).
+- **O card inteiro é clicável** e navega para a lista filtrada (card 2.6 §5); estado de foco/hover
+  do tema. Números secundários com alerta também são alvos individuais.
+- Grade: desktop 3 colunas (cards de método), demais blocos em 2; mobile empilha na ordem do
+  wireframe.
+
+### 5.6 Estados de tela — `EstadoCarregando`, `EstadoVazio`, `EstadoErro`, `EstadoSemAcesso`
+
+Os quatro estados do card 2.6 §2.3, componentizados **uma vez**:
+
+- **`EstadoCarregando`** — skeleton com a silhueta do conteúdo (linhas de tabela, cards), pulso
+  suave na cor de superfície secundária; nunca spinner central sozinho em tela de tabela, nunca
+  tela branca.
+- **`EstadoVazio`** — ícone discreto, uma frase dizendo *por que* pode estar vazio e **uma ação**
+  (limpar filtros, criar, ir à tela certa). Textos por tela em §7.2.
+- **`EstadoErro`** — mapeia o `codigo` para a mensagem do §7.1; botão "Tentar de novo"; código
+  técnico em `apoio` quando não mapeado. Sem stack trace em tela — isso vai ao Sentry.
+- **`EstadoSemAcesso`** — tela inteira (deep-link/permissão revogada): "Você não tem acesso a esta
+  tela" + o conjunto que falta em `apoio` (diagnóstico, card 2.6 §2.3.4) + botão para o Dashboard.
+  Sem dado nenhum da tela por trás.
+
+`AsyncValue` do Riverpod liga os quatro: `loading` → skeleton, `error` → `EstadoErro`,
+`data` vazio → `EstadoVazio`, `data` → conteúdo.
+
+### 5.7 Botões — hierarquia e a regra de exibição
+
+| Nível | Componente | Uso |
+|---|---|---|
+| Primário | `FilledButton` (cor de ação) | a ação da tela (Registrar entrega, Confirmar) — um por região |
+| Secundário | `FilledButton.tonal` (superfície secundária) | ações de apoio (Editar, Ver) |
+| Terciário | `TextButton` | Cancelar, links de navegação |
+| Destrutivo | `FilledButton` vermelho | remover, cancelar pedido, estornar — sempre com diálogo de confirmação |
+
+**Regra única (card 2.6 decisão 1):** sem **permissão** → o botão **não é renderizado**; sem
+**estado** → visível e desabilitado com o motivo em tooltip (desktop) e legenda `apoio` (mobile).
+O motivo é obrigatório: `DesabilitadoCom(motivo: ...)` é parte do contrato do componente, não um
+`onPressed: null` solto.
+
+### 5.8 Confirmações e resultados
+
+- **Confirmação efêmera** (salvou, marcou, resolveu): snackbar 4 s com desfazer quando existir
+  (estorno logo após entrega).
+- **Resultado que muda o que o usuário fará em seguida** — os três status da entrega
+  (`ENTREGUE` / `REORDENADA` / `BLOQUEADA_SEM_ESTOQUE`, card 2.2 §6.1), o veredito da virada REP —
+  é **diálogo/folha inferior**, com o texto do §7.3 e link para a pendência criada. Nunca snackbar:
+  some antes de ser lido.
+- **Confirmação destrutiva/consequente**: diálogo com a consequência dita ("o aluno será removido
+  das turmas"), botão primário nomeando a ação ("Remover das turmas", nunca "OK").
+
+---
+
+## 6. Grade de vagas — célula
+
+A grade semanal (telas 2 e 4) não é `TabelaIm360`: é um componente próprio (`GradeVagas`) porque a
+célula carrega três informações e dois estados de alerta:
+
+- Célula: método (`apoio`, caixa alta) · `ocupação/capacidade` (`numero`) · professor (`apoio`).
+- Estados: normal; **lotado** (ocupação = capacidade — texto em peso 600, sem cor de alerta: lotado
+  é fato, não problema); **acima da capacidade** (par de erro + ícone ⚠ — mesmo fato da pendência
+  `BLOCO_ACIMA_CAPACIDADE`); **sem professor** (ícone ⚠ no par de atenção); vazia (traço, e com
+  `turmas.criar` vira alvo de "criar bloco aqui").
+- Numerais tabulares obrigatórios — as colunas de dias alinham.
+- Mobile: um dia por vez (abas Seg–Sáb), células empilhadas como lista.
+
+---
+
+## 7. Textos — erros, vazios e avisos
+
+Português direto, sem jargão técnico, sem culpar o usuário, dizendo **o que aconteceu e o que dá
+para fazer**. O Flutter resolve a mensagem pelo `codigo` estável do `DETAIL` (card 2.2 §1.2) —
+nunca pelo texto do banco, que pode mudar.
+
+### 7.1 Catálogo `codigo` → mensagem
+
+| `codigo` | Mensagem em tela |
+|---|---|
+| `SEM_PERMISSAO` | "Você não tem permissão para esta ação." |
+| `TRANSICAO_INVALIDA` | "Essa mudança de status não é permitida a partir do status atual." |
+| `FORMATURA_SEM_CERTIFICADO` | "Para formar o aluno, o checklist do certificado precisa estar como ENTREGUE — ou a direção pode confirmar mesmo assim." |
+| `MOTIVO_OBRIGATORIO` | "Informe o motivo para continuar." |
+| `ALUNO_INATIVO` | "Esta ação só vale para aluno ATIVO ou ACELERAR." |
+| `METODO_INCOMPATIVEL` | "O método do aluno não é o método desta turma." |
+| `BLOCO_LOTADO` | "Esta turma está lotada. Escolha outro horário ou verifique a capacidade da sala." |
+| `DATA_PREVISTA_OBRIGATORIA` | "Aluno NOVO precisa de data prevista de início." |
+| `TRILHA_JA_EXISTE` | "Este aluno já tem trilha. Para gerar de novo, use a opção de substituir." |
+| `TRILHA_COM_ENTREGA` | "A trilha já tem apostila entregue e não pode ser regenerada. Edite a trilha em vez de substituí-la." |
+| `ALUNO_SEM_COMBO` | "O aluno não tem combo definido. Informe o combo nos dados do aluno." |
+| `ITEM_JA_ENTREGUE` | "Apostila já entregue não pode ser alterada na trilha. Para corrigir, estorne a entrega." |
+| `TRILHA_EM_FIM` | "A trilha deste aluno está concluída — não há apostila pendente para entregar." |
+| `MATERIAL_FORA_DA_TRILHA` | "Esta apostila não está pendente na trilha do aluno." |
+| `MOVIMENTO_JA_ESTORNADO` | "Este movimento já foi estornado." |
+| `MOVIMENTO_NAO_ESTORNAVEL` | "Este movimento não pode ser estornado." |
+| `PEDIDO_NAO_RECEBIVEL` | "Este pedido não está aguardando recebimento." |
+| `RECEBIMENTO_EXCEDE_PEDIDO` | "Quantidade acima do pedido — o recebimento com excedente requer a direção." |
+| `PARAMETRO_AUSENTE` | "Um parâmetro do sistema está sem valor: {chave}. Avise a direção (tela de Administração → Parâmetros)." |
+| `REP_JA_CONTINUO` | "Este aluno já está como REP contínuo." |
+| `REP_NAO_CONTINUO` | "Este aluno não está como REP contínuo." |
+| *não mapeado / rede* | "Não foi possível concluir. Tente de novo; se continuar, avise a direção (código {codigo})." |
+
+Regras: mensagens de **validação de campo** aparecem no campo; as demais em banner
+(formulário/diálogo) ou `EstadoErro` (tela). `{codigo}` sempre presente no caso não mapeado —
+é o que a direção manda para o suporte. `RECEBIMENTO_EXCEDE_PEDIDO` é a tradução que o card 2.6
+§10.2 pediu.
+
+### 7.2 Estados vazios por tela
+
+| Tela / região | Sem filtro ativo | Com filtro ativo (quando difere) |
+|---|---|---|
+| Alunos (lista) | "Nenhum aluno cadastrado. Matricule o primeiro em **+ Matricular**." | "Nenhum aluno com esses filtros — **Limpar filtros**." |
+| Ficha → Trilha | "Este aluno não tem trilha. Gere a partir do combo em **Editar trilha**." | — |
+| Ficha → Turmas | "O aluno não está em nenhuma turma. **+ Alocar em bloco**." (se ATIVO/ACELERAR, com o aviso de `ALUNO_SEM_TURMA`) | — |
+| Ficha → Histórico | "Nenhuma mudança de status registrada." | — |
+| Grade de turmas | "Nenhum bloco cadastrado. **+ Novo bloco**." | "Nenhum bloco com esses filtros — **Limpar filtros**." |
+| Bloco (alunos) | "Nenhum aluno neste bloco. **+ Adicionar aluno**." | — |
+| Turmas Modular | "Nenhuma turma Modular. **+ Nova turma**." | idem filtros |
+| Materiais/estoque | "Nenhum material cadastrado. **+ Novo material**." | idem filtros |
+| Movimentações de material | "Nenhuma movimentação. Entrada de estoque acontece pelo recebimento de pedido, na tela **Compras**." | idem período/tipo |
+| Compras → sugerido | "Nada a comprar agora: nenhum material com sugestão maior que zero." + filtro desligável | — |
+| Compras → pedidos | "Nenhum pedido. Crie a partir do **Pedido sugerido**." | — |
+| Projeção | Rotina ok e sem linhas: "Sem demanda projetada no horizonte atual." **Rotina falhou:** "A projeção não foi calculada — veja a pendência **ROTINA_FALHOU**." (nunca tabela zerada com cara de 'sem demanda' — card 2.6 §11) | — |
+| Certificados | "Ninguém chegando ao fim do curso agora." | idem filtros |
+| Salas e PCs | "Nenhuma sala cadastrada. **+ Nova sala**." | — |
+| Pendências | "Nenhuma pendência aberta. 🎉" | "Nenhuma pendência com esses filtros — **Limpar filtros**." |
+| Administração → usuários | "Só você por aqui. **+ Convidar usuário**." | — |
+| Dashboard (região sem dado) | região mostra zero real, nunca some — número que desaparece parece erro | — |
+
+### 7.3 Avisos e resultados padronizados
+
+- **Entrega `REORDENADA`:** "Sem estoque de **{pulada}**; foi entregue **{entregue}**. **{pulada}**
+  continua pendente e volta a ser a próxima quando houver estoque." + link "Ver pendência".
+- **Entrega `BLOQUEADA_SEM_ESTOQUE`:** "Nenhuma apostila da trilha tem estoque. A entrega não foi
+  registrada; foi aberta uma pendência de compra." + link.
+- **Trilha fechada na entrega:** "Trilha concluída 🎓 — o checklist de certificado foi aberto."
+  + link para a aba Certificado.
+- **Virada REP sugerida (após lançar reposição):** "Com essa falta, a reposição não cabe mais no
+  prazo — foi sugerida a virada para REP contínuo. Quem decide é você, na pendência." + link
+  "Executar agora".
+- **Mudar combo (formulário de Dados):** "Trocar o combo **não** refaz a trilha do aluno — será
+  aberta uma pendência para revisar a trilha." (texto final do apontamento 6 do card 2.6)
+- **Sair de ATIVO/ACELERAR:** "O aluno será removido das turmas ao confirmar."
+- **Override de capacidade:** "A capacidade calculada pelos PCs desta sala é **{n}**. O valor
+  informado substitui esse cálculo."
+- **Editar parâmetro `rep_*` / `projecao_*`:** "Vale a partir da próxima execução da rotina diária
+  (madrugada)."
+- **Desmarcar permissão na matriz:** "A mudança vale imediatamente para todos os usuários do
+  perfil."
+- **Cabeçalho da Projeção:** "calculada em {calculado_em}" — obrigatório (card 2.6 §11); detalhe ao
+  vivo com "o detalhe é de agora e pode diferir do total da madrugada".
+
+---
+
+## 8. Acessibilidade — contrato mínimo
+
+Consolida o card 1.9 §7 no que o componente tem de garantir por construção:
+
+1. Todo par texto/fundo destes tokens passa AA (≥ 4,5:1); os valores estão anotados nos §§2.1–2.4.
+   Par novo em card futuro entra **com o contraste calculado**, como aqui.
+2. Cor nunca é portador único: badge com rótulo, linha de alerta com ícone, estado com texto.
+3. Foco visível em todo controle (§4.5); navegação completa por teclado no desktop (tab, setas na
+   tabela, Enter abre linha).
+4. Alvo ≥ 44 px em toda ação das jornadas mobile do monitor; 40 px mínimo no desktop compacto.
+5. `Semantics` do Flutter: badge anuncia "status ATIVO", célula da grade anuncia "segunda 8h,
+   8 de 10 vagas, professor Marcos"; skeleton marcado como carregando.
+6. Texto respeita o fator de escala do sistema até 1,3× sem quebra de layout (tabelas degradam
+   coluna como no §3).
+
+---
+
+## 9. Estrutura de arquivos e mapa componente → card
+
+```
+lib/
+  theme/
+    cores.dart          // §10.1 — tokens dos dois temas
+    tipografia.dart     // §10.2 — estilos nomeados + tnum
+    dimensoes.dart      // §10.3 — espaçamento, raios, breakpoints
+    tema.dart           // §10.4 — temaClaro / temaEscuro (ThemeData M3)
+  widgets/
+    shell_im360.dart        // §3   — card 3.7
+    badge_status.dart       // §5.1 — card 4.6
+    badge_tipo.dart         // §5.1 — card 5.7
+    tabela_im360.dart       // §5.2/§5.3 — card 4.6 (primeira tabela: alunos)
+    formulario.dart         // §5.4 — card 4.6
+    card_dashboard.dart     // §5.5 — card 5.9
+    estados.dart            // §5.6 — card 3.7 (o shell já precisa de SemAcesso)
+    grade_vagas.dart        // §6   — card 5.6
+    dialogo_resultado.dart  // §5.8 — card 6.6 (entrega é o caso canônico)
+  erros/
+    catalogo_erros.dart     // §7.1 — card 3.7 (mapa codigo → mensagem, usado por todos)
+```
+
+O card que cria cada arquivo é o **primeiro que precisa dele**; os seguintes consomem. `theme/`
+inteiro nasce no 3.7 junto com o esqueleto.
+
+---
+
+## 10. Apêndice — tokens Dart
+
+Substitui o apêndice §8 do card 1.9 (que era um esboço): este é o completo. O 3.7 copia como está.
+
+### 10.1 `lib/theme/cores.dart`
+
+```dart
+import 'package:flutter/material.dart';
+
+/// Tokens de cor — fonte: docs/identidade-visual.md + docs/design-system.md §2.
+/// Nenhum componente usa hex direto: sempre um papel daqui ou do ColorScheme.
+abstract final class Cores {
+  // marca e ação
+  static const marca       = Color(0xFFE2620F); // só logotipo — reprova AA como texto/botão
+  static const acao        = Color(0xFFBE4E08);
+  static const acaoHover   = Color(0xFF973E09);
+  static const acaoEscuro  = Color(0xFFF2803F);
+  static const acaoEscuroHover = Color(0xFFFBA36F);
+
+  // grafite (estrutura, tema claro)
+  static const grafite50  = Color(0xFFF6F7F9);
+  static const grafite100 = Color(0xFFECEEF2);
+  static const grafite200 = Color(0xFFD9DDE5);
+  static const grafite400 = Color(0xFF8B94A6);
+  static const grafite500 = Color(0xFF656F82);
+  static const grafite700 = Color(0xFF3A4252);
+  static const grafite800 = Color(0xFF262D3A);
+  static const grafite900 = Color(0xFF171C26);
+
+  // seleção (claro)
+  static const selecao50  = Color(0xFFFFF4EC);
+  static const selecao100 = Color(0xFFFFE3D0);
+
+  // semânticos — claro (texto / fundo tonal)
+  static const sucesso        = Color(0xFF1E7A46);
+  static const sucessoFundo   = Color(0xFFE6F4EC);
+  static const atencao        = Color(0xFF8A5A06);
+  static const atencaoFundo   = Color(0xFFFCF3E0);
+  static const erro           = Color(0xFFB42318);
+  static const erroFundo      = Color(0xFFFEF3F2);
+  static const info           = Color(0xFF1B5FA8);
+  static const infoFundo      = Color(0xFFEAF2FB);
+
+  // tema escuro — estrutura
+  static const fundoEscuro       = Color(0xFF12161F);
+  static const superficieEscura  = Color(0xFF1B2130);
+  static const superficieElevada = Color(0xFF262D3A);
+  static const divisorEscuro     = Color(0xFF333B4B);
+  static const textoEscuroPrim   = Color(0xFFE7EAF0);
+  static const textoEscuroSec    = Color(0xFFA7B0C0);
+  static const desabilitadoEscuro = Color(0xFF5D6678);
+  static const selecaoEscura     = Color(0xFF33241A);
+
+  // semânticos — escuro
+  static const sucessoEscuro = Color(0xFF5FD08C);
+  static const atencaoEscuro = Color(0xFFE5B65C);
+  static const erroEscuro    = Color(0xFFF87A6E);
+  static const infoEscuro    = Color(0xFF7FB4F0);
+
+  // FORMADO (violeta própria — card 1.9 §6)
+  static const formado       = Color(0xFF4C3FA8);
+  static const formadoEscuro = Color(0xFFB3A6F2);
+}
+
+/// Par texto/fundo de um badge de status, por tema. Contrastes AA verificados
+/// (docs/design-system.md §2.3).
+class ParBadge {
+  final Color texto, fundo;
+  const ParBadge(this.texto, this.fundo);
+}
+
+abstract final class BadgesStatus {
+  static const claro = {
+    'ATIVO':     ParBadge(Color(0xFF1E7A46), Color(0xFFE6F4EC)),
+    'ACELERAR':  ParBadge(Color(0xFF973E09), Color(0xFFFFF0E4)),
+    'STANDBY':   ParBadge(Color(0xFF8A5A06), Color(0xFFFCF3E0)),
+    'TRANCADO':  ParBadge(Color(0xFF3A4252), Color(0xFFECEEF2)),
+    'CANCELADO': ParBadge(Color(0xFFB42318), Color(0xFFFEF3F2)),
+    'FORMADO':   ParBadge(Color(0xFF4C3FA8), Color(0xFFEEEBFA)),
+  };
+  static const escuro = {
+    'ATIVO':     ParBadge(Color(0xFF5FD08C), Color(0xFF1C3535)),
+    'ACELERAR':  ParBadge(Color(0xFFF5A468), Color(0xFF3A2826)),
+    'STANDBY':   ParBadge(Color(0xFFE5B65C), Color(0xFF332E27)),
+    'TRANCADO':  ParBadge(Color(0xFFA7B0C0), Color(0xFF262D3A)),
+    'CANCELADO': ParBadge(Color(0xFFF87A6E), Color(0xFF3D212B)),
+    'FORMADO':   ParBadge(Color(0xFFB3A6F2), Color(0xFF27284E)),
+  };
+}
+
+abstract final class BadgesTipo {
+  static const claro = {
+    'NOVO': Color(0xFF1E7A46),
+    'REM':  Color(0xFF656F82),
+    'PRE':  Color(0xFF1B5FA8),
+    'REP':  Color(0xFF8A5A06),
+  };
+  static const escuro = {
+    'NOVO': Color(0xFF5FD08C),
+    'REM':  Color(0xFFA7B0C0),
+    'PRE':  Color(0xFF7FB4F0),
+    'REP':  Color(0xFFE5B65C),
+  };
+}
+```
+
+### 10.2 `lib/theme/tipografia.dart`
+
+```dart
+import 'package:flutter/material.dart';
+
+/// Escala tipográfica — Inter empacotada como asset (card 3.7).
+abstract final class Tipografia {
+  static const _familia = 'Inter';
+
+  static const titulo = TextStyle(
+      fontFamily: _familia, fontSize: 24, height: 32 / 24, fontWeight: FontWeight.w700);
+  static const subtitulo = TextStyle(
+      fontFamily: _familia, fontSize: 20, height: 28 / 20, fontWeight: FontWeight.w600);
+  static const corpo = TextStyle(
+      fontFamily: _familia, fontSize: 16, height: 24 / 16, fontWeight: FontWeight.w400);
+  static const corpoTabela = TextStyle(
+      fontFamily: _familia, fontSize: 14, height: 20 / 14, fontWeight: FontWeight.w400);
+  static const rotulo = TextStyle(
+      fontFamily: _familia, fontSize: 14, height: 20 / 14, fontWeight: FontWeight.w500);
+  static const cabecalhoTabela = TextStyle(
+      fontFamily: _familia, fontSize: 14, height: 20 / 14, fontWeight: FontWeight.w600);
+  static const apoio = TextStyle(
+      fontFamily: _familia, fontSize: 12, height: 16 / 12, fontWeight: FontWeight.w400);
+  static const badge = TextStyle(
+      fontFamily: _familia, fontSize: 12, height: 16 / 12,
+      fontWeight: FontWeight.w500, letterSpacing: 0.4);
+
+  /// Numerais tabulares — obrigatório em tabela, grade e valor de estoque.
+  static TextStyle numero(TextStyle base) =>
+      base.copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
+}
+```
+
+### 10.3 `lib/theme/dimensoes.dart`
+
+```dart
+/// Espaçamento, raios e breakpoints — docs/design-system.md §2.6 e §3.
+abstract final class Dim {
+  // espaçamento (múltiplos de 4)
+  static const e4 = 4.0, e8 = 8.0, e12 = 12.0, e16 = 16.0, e24 = 24.0, e32 = 32.0;
+
+  // raios
+  static const raioBadge = 6.0, raio = 8.0, raioDialogo = 12.0;
+
+  // breakpoints (card 2.6 §2.1)
+  static const bpTablet = 600.0, bpDesktop = 1024.0;
+  static const larguraMenu = 240.0, larguraTrilho = 72.0, larguraConteudoMax = 1440.0;
+  static const larguraFormularioMax = 560.0;
+
+  // alvos e alturas
+  static const alvoMobile = 44.0, alturaBotao = 40.0, alturaBotaoMobile = 48.0;
+  static const alturaLinha = 44.0, alturaLinhaMobile = 48.0;
+}
+
+enum Faixa { mobile, tablet, desktop }
+
+Faixa faixaDe(double largura) => largura >= Dim.bpDesktop
+    ? Faixa.desktop
+    : largura >= Dim.bpTablet ? Faixa.tablet : Faixa.mobile;
+```
+
+### 10.4 `lib/theme/tema.dart`
+
+```dart
+import 'package:flutter/material.dart';
+import 'cores.dart';
+import 'dimensoes.dart';
+import 'tipografia.dart';
+
+/// ColorScheme montado à mão (não fromSeed): os hex são os verificados
+/// em docs/identidade-visual.md — a semente geraria tons não auditados.
+const _esquemaClaro = ColorScheme.light(
+  primary: Cores.acao,            onPrimary: Colors.white,
+  secondary: Cores.grafite700,    onSecondary: Colors.white,
+  surface: Colors.white,          onSurface: Cores.grafite900,
+  surfaceContainerHighest: Cores.grafite100,
+  onSurfaceVariant: Cores.grafite500,
+  outline: Cores.grafite200,
+  error: Cores.erro,              onError: Colors.white,
+  errorContainer: Cores.erroFundo, onErrorContainer: Cores.erro,
+);
+
+const _esquemaEscuro = ColorScheme.dark(
+  primary: Cores.acaoEscuro,      onPrimary: Cores.grafite900,
+  secondary: Cores.textoEscuroSec, onSecondary: Cores.grafite900,
+  surface: Cores.superficieEscura, onSurface: Cores.textoEscuroPrim,
+  surfaceContainerHighest: Cores.superficieElevada,
+  onSurfaceVariant: Cores.textoEscuroSec,
+  outline: Cores.divisorEscuro,
+  error: Cores.erroEscuro,        onError: Cores.grafite900,
+);
+
+ThemeData _tema(ColorScheme esquema, {required bool escuro, required bool compacto}) {
+  final foco = escuro ? Cores.acaoEscuro : Cores.grafite700; // anel de foco — card 1.9 §7
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: esquema,
+    scaffoldBackgroundColor: escuro ? Cores.fundoEscuro : Cores.grafite50,
+    fontFamily: 'Inter',
+    visualDensity: compacto ? VisualDensity.compact : VisualDensity.standard,
+    focusColor: foco,
+    dividerTheme: DividerThemeData(color: esquema.outline, thickness: 1, space: 1),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: Size(64, compacto ? Dim.alturaBotao : Dim.alturaBotaoMobile),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Dim.raio)),
+        textStyle: Tipografia.rotulo,
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: escuro ? Cores.superficieElevada : Cores.grafite100,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(Dim.raio),
+        borderSide: BorderSide(color: esquema.outline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(Dim.raio),
+        borderSide: BorderSide(color: esquema.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(Dim.raio),
+        borderSide: BorderSide(color: esquema.error, width: 2),
+      ),
+      labelStyle: Tipografia.rotulo,
+      helperStyle: Tipografia.apoio,
+      errorStyle: Tipografia.apoio,
+    ),
+    dataTableTheme: DataTableThemeData(
+      headingTextStyle: Tipografia.cabecalhoTabela,
+      headingRowColor: WidgetStatePropertyAll(esquema.surfaceContainerHighest),
+      dataTextStyle: Tipografia.corpoTabela,
+      dataRowMinHeight: compacto ? Dim.alturaLinha : Dim.alturaLinhaMobile,
+    ),
+    dialogTheme: DialogThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Dim.raioDialogo)),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Dim.raio)),
+    ),
+    tooltipTheme: const TooltipThemeData(waitDuration: Duration(milliseconds: 500)),
+  );
+}
+
+ThemeData temaClaro({bool compacto = true}) =>
+    _tema(_esquemaClaro, escuro: false, compacto: compacto);
+ThemeData temaEscuro({bool compacto = true}) =>
+    _tema(_esquemaEscuro, escuro: true, compacto: compacto);
+```
+
+---
+
+## 11. Decisões e apontamentos deste card
+
+Decisões (resumo para as Decisões vigentes):
+
+1. **Badges no tema escuro definidos e verificados** (§2.3–§2.4) — a lacuna do card 1.9; todos os
+   pares ≥ 5,5:1.
+2. **`ColorScheme` à mão, nunca `fromSeed`** — a semente geraria tons não auditados; `primary` é a
+   cor de ação, jamais a de marca.
+3. **Sistema plano com bordas** — sombra só no que flutua (menu, diálogo, folha).
+4. **Densidade pela faixa**: compacta no desktop/tablet, padrão no mobile; a mesma origem
+   (`faixaDe`) decide shell, densidade e forma da tabela (linhas × cartões).
+5. **Estilos tipográficos nomeados** + `Tipografia.numero()` para o tnum obrigatório — componente
+   não escolhe tamanho avulso.
+6. **Resultado que muda a próxima ação é diálogo/folha, nunca snackbar** (§5.8) — os três status
+   da entrega e o veredito REP são os casos canônicos.
+7. **Motivo obrigatório em botão desabilitado** é contrato do componente (§5.7), fechando a decisão
+   1 do card 2.6 em código.
+8. **Textos finais de erro e de estado vazio fechados** (§7) — os cards de tela consomem, não
+   redigem. Tradução por `codigo`, com fallback que sempre exibe o código.
+9. **Tema claro/escuro segue o sistema, com fixação local** (`shared_preferences`) — preferência de
+   exibição não é dado de negócio.
+
+Apontamentos para outros cards (nenhum bloqueante; nenhuma correção a documento anterior):
+
+| # | Apontamento | Card |
+|---|---|---|
+| 1 | Empacotar Inter (pesos 400–700, variável) como asset e registrar no `pubspec.yaml`; copiar `lib/theme/` deste documento | 3.7 |
+| 2 | `catalogo_erros.dart` (§7.1) nasce no 3.7 — o login já trata erro de credencial e rede | 3.7 |
+| 3 | Os erros `REP_JA_CONTINUO`/`REP_NAO_CONTINUO` (card 2.5 §8) já estão no catálogo de mensagens; conferir que o card 5.3 os cria com esses códigos | 5.3 |
+| 4 | `Semantics` da grade de vagas ("segunda 8h, 8 de 10 vagas…") exige que `v_bloco_vagas_semana`/`fn_grade_semana` continuem devolvendo dia e hora separados | 5.6 |
+| 5 | O texto de `PARAMETRO_AUSENTE` cita a tela de Parâmetros — vale para a direção; para os demais perfis o caso não deve ocorrer (depende de `fn_param_int` como `security definer`, ajuste bloqueante já registrado para o card 3.4) | 3.4 |
+
+---
+
+*Card 2.7 — Fase 2. Fecha a cadeia de design da Fase 2: identidade (1.9) → estrutura (2.6) →
+aplicação (2.7). O próximo consumidor é o card 3.7 (esqueleto Flutter).*
