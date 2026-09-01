@@ -4,7 +4,7 @@
 -- =============================================================================
 
 begin;
-select plan(6);
+select plan(7);
 
 create temporary view t_negocio as
   select c.oid, c.relname
@@ -109,18 +109,22 @@ select is(
 --      Definer novo tem de passar por revisão consciente: dentro de uma função
 --      definer de propriedade do papel `postgres` a RLS é ignorada por inteiro
 --      (o papel tem BYPASSRLS), então o filtro de unidade tem de estar no corpo.
---      A lista cresce card a card — hoje o card 3.3 não cria nenhuma.
+--      A lista cresce card a card.
 -- ---------------------------------------------------------------------------
 select is(
   (select coalesce(string_agg(proname, ', ' order by proname), '')
      from f_projeto
     where prosecdef
       and proname not in (
-            -- card 3.4:  'fn_unidade_atual', 'tem_permissao',
-            --            'fn_param_int', 'fn_param_txt', 'fn_hoje'
+            -- card 3.4 — as quatro primeiras precisam ignorar a RLS de
+            -- usuario/usuario_perfil (senão recursam na própria política) e
+            -- fn_param_txt/int precisam ler `parametro` sem exigir
+            -- `parametros.ler`, que só a direção tem. TODAS filtram unidade no
+            -- corpo, direta ou indiretamente por fn_unidade_atual().
+            'fn_unidade_atual', 'tem_permissao', 'fn_minhas_permissoes',
+            'fn_param_txt', 'fn_param_int'
             -- card 5.2:  'fn_capacidade_efetiva', 'fn_ocupacao_bloco'
             -- card 4.3:  'fn_pc_credencial_ler', 'fn_pc_credencial_gravar'
-            ''
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'
@@ -145,6 +149,30 @@ select is(
      ) x),
   '',
   'C9: nenhum execute para public/anon, e nenhuma rt_* para authenticated'
+);
+
+-- ---------------------------------------------------------------------------
+-- C8 (premissa) — o dono das funções `security definer` tem BYPASSRLS.
+--
+-- Não é curiosidade de plataforma: com `force row level security` em toda
+-- tabela (card 2.1 (b)), `security definer` sozinho NÃO livra o dono da RLS —
+-- e tem_permissao, que lê usuario_perfil, cairia na política de usuario_perfil,
+-- que chama tem_permissao. O Postgres corta isso com "infinite recursion
+-- detected in policy", e o sistema inteiro para na primeira consulta.
+--
+-- O card 3.3 verificou o atributo em EntrelaresProdDB e deixou a reconferência
+-- em aberto para os projetos GestaoIM360. Esta asserção transforma a premissa em
+-- portão: se um dia o Supabase deixar de conceder BYPASSRLS ao dono, a suíte
+-- reprova aqui, com o motivo escrito, em vez de o app quebrar em produção com
+-- um erro de recursão que não se parece com o que é.
+-- ---------------------------------------------------------------------------
+select ok(
+  (select bool_and(r.rolbypassrls)
+     from f_projeto f
+     join pg_proc p on p.oid = f.oid
+     join pg_roles r on r.oid = p.proowner
+    where f.prosecdef),
+  'C8: o dono de toda funcao security definer tem BYPASSRLS (premissa do card 3.3)'
 );
 
 select * from finish();
