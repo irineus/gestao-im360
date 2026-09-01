@@ -1,6 +1,6 @@
 # Regras de negócio como funções, triggers e rotinas
 
-**Card 2.2 — Fase 2 (Planejamento e Design).** Última atualização: 31/08/2026.
+**Card 2.2 — Fase 2 (Planejamento e Design).** Última atualização: 01/09/2026 (ajustes do card 2.5).
 
 Este documento diz **onde vive cada regra da seção 6 do plano** e qual é a **assinatura** de cada
 objeto de banco que a implementa. É design, não implementação: nenhum arquivo de
@@ -316,13 +316,16 @@ lotação — o passado não bloqueia o presente.
 > ⚠️ **Exige alteração no DDL (§14):** o `check` atual de `bloco_aluno_reposicao.status` aceita só
 > `PREVISTA`, `REALIZADA` e `CANCELADA`. Falta **`FALTOU`** — sem ele, o aluno que não comparece à
 > reposição fica indistinguível de quem a cancelou com antecedência, e é exatamente essa diferença
-> que o critério do card 2.5 vai precisar medir.
+> que o critério do card 2.5 mede (§3.4 de `docs/regra-virada-rep.md`).
 
-> ⚠️ **A virada pontual → REP contínuo é do card 2.5.** O ponto de extensão já está definido:
-> uma função `fn_rep_avaliar_virada(p_aluno_id uuid) → text`, chamada por
-> `fn_reposicao_registrar` e pela rotina diária, devolvendo `'MANTER'`, `'SUGERIR_CONTINUO'` ou
-> `'SUGERIR_VOLTA'`. Enquanto o critério não existir, ela devolve `'MANTER'` e a virada é manual.
-> Nada mais no sistema muda quando o card 2.5 fechar.
+> ✅ **A virada pontual → REP contínuo foi fechada pelo card 2.5** (01/09/2026), em
+> `docs/regra-virada-rep.md`. O ponto de extensão foi honrado: `fn_rep_avaliar_virada(p_aluno_id uuid)
+> → text` continua com a mesma assinatura e os mesmos três valores `'MANTER'` / `'SUGERIR_CONTINUO'` /
+> `'SUGERIR_VOLTA'`; só o corpo deixou de ser `'MANTER'` fixo. O critério é aritmético (débito de
+> aulas em aberto × capacidade semanal × semanas até o prazo, com gatilho independente por
+> reincidência de `FALTOU`), a virada é **sugerida por pendência e executada por uma pessoa**, e as
+> funções de execução são `fn_rep_virar_continuo` / `fn_rep_voltar_pontual`. Aquele card acrescenta
+> seis ajustes a esta especificação, todos consolidados em §14 (itens 5 a 10).
 
 ### 4.5 Concorrência: por que o advisory lock
 
@@ -625,7 +628,8 @@ corrida com a interface.
 | `SUGERIR_FORMADO` | `FORMADO:<aluno_id>` | BAIXA | `tg_certificado_sugere_formado` | aluno vira FORMADO |
 | `TRILHA_DIVERGENTE_COMBO` | `TRILHA_COMBO:<aluno_id>` | MEDIA | `tg_aluno_combo_alterado` | resolução manual |
 | `CERTIFICADO_INCONSISTENTE` | `CERT_INCONS:<aluno_id>` | MEDIA | `fn_estornar_entrega` | resolução manual |
-| `REP_VIRADA` | `REP:<aluno_id>` | MEDIA | `fn_rep_avaliar_virada` — **card 2.5** | resolução manual |
+| `REP_VIRADA` | `REP:<aluno_id>:CONTINUO` | MEDIA | `rt_rep_avaliar` (card 2.5) | `fn_rep_virar_continuo`, a rotina, ou resolução manual |
+| `REP_VIRADA` | `REP:<aluno_id>:VOLTA` | BAIXA | `rt_rep_avaliar` (card 2.5) | `fn_rep_voltar_pontual`, a rotina, ou resolução manual |
 | `ROTINA_FALHOU` | `ROTINA_FALHOU:<nome>` | ALTA | `rt_diaria` (bloco `exception`) | execução seguinte bem-sucedida |
 
 Os oito primeiros são os que o `check` de `pendencia.tipo` já aceita — dois deles com o nome que o
@@ -655,7 +659,8 @@ rt_diaria() → void          -- security definer; itera unidades ativas (§2.2)
   rt_pcs_normaliza()        -- fecha manutenções com data_fim vencida; devolve PCs a OPERACIONAL
   rt_capacidades()          -- fn_revalidar_blocos_sala em todas as salas
   rt_pendencias_diaria()    -- abre/fecha as pendências de tempo do catálogo §10.1
-  rt_rep_avaliar()          -- fn_rep_avaliar_virada por aluno com reposição aberta (card 2.5)
+  rt_rep_avaliar()          -- fn_rep_avaliar_virada por aluno com reposição aberta ou alocação REP;
+                            -- abre E fecha as pendências REP_VIRADA (card 2.5)
   rt_projecao_demanda()     -- refresh da projeção (card 8.1)
 ```
 
@@ -722,7 +727,8 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | Funções Modular | 7.2 |
 | `rt_projecao_demanda` | 8.1 |
 | `fn_certificado_*`, `tg_certificado_*` | 8.3 |
-| `fn_rep_avaliar_virada` (critério) | 2.5 |
+| `tp_rep_situacao`, `fn_rep_situacao`, `fn_rep_avaliar_virada`, `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (critério fechado no card 2.5) | 5.3 |
+| `rt_rep_avaliar` | 5.5 |
 
 Ordem de dependência igual à das migrações: 3.4 → 4.2 → 4.3 → 5.2 → 5.3 → 5.4 → 5.5 → 6.2 → 6.3 →
 6.5 → 7.2 → 8.1 → 8.3.
@@ -741,6 +747,12 @@ simples — que é exatamente por que o card 2.1 escolheu `text` + `check` em ve
 | 2 | `pendencia.tipo`: acrescentar `ESTOQUE_ZERO`, `ESTOQUE_ABAIXO_MINIMO`, `SUGERIR_FORMADO`, `TRILHA_DIVERGENTE_COMBO`, `CERTIFICADO_INCONSISTENTE`, `REP_VIRADA`, `ROTINA_FALHOU` ao `check` | idem | 5.5 |
 | 3 | `certificado_checklist`: acrescentar `formatura_por` / `formatura_em` | `add column` | 8.3 |
 | 4 | `aluno_material_hist`: acrescentar `observacao text` | `add column` | 6.2 |
+| 5 | `bloco_aluno`: acrescentar `tipo_desde date not null default current_date` + trigger `tg_bloco_aluno_tipo_desde` | `add column` + trigger | 5.1 |
+| 6 | `rt_pendencias_diaria`: a contagem de blocos para `ACELERAR_SEM_2O_BLOCO` filtra `tipo <> 'REP'` | corpo da rotina | 5.5 |
+| 7 | `fn_reposicao_registrar` devolve `text` (o veredito da virada) em vez de `void` | assinatura | 5.1 |
+| 8 | Tipo composto novo `tp_rep_situacao` — passam a ser dois, com `tp_entrega_resultado` | `create type` | 5.3 |
+| 9 | Erros novos: `REP_JA_CONTINUO` (409) e `REP_NAO_CONTINUO` (409) | catálogo §12 | 5.3 |
+| 10 | Parâmetros novos no seed: `rep_prazo_dias`, `rep_capacidade_semanal`, `rep_faltas_max`, `rep_janela_volta_dias` | seed | 3.6 |
 
 **Sobre o 3:** o DDL dá par "quem/quando" a `pedagogico`, `financeiro` e `certificado`, mas não a
 `formatura`. O plano exige que **cada item** do checklist registre quem marcou e quando; sem as duas
@@ -751,15 +763,22 @@ de texto livre. O reordenamento automático não precisa de um (`SEM_ESTOQUE` j�
 edição manual precisa: "por que este aluno pulou a apostila 7" é justamente o que alguém vai
 perguntar três meses depois.
 
-Os dois primeiros são bloqueantes — sem eles as funções não gravam. Os dois últimos são perda de
+Os dois primeiros são bloqueantes — sem eles as funções não gravam. Os dois seguintes são perda de
 informação, não erro de execução: dá para adiar, desde que conscientemente.
+
+**Os itens 5 a 10 vêm do card 2.5** (01/09/2026), com a justificativa de cada um em §8 de
+`docs/regra-virada-rep.md`. Bloqueantes ali: o 5 (sem `tipo_desde` não há como cortar o relógio do
+débito na virada, e o aluno convertido nunca poderia voltar a pontual) e o 10 (parâmetro ausente é
+`PARAMETRO_AUSENTE`, por decisão de §2.3 — não há `default` escondido no código).
 
 ---
 
 ## 15. O que fica em aberto
 
-1. **Critério da virada REP pontual → contínuo (card 2.5).** Ponto de extensão pronto:
-   `fn_rep_avaliar_virada`. Hoje devolve `'MANTER'`.
+1. ~~**Critério da virada REP pontual → contínuo (card 2.5).**~~ **Fechado em 01/09/2026** —
+   `docs/regra-virada-rep.md`. `fn_rep_avaliar_virada` manteve a assinatura reservada aqui. Segue em
+   aberto só a **calibração** dos quatro parâmetros `rep_*`, que depende de histórico de uso
+   (revisar no card 11.2, junto com a projeção de demanda).
 2. **Fórmula final da capacidade efetiva (card 5.2).** `fn_capacidade_efetiva` isola a decisão
    numa função só.
 3. **Códigos de permissão (card 2.4).** A lista de §12.1 é a entrada; o card fecha o catálogo e a

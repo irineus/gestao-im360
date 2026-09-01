@@ -51,7 +51,12 @@ Apresentar o card escolhido com as **Notas completas** antes de começar — ela
 
 ## Renomear a sessão
 
-Assim que a tarefa estiver escolhida, renomear a sessão para **`<Fase>.<Ordem> — <Tarefa>`** (ex.: `2.2 — Especificar regras de negócio como funções e triggers`), usando `set_session_title` com `session_id: "self"`. Sem isso a sessão fica com nome genérico e a lista de sessões não diz em que se trabalhou.
+Assim que a tarefa estiver escolhida, renomear a sessão para **`<Fase>.<Ordem> — <Tarefa>`** (ex.: `2.2 — Especificar regras de negócio como funções e triggers`). Sem isso a sessão fica com nome genérico e a lista de sessões não diz em que se trabalhou.
+
+`set_session_title` exige o **id real** da sessão — `session_id: "self"` é recusado com `target session could not be verified` (corrigido em 01/09/2026, depois de a renomeação falhar em silêncio na sessão do card 2.5). O `"self"` só vale no `get_session`, que é justamente de onde o id sai:
+
+1. `get_session` **sem** `session_id` → devolve `ccr.id` (`session_...`) desta sessão;
+2. `set_session_title` com esse `session_id` e o título.
 
 Usar só o número da fase e a ordem, não o nome inteiro da fase. Se a sessão tratar de mais de um card, nomear pelo principal.
 
@@ -78,7 +83,7 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 Commit e PR são obrigatórios ao concluir a tarefa; o merge **não**.
 
 1. Commit em português, mensagem descrevendo a tarefa do board (ex.: `Card 2.1: modelagem de dados detalhada (DDL Postgres)`).
-2. Push da branch e **abrir o PR contra `develop`** (`gh pr create --base develop`). Corpo do PR: o que foi entregue, link do card e o que ficou em aberto.
+2. Push da branch e **abrir o PR contra `develop`** (`gh pr create --base develop`). Corpo do PR: o que foi entregue, link do card e o que ficou em aberto. Em sessões do Claude Code na web o `gh` **não** existe — usar as ferramentas MCP do GitHub (`create_pull_request`) em vez de tentar instalar o CLI.
 3. **Nunca fazer o merge sem OK explícito de Irineu.** A exceção é ele dispensar o OK na própria sessão ("pode mergear direto", "não precisa pedir") — dispensa vale só para a sessão em que foi dada, não para as seguintes.
 4. Branch empurrada sem PR some. Se houver PR de tarefa anterior ainda não mergeado, dizer no resumo final.
 5. Promoção para produção (`develop` → `main`) é PR próprio e **sempre** exige OK — merge em `main` aplica migração no banco de produção.

@@ -525,9 +525,12 @@ alocação. As duas metades existem no schema:
 - metade pontual → `bloco_aluno_reposicao` (uma linha por reposição, com data e vaga ocupada naquele dia);
 - metade contínua → `bloco_aluno.tipo = 'REP'` (estado permanente da alocação).
 
-O que ainda **não** está definido é o gatilho que promove um do outro — o critério objetivo da
-virada. Card 2.5 criado na Fase 2 para isso; até ele fechar, a virada é manual, e as duas estruturas
-já suportam qualquer critério que venha (contagem de reposições pendentes, prazo, ou ambos).
+O gatilho que promove um do outro foi fechado pelo **card 2.5** em 01/09/2026, em
+`docs/regra-virada-rep.md`: débito de aulas em aberto × capacidade semanal × semanas até o prazo,
+com gatilho independente por reincidência de `FALTOU`, e virada **sugerida** (pendência
+`REP_VIRADA`), executada por uma pessoa. Aquele card exige uma coluna nova aqui —
+`bloco_aluno.tipo_desde date not null default current_date`, mantida por trigger — sem a qual a
+virada não tem como zerar o relógio do débito. Entra na migração do card 5.1.
 
 **Capacidade efetiva** (função do card 5.2, não é coluna):
 `coalesce(capacidade_override, nº de PCs OPERACIONAIS da sala)`, combinada com a capacidade nominal
@@ -753,8 +756,9 @@ criadas na migração 6.1, quando as duas pontas já existem.
 
 ## 12. Pontos que este documento deixa em aberto
 
-1. **Critério objetivo da virada REP pontual → contínuo** — card 2.5. O schema já suporta as duas
-   formas; falta a regra.
+1. ~~**Critério objetivo da virada REP pontual → contínuo**~~ — **fechado em 01/09/2026**
+   (card 2.5, `docs/regra-virada-rep.md`). Acrescenta `bloco_aluno.tipo_desde` a este DDL, na
+   migração do card 5.1.
 2. **Catálogo de códigos de permissão** (`<dominio>.<acao>`) — card 2.4. Até lá, as políticas de RLS
    estão escritas com o formato, não com a lista.
 3. **Política definitiva de credenciais dos PCs** — card 2.9. `pc.credencial_ref` é um placeholder
