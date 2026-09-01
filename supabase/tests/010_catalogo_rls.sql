@@ -7,7 +7,7 @@
 -- =============================================================================
 
 begin;
-select plan(5);
+select plan(6);
 
 -- A lista de tabelas de negócio é derivada do catálogo, não escrita à mão: é o
 -- que faz a suíte crescer sozinha quando uma migração nova cria tabela.
@@ -108,10 +108,11 @@ select is(
 -- catálogo do card 2.4, e todo código que o catálogo prevê para estas tabelas
 -- está de fato citado.
 --
--- Parcial porque a versão cheia (contra a tabela `permissao` populada) depende
--- do seed e é do card 3.6. Esta já paga: um `admin.gerir_perfil` no singular
--- dentro de uma política não dá erro nenhum — a política simplesmente nega para
--- sempre, e o sintoma é uma tela vazia que ninguém liga à digitação.
+-- Este par (espelho literal) já pagava sozinho: um `admin.gerir_perfil` no
+-- singular dentro de uma política não dá erro nenhum — a política simplesmente
+-- nega para sempre, e o sintoma é uma tela vazia que ninguém liga à digitação.
+-- A versão CHEIA, contra a tabela `permissao` populada, vem logo abaixo: ela é
+-- do card 3.6, porque só passou a existir catálogo em 01/09/2026.
 -- ---------------------------------------------------------------------------
 create temporary view p_codigo_usado as
   select distinct (regexp_matches(
@@ -141,6 +142,28 @@ select is(
      ) x),
   '',
   'C11: codigos de permissao das politicas batem com o catalogo do card 2.4'
+);
+
+-- ---------------------------------------------------------------------------
+-- C11 (cheia, card 3.6) — todo código citado numa política EXISTE no catálogo
+-- que o seed grava. É a versão que o card 2.8 §5.1 deixou reservada para quando
+-- houvesse seed.
+--
+-- O par acima compara política contra uma lista escrita à mão neste arquivo; se
+-- os dois errarem o mesmo código, ele passa. Este compara contra o que a
+-- migração de fato gravou no banco — a mesma tabela que `tem_permissao` lê em
+-- produção. Um código citado em política e ausente do catálogo nega para sempre,
+-- em silêncio, e é justamente o modo de falha que o card 2.4 (a) descreve.
+-- ---------------------------------------------------------------------------
+select is(
+  (select coalesce(string_agg(u.codigo, ', ' order by u.codigo), '')
+     from p_codigo_usado u
+    where not exists (
+          select 1 from public.permissao p
+           where p.codigo = u.codigo
+             and p.unidade_id = (select id from public.unidade where codigo = 'MATRIZ'))),
+  '',
+  'C11: todo codigo citado em politica existe no catalogo gravado pelo seed do card 3.6'
 );
 
 select * from finish();
