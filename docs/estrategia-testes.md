@@ -1,0 +1,957 @@
+# Estratégia de testes e critérios de aceite dos marcos
+
+Card de origem: **2.8 — Definir estratégia de testes e critérios de aceite dos marcos** (Fase 2,
+board Notion).
+Base: `docs/modelagem-dados-ddl.md` (2.1), `docs/regras-negocio-funcoes.md` (2.2),
+`docs/views-leitura.md` (2.3), `docs/permissoes-matriz.md` (2.4), `docs/regra-virada-rep.md` (2.5),
+`docs/projecao-demanda.md` (Ordem 5), `docs/wireframes.md` (2.6), `docs/design-system.md` (2.7) e
+`docs/plano-projeto-sistema.md` §9.
+
+Este documento é a fonte da **estratégia de testes** como o 2.1 é a fonte do DDL e o 2.3 a das
+views: cada card de implementação recorta daqui a obrigação de teste da sua camada (§13 e §17), e
+cada card de marco recorta o seu critério de aceite (§15).
+
+---
+
+## 1. Escopo
+
+**Neste documento:** a ferramenta de teste do banco e o porquê da escolha; como um teste "vira" um
+usuário para exercitar RLS; a família de testes de catálogo que este card cria; a obrigação de teste
+por tipo de card; o que roda no CI e quando; o mapa decisão → teste que protege as decisões já
+tomadas nos cards 2.1–2.7; e os critérios de aceite dos quatro marcos do plano §9.
+
+**Não está neste documento, de propósito:**
+
+| Assunto | Dono |
+|---|---|
+| Implementar os workflows do GitHub Actions | card 3.9 (o YAML pronto está no Apêndice B) |
+| Escrever os helpers e a escola-fixture no repositório | card **3.4.5**, criado por este card (SQL pronto no Apêndice A) |
+| Os testes em si de cada regra | o card que cria a regra (§13, §17) |
+| Conferência de totais contra a planilha | cards 9.4 (dry-run) e 8.8 (marco 3), com o critério em §15 |
+| Recalibração da projeção | card 11.2 — critério objetivo já fechado no card de Ordem 5 |
+
+---
+
+## 2. A pirâmide deste projeto é invertida em relação ao padrão Flutter
+
+A regra de ouro do `CLAUDE.md` — **regras de negócio no banco** — decide sozinha a forma da suíte.
+O card 2.6 fechou a consequência do outro lado: *"a tela nunca pré-verifica regra em Dart: chama a
+função e reage ao status de retorno"*. Somando as duas, **quase não existe lógica de negócio em Dart
+para testar**. Um projeto Flutter comum concentra teste em widget e unidade; aqui isso testaria o
+framework.
+
+A distribuição-alvo, em número de asserções:
+
+| Camada | Peso | O que prova |
+|---|---|---|
+| **Catálogo** (§5) | ~30% | O schema é o que os documentos dizem: RLS ligada, view `invoker`, nenhum `current_date`, todo valor gravado aceito pelo `check` |
+| **Comportamento no banco** (§6) | ~45% | A regra faz o que a especificação diz, e o erro certo sai com o `codigo` certo |
+| **Concorrência** (§7) e **rotinas** (§8) | ~10% | O advisory lock existe *e funciona*; a rotina é reexecutável e isolada |
+| **Flutter** (§9) | ~15% | Guarda de rota, ocultação por permissão, degradação por largura, tradução de erro |
+| Ponta a ponta em navegador | 0% | **Decisão: não fazer na v1** (§9.4) |
+
+**Decisão: nenhuma meta percentual de cobertura.** Com uma pessoa desenvolvendo, um portão de "80%
+de linhas" premia teste de *getter* e não impede que a regra cara passe sem teste. O portão aqui é
+**por obrigação de card** (§13) e pelo mapa de decisões protegidas (§14): um card de função não
+fecha sem os testes que a sua linha da tabela exige, independentemente de percentual.
+
+---
+
+## 3. Ferramenta do banco: **pgTAP**, com `supabase test db`
+
+A nota do card oferecia "pgTAP ou suíte SQL própria". **Decidido: pgTAP.**
+
+| Critério | pgTAP | Suíte SQL própria |
+|---|---|---|
+| Já disponível no Postgres do Supabase | sim, é extensão da imagem | — |
+| Comando de primeira classe no CLI que o CI já instala | `supabase test db` | teria de ser escrito |
+| Asserção de **exceção com SQLSTATE** (`throws_ok`) | pronta | escrever `begin/exception` à mão em cada teste |
+| Asserção de **estrutura** (`has_table`, `has_column`, `policies_are`, `function_returns`, `col_type_is`) | pronta — é metade da suíte deste projeto (§5) | reimplementar consultas ao catálogo |
+| Saída padronizada (TAP) para o CI anotar a linha que falhou | sim, via `pg_prove` | teria de ser escrita |
+
+O argumento decisivo é o terceiro e o quarto juntos: este projeto testa **muito mais estrutura e
+muito mais exceção** do que resultado de `select`, porque foi assim que os cards 2.1–2.4 desenharam
+o sistema (política de RLS como barreira, erro com `SQLSTATE PT<status>`). Escrever isso à mão é
+reescrever pgTAP pior.
+
+### 3.1 Onde o pgTAP vive — e onde não vive
+
+⚠️ **`create extension pgtap` nunca entra em `supabase/migrations/`.** Migração é o que o workflow
+`db-migrations` empurra para dev e prod (regra inegociável do `CLAUDE.md`); uma extensão de teste em
+produção é superfície de ataque sem uso. A extensão e os helpers nascem em **`supabase/seed.sql`**,
+que só é aplicado por `supabase db reset` — local e no CI.
+
+⚠️ **Proibido `supabase db reset --linked`** (e qualquer `db reset` apontado para dev ou prod). Ele
+aplicaria a fixture e a extensão de teste no banco remoto e apagaria o que estivesse lá. O reset é
+sempre local. Registrar na Decisões vigentes junto com as demais regras de migração.
+
+**`seed.sql` de teste ≠ seed do card 3.6.** O seed do 3.6 (unidade, perfis, 49 permissões, matriz
+inicial, usuário direção, parâmetros) é **dado de catálogo do sistema** e vai como **migração**,
+porque precisa existir em dev e prod. O `seed.sql` é a **escola-fixture** (§4.2): alunos, materiais,
+blocos e movimentos inventados, que nunca podem chegar a lugar nenhum além da máquina do dev e do
+runner do CI.
+
+### 3.2 Organização dos arquivos
+
+```
+supabase/
+  migrations/            # só schema — nada de teste aqui
+  seed.sql               # extensão pgtap + schema tests + helpers + escola-fixture (card 3.4.5)
+  tests/
+    010_catalogo_rls.test.sql
+    011_catalogo_convencoes.test.sql
+    012_catalogo_contratos.test.sql
+    020_acesso_tem_permissao.test.sql
+    030_alunos_status.test.sql
+    040_vagas_admissao.test.sql
+    050_trilha_entrega.test.sql
+    060_estoque_compras.test.sql
+    070_modular.test.sql
+    080_projecao.test.sql
+    085_rep_virada.test.sql
+    090_rotinas.test.sql
+    095_views_paridade.test.sql
+  tests_concorrencia/    # fora do pgTAP — §7
+    entrega_ultimo_exemplar.sh
+    admissao_ultima_vaga.sh
+```
+
+**Diretório plano com prefixo numérico**, não subpastas por área: o `pg_prove` do `supabase test db`
+é chamado sobre `supabase/tests` e não se deve depender de ele recursar. O prefixo dá ordem de
+leitura, não dependência — **todo arquivo é independente** e cria o que precisa (§4.3).
+
+---
+
+## 4. O problema central: um teste precisa *ser* um usuário
+
+Tudo o que os cards 2.1 e 2.4 decidiram depende de `auth.uid()`: `fn_unidade_atual()` lê a unidade
+do usuário logado, `tem_permissao(codigo)` percorre `usuario_perfil → perfil_permissao`, e cada
+política de RLS combina as duas. Numa sessão `psql` não há JWT: `auth.uid()` é nulo,
+`fn_unidade_atual()` devolve nulo e **toda** política falha.
+
+Isso tem duas consequências, e a segunda é a que engana:
+
+1. Um teste que não se autentica não testa nada — vai falhar em tudo, o que ao menos é honesto.
+2. Um teste que roda como `postgres` **também não testa nada**, e passa. O `postgres` é dono das
+   tabelas; o `force row level security` do card 2.1 faz a RLS valer para o dono também, mas as
+   funções `security definer` e os `grant` não são exercitados como o PostgREST os exercita. O teste
+   ficaria verde e a tela quebraria.
+
+Daí o primeiro entregável de infraestrutura de teste: **helpers que reproduzem exatamente o contexto
+que o PostgREST monta** — papel `authenticated` e `request.jwt.claims` com o `sub`.
+
+### 4.1 Os helpers (SQL completo no Apêndice A)
+
+```sql
+tests.criar_usuario(p_email text, p_perfil text, p_unidade uuid default null) returns uuid
+tests.autenticar(p_usuario uuid) returns void      -- vira 'authenticated' com o sub no JWT
+tests.como_anonimo() returns void                  -- papel 'anon', sem claims
+tests.encerrar_sessao() returns void               -- reset role + claims (voltar a postgres)
+tests.conta_como(p_usuario uuid, p_sql text) returns bigint  -- conta linhas na pele do usuário
+```
+
+Três detalhes que, errados, produzem suíte verde e sistema quebrado:
+
+- **`set_config(..., true)`** (`is_local`) em tudo: o efeito morre no `rollback` do arquivo de teste.
+  Sem o `true`, um teste vaza identidade para o seguinte.
+- **A ordem é claims primeiro, `set role` depois.** Depois de `set role authenticated` o teste perde
+  privilégio para várias coisas; `reset role` é o caminho de volta, e é o que `tests.encerrar_sessao`
+  faz.
+- **`tests.criar_usuario` é `security definer`**, porque insere em `auth.users` (dona é
+  `supabase_auth_admin`) e em `usuario`, que tem RLS. Fica no schema `tests`, sem `grant` para
+  `authenticated`, e **não existe** em dev nem em prod.
+
+### 4.2 A escola-fixture
+
+Uma escola pequena e **fixa**, com números escolhidos para exercitar as bordas — não uma cópia da
+planilha. A planilha entra em cena no dry-run do card 9.4, com dados reais; aqui o que se quer é
+determinismo.
+
+| Elemento | Quantidade | Por quê exatamente isso |
+|---|---|---|
+| Unidade | 2 (`ESCOLA_A` ativa, `ESCOLA_B`) | multi-unidade é a decisão de arquitetura que só um segundo tenant testa; toda asserção de RLS confere que `ESCOLA_B` **não** aparece |
+| Usuários | 4, um por perfil, + 1 sem perfil nenhum | o quinto é o teste de "sem política = sem acesso" |
+| Sala/PCs | 1 sala com **10** PCs, 1 com 6 | 10 é a capacidade real do laboratório; a borda 10/11 é o teste de lotação |
+| Blocos | 3 (um vazio, um com 9 alunos, um com 10) | 9 → aceita o 10º; 10 → recusa o 11º, sem depender de ordem de execução |
+| Materiais | 6 (2 com saldo 0, 1 com saldo 1, 3 com saldo folgado) | saldo 1 é o teste de concorrência; saldo 0 é o `REORDENADA` e o `BLOQUEADA_SEM_ESTOQUE` |
+| Alunos | 12, cobrindo os 4 degraus da cascata da projeção, 1 em FIM, 1 em STANDBY antigo, 1 com débito REP na borda | um aluno por caso que alguma decisão criou |
+
+A fixture é **datada em relativo** (`fn_hoje() - interval 'N days'`), nunca em datas absolutas: uma
+fixture com `'2026-09-01'` começa a falhar sozinha em janeiro.
+
+### 4.3 Isolamento
+
+Cada arquivo de teste é `begin; select plan(n); … select * from finish(); rollback;`. **Nenhum teste
+enxerga o que outro escreveu**, e a ordem dos arquivos não importa. O que um teste precisa além da
+fixture, ele cria dentro da própria transação — inclusive `create or replace function`, que dentro
+da transação é revertido junto (usado no teste de isolamento das rotinas, §8).
+
+---
+
+## 5. Testes de catálogo — o achado deste card
+
+Somando os quatro documentos anteriores, o projeto já acumula **~35 "ajustes que o DDL precisa
+receber"**, dos quais 15 marcados como bloqueantes: §14 do card 2.2, §8 do 2.5, §10 do 2.3, §7 do
+2.4 e §11 do card de Ordem 5. Lendo os quinze juntos, quase todos são a **mesma falha**, em três
+formatos:
+
+1. **Uma função grava um valor que o `check` da tabela não aceita.** `FALTOU` em
+   `bloco_aluno_reposicao.status`; sete tipos novos em `pendencia.tipo`;
+   `TURMA_MODULAR_SEM_CRONOGRAMA`; severidade `INFO` que não existe.
+2. **Uma função ou política exige um código de permissão que o seed não cria** — ou o seed cria um
+   código que ninguém consome (o card 2.4 proibiu o segundo caso na decisão (a)).
+3. **Uma função está com a volatilidade, o `security` ou o `search_path` errados** —
+   `fn_capacidade_efetiva` como invoker, `fn_param_int` como invoker.
+
+Nenhuma dessas aparece em teste de caminho feliz. Pior: a maioria **falha em silêncio na produção**,
+porque acontece dentro de `rt_diaria`, que por decisão do card 2.2 (j) captura a exceção de cada
+sub-rotina, abre uma pendência `ROTINA_FALHOU` e segue. O sintoma é uma pendência que ninguém lê às
+03:10 da manhã, e a projeção de demanda simplesmente para de existir.
+
+Todas as três, porém, são **verificáveis contra o catálogo do Postgres**, sem executar regra
+nenhuma, em dezenas de linhas de SQL. É o teste mais barato e o de maior retorno do projeto.
+
+**Decisão: a suíte de catálogo é obrigatória desde a primeira migração (card 3.3) e cresce com o
+schema. Nenhum card de migração fecha com ela vermelha.**
+
+### 5.1 Os treze testes de catálogo
+
+| # | Asserção | Protege a decisão |
+|---|---|---|
+| C1 | Toda tabela de negócio tem `relrowsecurity` **e** `relforcerowsecurity` | 2.1 (b) — RLS em tudo, inclusive para o dono |
+| C2 | Toda tabela de negócio tem `unidade_id` e as quatro colunas de auditoria (`criado_em/por`, `atualizado_em/por`) | `CLAUDE.md`; 2.1 |
+| C3 | Toda tabela tem trigger de auditoria (`fn_auditoria`) | 2.1 |
+| C4 | Nenhuma tabela de negócio sem política, **exceto** a lista fechada de ausências intencionais: `movimento_estoque` (sem `update`/`delete`), `permissao` (sem escrita) | 2.1 (b), 2.4 (c) e (e) — ausência intencional documentada vira asserção, senão vira esquecimento |
+| C5 | Toda view tem `security_invoker=on` em `reloptions`; **zero** `relkind='m'` no schema | 2.3 (a) e (b) |
+| C6 | Nenhum `current_date` em corpo de função, definição de view ou `default` de coluna | 2.3 (c) — o bug das 21h |
+| C7 | Toda função tem `search_path` fixo em `proconfig` | 2.2 §1.1 |
+| C8 | Toda função `security definer` está numa **lista fechada** versionada no teste | 2.2 §2.2, 2.3, 2.4 (#9.5) — `definer` novo tem de passar por revisão consciente |
+| C9 | Nenhuma função tem `execute` para `public` ou `anon`; nenhuma `rt_*` tem `execute` para `authenticated` | 2.2 §1.1, §11 |
+| C10 | Todo tipo passado a `fn_pendencia_abrir` no código está no `check` de `pendencia.tipo`, e toda severidade usada está no `check` de `severidade` | 2.2 §14, 2.3 (#4), Ordem 5 (#3) — a família inteira do formato 1 |
+| C11 | Todo código em `tem_permissao('…')`/`fn_exige_permissao('…')` (em funções e em `polqual`/`polwithcheck`) existe em `permissao`; e todo `permissao` tem ao menos um consumidor | 2.4 (a) — nos dois sentidos |
+| C12 | Todo `codigo` de erro levantado no código está no fixture de contrato (§10); nenhum a mais, nenhum a menos | 2.2 §1.2, 2.7 (h) |
+| C13 | `pg_advisory_xact_lock` aparece no corpo de `fn_bloco_admitir` e `fn_registrar_entrega` | 2.2 (c) — não prova que funciona (§7), prova que não sumiu num refactor |
+
+### 5.2 A convenção que faz C10, C11 e C12 funcionarem
+
+Os três leem `pg_proc.prosrc` com expressão regular. Isso só é confiável sob uma regra explícita:
+
+> **Constante de contrato aparece sempre como literal na chamada.** Tipo de pendência, código de
+> permissão e `codigo` de erro nunca são montados em variável, concatenação ou `format()`.
+
+Não é burocracia: é o que separa um teste estático que enxerga tudo de um que cega em silêncio no
+dia em que alguém escreve `perform fn_pendencia_abrir(v_tipo, …)`. A regra entra nas convenções do
+card 2.2 (§16, ajuste #4) e o próprio C10 tem uma asserção-espelho: **nenhuma chamada a
+`fn_pendencia_abrir` com primeiro argumento não-literal**.
+
+---
+
+## 6. Testes de comportamento no banco
+
+### 6.1 Regra por camada, teste na camada
+
+O card 2.2 §1 organiza as regras em quatro camadas. O teste segue a mesma tabela — testar uma regra
+na camada errada dá falso conforto:
+
+| Camada da regra | O teste tem de | Exemplo |
+|---|---|---|
+| **1. Restrição** | Escrever direto na tabela, sem função, e exigir a violação | `insert` em `pendencia` com `tipo` inventado → `23514` |
+| **2. Trigger** | Escrever direto na tabela, **contornando a função de aplicação** | `insert` em `bloco_aluno` no bloco de 10/10 → `BLOCO_LOTADO`, mesmo sem passar por `fn_bloco_admitir` |
+| **3. Função** | Chamar por RPC, autenticado como o perfil que a usa, e conferir **retorno** e **efeito** | `fn_registrar_entrega` → `ENTREGUE` + movimento + trilha marcada, numa transação só |
+| **4. Rotina** | Fixar a fixture no tempo relativo, rodar a rotina, conferir pendência aberta; rodar de novo e conferir que **não duplicou** (§8) | `rt_pendencias_diaria` e `STANDBY_PROLONGADO` |
+
+O teste de camada 2 é o que costuma faltar e o que mais vale: com "Automatically expose new tables"
+ligado nos dois projetos (pendência técnica 3 das Decisões vigentes), **toda tabela é uma API**. O
+trigger é o que impede o `POST` direto; o teste que só chama a função nunca descobre que o trigger
+não existe.
+
+### 6.2 Erro: sempre `throws_ok` com SQLSTATE **e** `codigo`
+
+```sql
+select throws_ok(
+  $$ select fn_bloco_admitir('…','…','NOVO', null) $$,
+  'PT409',
+  null,                                   -- mensagem não é contrato: não asserir texto
+  'admissão em bloco lotado devolve PT409'
+);
+select ok(
+  (tests.ultimo_erro_detail() ->> 'codigo') = 'BLOCO_LOTADO',
+  'e o codigo estável é BLOCO_LOTADO'
+);
+```
+
+**Nunca asserir a mensagem em português.** O card 2.2 (d) foi explícito — o Flutter trata pelo
+`codigo` — e um teste que exige o texto transforma uma melhoria de redação em falha de CI.
+`DATA_PREVISTA_OBRIGATORIA` continua sendo o contrato quando a frase mudar.
+
+### 6.3 Views: o teste é **paridade de linhas**, não ausência de erro
+
+Esta é a segunda inversão que este card fixa. O card 2.3 (§3.4) e o 2.4 documentaram o modo de falha
+do sistema: **a RLS não devolve erro, ela reduz linhas em silêncio.** Um usuário sem `materiais.ler`
+não vê "acesso negado" na grade semanal — vê a **escola vazia**. Um monitor sem `estoque.ler` não vê
+erro na entrega — vê saldo 0 em tudo e bloqueia toda entrega por falta de um estoque que existe.
+
+Logo, "o perfil X consegue ler a view sem erro" é uma asserção quase vazia. O teste correto é:
+
+```
+para cada view do card 2.3 §11:
+  n_direcao := linhas vistas pela direção
+  para cada perfil que o card 2.4 §6 autoriza na tela que consome a view:
+      assert linhas vistas pelo perfil = n_direcao        -- senão a tela mente
+  para o usuário sem perfil:
+      assert linhas vistas = 0                            -- e a rota é barrada
+  para um usuário da ESCOLA_B:
+      assert nenhuma linha da ESCOLA_A                    -- isolamento de unidade
+```
+
+Com `n_direcao > 0` garantido pela fixture — uma paridade de zero contra zero passa sempre e não
+prova nada. É a asserção que teria pegado, sozinha, os dois achados mais caros do card 2.4.
+
+### 6.4 Projeção: o teste que protege a aritmética
+
+O card de Ordem 5 gira em torno de uma linha (`where k >= 2`): **as parcelas imediata e projetada só
+somam se forem disjuntas**. O teste correspondente não olha a linha — olha a consequência:
+
+```sql
+-- nenhum aluno aparece nas duas parcelas para o mesmo material
+select is_empty(
+  $$ select a.aluno_id from v_demanda_imediata_aluno a
+     join v_projecao_aluno p using (aluno_id, material_id) $$,
+  'imediata e projetada são disjuntas por aluno × material'
+);
+```
+
+Mais quatro, um por degrau da cascata: um aluno-fixture por origem (`MODULAR`, `RITMO_ALUNO`,
+`PREVISAO_CURSO`, `MEDIA_METODO`) e a asserção de que `v_projecao_aluno.origem` é o degrau esperado —
+**uma regra por aluno, nunca por item** (decisão (a) do card de Ordem 5): asserir também que um mesmo
+aluno nunca tem duas origens. E os dois filtros do ritmo, que atacam falhas opostas: aluno com três
+entregas na mesma data (o caso da migração) **não** cai para ritmo ~0, e aluno que voltou de seis
+meses parado **não** sai do horizonte.
+
+### 6.5 REP: as duas bordas
+
+O card 2.5 é aritmético, então o teste é de borda, não de exemplo: fixture com débito **exatamente
+no limite** (`debito = capacidade × semanas`) → nenhuma pendência; mais uma aula → `REP_VIRADA`
+aberta com `chave_dedup` terminada em `:CONTINUO`. E o teste do pingue-pongue, que é o que a decisão
+(f) existe para evitar: virar contínuo, voltar a pontual, rodar `rt_rep_avaliar` no dia seguinte →
+**nenhuma** pendência `:VOLTA` antes de `rep_janela_volta_dias`.
+
+---
+
+## 7. Concorrência: fora do pgTAP, por necessidade
+
+O card 2.2 (c) escolheu `pg_advisory_xact_lock` porque **nenhuma constraint protege contra 11 alunos
+em 10 PCs nem contra saldo −1**. Um teste pgTAP roda numa conexão só e jamais exercita isso: o
+`select` que conta e o `insert` que grava acontecem na mesma transação, e a corrida não existe.
+
+**Decisão: duas sessões de verdade, num script de shell, fora da suíte pgTAP.**
+
+```
+tests_concorrencia/entrega_ultimo_exemplar.sh
+  material com saldo 1, dois alunos com ele como próximo
+  psql A: begin; select fn_registrar_entrega(A);       -- segura o lock
+  psql B: begin; select fn_registrar_entrega(B);       -- bloqueia
+  psql A: commit;  psql B: (destrava) commit;
+  asserção: um 'ENTREGUE' e um 'REORDENADA'/'BLOQUEADA_SEM_ESTOQUE'
+            e saldo final = 0, nunca −1
+```
+
+O irmão é `admissao_ultima_vaga.sh`: bloco com 9/10, duas admissões simultâneas → uma passa, a outra
+recebe `BLOCO_LOTADO`, e `count(*) = 10`, nunca 11.
+
+Dois cuidados que decidem se o teste vale alguma coisa: os scripts **não podem** rodar dentro da
+transação de teste (por definição), então limpam o que criaram no fim (`delete` explícito num banco
+local descartável); e precisam de **timeout** — se o lock não existir, os dois passam e o teste tem
+de reprovar por saldo, não por travar o CI para sempre. `statement_timeout` de 10 s nas duas sessões.
+
+Enquanto a suíte não existe, o C13 (§5.1) é o guarda-chuva barato: garante que a chamada do lock não
+sumiu. Ele **não substitui** o teste de duas sessões, que é pré-condição do marco 2 (§15.2).
+
+---
+
+## 8. Rotinas agendadas: idempotência e isolamento
+
+Duas propriedades que o card 2.2 decidiu e que só o teste sustenta:
+
+**Idempotência** (decisão (i): dedup por índice único parcial, `on conflict do nothing`). Rodar
+`rt_pendencias_diaria()` duas vezes seguidas e asserir que a contagem de pendências abertas é
+idêntica. Uma rotina que duplica pendência transforma a central numa lista que ninguém lê — e o
+sintoma aparece semanas depois.
+
+**Isolamento** (decisão (j): cada sub-rotina num `exception` próprio). Testável dentro da transação,
+porque `create or replace` é transacional:
+
+```sql
+create or replace function rt_capacidades() returns void language plpgsql as
+  $$ begin raise exception 'falha proposital'; end $$;      -- revertido no rollback
+select rt_diaria();
+select ok(<pendência ROTINA_FALHOU:rt_capacidades existe>, 'a falha virou pendência');
+select ok(<pendências de STANDBY foram abertas>,            'e as rotinas seguintes rodaram');
+```
+
+Sem esse teste, "cada uma isolada em `exception` própria" é uma frase no documento. Com ele, é
+verificado a cada PR.
+
+**Contexto de rotina** (2.2 §2.2): asserir que `rt_diaria` enxerga as **duas** unidades da fixture, e
+que uma chamada a `rt_*` **sem** o GUC de contexto não escreve nada — é o desvio por `set_config`
+que faz o `force row level security` do card 2.1 conviver com o `pg_cron`.
+
+**Horário**: asserir que o `cron.schedule` registrado é `'10 6 * * *'`. A decisão diz 03:10 em São
+Paulo; um `'10 3 * * *'` lido como local seria o meio do expediente, e a diferença não aparece em
+nenhum comportamento — só no catálogo.
+
+---
+
+## 9. Testes no Flutter
+
+### 9.1 O que testar (e é pouco, de propósito)
+
+| Suíte | O que prova | Card |
+|---|---|---|
+| `catalogo_erros_test.dart` | Todo `codigo` do fixture de contrato (§10) tem mensagem; o caso não mapeado exibe o código | 3.7 |
+| `guardas_rota_test.dart` | Cada uma das 13 rotas do card 2.4 §6 abre com o conjunto mínimo de permissões e é barrada faltando **qualquer uma** delas — tabelado, uma linha por rota | 3.7, depois cada card de tela |
+| `permissao_widget_test.dart` | Botão sem permissão é **ocultado**; botão sem estado é **desabilitado com motivo** (`DesabilitadoCom`) — as duas metades da decisão 2 do card 2.6 | 3.7 |
+| `faixa_test.dart` | `faixaDe(largura)` devolve menu/trilho/barra inferior nos limites 600 e 1024, e a `TabelaIm360` troca linhas por cartões junto | 3.7 |
+| `dialogo_resultado_test.dart` | Os três status da entrega abrem **diálogo/folha**, não snackbar (decisão (f) do card 2.7) | 6.6 |
+| `tnum_test.dart` | Estilos numéricos carregam `fontFeature tnum` — a coluna de estoque desalinhada é o sintoma que ninguém reporta | 3.7 |
+
+### 9.2 Golden: só componente, nunca tela
+
+**Decisão: golden test apenas para o catálogo de componentes** — badges de status e de tipo nos dois
+temas (o contrato visual que o card 2.7 fechou com contraste verificado par a par), e nada mais.
+Golden de tela inteira quebra a cada ajuste de espaçamento; com uma pessoa no projeto, o resultado
+previsível é `--update-goldens` no automático, e aí o golden deixou de testar. Badge é estável por
+definição: se ele mudou, foi de propósito.
+
+### 9.3 Sem mock do Supabase
+
+Widget test com cliente Supabase falso testa o mock. As telas recebem os dados por um repositório
+injetado; o teste injeta **dados**, não um cliente HTTP. O acordo tela↔banco quem verifica é a suíte
+do banco (§6) mais o fixture de contrato (§10).
+
+### 9.4 O que **não** entra na v1
+
+Sem `integration_test`, sem Playwright, sem teste de ponta a ponta em navegador. Custo alto de
+manutenção para uma pessoa, e neste projeto o papel dele já tem dois donos melhores: os **marcos de
+validação** com pessoas de verdade (§15) e o **dry-run** do card 9.4, que exercita o caminho inteiro
+com dados reais. Reavaliar na Fase 11 se a equipe crescer.
+
+---
+
+## 10. O contrato entre banco e app: um fixture, dois consumidores
+
+O catálogo de erros existe hoje em dois lugares: §12 do card 2.2 (SQL) e §7.1 do card 2.7 (Dart).
+Conferidos nesta data, **batem: 21 códigos dos dois lados** (19 do card 2.2 + `REP_JA_CONTINUO` e
+`REP_NAO_CONTINUO` do 2.5). Nada garante que continuem batendo — e a falha é silenciosa, com cara de
+problema de rede: o usuário vê *"Não foi possível concluir… (código X)"* em vez da instrução certa.
+
+**Decisão: um arquivo versionado, `test/fixtures/codigos_erro.txt`, com um código por linha, é o
+contrato.** Dois testes o consomem, de lados opostos:
+
+- **C12** (SQL, §5.1): o conjunto de `codigo` que aparece no `DETAIL` das funções é **exatamente** o
+  do arquivo — pega o código novo que ninguém traduziu e o código morto que ficou.
+- **`catalogo_erros_test.dart`**: todo código do arquivo tem mensagem em `catalogo_erros.dart`.
+
+Um card que cria um erro novo toca três arquivos (função, fixture, catálogo Dart) e os dois testes
+falham enquanto faltar um. É a única forma barata de manter dois repositórios da verdade em dia sem
+gerar código.
+
+O mesmo mecanismo, com o mesmo arquivo, poderia valer para tipos de pendência; hoje **não vale a
+pena**, porque a tela consome a pendência pelo tipo vindo do banco e o C10 já fecha o lado que erra.
+
+---
+
+## 11. Determinismo: as três fontes de teste instável
+
+Teste que falha uma vez por semana ensina a equipe a reexecutar o CI, e a partir daí nenhum
+resultado vermelho significa alguma coisa. As três fontes previsíveis aqui:
+
+| Fonte | Como evitar |
+|---|---|
+| **Tempo** | Fixture sempre em datas relativas a `fn_hoje()`. **Nunca** asserir `fn_hoje() = current_date` — passa 21 horas por dia e falha 3, e a falha é o comportamento **correto**. O que se testa sobre fuso é o C6 (nenhum `current_date` no schema) e o horário do `cron` (§8) |
+| **Ordem** | Cada arquivo em transação própria com `rollback`; nada compartilhado além da fixture, que é recriada pelo `db reset` |
+| **Aleatoriedade** | `gen_random_uuid()` nas fixtures só em coluna que o teste não asserta; toda referência é por chave natural (`codigo`, `email`), nunca por UUID literal |
+
+---
+
+## 12. CI: o que roda, quando, e o que bloqueia
+
+Hoje existe um único workflow (`db-migrations`), que só dispara em `supabase/migrations/**`. A
+estratégia exige dois, e a mudança pertence ao **card 3.9** (YAML pronto no Apêndice B).
+
+| Workflow | Dispara | Jobs | Bloqueia |
+|---|---|---|---|
+| **`testes.yml`** (novo) | **todo PR** e todo push em `develop`/`main` | `banco` (Postgres limpo → migrações do zero → `seed.sql` → `supabase test db`) e `app` (`dart format --set-exit-if-changed`, `flutter analyze --fatal-infos`, `flutter test`) | o merge do PR |
+| **`db-migrations.yml`** (existe) | push em `develop`/`main` tocando `supabase/migrations/**` | ganha um job `testes` **antes** do `db push`, com `needs:` — é o que a nota do card 3.9 já pedia ("suíte SQL num Postgres limpo → db push") | a aplicação em dev/prod |
+
+Três ajustes no que já existe, todos com motivo próprio:
+
+1. **`supabase/setup-cli` com versão fixa**, não `latest` (pendência técnica 2(d) das Decisões
+   vigentes): hoje uma versão nova do CLI quebra o pipeline sem que nada mude no repositório — e
+   quebraria a suíte de teste junto, que é justamente o que deveria estar dizendo a verdade.
+2. **`major_version` do Postgres em `supabase/config.toml`**, igual ao dos projetos remotos. Testar
+   em 15 e aplicar em 17 é testar outro banco.
+3. **`required reviewer` no environment `prod`** (pendência 2(c)): o portão humano da migração de
+   produção, além do clique de Irineu no PR de promoção.
+
+**Rodar do zero, sempre.** O job do banco aplica as migrações desde a primeira, num Postgres vazio.
+Isso testa de graça a propriedade que mais importa numa migração: que a sequência inteira sobe
+limpa. `db push` incremental nunca descobre que a migração 12 depende de algo que a 7 removeu.
+
+---
+
+## 13. Obrigação de teste por tipo de card
+
+O portão que substitui a meta de cobertura (§2). Um card não é "Concluído" com a sua linha em aberto.
+
+| Tipo de card | Testes obrigatórios |
+|---|---|
+| **Migração de schema** | Suíte de catálogo (§5) verde com as tabelas novas incluídas; um teste por `check`/`unique` que expresse regra de negócio (camada 1) |
+| **Função de aplicação** | Caminho feliz com efeito conferido; **um `throws_ok` por `codigo` que a função pode levantar**; um teste negativo de permissão (perfil sem o código → `PT403`); teste de camada 2 se houver trigger-garantia |
+| **View** | Paridade de linhas por perfil + zero para quem não pode + isolamento de unidade (§6.3); as quatro armadilhas do card 2.3 §3 quando aplicáveis (soma de conjunto vazio, `count` sobre `left join`, `fn_hoje`, RLS silenciosa) |
+| **Rotina `rt_*`** | Idempotência (rodar duas vezes) + isolamento de falha + contexto de rotina (§8) |
+| **Tela** | Guarda de rota tabelada; ocultação por permissão; estado vazio renderizado com o texto do card 2.7 |
+| **Migração de dados (Fase 9)** | Reexecutabilidade: importar duas vezes o mesmo snapshot produz os mesmos totais, sem duplicar |
+| **Correção de bug** | O teste que reproduz o defeito entra **no mesmo commit** da correção, e falha sem ela |
+
+---
+
+## 14. Testes que protegem decisões
+
+Cada decisão cara já tomada, e o teste sem o qual ela vira comentário. É a tabela para consultar
+quando um card perguntar "o que eu preciso testar aqui?".
+
+| Decisão (card) | Teste que a protege |
+|---|---|
+| RLS com `force`, quatro políticas por tabela (2.1 b) | C1, C4 |
+| `movimento_estoque` sem `update`/`delete` para ninguém (2.1 b) | C4 + tentativa de `update` autenticado como direção → recusa |
+| Movimento imutável, correção por estorno (`CLAUDE.md`) | Estorno mantém o movimento original e devolve o saldo |
+| Contexto de rotina por GUC (2.2 a) | §8 — rotina sem GUC não escreve; com GUC, alcança as duas unidades |
+| Falha que precisa deixar rastro é status, não exceção (2.2 b) | Entrega sem estoque nenhum → retorno `BLOQUEADA_SEM_ESTOQUE` **e** pendência `COMPRA_SEM_ESTOQUE` persistida após o `commit` |
+| Advisory lock em admissão e entrega (2.2 c) | §7 (duas sessões) + C13 |
+| Erro por `codigo`, nunca por texto (2.2 d) | §6.2 + C12 + fixture de contrato (§10) |
+| Livro atual/próximo derivados, nunca coluna (2.2 e) | Entrega muda o "próximo" sem `update` em coluna de aluno |
+| Um job diário às 03:10 SP (2.2 j) | §8 — `cron.schedule` = `'10 6 * * *'` |
+| Dedup de pendência por índice único (2.2 i) | §8 — idempotência |
+| `security_invoker` em toda view (2.3 a) | C5 |
+| Nenhuma matview (2.3 b) | C5 |
+| `fn_hoje()` no lugar de `current_date` (2.3 c) | C6 |
+| `qtd_projetada` reservada como 0 na posição definitiva (2.3 d) | Ordem das colunas de `v_pedido_sugerido` conferida em C-view; o card 8.2 só troca a expressão |
+| Permissões de leitura declaradas por view (2.3 i) | §6.3 — paridade de linhas |
+| Nove tabelas fora do padrão de quatro políticas (2.4 b) | Monitor executa entrega ponta a ponta e as quatro escritas-efeito-colateral gravam |
+| `insert` por tipo em `movimento_estoque` (2.4 c) | Monitor tenta `ENTRADA` direto → recusa; `SAIDA` pela função → passa |
+| `materiais.ler` e `estoque.ler` para todos (2.4) | §6.3 — grade e dashboard não vêm vazios para pedagógico e monitor |
+| RLS não é por coluna; trigger de colunas do checklist (2.4) | Monitor tenta `PATCH` em `pedagogico_ok` → recusa pelo trigger, não pela política |
+| Virada REP sugerida, nunca automática (2.5 a) | `rt_rep_avaliar` abre pendência e **não** cria alocação |
+| Prazo e gatilho aritmético (2.5 b, c) | §6.5 — borda exata |
+| Carência na volta (2.5 f) | §6.5 — pingue-pongue |
+| Projeção começa no 2º item (Ordem 5, b) | §6.4 — disjunção |
+| Uma regra por aluno (Ordem 5, a) | §6.4 — origem única por aluno |
+| Piso 7 / teto 120 dias no ritmo (Ordem 5, c) | §6.4 — entrega em lote e volta de parada |
+| `demanda_projetada` escrita só pela rotina (Ordem 5, g) | Direção tenta `insert` pelo PostgREST → recusa; rotina grava |
+| Botão sem permissão ocultado; sem estado, desabilitado com motivo (2.6, 2.7 g) | `permissao_widget_test` |
+| Tela não pré-verifica regra (2.6 c) | `dialogo_resultado_test` — os três status vêm do banco |
+| Resultado que muda a próxima ação é diálogo, não snackbar (2.7 f) | `dialogo_resultado_test` |
+| Numerais tabulares em tabela e estoque (1.9, 2.7 e) | `tnum_test` |
+| Badges com contraste verificado (2.7 a) | Golden dos badges nos dois temas |
+
+---
+
+## 15. Critérios de aceite dos marcos
+
+Quatro marcos, do plano §9, já com card no board: **M1** = 4.8, **M2** = 6.9, **M3** = 8.8,
+**M4** = 9.7 (go-live, com o dry-run 9.4 como pré-requisito).
+
+Três regras valem para os quatro:
+
+1. **Pré-condição automatizada antes de convocar gente.** Marco é validação com pessoas; começar com
+   suíte vermelha é gastar a hora do pedagógico procurando bug que o CI acharia sozinho.
+2. **Critério de reprovação escrito.** Marco sem condição de reprovação é demonstração, não
+   validação — e demonstração sempre passa.
+3. **Ajuste vira card, nunca correção no ato** (já na nota do card 4.8). Corrigir ao vivo perde o
+   rastro e ninguém sabe o que mudou depois da validação.
+
+### 15.1 M1 — Cadastros e permissões (card 4.8)
+
+**Quem valida:** Irineu + secretaria (usuária principal dos cadastros); direção nas telas de
+administração.
+
+**Pré-condições automatizadas:** suítes `010`–`030` verdes; `flutter analyze` limpo; app publicado
+no Pages de dev; seed do card 3.6 aplicado em dev pelo pipeline (não à mão).
+
+**Roteiro:** cadastrar um combo real (Secretariado Executivo) com cursos e materiais; cadastrar um
+aluno; percorrer ATIVO → STANDBY → ATIVO → CANCELADO; abrir o sistema com um usuário de cada perfil.
+
+**Aprova se, e só se:**
+
+| # | Critério | Como se verifica |
+|---|---|---|
+| 1 | Os 49 códigos do card 2.4 existem em `permissao` e a matriz inicial confere: direção 49, secretaria 37, pedagógico 22, monitor 13 | consulta, não conferência a olho |
+| 2 | Para cada perfil, o menu exibe **exatamente** as rotas do mapa do card 2.4 §6 — nem uma a menos, nem uma a mais | quatro logins |
+| 3 | As três permissões de exceção (`alunos.formar_sem_certificado`, `alunos.reverter_status`, `compras.receber_excedente`) só aparecem para a direção | quatro logins |
+| 4 | Nenhuma tela abre **vazia** por falta de permissão — o modo de falha do card 2.4 | quatro logins × telas do perfil |
+| 5 | Transição inválida devolve a mensagem do catálogo do card 2.7, não texto do Postgres | tentativa deliberada |
+| 6 | Toda mudança de status gerou linha em `aluno_status_hist` com quem e quando; toda linha criada tem `criado_por` do usuário do roteiro | consulta ao fim |
+
+**Reprova se:** aparecer qualquer erro cru do PostgREST/Postgres em tela; qualquer tela vazia por
+RLS; qualquer política exigindo permissão que o seed não cria (é o C11 — não deveria chegar aqui).
+
+**Fora do marco:** turmas, estoque, dashboard, projeção.
+
+### 15.2 M2 — Fluxo completo de um aluno (card 6.9)
+
+**Quem valida:** Irineu + monitor (é a jornada dele) + secretaria.
+
+**Pré-condições automatizadas:** suítes `010`–`060` verdes **e** a suíte de concorrência (§7) verde —
+esta é a única pré-condição que não é negociável por prazo, porque o defeito que ela pega (saldo −1,
+11 alunos em 10 PCs) é invisível em uso normal e corrompe dado.
+
+**Roteiro:** matricular no combo (trilha gerada) → alocar em bloco → tentar alocar em bloco lotado →
+receber um pedido (ENTRADA) → registrar entrega (SAIDA) → registrar entrega de material sem estoque →
+zerar a trilha inteira e tentar de novo → estornar.
+
+**Aprova se, e só se:**
+
+| # | Critério |
+|---|---|
+| 1 | A trilha nasce do combo na ordem certa e o "próximo" é o primeiro não entregue, sem coluna que o guarde |
+| 2 | Os **três** status de retorno da entrega ocorreram no roteiro (`ENTREGUE`, `REORDENADA`, `BLOQUEADA_SEM_ESTOQUE`), cada um com o diálogo do card 2.7 — e o `REORDENADA` deixou rastro em `aluno_material_hist` com `motivo='SEM_ESTOQUE'` |
+| 3 | `BLOQUEADA_SEM_ESTOQUE` **persistiu** a pendência `COMPRA_SEM_ESTOQUE` (a decisão 2.2 (b) conferida na prática) |
+| 4 | Saldo pela view = `sum(quantidade)` bruto em cada passo; **nunca negativo** |
+| 5 | Estorno devolve o saldo e a trilha ao estado anterior, e o movimento original continua lá |
+| 6 | Bloco com 10 PCs aceita o 10º e recusa o 11º com `BLOCO_LOTADO`; PC em manutenção derruba a capacidade e gera `BLOCO_ACIMA_CAPACIDADE` quando já estava cheio |
+| 7 | Duas entregas simultâneas do último exemplar, feitas em dois navegadores: uma entrega, a outra reordena ou bloqueia; saldo final 0 |
+| 8 | O monitor completa a jornada inteira **no celular** com o seu perfil, sem esbarrar em RLS |
+
+**Reprova se:** saldo negativo em qualquer momento; entrega que grave movimento sem marcar a trilha
+(ou o contrário); qualquer passo que exija a direção para o que é jornada do monitor.
+
+### 15.3 M3 — Dashboard e projeção (card 8.8)
+
+⚠️ **Divergência registrada com o plano §9 e com a nota do card.** O marco pede "dashboard e projeção
+comparados à planilha". A metade do dashboard é comparável e tem de bater **exatamente**. A metade da
+projeção **não é comparável**: a planilha não projeta demanda — ela tem previsão de conclusão
+informada manualmente por aluno e ajustes manuais na aba Pedidos. Exigir uma comparação que não
+existe produz um dos dois vícios: aceite de fachada, ou reprovação de um número que está certo. Os
+critérios abaixo separam as duas metades; o critério **definitivo** da projeção é o do card 11.2
+(viés entre −10% e +25%) e só existe depois de três meses de uso — dizer isso agora é honestidade,
+não adiamento.
+
+**Quem valida:** Irineu + dono do produto (é ele quem decide se a compra sugerida é aceitável).
+
+**Pré-condições automatizadas:** suítes `010`–`095` verdes; recorte da planilha importado em dev
+pela ferramenta do card 9.1 (não por `insert` à mão — importar à mão testa a mão).
+
+**Metade A — contagens, batem exatamente:**
+
+| Número | Fonte de conferência |
+|---|---|
+| Alunos por método e status | Dashboard da planilha (161/71/33 no snapshot de 29/08) |
+| Alunos sem turma | 20 no snapshot, com os 2 códigos divergentes já tratados |
+| Ocupação e vagas por bloco | grade da planilha; capacidades 10 / 15 / 6 |
+| Estoque atual por material | aba `Ger. Apost` |
+| Demanda imediata | alunos ativos cujo próximo livro é o material |
+| Conclusões por semestre | Dashboard da planilha |
+| Alunos no último livro | conferindo a distinção do card 2.3: `em_ultimo_livro` (1 pendente) ≠ `em_fim` (nenhum) |
+
+**Metade B — projeção, aceite por reprodução e plausibilidade:**
+
+| # | Critério |
+|---|---|
+| 1 | Quatro alunos, um por degrau (`MODULAR`, `RITMO_ALUNO`, `PREVISAO_CURSO`, `MEDIA_METODO`): a `origem` é a esperada e a conta refeita à mão bate com `v_projecao_aluno` |
+| 2 | Disjunção: nenhum aluno aparece em imediata e projetada para o mesmo material — o teste do §6.4 rodado sobre os dados reais do recorte |
+| 3 | Plausibilidade: Σ(imediata + projetada) no horizonte de 60 dias fica entre **0,6×** e **1,6×** a média de saídas do histórico migrado no mesmo número de meses. Fora da banda **não reprova sozinho**, mas exige explicação escrita antes do aceite. A banda é assimétrica de propósito, como o card 11.2: sobra é capital parado, falta é aula perdida |
+| 4 | Nenhum material com projeção > 0 e nenhum aluno em `v_projecao_aluno` — projeção sem origem é bug, não estimativa |
+| 5 | O dono do produto olha o pedido sugerido e diz se compraria aquilo. Um "não" registrado vira card de calibração, não reprova o marco |
+
+**Reprova se:** qualquer número da metade A divergir sem explicação registrada; a disjunção falhar
+(aluno contado duas vezes na compra); a tela de projeção não abrir para algum dos perfis que o card
+2.4 autorizou (é o `fn_param_int` invoker — bloqueante conhecido).
+
+### 15.4 M4 — Go-live (card 9.7)
+
+**Quem valida:** Irineu, dono do produto, e as quatro funções em uso real.
+
+**Pré-condições — todas obrigatórias, sem exceção por prazo:**
+
+1. M1, M2 e M3 aceitos, com os cards de ajuste abertos por eles **fechados ou explicitamente adiados
+   por escrito**.
+2. Dry-run do card 9.4 com **zero divergência não explicada**.
+3. Importação **reexecutável** comprovada: o mesmo snapshot importado duas vezes produz os mesmos
+   totais e não duplica nada.
+4. Backup semanal (card 3.11) com **restauração testada** — um backup nunca restaurado não é backup.
+5. Rotina diária tendo rodado com sucesso ao menos uma vez em produção, com `ROTINA_FALHOU` ausente.
+6. Sentry recebendo evento de produção (um erro provocado de propósito) sem PII de aluno na carga.
+7. Secrets do `db-migrations` validados e `required reviewer` ativo no environment `prod`.
+8. `supabase migration list` sem diferença entre repositório e produção.
+9. Treinamento do card 9.6 concluído nos quatro perfis, e cada usuário real com primeiro login feito.
+
+**Aprova se:** os totais em produção reproduzem os do dry-run; a planilha foi marcada somente
+leitura no dia; o backup pós-carga existe e foi restaurado em teste; e há **plano de volta escrito**
+— até quando se volta para a planilha, quem decide e como.
+
+**Reprova se:** qualquer divergência de contagem; qualquer migração pendente; qualquer pendência
+`ROTINA_FALHOU` aberta; ausência de plano de volta.
+
+---
+
+## 16. Ajustes que esta especificação exige
+
+Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
+
+| # | Ajuste | Onde | Card | Gravidade |
+|---|---|---|---|---|
+| 1 | Workflow `testes.yml` em **todo PR** (jobs `banco` e `app`) e job de suíte **antes** do `db push` no `db-migrations` | `.github/workflows/` | 3.9 | **bloqueante** para o portão — sem ele a suíte existe e não reprova nada |
+| 2 | `supabase/setup-cli` com **versão fixa** no lugar de `latest` | `db-migrations.yml` | 3.9 | **bloqueante** — CLI novo quebra o pipeline sem mudança no repositório (pendência 2(d)) |
+| 3 | `major_version` do Postgres em `supabase/config.toml`, igual ao dos projetos remotos | `supabase/config.toml` | 3.9 | alta — testar em versão diferente da que aplica |
+| 4 | **Constante de contrato sempre literal** na chamada (tipo de pendência, código de permissão, `codigo` de erro): nunca variável, concatenação ou `format()` | convenções do 2.2 §1.1 | todos os cards de função | alta — sem isso C10/C11/C12 cegam em silêncio |
+| 5 | `create extension pgtap`, schema `tests` e `seed.sql` **nunca** em `supabase/migrations/`; `supabase db reset --linked` proibido | — | 3.4.5 | **bloqueante** — extensão de teste em produção, ou fixture escrita em dev |
+| 6 | Seed do card 3.6 é **migração** (dado de catálogo, precisa existir em prod), não `seed.sql` | nota do card 3.6 | 3.6 | alta — confusão previsível entre os dois "seeds" |
+| 7 | Suíte de concorrência de duas sessões é entregável dos cards de admissão e entrega | notas dos cards | 5.3 e 6.3 | **bloqueante** para o marco 2 (§15.2) |
+| 8 | `required reviewer` no environment `prod` do GitHub | Settings do repositório | 3.9 | alta — portão humano da migração de produção (pendência 2(c)) |
+| 9 | Fixture `test/fixtures/codigos_erro.txt` versionado, consumido pelo C12 e pelo teste Dart | repositório | 3.7 | média — hoje os 21 códigos batem; o teste é o que mantém |
+| 10 | Critérios de aceite de §15 copiados para as Notas dos cards 4.8, 6.9, 8.8 e 9.7 **antes** de a fase começar | board | este card | média — critério escrito depois é justificativa, não critério |
+
+---
+
+## 17. Mapa suíte → card
+
+| Suíte / arquivo | Card que cria | Fase |
+|---|---|---|
+| `seed.sql` (pgTAP, schema `tests`, helpers, escola-fixture) | **3.4.5** (criado por este card) | 3 |
+| `010_catalogo_rls`, `011_catalogo_convencoes` | 3.3 (nasce) → cresce em toda migração | 3+ |
+| `012_catalogo_contratos` (C10, C11, C12, C13) | 3.6 (precisa do seed de permissões) | 3 |
+| `020_acesso_tem_permissao` | 3.4 | 3 |
+| `030_alunos_status` | 4.2 | 4 |
+| `040_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` | 5.3 | 5 |
+| `050_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` | 6.3 | 6 |
+| `060_estoque_compras` | 6.5 | 6 |
+| `070_modular` | 7.2 | 7 |
+| `080_projecao` | 8.1 | 8 |
+| `085_rep_virada` | 5.3 (funções REP entram na mesma migração) | 5 |
+| `090_rotinas` | 5.5 (primeira rotina) → cresce em 8.1 | 5+ |
+| `095_views_paridade` | 6.4 (primeiras views) → cresce em 5.6, 5.9, 8.7 | 5+ |
+| `catalogo_erros_test`, `guardas_rota_test`, `permissao_widget_test`, `faixa_test`, `tnum_test` | 3.7 | 3 |
+| Golden dos badges | 4.6 (status) e 5.7 (tipo) | 4–5 |
+| `dialogo_resultado_test` | 6.6 | 6 |
+| `testes.yml` + gate no `db-migrations` | 3.9 | 3 |
+| Reexecutabilidade da importação | 9.1 / 9.4 | 9 |
+
+---
+
+## 18. O que fica em aberto
+
+1. **Teste de desempenho** — sem meta. Com ~265 alunos e uma unidade, nada aqui é problema de
+   volume; a decisão consciente é não gastar teste nisso agora. Reavaliar se a Fase 11 trouxer a
+   segunda unidade.
+2. **Acessibilidade automatizada** — o card 2.7 verificou contraste par a par no papel; um teste
+   automático de contraste e de alvo mínimo (44 px) é desejável e não é da v1.
+3. **Dados de teste realistas para a projeção** — a escola-fixture é pequena de propósito. A
+   avaliação séria da cascata só acontece sobre o recorte importado (M3) e sobre o histórico real
+   (cards 9.5 e 11.2).
+4. **Quem roda a suíte de concorrência localmente** depende do `supabase start`, que exige Docker.
+   Se a máquina de Irineu não o tiver, essa suíte roda só no CI — decidir no card 3.9.
+
+---
+
+## Apêndice A — helpers de teste (`supabase/seed.sql`, card 3.4.5)
+
+> Vai em `supabase/seed.sql`. **Nunca** em `supabase/migrations/`.
+
+```sql
+-- ---------------------------------------------------------------------------
+-- Infraestrutura de teste. Aplicada apenas por `supabase db reset` (local/CI).
+-- ---------------------------------------------------------------------------
+create extension if not exists pgtap with schema extensions;
+
+create schema if not exists tests;
+revoke all on schema tests from public, anon, authenticated;
+
+-- Cria usuário em auth.users + usuario + usuario_perfil.
+-- security definer: auth.users pertence a supabase_auth_admin e usuario tem RLS.
+create or replace function tests.criar_usuario(
+  p_email   text,
+  p_perfil  text,
+  p_unidade uuid default null
+) returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_uid     uuid := gen_random_uuid();
+  v_unidade uuid := coalesce(p_unidade, (select id from unidade where codigo = 'ESCOLA_A'));
+begin
+  insert into auth.users (id, email, aud, role, encrypted_password,
+                          email_confirmed_at, created_at, updated_at)
+  values (v_uid, p_email, 'authenticated', 'authenticated', '', now(), now(), now());
+
+  insert into usuario (id, unidade_id, email, nome, ativo, criado_por)
+  values (v_uid, v_unidade, p_email, p_email, true, v_uid);
+
+  if p_perfil is not null then
+    insert into usuario_perfil (usuario_id, perfil_id, unidade_id, criado_por)
+    select v_uid, p.id, v_unidade, v_uid from perfil p where p.codigo = p_perfil;
+  end if;
+
+  return v_uid;
+end $$;
+
+-- Reproduz o contexto que o PostgREST monta para um usuário logado.
+-- Claims ANTES do set role; is_local = true para o efeito morrer no rollback.
+create or replace function tests.autenticar(p_usuario uuid) returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', p_usuario::text, 'role', 'authenticated')::text,
+    true);
+  set local role authenticated;
+end $$;
+
+create or replace function tests.como_anonimo() returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  perform set_config('request.jwt.claims', null, true);
+  set local role anon;
+end $$;
+
+create or replace function tests.encerrar_sessao() returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  reset role;
+  perform set_config('request.jwt.claims', null, true);
+end $$;
+
+-- Conta linhas de um SELECT na pele de um usuário — base do teste de paridade (§6.3).
+create or replace function tests.conta_como(p_usuario uuid, p_sql text)
+returns bigint
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare v_n bigint;
+begin
+  perform tests.autenticar(p_usuario);
+  execute format('select count(*) from (%s) t', p_sql) into v_n;
+  perform tests.encerrar_sessao();
+  return v_n;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Escola-fixture (§4.2) — datas SEMPRE relativas a fn_hoje().
+-- ... unidades ESCOLA_A/ESCOLA_B, salas 10 e 6 PCs, 3 blocos (0/9/10),
+--     6 materiais (saldos 0,0,1,n,n,n), 12 alunos cobrindo os 4 degraus
+--     da cascata, 1 em FIM, 1 em STANDBY antigo, 1 com débito REP na borda.
+-- Detalhamento no card 3.4.5, quando as tabelas existirem.
+-- ---------------------------------------------------------------------------
+```
+
+## Apêndice B — `.github/workflows/testes.yml` (card 3.9)
+
+```yaml
+name: testes
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  banco:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.20.5          # fixa — nunca `latest` (§12, ajuste 2)
+      - name: Subir Postgres limpo e aplicar TODAS as migrações do zero
+        run: |
+          supabase start -x realtime,storage-api,imgproxy,studio,inbucket,edge-runtime,logflare,vector
+          supabase db reset          # migrações desde a primeira + seed.sql
+      - name: Suíte pgTAP
+        run: supabase test db
+      - name: Suíte de concorrência (duas sessões)
+        run: |
+          for s in supabase/tests_concorrencia/*.sh; do bash "$s"; done
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.0'   # fixa, pelo mesmo motivo
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed .
+      - run: flutter analyze --fatal-infos
+      - run: flutter test
+```
+
+E, em `db-migrations.yml`, o job existente passa a depender da suíte:
+
+```yaml
+jobs:
+  testes:
+    uses: ./.github/workflows/testes.yml     # ou o job `banco` replicado
+  migrate:
+    needs: testes                            # vermelho não chega a dev nem a prod
+    ...
+```
+
+## Apêndice C — anatomia de um arquivo de teste
+
+```sql
+-- supabase/tests/040_vagas_admissao.test.sql
+begin;
+select plan(6);
+
+-- fixture nomeada por chave natural, nunca por UUID literal (§11)
+select tests.criar_usuario('secretaria@teste.local', 'secretaria') as u_sec \gset
+
+-- camada 3: a função, no caminho normal
+select tests.autenticar(:'u_sec');
+select is(
+  (fn_bloco_admitir(<aluno>, <bloco_com_9>, 'REM', null)).status, 'ADMITIDO',
+  'admissão em bloco com vaga devolve ADMITIDO');
+
+-- camada 3: a mesma função, sem vaga
+select throws_ok(
+  $$ select fn_bloco_admitir(<outro_aluno>, <bloco_com_10>, 'REM', null) $$,
+  'PT409', null, 'bloco lotado devolve PT409');
+
+-- camada 2: o trigger, escrevendo DIRETO na tabela (o que o PostgREST faria)
+select throws_ok(
+  $$ insert into bloco_aluno (aluno_id, bloco_id, tipo, unidade_id)
+     values (<outro_aluno>, <bloco_com_10>, 'REM', <unidade>) $$,
+  'PT409', null, 'o trigger barra o insert direto, sem passar pela função');
+
+-- permissão: o monitor não aloca
+select tests.encerrar_sessao();
+select tests.criar_usuario('monitor@teste.local', 'monitor') as u_mon \gset
+select tests.autenticar(:'u_mon');
+select throws_ok(
+  $$ select fn_bloco_admitir(<aluno>, <bloco_vazio>, 'REM', null) $$,
+  'PT403', null, 'monitor sem turmas.alocar recebe PT403');
+
+-- isolamento de unidade
+select tests.encerrar_sessao();
+select tests.criar_usuario('dir_b@teste.local', 'direcao', <unidade_b>) as u_b \gset
+select is(tests.conta_como(:'u_b', 'select 1 from bloco_aluno'), 0::bigint,
+          'usuário da ESCOLA_B não enxerga alocação da ESCOLA_A');
+
+select is(tests.conta_como(:'u_sec', 'select 1 from bloco_aluno where bloco_id = <bloco_com_10>'),
+          10::bigint, 'e o bloco continua com 10, nunca 11');
+
+select * from finish();
+rollback;
+```
