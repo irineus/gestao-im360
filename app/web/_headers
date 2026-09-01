@@ -1,0 +1,22 @@
+# Cabeçalhos do Cloudflare Pages (card 3.8).
+# Formato: um bloco por padrão de caminho, cabeçalhos indentados.
+# Limites do Pages: 100 regras por arquivo, 2.000 caracteres por cabeçalho.
+#
+# ⚠️ NÃO existe `_redirects` neste projeto, e não deve passar a existir com a
+# regra de SPA que se copia da internet (`/*  /index.html  200`). No Cloudflare
+# Pages "os redirects são sempre seguidos, exista ou não um asset para a
+# requisição": a regra engoliria `main.dart.js`, `canvaskit.wasm` e as fontes, e
+# o app abriria em branco. O fallback já é nativo — sem um `404.html` no topo,
+# o Pages trata o projeto como single-page application e devolve o `index.html`
+# para qualquer caminho. Por isso também: **nunca criar `web/404.html`**, que é
+# o que desliga esse comportamento e quebra todo link direto (`/alunos`,
+# `/redefinir-senha`).
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https://ncdfolxdupbbfvtydngx.supabase.co https://aqfuawrygxsiopyppjza.supabase.co
+  Cache-Control: public, max-age=0, must-revalidate
