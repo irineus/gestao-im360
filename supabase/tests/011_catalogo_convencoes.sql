@@ -122,7 +122,16 @@ select is(
             -- `parametros.ler`, que só a direção tem. TODAS filtram unidade no
             -- corpo, direta ou indiretamente por fn_unidade_atual().
             'fn_unidade_atual', 'tem_permissao', 'fn_minhas_permissoes',
-            'fn_param_txt', 'fn_param_int'
+            'fn_param_txt', 'fn_param_int',
+            -- card 3.5 — as três do espelho auth.users → usuario. As duas
+            -- primeiras escrevem em `usuario` (RLS forçada) a mando do
+            -- supabase_auth_admin, que não é usuário do sistema e não tem
+            -- política nenhuma a favor; a terceira precisa LER auth.users, que
+            -- nenhum papel do app alcança. Nenhuma devolve dado ao chamador:
+            -- duas gravam a partir do que o Auth já tem e a terceira compara e
+            -- recusa — por isso não carregam filtro de unidade no corpo.
+            'fn_usuario_espelhar', 'fn_usuario_email_sincronizar',
+            'fn_usuario_espelho_coerente'
             -- card 5.2:  'fn_capacidade_efetiva', 'fn_ocupacao_bloco'
             -- card 4.3:  'fn_pc_credencial_ler', 'fn_pc_credencial_gravar'
           )),

@@ -1,3 +1,163 @@
-# Mínimo para o CLI vincular o projeto no CI. Se uma versão do CLI exigir mais
-# campos, rode `supabase init` e mantenha este project_id.
+# Configuração versionada do Supabase — Gestão IM360
+#
+# Referência: https://supabase.com/docs/guides/local-development/cli/config
+#
+# ⚠️ O QUE ESTE ARQUIVO É, E O QUE ELE NÃO É (card 3.5)
+#
+# Ele é: (a) a configuração do stack LOCAL que `supabase start` sobe — o mesmo
+# em que a suíte pgTAP roda (`supabase test db`); (b) o registro versionado do
+# que os projetos remotos precisam ter configurado.
+#
+# Ele NÃO é aplicado nos projetos remotos. O CI deste repositório
+# (.github/workflows/db-migrations.yml) roda `supabase db push` e mais nada:
+# `supabase config push` NÃO é usado, e não deve passar a ser sem uma decisão
+# explícita. Motivo — lição trazida do projeto Desmalha: `config push` reescreve
+# a configuração de Auth do projeto remoto A PARTIR DESTE ARQUIVO, e o que não
+# estiver aqui volta ao default. O SMTP próprio, que mora só no painel (porque
+# tem credencial e credencial não entra no repositório), é apagado no ato — e o
+# sintoma é o convite e a recuperação de senha pararem de chegar, dias depois,
+# sem erro em lugar nenhum.
+#
+# Portanto: os valores de [auth] abaixo valem localmente e são a lista de
+# conferência do painel (Authentication → Sign In / Providers, URL Configuration,
+# Rate Limits). Ver docs/acesso-autenticacao.md §7.
+
 project_id = "gestao-im360"
+
+[api]
+enabled = true
+port = 54321
+# `public` é o schema do sistema; `graphql_public` vem de fábrica e não é usado.
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# Igual ao dos projetos remotos (dev e prod estão em 17.6). Sem fixar, o CLI usa
+# o default dele, que hoje coincide por sorte — testar em versão diferente da
+# que aplica é o ajuste #3 do card 2.8 §16.
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = true
+# supabase/seed.sql: pgTAP, schema `tests`, helpers e escola-fixture (card 3.4.5).
+# Nunca sai da máquina de quem testa — `supabase db reset --linked` é proibido.
+sql_paths = ["./seed.sql"]
+
+[studio]
+enabled = true
+port = 54323
+
+[local_smtp]
+# Captura local dos e-mails do Auth (convite, recuperação de senha), em
+# http://127.0.0.1:54324. É onde o fluxo do card 3.7 se testa sem SMTP.
+enabled = true
+port = 54324
+
+[storage]
+enabled = false
+
+[realtime]
+enabled = false
+
+[edge_runtime]
+# Nenhuma Edge Function na v1: as regras de negócio vivem no banco
+# (CLAUDE.md, "Regras inegociáveis"). Ligar só se o convite do card 4.7 exigir
+# a Admin API — decisão daquele card, com a justificativa registrada.
+enabled = false
+
+# =============================================================================
+# Auth — e-mail/senha, sem cadastro público (card 3.5)
+# =============================================================================
+[auth]
+enabled = true
+
+# ⚠️ Local. Nos projetos remotos a Site URL é a do Cloudflare Pages, e ela só
+# existe a partir do card 3.8 — anotado como pendência lá. Site URL errada não
+# quebra o login: quebra o LINK do convite e o da recuperação de senha, que é
+# construído a partir dela.
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = [
+  "http://127.0.0.1:3000",
+  "http://localhost:3000",
+]
+
+# 1 hora. Vale a pena saber o que este número significa neste sistema: desativar
+# alguém na tela de Administração não revoga o token já emitido — o app nega
+# tudo (fn_unidade_atual() devolve null, card 3.4), mas a sessão só some de vez
+# quando o JWT expira. Bloqueio imediato é "Ban user" no painel.
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+
+# ⚠️ O item mais importante deste arquivo: NÃO HÁ CADASTRO ABERTO AO PÚBLICO.
+# Usuário entra por convite da direção (card 3.5, nota do board). Com o signup
+# ligado, qualquer pessoa com a URL e a chave anônima — que é pública por
+# desenho, vai no bundle do Flutter — cria a própria conta. Não veria dado
+# nenhum (sem linha em `usuario`, fn_unidade_atual() é null e toda política
+# nega), mas encheria auth.users de contas que a direção não reconhece.
+enable_signup = false
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+
+# Senha: 8 caracteres com letras e dígitos. O sistema é usado por 4 a 8 pessoas
+# da escola em máquinas compartilhadas do laboratório; exigir símbolo aqui
+# empurra para o papel colado no monitor, que é o risco real (mesmo raciocínio
+# do card 2.9).
+minimum_password_length = 8
+password_requirements = "letters_digits"
+
+[auth.email]
+# ⚠️ ARMADILHA, medida em 01/09/2026 (card 3.5): esta chave NÃO é "permitir
+# cadastro público por e-mail". O CLI a traduz para GOTRUE_EXTERNAL_EMAIL_ENABLED,
+# que liga e desliga o PROVEDOR de e-mail inteiro. Com `false`, o convite ainda
+# chega, mas `token?grant_type=password` e `recover` respondem 400
+# `email_provider_disabled` ("Email logins are disabled") — ou seja, ninguém
+# entra e ninguém recupera senha, e o erro não fala de cadastro nenhum.
+# Quem fecha o cadastro público é o `enable_signup = false` da seção [auth]
+# acima, e ele sozinho basta: verificado, POST /auth/v1/signup devolve 422
+# `signup_disabled` com esta chave em `true`.
+enable_signup = true
+# Troca de e-mail confirmada NOS DOIS endereços. `usuario.email` é espelho de
+# auth.users (trigger do card 3.5) e é por ele que a pessoa entra: confirmação
+# só no endereço novo permitiria que um acesso esquecido aberto trocasse o
+# e-mail de acesso sem que o dono soubesse.
+double_confirm_changes = true
+# Convite já chega confirmado (o clique no link do convite é a confirmação).
+enable_confirmations = true
+# Trocar a senha exige sessão recente. Máquina compartilhada de laboratório.
+secure_password_change = true
+max_frequency = "60s"
+otp_length = 6
+# 24h para o link do convite e da recuperação. O default de 1h não sobrevive a
+# um convite mandado no fim da tarde.
+otp_expiry = 86400
+
+# [auth.email.smtp] fica DELIBERADAMENTE fora deste arquivo — ver o aviso do
+# topo. O SMTP próprio é configurado no painel de cada projeto (pendência de
+# Irineu, docs/acesso-autenticacao.md §7): sem ele o Supabase usa o serviço
+# interno, limitado a poucos e-mails por hora e sem garantia de entrega.
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[auth.mfa]
+# Fora da v1. Quando entrar, entra pela direção primeiro.
+[auth.mfa.totp]
+enroll_enabled = false
+verify_enabled = false
+
+[auth.rate_limit]
+# Defaults do CLI, repetidos aqui porque no painel eles são o que separa "o
+# convite não chegou" de "o convite foi barrado": com o serviço de e-mail
+# interno o teto é baixo, e um dia de cadastro de equipe encosta nele.
+email_sent = 2
+sign_in_sign_ups = 30
+token_refresh = 150
+token_verifications = 30

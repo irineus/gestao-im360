@@ -128,7 +128,9 @@ end $$;
 --
 -- Idempotente por e-mail: reexecutar o seed não duplica, e o `on conflict` em
 -- `usuario` sobrevive ao trigger de espelhamento auth.users → usuario do card
--- 3.5, que passará a criar a linha antes deste insert chegar nela.
+-- 3.5 — que desde 01/09/2026 existe de fato e cria a linha antes de este insert
+-- chegar nela. O `do update` é o que faz `p_ativo => false` valer: o espelho
+-- sempre cria a linha ativa, porque `ativo` é dado do app e não do Auth.
 create or replace function tests.criar_usuario(
   p_email   text,
   p_perfil  text,
@@ -148,9 +150,38 @@ begin
   if v_uid is null then
     v_uid := gen_random_uuid();
 
-    insert into auth.users (id, email, aud, role, encrypted_password,
-                            email_confirmed_at, created_at, updated_at)
-    values (v_uid, p_email, 'authenticated', 'authenticated', '', now(), now(), now());
+    -- raw_user_meta_data com a unidade: é o metadado do convite, e desde o card
+    -- 3.5 o trigger tg_auth_usuario_criado o lê para criar a linha de `usuario`.
+    -- Sem ele o helper quebraria — a fixture tem DUAS unidades ativas, e o
+    -- fallback "única unidade ativa" do espelho recusa a ambiguidade com
+    -- USUARIO_SEM_UNIDADE. Passar o metadado aqui não é contornar o trigger: é
+    -- exercitar o mesmo caminho que o convite de verdade percorre.
+    -- instance_id, raw_app_meta_data e uma senha de verdade: sem os três, a linha
+    -- serve para teste SQL e mais nada — o GoTrue filtra por `instance_id` e
+    -- responde "user not found" (medido no card 3.5). Com eles, os oito usuários
+    -- da fixture LOGAM no stack local, que é o que o card 3.7 precisa para
+    -- exercitar a tela de login sem inventar usuário à mão.
+    --
+    -- ⚠️ A senha abaixo é de fixture e só existe no stack local: este arquivo
+    -- nunca vai para migrations/ e `supabase db reset --linked` é proibido
+    -- (card 2.8, ajuste 5). Não é credencial de ninguém e não abre nada — não
+    -- confundir com a política do card 2.9.
+    -- Os seis campos de token vão como '' e não como null: o GoTrue lê essas
+    -- colunas em `string` e morre com "converting NULL to string is unsupported"
+    -- — erro 500 no login, sem relação aparente com a linha que o causou.
+    insert into auth.users (id, instance_id, email, aud, role, encrypted_password,
+                            email_confirmed_at, created_at, updated_at,
+                            raw_app_meta_data, raw_user_meta_data,
+                            confirmation_token, recovery_token,
+                            email_change, email_change_token_new,
+                            email_change_token_current, reauthentication_token)
+    values (v_uid, '00000000-0000-0000-0000-000000000000',
+            p_email, 'authenticated', 'authenticated',
+            extensions.crypt('fixture-local-123', extensions.gen_salt('bf')),
+            now(), now(), now(),
+            jsonb_build_object('provider', 'email', 'providers', array['email']),
+            jsonb_build_object('unidade_id', v_unidade::text, 'nome', p_email),
+            '', '', '', '', '', '');
   end if;
 
   insert into usuario (id, unidade_id, nome, email, ativo)
