@@ -15,6 +15,7 @@ O sistema **Gestão IM360** (Flutter + Supabase + Cloudflare) substituirá a pla
 | `script-extracao-planilha.md` | Protótipo Python (openpyxl) de extração da planilha — base da ferramenta de migração da fase 8/9 do board | protótipo |
 | `modelagem-dados-ddl.md` | DDL detalhado (33 tabelas, funções de infraestrutura, padrão de RLS) e mapa DDL → card das fases 3 a 8. **Fonte das migrações** | vigente |
 | `identidade-visual.md` | Marca, paleta (com contrastes WCAG verificados), tipografia, badges de status e tokens Dart. **Fonte do design system (card 2.7)**. Arquivos em `assets/marca/` | vigente |
+| `regra-virada-rep.md` | Card 2.5: critério objetivo da virada REP pontual → contínuo (débito × capacidade semanal × prazo), funções `fn_rep_situacao`/`fn_rep_avaliar_virada`/`fn_rep_virar_continuo`/`fn_rep_voltar_pontual`, pendências `REP_VIRADA` e os 8 ajustes que exige | vigente |
 | `regras-negocio-funcoes.md` | Card 2.2: onde vive cada regra da seção 6 do plano (restrição, trigger, função de aplicação ou rotina `pg_cron`) e a assinatura de cada objeto; catálogo de erros, de pendências, ajustes que o DDL precisa receber e mapa função → card | vigente |
 
 A planilha original (`Gestão Interativo.xlsx`, snapshot 29/08/2026) está no projeto do Claude.ai, não neste repositório.
@@ -25,6 +26,7 @@ A planilha original (`Gestão Interativo.xlsx`, snapshot 29/08/2026) está no pr
 - 30/08/2026 — board no Notion (11 fases) e página Decisões vigentes criados; plano v1.1 (Word) enviado ao dono do produto.
 - 31/08/2026 — dono do produto respondeu as 9 questões do cap. 11; decisões técnicas fechadas com Irineu; projetos Supabase dev/prod criados; repositório inicializado com este bootstrap. Planilha de conferência de alunos sem turma entregue ao pedagógico (20 alunos + 2 códigos divergentes).
 - 31/08/2026 — board reconciliado com as decisões já tomadas e **card 2.1 concluído**: DDL detalhado em `modelagem-dados-ddl.md`. Card 2.5 criado para o critério objetivo da virada REP pontual → contínuo.
+- 01/09/2026 — **card 2.5 concluído**: critério objetivo da virada REP fechado em `regra-virada-rep.md`. Virada **sugerida** (pendência `REP_VIRADA`), nunca automática — virar contínuo cria alocação permanente e consome vaga toda semana. Prazo de 30 dias corridos por aula perdida, com quatro parâmetros novos (`rep_prazo_dias`, `rep_capacidade_semanal`, `rep_faltas_max`, `rep_janela_volta_dias`). Destrava as regras de admissão e lotação da Fase 5.
 - 31/08/2026 — **card 1.9 concluído**: identidade visual fechada em `identidade-visual.md` + SVGs em `assets/marca/`. Paleta inspirada no Instituto Mix sem copiar (o sistema é de um franqueado, não é produto da franqueadora): laranja de marca, estrutura em grafite-azulado, vermelho reservado a erro. Destrava os cards 2.6 (wireframes) e 2.7 (design system).
 
 ## Decisões-chave (resumo — detalhe na página Decisões vigentes)
@@ -33,7 +35,7 @@ A planilha original (`Gestão Interativo.xlsx`, snapshot 29/08/2026) está no pr
 - Ambientes: Supabase **dev** `ncdfolxdupbbfvtydngx` e **prod** `aqfuawrygxsiopyppjza` (sa-east-1). Migrações **somente via CI/CD** (`develop` → dev; `main` → prod).
 - Entrega sem estoque: não bloqueia — entrega a próxima apostila da trilha com estoque, reordenando a trilha (registrado no histórico); se **nenhuma** tiver estoque, bloqueia e gera pendência de compra.
 - Parâmetros iniciais: projeção 60 dias; alerta STANDBY 30 dias.
-- REP híbrido: eventos pontuais com data enquanto der para repor tudo no prazo; senão o aluno vira REP contínuo na alocação (critério objetivo da virada: definir na Fase 2 do plano).
+- REP híbrido: eventos pontuais com data enquanto der para repor tudo no prazo; senão o aluno vira REP contínuo na alocação. **Critério objetivo fechado em 01/09/2026 (card 2.5):** o aluno é sugerido para contínuo quando o débito de aulas em aberto não cabe mais na capacidade semanal de reposição até o prazo de 30 dias da aula mais antiga, ou quando falta duas vezes à própria reposição. A virada é sempre sugerida, nunca automática.
 - Perfis direção/pedagógico/secretaria/monitor com matriz de permissões configurável; `tem_permissao()` + RLS.
 - Sentry desde a Fase 0 (free tier), além dos logs do Supabase.
 
