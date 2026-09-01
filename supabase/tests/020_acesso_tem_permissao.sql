@@ -5,13 +5,17 @@
 -- fn_minhas_permissoes, fn_param_int/txt, fn_exige_permissao, o contexto de
 -- rotina e as políticas das sete tabelas do card 3.3.
 --
--- ⚠️ Esta suíte monta a PRÓPRIA fixture e faz a troca de papel no topo do
--- script, sem os helpers tests.* do Apêndice A do card 2.8 — eles são do card
--- 3.4.5 e ainda não existem. Ver o achado registrado na subpágina deste card:
--- `set local role` dentro de uma função que carrega cláusula `set search_path`
--- é desfeito na saída da função (o Postgres restaura o nível de GUC inteiro),
--- então `tests.autenticar` como está escrito no apêndice provavelmente não
--- persiste o papel — a verificar no 3.4.5, num stack local.
+-- Esta suíte monta a PRÓPRIA fixture e faz a troca de papel no topo do script,
+-- sem os helpers tests.* do Apêndice A do card 2.8 — eles são do card 3.4.5 e
+-- ainda não existem.
+--
+-- Verificado em 01/09/2026 (Postgres 17, container local): o helper do Apêndice
+-- A está CORRETO. `set local role` dentro de uma função com cláusula
+-- `set search_path` persiste depois da saída — o Postgres salva e restaura só as
+-- variáveis nomeadas na cláusula, não o nível de GUC inteiro. Quem restaura tudo
+-- é `security definer`, e ali o `set role` nem chega a passar: dá erro explícito
+-- ("cannot set parameter role within security-definer function"). Não há modo de
+-- falha silencioso nesse desenho — o que havia era uma suspeita, agora descartada.
 --
 -- O setup roda como `postgres`, que tem BYPASSRLS (achado do card 3.3): a RLS
 -- não atrapalha a montagem da fixture. Tudo dentro de begin/rollback.
@@ -272,18 +276,10 @@ select throws_ok(
   'PT422', null,
   'fn_param_int sem valor nem default levanta PT422');
 
--- `reset role` antes de chamar o helper: o schema temporário pertence ao usuário
--- da sessão (postgres) e não concede USAGE a authenticated. O veredito não muda
--- com o papel — fn_param_int e fn_exige_permissao decidem por auth.uid(), que
--- continua sendo o do monitor, e não pela RLS.
-reset role;
-
 select is(
   pg_temp.codigo_do_erro($$ select public.fn_param_int('inexistente') $$),
   'PARAMETRO_AUSENTE',
   'e o codigo estavel no DETAIL e PARAMETRO_AUSENTE');
-
-set local role authenticated;
 
 -- ===========================================================================
 -- 6. fn_exige_permissao
@@ -293,14 +289,10 @@ select throws_ok(
   'PT403', null,
   'fn_exige_permissao levanta PT403 para quem nao tem o codigo');
 
-reset role;
-
 select is(
   pg_temp.codigo_do_erro($$ select public.fn_exige_permissao('admin.ler') $$),
   'SEM_PERMISSAO',
   'e o codigo estavel no DETAIL e SEM_PERMISSAO');
-
-set local role authenticated;
 
 select lives_ok(
   $$ select public.fn_exige_permissao('unidades.ler') $$,
