@@ -27,15 +27,13 @@ MCP do Notion conectado na sessão. Se não estiver, parar e avisar Irineu (sem 
 
 ## Consultar o board
 
-Consultar os cards via query no data source, ordenando por fase e ordem. As fases têm nomes "1. …" a "11. …", que quebram ordenação alfabética ("10." vem antes de "2."). Usar SEMPRE esta expressão de ordenação:
+Consultar os cards via query no data source, ordenando por fase e ordem. As fases têm nomes **"01. …" a "11. …"**, com zero à esquerda. Usar SEMPRE esta expressão de ordenação:
 
 ```sql
-ORDER BY
-  CASE WHEN "Fase" LIKE '10.%' THEN 10
-       WHEN "Fase" LIKE '11.%' THEN 11
-       ELSE CAST(substr("Fase", 1, 1) AS INTEGER) END,
-  "Ordem"
+ORDER BY CAST(substr("Fase", 1, 2) AS INTEGER), "Ordem"
 ```
+
+⚠️ Corrigido em 01/09/2026 (card 2.3). A expressão anterior lia `substr("Fase", 1, 1)`, escrita quando se supunha "1." a "11." sem zero: com o zero à esquerda ela devolve **0 para todas as fases**, a ordenação vira arbitrária e o "primeiro card não concluído" sai errado. Conferir o resultado: se `CAST(...)` der 0 em toda linha, os nomes das fases mudaram de novo.
 
 A query é tarifada — buscar tudo o que a sessão precisa em **uma** chamada. A página Decisões vigentes é filha do database e aparece nos resultados com `Fase` nula: ignorar essa linha.
 
@@ -51,7 +49,12 @@ Apresentar o card escolhido com as **Notas completas** antes de começar — ela
 
 ## Renomear a sessão
 
-Assim que a tarefa estiver escolhida, renomear a sessão para **`<Fase>.<Ordem> — <Tarefa>`** (ex.: `2.2 — Especificar regras de negócio como funções e triggers`), usando `set_session_title` com `session_id: "self"`. Sem isso a sessão fica com nome genérico e a lista de sessões não diz em que se trabalhou.
+Assim que a tarefa estiver escolhida, renomear a sessão para **`<Fase>.<Ordem> — <Tarefa>`** (ex.: `2.2 — Especificar regras de negócio como funções e triggers`). Sem isso a sessão fica com nome genérico e a lista de sessões não diz em que se trabalhou.
+
+`set_session_title` exige o **id real** da sessão — `session_id: "self"` é recusado com `target session could not be verified` (corrigido em 01/09/2026, depois de a renomeação falhar em silêncio na sessão do card 2.5). O `"self"` só vale no `get_session`, que é justamente de onde o id sai:
+
+1. `get_session` **sem** `session_id` → devolve `ccr.id` (`session_...`) desta sessão;
+2. `set_session_title` com esse `session_id` e o título.
 
 Usar só o número da fase e a ordem, não o nome inteiro da fase. Se a sessão tratar de mais de um card, nomear pelo principal.
 
@@ -61,6 +64,7 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 
 1. Marcar o card como **Em andamento** ao começar.
 2. Criar branch a partir de `develop`: `git switch develop && git pull && git switch -c tarefa/<fase>-<ordem>-<slug>` (ex.: `tarefa/2-2-regras-negocio`). Nunca trabalhar direto em `main` nem em `develop`.
+   - **Em sessão na nuvem isso não vale:** a sessão já vem com uma branch designada (`claude/<algo>`), e o *push protection* do proxy só aceita push contra a branch de trabalho da sessão. Usar a branch designada, reapontada para `origin/develop` (`git checkout -B <branch-designada> origin/develop`), e abrir o PR a partir dela. Se o PR anterior dessa branch já foi mergeado, reapontar de novo — nunca empilhar em cima de história já mergeada.
 3. Executar respeitando as regras do `CLAUDE.md`: migrações só via CI/CD; regras de negócio no banco; RLS em toda tabela; nomes em português snake_case; credenciais nunca em texto puro.
 4. Se a nota do card divergir do que faz sentido (ex.: pedir um entregável que já é de outro card), **não seguir em silêncio nem inventar escopo**: fazer o que é coerente, registrar a divergência e o motivo na subpágina de resultado e nas Notas.
 
@@ -78,7 +82,7 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 Commit e PR são obrigatórios ao concluir a tarefa; o merge **não**.
 
 1. Commit em português, mensagem descrevendo a tarefa do board (ex.: `Card 2.1: modelagem de dados detalhada (DDL Postgres)`).
-2. Push da branch e **abrir o PR contra `develop`** (`gh pr create --base develop`). Corpo do PR: o que foi entregue, link do card e o que ficou em aberto.
+2. Push da branch e **abrir o PR contra `develop`** (`gh pr create --base develop`). Corpo do PR: o que foi entregue, link do card e o que ficou em aberto. Em sessões do Claude Code na web o `gh` **não** existe — usar as ferramentas MCP do GitHub (`create_pull_request`) em vez de tentar instalar o CLI.
 3. **Nunca fazer o merge sem OK explícito de Irineu.** A exceção é ele dispensar o OK na própria sessão ("pode mergear direto", "não precisa pedir") — dispensa vale só para a sessão em que foi dada, não para as seguintes.
 4. Branch empurrada sem PR some. Se houver PR de tarefa anterior ainda não mergeado, dizer no resumo final.
 5. Promoção para produção (`develop` → `main`) é PR próprio e **sempre** exige OK — merge em `main` aplica migração no banco de produção.
@@ -94,14 +98,18 @@ git fetch origin --quiet
 git cherry develop origin/<branch> | grep '^+' | wc -l   # 0 = tudo já está em develop
 ```
 
-O erro é assimétrico: se `--merged` lista a branch, ela está mergeada; se não lista, não se conclui nada. Só apagar com zero linhas `+`:
+O erro é assimétrico: se `--merged` lista a branch, ela está mergeada; se não lista, não se conclui nada. Zero linhas `+` é o que autoriza apagar.
+
+**Em sessão na nuvem, apagar branch remota é impossível — não tentar.** (Corrigido em 01/09/2026; a instrução anterior dizia que o `HTTP 403` era falta de permissão do token, o que está errado.) Todo tráfego de git das sessões hospedadas pela Anthropic passa por um proxy que faz *push protection*: **`git push` só é aceito contra a branch de trabalho da própria sessão**. Apagar a ref de qualquer outra branch devolve `HTTP 403` de forma determinística, e nenhuma configuração de ambiente, de `.claude/settings.json` ou de token muda isso. Repetir não resolve, e o `curl -sS "$HTTPS_PROXY/__agentproxy/status"` vai mostrar o proxy saudável — não é instabilidade.
+
+O que fazer: dizer no resumo final quais branches estão mergeadas e prontas para remoção, com o link `https://github.com/irineus/gestao-im360/branches`, e **nunca dar a limpeza como feita**.
+
+Numa sessão local (terminal, ou depois de `--teleport`) não há proxy no caminho e a remoção funciona normalmente:
 
 ```bash
 git push origin --delete <branch>
 git branch -D <branch>
 ```
-
-Se o push falhar com `HTTP 403`, o token não tem permissão para remover refs — **repetir não resolve**. Dizer que não deu e passar `https://github.com/irineus/gestao-im360/branches` em vez de dar a limpeza como feita.
 
 ## Criar cards novos
 
