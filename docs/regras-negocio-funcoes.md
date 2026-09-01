@@ -7,13 +7,11 @@ objeto de banco que a implementa. É design, não implementação: nenhum arquiv
 `supabase/migrations/` é criado aqui. Cada card das Fases 3 a 8 recorta a sua parte
 (ver §13, mapa função → card).
 
-> ⚠️ **Dependência ausente do repositório.** O card 2.1 declarou `docs/modelagem-dados-ddl.md`
-> como entregável, mas o arquivo **não foi commitado** (o repositório tem apenas o commit de
-> bootstrap). Este documento foi escrito a partir da seção 5 do plano, da página de Resultado do
-> card 2.1 no Notion (inventário das 31 tabelas, decisões de modelagem, restrições) e das
-> Decisões vigentes. Os nomes de tabela usados aqui são os do inventário oficial; os nomes de
-> **coluna** seguem o plano. **Se e quando o DDL entrar no repositório e algum nome divergir, o
-> DDL vence** e este documento é corrigido — a lógica não muda, só o identificador.
+> **Conferido contra o DDL em 31/08/2026.** Este documento foi escrito antes de `docs/modelagem-dados-ddl.md`
+> (card 2.1) entrar no repositório, a partir do plano e da página de Resultado do card 2.1 no Notion. Com o DDL
+> já commitado, os nomes citados aqui foram conferidos um a um contra ele: **nenhum diverge**.
+> `proximo_material_id` e `em_fim` não são colunas — são campos do tipo de retorno `tp_entrega_resultado` (§7).
+> A regra permanece válida: **em qualquer divergência futura, o DDL vence** e este documento é corrigido.
 
 ---
 
