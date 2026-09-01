@@ -7,13 +7,11 @@ objeto de banco que a implementa. É design, não implementação: nenhum arquiv
 `supabase/migrations/` é criado aqui. Cada card das Fases 3 a 8 recorta a sua parte
 (ver §13, mapa função → card).
 
-> ⚠️ **Dependência ausente do repositório.** O card 2.1 declarou `docs/modelagem-dados-ddl.md`
-> como entregável, mas o arquivo **não foi commitado** (o repositório tem apenas o commit de
-> bootstrap). Este documento foi escrito a partir da seção 5 do plano, da página de Resultado do
-> card 2.1 no Notion (inventário das 31 tabelas, decisões de modelagem, restrições) e das
-> Decisões vigentes. Os nomes de tabela usados aqui são os do inventário oficial; os nomes de
-> **coluna** seguem o plano. **Se e quando o DDL entrar no repositório e algum nome divergir, o
-> DDL vence** e este documento é corrigido — a lógica não muda, só o identificador.
+> **Conferido contra o DDL.** Os nomes de tabela, coluna e restrição usados aqui foram verificados
+> um a um contra `docs/modelagem-dados-ddl.md` (card 2.1). Onde esta especificação **exige alteração
+> no DDL** — tipos de pendência novos, um valor de status a mais em `bloco_aluno_reposicao` — isso
+> está consolidado em §14, para entrar na migração da fase correspondente. Nenhuma alteração de DDL
+> é feita por conta própria aqui.
 
 ---
 
@@ -39,8 +37,8 @@ garantia. Registrar entrega, por exemplo, é `fn_registrar_entrega` (camada 3) s
 | Prefixo | Significado |
 |---|---|
 | `fn_` | função de infraestrutura ou de aplicação (chamável por RPC quando tem `grant` para `authenticated`) |
-| `trg_fn_` | função de trigger (`returns trigger`) |
-| `trg_` | o trigger em si (`trg_<tabela>_<regra>`) |
+| `fn_` | também a função de trigger (`returns trigger`) — o DDL já usa `fn_movimento_imutavel()` |
+| `tg_` | o trigger em si (`tg_<tabela>_<regra>`) — prefixo já estabelecido pelo DDL do card 2.1 |
 | `rt_` | rotina agendada, chamada só pelo `pg_cron` |
 | `tp_` | tipo composto de retorno |
 | `v_` | view de leitura (card 2.3) |
@@ -97,7 +95,7 @@ pendência morreria no rollback e ninguém compraria a apostila.
 | `fn_auditoria()` | trigger `before insert or update` em toda tabela: preenche `criado_em/por`, `atualizado_em/por` |
 | `fn_unidade_atual() → uuid` | unidade do usuário autenticado; usada em toda política de RLS |
 | `tem_permissao(p_codigo text) → boolean` | `usuario_perfil` → `perfil_permissao` → `permissao`; usada em RLS e nos guards do Flutter |
-| `fn_movimento_imutavel()` | trigger que barra `update`/`delete` em `movimento_estoque` |
+| `fn_movimento_imutavel()` | função do trigger `tg_movimento_imutavel`, que barra `update`/`delete` em `movimento_estoque` |
 
 Ambas as duas do meio são `security definer` com `search_path` fixo, para não recursarem na RLS
 de `usuario_perfil`.
@@ -184,11 +182,11 @@ Duas leituras deliberadas do plano, que ele não fecha:
 
 | Objeto | Momento | Faz |
 |---|---|---|
-| `trg_aluno_status_valida` | `before update of status on aluno for each row` | recusa transição fora de `fn_aluno_transicao_valida` (`PT409 / TRANSICAO_INVALIDA`); exige o gate de FORMADO (§3.3); grava `new.status_desde = current_date` |
-| `trg_aluno_status_hist` | `after update of status on aluno for each row` | insere `aluno_status_hist` (anterior, novo, `current_date`, `auth.uid()`, motivo) |
-| `trg_aluno_status_desaloca` | `after update of status on aluno for each row` | se o novo status **não** é ATIVO/ACELERAR: `bloco_aluno.ativo = false`, `turma_modular_aluno.ativo = false` e cancela `bloco_aluno_reposicao` com data futura (§4.4) |
-| `trg_aluno_trilha_inicial` | `after insert on aluno for each row` | se `combo_id` não é nulo, chama `fn_trilha_gerar` (§5.1) |
-| `trg_aluno_combo_alterado` | `after update of combo_id on aluno for each row` | **não** regenera a trilha: abre pendência `TRILHA_DIVERGENTE_COMBO` |
+| `tg_aluno_status_valida` | `before update of status on aluno for each row` | recusa transição fora de `fn_aluno_transicao_valida` (`PT409 / TRANSICAO_INVALIDA`); exige o gate de FORMADO (§3.3); grava `new.status_desde = current_date` |
+| `tg_aluno_status_hist` | `after update of status on aluno for each row` | insere `aluno_status_hist` (`status_anterior`, `status_novo`, `ocorrido_em`, `usuario_id`, `motivo`) |
+| `tg_aluno_status_desaloca` | `after update of status on aluno for each row` | se o novo status **não** é ATIVO/ACELERAR: `bloco_aluno.ativo = false`, `turma_modular_aluno.ativo = false` e cancela `bloco_aluno_reposicao` com data futura (§4.4) |
+| `tg_aluno_trilha_inicial` | `after insert on aluno for each row` | se `combo_id` não é nulo, chama `fn_trilha_gerar` (§5.1) |
+| `tg_aluno_combo_alterado` | `after update of combo_id on aluno for each row` | **não** regenera a trilha: abre pendência `TRILHA_DIVERGENTE_COMBO` |
 
 **O motivo da transição** chega ao trigger por `set_config('app.motivo_status', …, true)` feito
 dentro de `fn_aluno_alterar_status`; num `UPDATE` direto ele fica nulo e o histórico registra
@@ -269,8 +267,8 @@ fn_ocupacao_bloco(p_bloco_id uuid, p_data date default current_date) → integer
 Conforme a decisão de 31/08/2026 (REP híbrido), a lotação numa data é
 
 ```
-count(bloco_aluno where bloco_id = X and ativo)
-+ count(bloco_aluno_reposicao where bloco_destino_id = X and data = p_data and situacao = 'PREVISTA')
+count(bloco_aluno            where bloco_id = X and ativo)
++ count(bloco_aluno_reposicao where bloco_id = X and data = p_data and status = 'PREVISTA')
 ```
 
 ```sql
@@ -282,8 +280,8 @@ fn_vagas_livres(p_bloco_id uuid, p_data date default current_date) → integer  
 
 | Objeto | Momento | Faz |
 |---|---|---|
-| `trg_bloco_aluno_admissao` | `before insert or update of ativo, bloco_id on bloco_aluno` | valida, quando a linha fica ativa: aluno em ATIVO/ACELERAR (`PT409 / ALUNO_INATIVO`); método do aluno = método do bloco (`PT422 / METODO_INCOMPATIVEL`); ocupação < capacidade (`PT409 / BLOCO_LOTADO`) |
-| `trg_reposicao_admissao` | `before insert or update on bloco_aluno_reposicao` | mesma checagem, **na data da reposição**; data no passado só com `turmas.lancar_reposicao_retroativa` |
+| `tg_bloco_aluno_admissao` | `before insert or update of ativo, bloco_id on bloco_aluno` | valida, quando a linha fica ativa: aluno em ATIVO/ACELERAR (`PT409 / ALUNO_INATIVO`); método do aluno = método do bloco (`PT422 / METODO_INCOMPATIVEL`); ocupação < capacidade (`PT409 / BLOCO_LOTADO`) |
+| `tg_reposicao_admissao` | `before insert or update on bloco_aluno_reposicao` | mesma checagem, **na data da reposição**; data no passado só com `turmas.lancar_reposicao_retroativa` |
 
 ```sql
 fn_bloco_admitir(p_bloco_id uuid, p_aluno_id uuid, p_tipo text,
@@ -301,14 +299,24 @@ alocação existente se já houver uma inativa (em vez de criar linha duplicada 
 ### 4.4 Reposição (metade pontual do REP)
 
 ```sql
-fn_reposicao_agendar(p_aluno_id uuid, p_bloco_destino_id uuid, p_data date,
-                     p_bloco_origem_id uuid default null, p_motivo text default null) → uuid
+fn_reposicao_agendar(p_aluno_id uuid, p_bloco_id uuid, p_data date,
+                     p_bloco_origem_id uuid default null, p_data_origem date default null,
+                     p_observacao text default null) → uuid
 fn_reposicao_registrar(p_reposicao_id uuid, p_compareceu boolean) → void   -- PREVISTA → REALIZADA | FALTOU
-fn_reposicao_cancelar(p_reposicao_id uuid, p_motivo text) → void           -- PREVISTA → CANCELADA
+fn_reposicao_cancelar(p_reposicao_id uuid, p_observacao text) → void       -- PREVISTA → CANCELADA
 ```
 
-Só `situacao = 'PREVISTA'` ocupa vaga. `REALIZADA`, `FALTOU` e `CANCELADA` saem da conta de
+`bloco_id` é o bloco **onde o aluno vai repor**; `bloco_origem_id` e `data_origem` guardam a aula
+perdida. A unicidade `(bloco_id, aluno_id, data)` do DDL já impede agendar a mesma reposição duas
+vezes.
+
+Só `status = 'PREVISTA'` ocupa vaga. `REALIZADA`, `FALTOU` e `CANCELADA` saem da conta de
 lotação — o passado não bloqueia o presente.
+
+> ⚠️ **Exige alteração no DDL (§14):** o `check` atual de `bloco_aluno_reposicao.status` aceita só
+> `PREVISTA`, `REALIZADA` e `CANCELADA`. Falta **`FALTOU`** — sem ele, o aluno que não comparece à
+> reposição fica indistinguível de quem a cancelou com antecedência, e é exatamente essa diferença
+> que o critério do card 2.5 vai precisar medir.
 
 > ⚠️ **A virada pontual → REP contínuo é do card 2.5.** O ponto de extensão já está definido:
 > uma função `fn_rep_avaliar_virada(p_aluno_id uuid) → text`, chamada por
@@ -336,8 +344,8 @@ serializando só as admissões daquele bloco. O lock é liberado no fim da trans
 
 | Objeto | Momento | Faz |
 |---|---|---|
-| `trg_pc_manutencao_status` | `after insert or update on pc_manutencao` | `pc.status = 'MANUTENCAO'` enquanto a manutenção estiver aberta e `current_date` dentro da janela; ao fechar (`data_fim` preenchida e passada), volta a `OPERACIONAL` — nunca mexe em PC `DESATIVADO` |
-| `trg_pc_revalida_blocos` | `after insert or update on pc_manutencao`, `after update of status, sala_id on pc` | chama `fn_revalidar_blocos_sala(sala_id)` |
+| `tg_pc_manutencao_status` | `after insert or update on pc_manutencao` | `pc.status = 'MANUTENCAO'` enquanto a manutenção estiver aberta e `current_date` dentro da janela; ao fechar (`data_fim` preenchida e passada), volta a `OPERACIONAL` — nunca mexe em PC `DESATIVADO` |
+| `tg_pc_revalida_blocos` | `after insert or update on pc_manutencao`, `after update of status, sala_id on pc` | chama `fn_revalidar_blocos_sala(sala_id)` |
 
 ```sql
 fn_revalidar_blocos_sala(p_sala_id uuid) → integer   -- nº de blocos com pendência aberta
@@ -347,7 +355,7 @@ Para cada `bloco_horario` ativo da sala: se `fn_ocupacao_bloco > fn_capacidade_e
 `BLOCO_ACIMA_CAPACIDADE` (severidade ALTA); senão, resolve a pendência aberta desse bloco.
 
 **Nunca remove aluno.** É a regra explícita do plano: a turma cheia não encolhe; ela vira
-pendência, e novas admissões ficam bloqueadas pelo `trg_bloco_aluno_admissao` até normalizar —
+pendência, e novas admissões ficam bloqueadas pelo `tg_bloco_aluno_admissao` até normalizar —
 o que já acontece naturalmente, já que a capacidade caiu abaixo da ocupação.
 
 ---
@@ -390,7 +398,10 @@ fn_trilha_reordenar(p_aluno_id uuid, p_material_id uuid, p_nova_ordem integer) �
 ```
 
 Todas exigem `alunos.editar_trilha`, marcam `origem = 'MANUAL'`, recusam mexer em item já
-entregue (`PT409 / ITEM_JA_ENTREGUE`) e gravam `aluno_material_hist` com o motivo. O
+entregue (`PT409 / ITEM_JA_ENTREGUE`) e gravam `aluno_material_hist` (`ordem_anterior`,
+`ordem_nova`, `usuario_id`). O `motivo` é o enum fechado do DDL — `MANUAL` na edição pela tela,
+`REMOCAO` na retirada, `GERACAO_COMBO` na geração inicial e `SEM_ESTOQUE` no reordenamento
+automático de §6.2. **Não há coluna de texto livre nessa tabela** (§14). O
 `unique (aluno_id, ordem) deferrable initially deferred` do DDL permite reordenar num único
 `UPDATE`, sem passar por valores temporários.
 
@@ -440,11 +451,12 @@ fn_registrar_entrega(p_aluno_id uuid, p_material_id uuid default null,
      "próximo" quando houver estoque), abre pendência `ESTOQUE_ZERO` do material pulado, e segue
      com `status = 'REORDENADA'`.
    - **Não achou** (nenhum item pendente da trilha tem estoque) → abre pendência
-     `COMPRA_URGENTE` (severidade ALTA) e **retorna** `status = 'BLOQUEADA_SEM_ESTOQUE'`
+     `COMPRA_SEM_ESTOQUE` (severidade ALTA) e **retorna** `status = 'BLOQUEADA_SEM_ESTOQUE'`
      **sem levantar exceção** (§1.3), para que a pendência sobreviva ao commit. Nada de estoque é
      movimentado.
-7. `insert into movimento_estoque (tipo, quantidade, material_id, aluno_id, data, observacao)
-   values ('SAIDA', -1, …)` — quantidade **com sinal**, conforme o DDL.
+7. `insert into movimento_estoque (tipo, quantidade, material_id, aluno_id, ocorrido_em, observacao)
+   values ('SAIDA', -1, …)` — quantidade **com sinal**, e `movimento_sinal_ck` já garante o sinal
+   por tipo. A autoria não é coluna própria: vem de `criado_por`, preenchido por `fn_auditoria()`.
 8. `update aluno_material set entregue = true, data_entrega = current_date,
    movimento_estoque_id = <novo>`.
 9. Se a trilha ficou em FIM: `fn_certificado_abrir(p_aluno_id)` e pendência `ALUNO_ULTIMO_LIVRO`.
@@ -464,7 +476,7 @@ fn_estornar_entrega(p_movimento_id uuid, p_motivo text) → uuid   -- id do movi
 2. O movimento precisa ser `SAIDA` e ainda não estornado — o índice único parcial
    `movimento_estorno_uk` garante a unicidade mesmo sob concorrência.
 3. Insere `ESTORNO` com `quantidade = +1` e `estorno_de_id` apontando para a saída. **O movimento
-   original nunca é apagado nem alterado** (`trg_movimento_imutavel` + ausência de política de
+   original nunca é apagado nem alterado** (`tg_movimento_imutavel` + ausência de política de
    `update`/`delete` na RLS).
 4. Desmarca `aluno_material` (`entregue = false`, `data_entrega = null`,
    `movimento_estoque_id = null`).
@@ -506,8 +518,8 @@ fn_pedido_receber(p_pedido_id uuid, p_itens jsonb) → integer   -- nº de movim
 
 | Objeto | Momento | Faz |
 |---|---|---|
-| `trg_movimento_valida_sinal` | `before insert on movimento_estoque` | ENTRADA > 0, SAIDA < 0, ESTORNO com sinal oposto ao movimento estornado, AJUSTE ≠ 0 |
-| `trg_movimento_resolve_pendencia` | `after insert on movimento_estoque` (ENTRADA/AJUSTE positivo) | se o saldo do material voltou a ser > 0, resolve `ESTOQUE_ZERO` e `COMPRA_URGENTE` daquele material |
+| `tg_movimento_estorno_sinal` | `before insert on movimento_estoque` (só `ESTORNO`) | o estorno tem de ter **sinal oposto e mesma magnitude** do movimento em `estorno_de_id`. ENTRADA > 0, SAIDA < 0, `quantidade <> 0` e "ESTORNO ⟺ `estorno_de_id`" **já são `check` no DDL** (`movimento_sinal_ck`, `movimento_estorno_ck`) — o trigger só cobre o que depende da outra linha |
+| `tg_movimento_resolve_pendencia` | `after insert on movimento_estoque` (ENTRADA/AJUSTE positivo) | se o saldo do material voltou a ser > 0, resolve `ESTOQUE_ZERO` e `COMPRA_SEM_ESTOQUE` daquele material |
 
 O segundo trigger fecha o ciclo aberto em §6.2: a apostila que faltou gerou pendência; a chegada
 do pedido a resolve sozinha, sem ninguém precisar lembrar de limpar a lista.
@@ -517,7 +529,9 @@ do pedido a resolve sozinha, sem ninguém precisar lembrar de limpar a lista.
 ## 8. Certificados
 
 ```sql
-fn_certificado_abrir(p_aluno_id uuid) → uuid   -- idempotente: insert … on conflict (aluno_id) do nothing
+fn_certificado_abrir(p_aluno_id uuid, p_data_fim_curso date default current_date) → uuid
+  -- idempotente: insert … on conflict (aluno_id) do nothing
+  -- data_fim_curso é NOT NULL no DDL: default = data da última entrega da trilha
 fn_certificado_marcar(p_aluno_id uuid, p_item text, p_valor boolean) → void
   -- p_item ∈ (PEDAGOGICO, FINANCEIRO, FORMATURA)
 fn_certificado_status(p_aluno_id uuid, p_status text) → void
@@ -526,10 +540,12 @@ fn_certificado_status(p_aluno_id uuid, p_status text) → void
 
 - Permissão **por item**: `FINANCEIRO` exige `certificados.marcar_financeiro` (monitor, na matriz
   inicial); `PEDAGOGICO` e `FORMATURA` exigem `certificados.marcar_pedagogico`.
-- `trg_certificado_quem_quando` (`before update on certificado_checklist`) grava
-  `<item>_ok_por = auth.uid()` e `<item>_ok_em = now()` a cada mudança de valor — a exigência de
-  "quem e quando" do plano vale mesmo em `UPDATE` direto.
-- `trg_certificado_sugere_formado` (`after update on certificado_checklist`): com os três itens OK
+- `tg_certificado_quem_quando` (`before update on certificado_checklist`) grava
+  `<item>_por = auth.uid()` e `<item>_em = now()` a cada mudança de valor — a exigência de
+  "quem e quando" do plano vale mesmo em `UPDATE` direto. O DDL tem os três pares
+  `pedagogico_por/_em`, `financeiro_por/_em` e `certificado_por/_em`; **`formatura` não tem par**
+  (§14).
+- `tg_certificado_sugere_formado` (`after update on certificado_checklist`): com os três itens OK
   e `certificado_status = 'ENTREGUE'`, abre pendência `SUGERIR_FORMADO` (severidade BAIXA). É
   **sugestão**, não automação: quem forma o aluno é uma pessoa, por `fn_aluno_alterar_status`.
 
@@ -551,8 +567,9 @@ fn_turma_modular_modulo_corrente(p_turma_id uuid) → uuid        -- stable
 - Admissão respeita `turma_modular.capacidade` (mesmo advisory lock de §4.5) e exige aluno
   ATIVO/ACELERAR do método MODULAR.
 - `fn_turma_modular_avancar`: marca o módulo corrente como `concluido`, grava a data, abre o
-  próximo em `ordem` e ajusta a `prev_conclusao` dele a partir da duração planejada. **A turma
-  avança em conjunto** — não existe avanço por aluno.
+  próximo e ajusta a `prev_conclusao` dele a partir da duração planejada. **A ordem não é coluna de
+  `turma_modular_modulo`**: vem de `modulo.ordem`, via join — o cronograma da turma herda a
+  sequência do catálogo. **A turma avança em conjunto** — não existe avanço por aluno.
 - Quando o módulo que abre é o **primeiro de um livro novo**, aquele livro passa a ser demanda da
   turma inteira: é o gancho da projeção Modular (card 8.1), que lê `turma_modular_modulo`, não o
   ritmo individual.
@@ -568,13 +585,22 @@ por você". Todas passam por duas funções, e nenhum outro código insere em `p
 fn_pendencia_abrir(p_tipo text, p_chave_dedup text, p_descricao text,
                    p_severidade text default 'MEDIA',
                    p_aluno_id uuid default null, p_bloco_id uuid default null,
-                   p_material_id uuid default null) → uuid
+                   p_material_id uuid default null, p_pc_id uuid default null) → uuid
 -- insert … on conflict (unidade_id, chave_dedup) where resolvida_em is null do nothing
 -- devolve o id da pendência aberta (nova ou preexistente)
 
-fn_pendencia_resolver(p_chave_dedup text, p_justificativa text default null) → integer
-fn_pendencia_resolver_id(p_pendencia_id uuid, p_justificativa text) → void   -- exige pendencias.resolver
+fn_pendencia_resolver(p_chave_dedup text) → integer
+-- fechamento automático: resolvida_em = now(), resolucao = 'RESOLVIDA', resolvida_por = null
+
+fn_pendencia_resolver_id(p_pendencia_id uuid, p_resolucao text,
+                         p_justificativa text default null) → void
+-- fechamento humano; exige pendencias.resolver; p_resolucao ∈ (RESOLVIDA, IGNORADA)
 ```
+
+`resolucao` **não é opcional**: `pendencia_resolucao_ck` exige que `resolvida_em` e `resolucao`
+andem juntos, e `pendencia_ignorada_ck` exige justificativa quando a resolução é `IGNORADA`. Por
+isso o fechamento automático e o humano são funções separadas — a rotina não tem justificativa a
+dar, e a pessoa que ignora uma pendência tem de escrever o porquê.
 
 O índice único parcial do DDL (`pendencia_aberta_uk`) faz a deduplicação: a rotina diária tenta
 inserir todo dia e o banco simplesmente ignora a repetida enquanto a anterior estiver aberta.
@@ -590,14 +616,24 @@ corrida com a interface.
 | `PREVISAO_VENCIDA` | `PREVISAO:<aluno_id>` | MEDIA | `rt_pendencias_diaria` | nova `prev_conclusao_curso` ou formatura |
 | `ACELERAR_SEM_2O_BLOCO` | `ACELERAR:<aluno_id>` | INFO | `rt_pendencias_diaria` | 2º bloco ativo, ou volta a ATIVO |
 | `BLOCO_ACIMA_CAPACIDADE` | `CAPACIDADE:<bloco_id>` | ALTA | `fn_revalidar_blocos_sala` | a própria função, quando normaliza |
-| `ESTOQUE_ZERO` | `ESTOQUE_ZERO:<material_id>` | MEDIA | `fn_registrar_entrega` (item pulado) | `trg_movimento_resolve_pendencia` |
-| `COMPRA_URGENTE` | `COMPRA_URGENTE:<aluno_id>` | ALTA | `fn_registrar_entrega` (trilha sem estoque nenhum) | `trg_movimento_resolve_pendencia` |
-| `ESTOQUE_ABAIXO_MINIMO` | `MINIMO:<material_id>` | BAIXA | `rt_pendencias_diaria` | saldo ≥ mínimo |
+| `COMPRA_SEM_ESTOQUE` | `COMPRA_SEM_ESTOQUE:<aluno_id>` | ALTA | `fn_registrar_entrega` (trilha sem estoque nenhum) | `tg_movimento_resolve_pendencia` |
 | `ALUNO_ULTIMO_LIVRO` | `ULTIMO_LIVRO:<aluno_id>` | BAIXA | `fn_registrar_entrega` | formatura, ou estorno que tira do FIM |
-| `SUGERIR_FORMADO` | `FORMADO:<aluno_id>` | BAIXA | `trg_certificado_sugere_formado` | aluno vira FORMADO |
-| `TRILHA_DIVERGENTE_COMBO` | `TRILHA_COMBO:<aluno_id>` | MEDIA | `trg_aluno_combo_alterado` | resolução manual |
+| `PC_SEM_SUBSTITUTO` | `PC_SEM_SUBST:<pc_id>` | MEDIA | `fn_revalidar_blocos_sala` | fim da manutenção, ou substituto informado |
+| **novos — ver §14** | | | | |
+| `ESTOQUE_ZERO` | `ESTOQUE_ZERO:<material_id>` | MEDIA | `fn_registrar_entrega` (item pulado) | `tg_movimento_resolve_pendencia` |
+| `ESTOQUE_ABAIXO_MINIMO` | `MINIMO:<material_id>` | BAIXA | `rt_pendencias_diaria` | saldo ≥ mínimo |
+| `SUGERIR_FORMADO` | `FORMADO:<aluno_id>` | BAIXA | `tg_certificado_sugere_formado` | aluno vira FORMADO |
+| `TRILHA_DIVERGENTE_COMBO` | `TRILHA_COMBO:<aluno_id>` | MEDIA | `tg_aluno_combo_alterado` | resolução manual |
 | `CERTIFICADO_INCONSISTENTE` | `CERT_INCONS:<aluno_id>` | MEDIA | `fn_estornar_entrega` | resolução manual |
 | `REP_VIRADA` | `REP:<aluno_id>` | MEDIA | `fn_rep_avaliar_virada` — **card 2.5** | resolução manual |
+| `ROTINA_FALHOU` | `ROTINA_FALHOU:<nome>` | ALTA | `rt_diaria` (bloco `exception`) | execução seguinte bem-sucedida |
+
+Os oito primeiros são os que o `check` de `pendencia.tipo` já aceita — dois deles com o nome que o
+DDL escolheu, e que esta especificação adota: **`COMPRA_SEM_ESTOQUE`** (não "COMPRA_URGENTE") e
+**`PC_SEM_SUBSTITUTO`**, que o desenho original não tinha previsto e que se encaixa em
+`fn_revalidar_blocos_sala`: um PC em manutenção sem substituto é a causa da queda de capacidade, e
+merece pendência própria além da do bloco. Os sete seguintes exigem `alter table` no `check` —
+consolidados em §14.
 
 ---
 
@@ -637,12 +673,12 @@ lista nunca acumula item que já deixou de ser verdade.
 | `codigo` | HTTP | Onde nasce |
 |---|---|---|
 | `SEM_PERMISSAO` | 403 | `fn_exige_permissao` |
-| `TRANSICAO_INVALIDA` | 409 | `trg_aluno_status_valida` |
-| `FORMATURA_SEM_CERTIFICADO` | 409 | `trg_aluno_status_valida` |
+| `TRANSICAO_INVALIDA` | 409 | `tg_aluno_status_valida` |
+| `FORMATURA_SEM_CERTIFICADO` | 409 | `tg_aluno_status_valida` |
 | `MOTIVO_OBRIGATORIO` | 422 | `fn_aluno_alterar_status`, `fn_estornar_entrega`, `fn_ajustar_estoque` |
 | `ALUNO_INATIVO` | 409 | admissão em bloco/turma, `fn_registrar_entrega` |
-| `METODO_INCOMPATIVEL` | 422 | `trg_bloco_aluno_admissao` |
-| `BLOCO_LOTADO` | 409 | `trg_bloco_aluno_admissao`, `trg_reposicao_admissao` |
+| `METODO_INCOMPATIVEL` | 422 | `tg_bloco_aluno_admissao` |
+| `BLOCO_LOTADO` | 409 | `tg_bloco_aluno_admissao`, `tg_reposicao_admissao` |
 | `DATA_PREVISTA_OBRIGATORIA` | 422 | `fn_bloco_admitir` (tipo NOVO) |
 | `TRILHA_JA_EXISTE` / `TRILHA_COM_ENTREGA` | 409 | `fn_trilha_gerar` |
 | `ALUNO_SEM_COMBO` | 422 | `fn_trilha_gerar` |
@@ -675,17 +711,17 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 |---|---|
 | `fn_contexto_rotina`, desvio de rotina em `fn_unidade_atual`/`tem_permissao`, `fn_param_int/txt`, `fn_exige_permissao` | 3.4 |
 | `fn_aluno_transicao_valida`, triggers de status, `fn_aluno_alterar_status`, `fn_aluno_reverter_status` | 4.2 |
-| `trg_pc_manutencao_status`, `trg_pc_revalida_blocos` | 4.3 |
+| `tg_pc_manutencao_status`, `tg_pc_revalida_blocos` | 4.3 |
 | `fn_capacidade_efetiva` | 5.2 |
-| `fn_ocupacao_bloco`, `fn_vagas_livres`, `trg_bloco_aluno_admissao`, `fn_bloco_admitir/remover`, reposições | 5.3 |
+| `fn_ocupacao_bloco`, `fn_vagas_livres`, `tg_bloco_aluno_admissao`, `fn_bloco_admitir/remover`, reposições | 5.3 |
 | `fn_revalidar_blocos_sala` | 5.4 |
 | `fn_pendencia_abrir/resolver`, `rt_pendencias_diaria`, `rt_diaria` e o job `pg_cron` | 5.5 |
 | `fn_trilha_gerar`, `fn_trilha_proximo_material`, edição da trilha | 6.2 |
 | `tp_entrega_resultado`, `fn_registrar_entrega`, `fn_estornar_entrega`, `fn_saldo_material` | 6.3 |
-| `fn_pedido_receber`, `fn_ajustar_estoque`, `trg_movimento_valida_sinal`, `trg_movimento_resolve_pendencia` | 6.5 |
+| `fn_pedido_receber`, `fn_ajustar_estoque`, `tg_movimento_valida_sinal`, `tg_movimento_resolve_pendencia` | 6.5 |
 | Funções Modular | 7.2 |
 | `rt_projecao_demanda` | 8.1 |
-| `fn_certificado_*`, `trg_certificado_*` | 8.3 |
+| `fn_certificado_*`, `tg_certificado_*` | 8.3 |
 | `fn_rep_avaliar_virada` (critério) | 2.5 |
 
 Ordem de dependência igual à das migrações: 3.4 → 4.2 → 4.3 → 5.2 → 5.3 → 5.4 → 5.5 → 6.2 → 6.3 →
@@ -693,7 +729,34 @@ Ordem de dependência igual à das migrações: 3.4 → 4.2 → 4.3 → 5.2 → 
 
 ---
 
-## 14. O que fica em aberto
+## 14. Ajustes que esta especificação exige no DDL
+
+Nada aqui é alteração feita por conta própria: é a lista do que a migração de cada fase precisa
+acrescentar ao DDL do card 2.1 para que estas funções possam existir. Todos são `alter table`
+simples — que é exatamente por que o card 2.1 escolheu `text` + `check` em vez de `enum`.
+
+| # | Ajuste | Onde | Card |
+|---|---|---|---|
+| 1 | `bloco_aluno_reposicao.status`: acrescentar **`FALTOU`** ao `check` | `drop constraint` / `add constraint` | 5.1 |
+| 2 | `pendencia.tipo`: acrescentar `ESTOQUE_ZERO`, `ESTOQUE_ABAIXO_MINIMO`, `SUGERIR_FORMADO`, `TRILHA_DIVERGENTE_COMBO`, `CERTIFICADO_INCONSISTENTE`, `REP_VIRADA`, `ROTINA_FALHOU` ao `check` | idem | 5.5 |
+| 3 | `certificado_checklist`: acrescentar `formatura_por` / `formatura_em` | `add column` | 8.3 |
+| 4 | `aluno_material_hist`: acrescentar `observacao text` | `add column` | 6.2 |
+
+**Sobre o 3:** o DDL dá par "quem/quando" a `pedagogico`, `financeiro` e `certificado`, mas não a
+`formatura`. O plano exige que **cada item** do checklist registre quem marcou e quando; sem as duas
+colunas, `formatura` é o único item sem rastro.
+
+**Sobre o 4:** `aluno_material_hist.motivo` é um `check` fechado de quatro valores, e não há campo
+de texto livre. O reordenamento automático não precisa de um (`SEM_ESTOQUE` já diz tudo), mas a
+edição manual precisa: "por que este aluno pulou a apostila 7" é justamente o que alguém vai
+perguntar três meses depois.
+
+Os dois primeiros são bloqueantes — sem eles as funções não gravam. Os dois últimos são perda de
+informação, não erro de execução: dá para adiar, desde que conscientemente.
+
+---
+
+## 15. O que fica em aberto
 
 1. **Critério da virada REP pontual → contínuo (card 2.5).** Ponto de extensão pronto:
    `fn_rep_avaliar_virada`. Hoje devolve `'MANTER'`.
