@@ -26,7 +26,24 @@ em <http://127.0.0.1:54324>.
 |---|---|
 | `SUPABASE_URL` | URL do projeto (dev `ncdfolxdupbbfvtydngx`, prod `aqfuawrygxsiopyppjza`) |
 | `SUPABASE_ANON_KEY` | chave anônima/publicável — **pública por desenho**, vai no bundle. A *service key* nunca entra aqui: `service_role` tem `BYPASSRLS` (card 3.3) |
-| `APP_URL_BASE` | base pública do app, usada para montar o `redirectTo` da recuperação de senha. Precisa estar nas **Redirect URLs** dos dois projetos (card 3.8) |
+| `APP_URL_BASE` | base pública do app, usada para montar o `redirectTo` da recuperação de senha. Precisa estar nas **Redirect URLs** dos dois projetos, com o curinga `/**` (`docs/deploy-web.md` §4) |
+
+## Empacotar para o Cloudflare Pages
+
+```bash
+flutter build web --release --no-web-resources-cdn \
+  --dart-define=SUPABASE_URL=… --dart-define=SUPABASE_ANON_KEY=… --dart-define=APP_URL_BASE=…
+```
+
+`--no-web-resources-cdn` **não é opcional**: sem ele o build de release busca o CanvasKit no
+`gstatic.com` e, com o CDN inalcançável (filtro de rede, proxy), o app abre em **tela branca sem
+erro**. Com a opção, tudo é servido da própria origem. O resto do contrato do deploy — os
+cabeçalhos, por que não existe `_redirects` e o que Irineu configura no painel do Supabase — está em
+`docs/deploy-web.md`.
+
+O app usa **estratégia de URL por caminho** (`/alunos`, não `/#/alunos`): o fragmento pertence ao
+Auth, que devolve os tokens nele. Quem serve o build precisa devolver o `index.html` para qualquer
+caminho — o Cloudflare Pages já faz isso sozinho, um `python -m http.server` não faz.
 
 ## Verificar antes de empurrar
 

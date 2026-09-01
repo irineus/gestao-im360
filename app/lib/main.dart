@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/ambiente.dart';
+import 'config/estrategia_url.dart';
 import 'rotas/roteador.dart';
 import 'theme/dimensoes.dart';
 import 'theme/preferencia_tema.dart';
@@ -11,6 +12,9 @@ import 'theme/tipografia.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Antes de qualquer rota ser lida: o fragmento da URL é do Auth, não do
+  // roteador (card 3.8).
+  usarUrlPorCaminho();
 
   if (!Ambiente.configurado) {
     // Subir desconectado daria erro de rede em toda consulta, e o diagnóstico

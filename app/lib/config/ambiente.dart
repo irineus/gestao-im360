@@ -14,7 +14,9 @@ abstract final class Ambiente {
 
   static const rotaRedefinicaoSenha = '/redefinir-senha';
 
-  static String get urlRedefinicaoSenha => '$urlBase/#$rotaRedefinicaoSenha';
+  /// Sem `#`: a rota vive no caminho (`lib/config/estrategia_url.dart`), e o
+  /// fragmento fica livre para os tokens que o Auth devolve.
+  static String get urlRedefinicaoSenha => '$urlBase$rotaRedefinicaoSenha';
 
   /// Sem os dois valores o app não sobe conectado a lugar nenhum. Falhar com
   /// uma tela que diz o que falta é melhor do que subir e dar erro de rede em

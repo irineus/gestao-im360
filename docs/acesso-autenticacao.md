@@ -155,12 +155,22 @@ se explica e um que parece bug.
 
 ## 5. Recuperação de senha
 
-`resetPasswordForEmail(email, redirectTo: '<site_url>/#/redefinir-senha')` → o Auth manda o link →
+`resetPasswordForEmail(email, redirectTo: '<site_url>/redefinir-senha')` → o Auth manda o link →
 a pessoa volta ao app com uma sessão de recuperação → `updateUser(password: …)`.
+
+⚠️ **Sem `#`** (corrigido no card 3.8): o app passou a usar estratégia de URL por caminho, porque o
+fragmento é onde o Auth devolve os tokens dos links que ele gera fora do fluxo PKCE — convite e
+magic link pelo painel. Com a rota no fragmento, esses links caíam em "Esta tela não existe".
+Detalhe e medição em `docs/deploy-web.md` §6.
 
 Duas condições, as duas fora do código: a URL de destino tem de estar nas **Redirect URLs** do
 projeto (§7), e a **Site URL** tem de ser a do app — é dela que o link é construído. Site URL errada
 não quebra o login: quebra o link, e só se descobre quando alguém precisa dele.
+
+E a lista de Redirect URLs casa por **igualdade**, não por prefixo (medido no card 3.8):
+`https://app.exemplo` **não** autoriza `https://app.exemplo/redefinir-senha` — quem autoriza caminho
+é o curinga `/**`, e caminho sob a própria Site URL é a única exceção. Destino recusado não devolve
+erro: manda a pessoa para a Site URL, que é como um link "quase certo" passa despercebido.
 
 Verificado local em 01/09/2026: `POST /auth/v1/recover` → 200 e o e-mail *"Reset your password"* no
 Mailpit (`http://127.0.0.1:54324`), que é onde o card 3.7 testa o fluxo sem SMTP nenhum.
@@ -188,9 +198,9 @@ uma pergunta que vai aparecer.
 1. **Sign In / Providers → Email**: provedor **habilitado**; **Allow new users to sign up
    DESABILITADO** (é o `enable_signup` de `[auth]`); confirmação de e-mail habilitada; senha mínima 8
    com letras e dígitos; `Secure password change` habilitado.
-2. **URL Configuration → Site URL**: a URL do Cloudflare Pages. **Só existe a partir do card 3.8** —
-   até lá o link de convite e de recuperação aponta para o lugar errado. Anotado como pendência do
-   3.8. **Redirect URLs**: a rota de redefinição de senha do app.
+2. **URL Configuration → Site URL**: a URL do Cloudflare Pages daquele ambiente. **Redirect URLs**:
+   `<url pública>/**`. O card 3.8 fechou o formato exato e a razão de cada linha —
+   `docs/deploy-web.md` §4 é a lista de conferência do painel.
 3. ⚠️ **SMTP próprio** (pendência): sem ele o Supabase usa o serviço interno, com teto de poucos
    e-mails por hora e **sem garantia de entrega** — e o convite e a recuperação de senha vivem de
    e-mail. Um provedor transacional (Resend, por exemplo) resolve. Fica **só no painel**, nunca neste
