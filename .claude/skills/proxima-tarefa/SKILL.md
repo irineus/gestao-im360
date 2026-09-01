@@ -27,15 +27,13 @@ MCP do Notion conectado na sessão. Se não estiver, parar e avisar Irineu (sem 
 
 ## Consultar o board
 
-Consultar os cards via query no data source, ordenando por fase e ordem. As fases têm nomes "1. …" a "11. …", que quebram ordenação alfabética ("10." vem antes de "2."). Usar SEMPRE esta expressão de ordenação:
+Consultar os cards via query no data source, ordenando por fase e ordem. As fases têm nomes **"01. …" a "11. …"**, com zero à esquerda. Usar SEMPRE esta expressão de ordenação:
 
 ```sql
-ORDER BY
-  CASE WHEN "Fase" LIKE '10.%' THEN 10
-       WHEN "Fase" LIKE '11.%' THEN 11
-       ELSE CAST(substr("Fase", 1, 1) AS INTEGER) END,
-  "Ordem"
+ORDER BY CAST(substr("Fase", 1, 2) AS INTEGER), "Ordem"
 ```
+
+⚠️ Corrigido em 01/09/2026 (card 2.3). A expressão anterior lia `substr("Fase", 1, 1)`, escrita quando se supunha "1." a "11." sem zero: com o zero à esquerda ela devolve **0 para todas as fases**, a ordenação vira arbitrária e o "primeiro card não concluído" sai errado. Conferir o resultado: se `CAST(...)` der 0 em toda linha, os nomes das fases mudaram de novo.
 
 A query é tarifada — buscar tudo o que a sessão precisa em **uma** chamada. A página Decisões vigentes é filha do database e aparece nos resultados com `Fase` nula: ignorar essa linha.
 

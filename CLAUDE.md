@@ -39,8 +39,8 @@ Não confundir com o board do **Desmalha** (outro projeto de Irineu, data source
 
 ## Workflow do board Notion
 
-- **Ordenação de fases** (nomes "1." a "11." quebram ordenação alfabética) — usar sempre:
-  `CASE WHEN "Fase" LIKE '10.%' THEN 10 WHEN "Fase" LIKE '11.%' THEN 11 ELSE CAST(substr("Fase", 1, 1) AS INTEGER) END`
+- **Ordenação de fases** (nomes "01." a "11.", com zero à esquerda) — usar sempre
+  `CAST(substr("Fase", 1, 2) AS INTEGER)`. A forma antiga com `substr(..., 1, 1)` devolve 0 para todas as fases e embaralha o board (corrigido em 01/09/2026, card 2.3).
 - Campo `Notas`: buscar o valor atual antes de atualizar e reenviar o texto completo — nunca sobrescrever a linha "Origem:".
 - Páginas de resultado de tarefa: sempre **subpáginas do card** (`parent: {page_id: <card-id>}`), nunca soltas na raiz.
 - Inserir card no meio da sequência: `Ordem` decimal (ex.: 3.5), sem renumerar os demais.
