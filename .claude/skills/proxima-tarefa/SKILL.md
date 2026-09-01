@@ -64,6 +64,7 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 
 1. Marcar o card como **Em andamento** ao começar.
 2. Criar branch a partir de `develop`: `git switch develop && git pull && git switch -c tarefa/<fase>-<ordem>-<slug>` (ex.: `tarefa/2-2-regras-negocio`). Nunca trabalhar direto em `main` nem em `develop`.
+   - **Em sessão na nuvem isso não vale:** a sessão já vem com uma branch designada (`claude/<algo>`), e o *push protection* do proxy só aceita push contra a branch de trabalho da sessão. Usar a branch designada, reapontada para `origin/develop` (`git checkout -B <branch-designada> origin/develop`), e abrir o PR a partir dela. Se o PR anterior dessa branch já foi mergeado, reapontar de novo — nunca empilhar em cima de história já mergeada.
 3. Executar respeitando as regras do `CLAUDE.md`: migrações só via CI/CD; regras de negócio no banco; RLS em toda tabela; nomes em português snake_case; credenciais nunca em texto puro.
 4. Se a nota do card divergir do que faz sentido (ex.: pedir um entregável que já é de outro card), **não seguir em silêncio nem inventar escopo**: fazer o que é coerente, registrar a divergência e o motivo na subpágina de resultado e nas Notas.
 
@@ -97,14 +98,18 @@ git fetch origin --quiet
 git cherry develop origin/<branch> | grep '^+' | wc -l   # 0 = tudo já está em develop
 ```
 
-O erro é assimétrico: se `--merged` lista a branch, ela está mergeada; se não lista, não se conclui nada. Só apagar com zero linhas `+`:
+O erro é assimétrico: se `--merged` lista a branch, ela está mergeada; se não lista, não se conclui nada. Zero linhas `+` é o que autoriza apagar.
+
+**Em sessão na nuvem, apagar branch remota é impossível — não tentar.** (Corrigido em 01/09/2026; a instrução anterior dizia que o `HTTP 403` era falta de permissão do token, o que está errado.) Todo tráfego de git das sessões hospedadas pela Anthropic passa por um proxy que faz *push protection*: **`git push` só é aceito contra a branch de trabalho da própria sessão**. Apagar a ref de qualquer outra branch devolve `HTTP 403` de forma determinística, e nenhuma configuração de ambiente, de `.claude/settings.json` ou de token muda isso. Repetir não resolve, e o `curl -sS "$HTTPS_PROXY/__agentproxy/status"` vai mostrar o proxy saudável — não é instabilidade.
+
+O que fazer: dizer no resumo final quais branches estão mergeadas e prontas para remoção, com o link `https://github.com/irineus/gestao-im360/branches`, e **nunca dar a limpeza como feita**.
+
+Numa sessão local (terminal, ou depois de `--teleport`) não há proxy no caminho e a remoção funciona normalmente:
 
 ```bash
 git push origin --delete <branch>
 git branch -D <branch>
 ```
-
-Se o push falhar com `HTTP 403`, o token não tem permissão para remover refs — **repetir não resolve**. Dizer que não deu e passar `https://github.com/irineus/gestao-im360/branches` em vez de dar a limpeza como feita.
 
 ## Criar cards novos
 
