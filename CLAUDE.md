@@ -29,6 +29,7 @@ Não confundir com o board do **Desmalha** (outro projeto de Irineu, data source
 ## Regras inegociáveis
 
 - **Migrações somente via CI/CD** (`.github/workflows/db-migrations.yml`): novo arquivo em `supabase/migrations/` → push em `develop` aplica no dev → merge em `main` aplica no prod. Nunca aplicar SQL manualmente em prod. Nomear migrações `YYYYMMDDHHMMSS_descricao.sql` (padrão do CLI).
+- **Merge só com o clique de Irineu** (acordo de 01/09/2026): branch de tarefa a partir de `origin/develop`, `AskUserQuestion` para abrir o PR e mergear em `develop`, e outra `AskUserQuestion` para promover a `main`. Ver "Fluxo de entrega" abaixo.
 - **Regras de negócio no banco** (funções SQL/PL-pgSQL, triggers, `pg_cron`); o Flutter orquestra e consome tabelas/views via `supabase_flutter`. Edge Functions só quando indispensável.
 - **RLS em toda tabela.** O código verifica permissões via `tem_permissao(codigo)`, **nunca perfis**. RLS filtra também por `unidade_id` do usuário.
 - Toda tabela de negócio: `id uuid`, `unidade_id`, `criado_em/por`, `atualizado_em/por`.
@@ -36,6 +37,25 @@ Não confundir com o board do **Desmalha** (outro projeto de Irineu, data source
 - Nomes em português, snake_case (tabelas, colunas, funções). Documentos e commits em português.
 - Credenciais de PCs nunca em texto puro.
 - Flutter: `go_router`, Riverpod, `supabase_flutter`; desktop-first para secretaria, mobile-friendly para monitor.
+
+## Fluxo de entrega (acordo de 01/09/2026 — vale para todas as sessões)
+
+**Nenhum merge acontece sem Irineu clicar.** O acordo é fechado e não se renegocia a cada sessão:
+
+1. **Branch de tarefa sempre a partir de `origin/develop`**, qualquer que seja a branch designada da
+   sessão — inclusive quando for `main`:
+   `git fetch origin develop && git checkout -B tarefa/<fase>-<ordem>-<slug> origin/develop`.
+   Nunca commitar direto em `main` nem em `develop`. Branch criada a partir de `main` nasce sem o que
+   já está em `develop` e ainda não foi promovido.
+2. Concluído o entregável do card: commit, push da branch e **pergunta com `AskUserQuestion`** — abrir
+   o PR contra `develop` e, com o CI verde, mergear? A pergunta é clicável e vem **antes** do resumo
+   final; pedido em texto solto se perde no relatório.
+3. Depois do merge em `develop` e do CI verde, **segunda pergunta com `AskUserQuestion`** — promover
+   `develop` → `main`? Merge em `main` **aplica migração no banco de produção**: sem clique, não há
+   promoção, e se a promoção levar migração isso é dito dentro da pergunta, com o nome do arquivo.
+
+Vermelho no CI não se mergeia. Dispensa do OK só vale se Irineu der na própria sessão. Detalhe
+operacional na skill `proxima-tarefa`, seção "Ciclo do Git ao concluir".
 
 ## Workflow do board Notion
 
