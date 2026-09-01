@@ -1,0 +1,35 @@
+{
+    "name": "Gestão IM360",
+    "short_name": "IM360",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#171C26",
+    "theme_color": "#171C26",
+    "description": "Gestão IM360 — gestão de alunos, turmas, vagas e material didático",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

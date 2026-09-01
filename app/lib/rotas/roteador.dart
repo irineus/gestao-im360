@@ -1,0 +1,137 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../sessao/sessao.dart';
+import '../sessao/sessao_provider.dart';
+import '../telas/acesso_bloqueado.dart';
+import '../telas/em_construcao.dart';
+import '../telas/login.dart';
+import '../telas/redefinir_senha.dart';
+import '../telas/selecao_unidade.dart';
+import '../telas/sem_acesso.dart';
+import '../widgets/estados.dart';
+import '../widgets/shell_im360.dart';
+import 'rotas.dart';
+
+/// Rota interna do estado de sessão bloqueado (sem espelho, sem perfil, erro).
+const _caminhoAcesso = '/acesso';
+
+/// Cards que entregam cada tela — o placeholder diz o seu, para não virar
+/// destino permanente (docs/wireframes.md §18).
+const _cardDaRota = <String, String>{
+  'dashboard': '5.9 / 8.7',
+  'alunos': '4.6',
+  'aluno_trilha': '6.6',
+  'turmas': '5.6',
+  'turmas_modular': '7.3',
+  'pendencias': '5.8',
+  'materiais': '6.7',
+  'compras': '6.8',
+  'projecao': '8.5',
+  'certificados': '8.6',
+  'salas': '4.5',
+  'administracao': '4.7',
+  'importacao': '9.1',
+};
+
+final roteadorProvider = Provider<GoRouter>((ref) {
+  final controlador = ref.watch(sessaoProvider.notifier);
+
+  return GoRouter(
+    initialLocation: rotasAplicacao.first.caminho,
+    // O roteador reavalia o redirect quando a sessão muda; nenhuma tela navega
+    // por conta própria depois de entrar ou sair.
+    refreshListenable: controlador,
+    redirect: (context, estadoRota) {
+      final estado = ref.read(sessaoProvider);
+      final caminho = estadoRota.uri.path;
+
+      // A redefinição de senha é pública e tem de continuar alcançável mesmo
+      // com sessão: o link do Auth cria uma sessão de recuperação antes de a
+      // pessoa chegar aqui.
+      if (caminho == rotaRedefinirSenha.caminho) return null;
+
+      return switch (estado) {
+        SessaoCarregando() => null,
+        SessaoDeslogada() =>
+          caminho == rotaLogin.caminho ? null : rotaLogin.caminho,
+        SessaoSemEspelho() ||
+        SessaoSemPerfil() ||
+        SessaoErro() => caminho == _caminhoAcesso ? null : _caminhoAcesso,
+        SessaoAtiva(:final sessao) => _destinoComSessao(caminho, sessao),
+      };
+    },
+    routes: [
+      GoRoute(path: rotaLogin.caminho, builder: (_, _) => const TelaLogin()),
+      GoRoute(
+        path: rotaRedefinirSenha.caminho,
+        builder: (_, _) => const TelaRedefinirSenha(),
+      ),
+      GoRoute(
+        path: _caminhoAcesso,
+        builder: (_, _) => const TelaAcessoBloqueado(),
+      ),
+      GoRoute(
+        path: rotaSelecaoUnidade.caminho,
+        builder: (_, _) => const TelaSelecaoUnidade(),
+      ),
+      ShellRoute(
+        builder: (_, _, filho) => ShellIm360(filho: filho),
+        routes: [
+          for (final rota in rotasAplicacao)
+            GoRoute(
+              path: rota.caminho,
+              builder: (_, _) => _TelaGuardada(rota: rota),
+            ),
+        ],
+      ),
+    ],
+    errorBuilder: (context, estadoRota) => Scaffold(
+      body: EstadoErro(
+        mensagem: 'Esta tela não existe.',
+        codigoTecnico: estadoRota.uri.path,
+        aoRepetir: () => context.go(rotasAplicacao.first.caminho),
+      ),
+    ),
+  );
+});
+
+/// Onde a sessão ativa pode estar.
+///
+/// Sai do login/acesso para a primeira rota que o usuário abre — o Dashboard
+/// exige cinco permissões, e um perfil enxuto entraria e cairia numa tela sem
+/// acesso logo depois de digitar a senha certa.
+String? _destinoComSessao(String caminho, Sessao sessao) {
+  final permitido = primeiraRotaPermitida(sessao.permissoes);
+  final inicio = permitido?.caminho ?? _caminhoAcesso;
+
+  if (caminho == rotaLogin.caminho || caminho == _caminhoAcesso) return inicio;
+
+  // Seleção de unidade: pulada em silêncio na v1 (uma unidade só).
+  if (caminho == rotaSelecaoUnidade.caminho) return inicio;
+
+  return null;
+}
+
+/// A guarda por rota. Existe além do redirect porque a permissão pode sumir com
+/// a sessão aberta (a direção desmarca na matriz, e o card 2.4 registra que a
+/// mudança vale imediatamente) — aí o `build` da tela é o último ponto em que
+/// dá para não mostrar nada.
+class _TelaGuardada extends ConsumerWidget {
+  const _TelaGuardada({required this.rota});
+
+  final Rota rota;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final permissoes = ref.watch(permissoesProvider);
+    if (!podeAbrir(rota, permissoes)) {
+      return TelaSemAcesso(
+        faltando: permissoesFaltantes(rota, permissoes),
+        paraOndeIr: primeiraRotaPermitida(permissoes)?.caminho,
+      );
+    }
+    return TelaEmConstrucao(rota: rota, card: _cardDaRota[rota.id] ?? '—');
+  }
+}

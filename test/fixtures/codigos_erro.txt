@@ -1,0 +1,43 @@
+# Contrato de códigos de erro entre o banco e o app (card 2.8 §10).
+# Um código por linha; linhas em branco e as iniciadas por # são ignoradas.
+#
+# Dois consumidores, de lados opostos:
+#   - C12 (SQL): o conjunto de `codigo` no DETAIL das funções é EXATAMENTE este;
+#   - app/test/catalogo_erros_test.dart: todo código daqui tem mensagem em
+#     lib/erros/catalogo_erros.dart.
+#
+# Um card que cria erro novo toca três arquivos (função, este fixture, catálogo
+# Dart) e os dois testes reprovam enquanto faltar um.
+#
+# Mora na raiz, e não em app/test/, porque o contrato é entre supabase/ e app/ —
+# é de nenhum dos dois sozinho.
+#
+# 19 códigos do card 2.2 §12
+SEM_PERMISSAO
+TRANSICAO_INVALIDA
+FORMATURA_SEM_CERTIFICADO
+MOTIVO_OBRIGATORIO
+ALUNO_INATIVO
+METODO_INCOMPATIVEL
+BLOCO_LOTADO
+DATA_PREVISTA_OBRIGATORIA
+TRILHA_JA_EXISTE
+TRILHA_COM_ENTREGA
+ALUNO_SEM_COMBO
+ITEM_JA_ENTREGUE
+TRILHA_EM_FIM
+MATERIAL_FORA_DA_TRILHA
+MOVIMENTO_JA_ESTORNADO
+MOVIMENTO_NAO_ESTORNAVEL
+PEDIDO_NAO_RECEBIVEL
+RECEBIMENTO_EXCEDE_PEDIDO
+PARAMETRO_AUSENTE
+# 2 do card 2.5 (virada REP)
+REP_JA_CONTINUO
+REP_NAO_CONTINUO
+# 1 do card 2.9 (credenciais de PC)
+PC_INEXISTENTE
+# 3 do card 3.5 (espelho auth.users -> usuario)
+USUARIO_SEM_UNIDADE
+USUARIO_SEM_EMAIL
+EMAIL_IMUTAVEL
