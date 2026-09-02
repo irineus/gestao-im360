@@ -63,23 +63,45 @@ flutter test
 ```
 lib/
   config/ambiente.dart        --dart-define e o que falta quando falta
+  catalogo/                   card 4.4 — o catálogo curricular como o app o vê
+    catalogo.dart             modelos das sete tabelas do 4.1 + filtros e o plano de
+                              gravação de uma sequência ordenada (lógica pura, testável)
+    catalogo_repositorio.dart interface + implementação PostgREST (tabelas, nunca view)
+    catalogo_provider.dart    FutureProviders por consulta, filtros por aba e a versão
+                              do catálogo que toda escrita incrementa para recarregar
   erros/
     catalogo_erros.dart       codigo -> mensagem (design-system §7.1)
-    erro_app.dart             extrai o codigo do DETAIL das exceções do Supabase
+    erro_app.dart             extrai o codigo do DETAIL das exceções do Supabase; traduz
+                              também os SQLSTATEs de integridade 23503/23505 (card 4.4)
   rotas/
     rotas.dart                as 13 telas e o conjunto mínimo de cada uma (2.4 §6)
-    roteador.dart             go_router: redirect por estado de sessão + guarda por rota
+    roteador.dart             go_router: redirect por estado de sessão + guarda por rota;
+                              mapa rota -> tela entregue (o resto abre o placeholder)
   sessao/
     sessao.dart               Sessao e os cinco estados (inclusive os de falha)
     sessao_repositorio.dart   a carga em três passos (acesso-autenticacao §4)
-    sessao_provider.dart      Riverpod; permissoesProvider e resumoUsuarioProvider
+    sessao_provider.dart      Riverpod; permissoesProvider, resumoUsuarioProvider e
+                              unidadeAtualProvider (a unidade que toda escrita carrega)
   telas/                      login, redefinir senha, unidade, acesso bloqueado, placeholders
+    materiais/                card 4.4 — tela 6 (parte catálogo): três abas
+      tela_materiais.dart     abas Materiais / Cursos / Combos, cada uma uma TabelaIm360
+      filtros_catalogo.dart   busca, método, categoria, "só ativos" — estado no provider
+      formularios.dart        material, curso, combo, módulo e o nome dos métodos
+      detalhes.dart           painel do curso (sequência + módulos) e do combo (cursos)
+      editor_sequencia.dart   lista ordenada com alça própria, remover e adicionar
   theme/                      cópia do apêndice §10 do card 2.7 + preferência clara/escura
   widgets/
     botoes.dart               BotaoAcao: sem permissão oculta, sem estado desabilita com motivo
     estados.dart              carregando / vazio / erro / sem acesso
+    formulario.dart           FormularioIm360 (design-system §5.4): validação de formato,
+                              banner de erro pelo codigo, primário travado ao executar,
+                              ações extras com confirmação; mostrarFormulario decide
+                              diálogo × tela cheia pela faixa
     marca.dart                símbolo e assinatura desenhados (ver nota no arquivo)
     shell_im360.dart          menu lateral / trilho / barra inferior
+    tabela_im360.dart         TabelaIm360 (design-system §5.2): os quatro estados num
+                              contrato só, degradação por prioridade de coluna e cartões
+                              no mobile com os filtros numa folha inferior
 ```
 
 O contrato de códigos de erro é `../test/fixtures/codigos_erro.txt`, na raiz do
