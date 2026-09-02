@@ -87,26 +87,43 @@ O card 2.8 §15 pôs "backup restaurado em teste" como pré-condição do go-liv
 resume tudo: **backup nunca restaurado não é backup**. Aqui isso deixa de ser ritual e vira asserção
 semanal, no mesmo job que produz o backup:
 
-1. `supabase start` + `supabase db reset` → um Postgres local com as migrações de `main` aplicadas.
-   Dele sai a **lista de tabelas que o repositório diz que produção tem**.
-2. `create database restauracao` → banco **vazio** no mesmo cluster. É a situação real de uma
-   restauração num projeto Supabase novo: os papéis (`anon`, `authenticated`, `service_role`) já
-   existem, porque papel é objeto de cluster. Por isso `roles.sql` **não** é aplicado no ensaio —
-   aplicá-lo testaria criação de papel, não recuperação de dado.
-3. `backup/restaurar.sh` → `schema.sql` e `data.sql`, com `ON_ERROR_STOP=1` e
+1. `supabase start` + `supabase db reset` → um Postgres do Supabase com as migrações de `main`
+   aplicadas. **Este é o alvo**, e é o destino real de uma restauração neste projeto: projeto novo,
+   migrações pelo CI, dado por cima. Dele sai também a **lista de tabelas que o repositório diz que
+   produção tem**.
+2. `backup/conferir-schema.sh` → o `schema.sql` é **conferido, não aplicado** (ver o porquê logo
+   abaixo).
+3. `truncate` em todas as tabelas de `public`, em `auth.users` e em
+   `supabase_migrations.schema_migrations` → o alvo fica **vazio**. Sem isso, uma tabela que o dump
+   *não* trouxesse continuaria com as linhas do seed e passaria na conferência.
+4. `backup/restaurar.sh dump <url> --somente-dados` → `data.sql`, com `ON_ERROR_STOP=1` e
    `--single-transaction`: ou entra tudo, ou não entra nada. Restauração parcial é a pior das três
    hipóteses, porque parece sucesso.
-4. `backup/conferir-restauracao.sh` → as asserções.
+5. `backup/conferir-restauracao.sh` → as asserções.
+
+### Por que `schema.sql` é conferido e `data.sql` é restaurado
+
+Porque **a estrutura já tem backup e o dado não tinha** (§2). A restauração de verdade parte de um
+projeto Supabase novo com as migrações aplicadas, e o que falta ali é exatamente o que o Git não
+guarda. Aplicar o `schema.sql` num banco criado do zero não é sequer possível — ele conta com a
+casca do Supabase (`extensions`, `auth`, `storage`, `vault`), que é criada **por banco** e não por
+cluster; foi assim que a primeira versão deste ensaio morreu (§8).
+
+E o `schema.sql` continua tendo uma asserção própria, que é para o que ele serve: comparado com as
+migrações de `main`, ele denuncia **tabela que existe em produção e não vem de migração nenhuma** —
+SQL aplicado à mão, contra a regra inegociável do `CLAUDE.md`, e não há mais nada no projeto que
+denunciaria isso.
 
 **As asserções são positivas**, pela mesma razão que o vigia não se contenta com "não deu erro" e
 que o card 2.8 (b) recusa "a view não levantou exceção":
 
-| # | Asserção | O que ela pega |
-|---|---|---|
-| 1 | o banco restaurado tem tabela em `public` | dump que saiu com 0 e trouxe só o cabeçalho |
-| 2 | **comparação simétrica** com as tabelas das migrações de `main` | schema truncado (falta) **e** SQL aplicado à mão em produção (sobra) |
-| 3 | `unidade`, `perfil`, `permissao`, `perfil_permissao` e `parametro` com linha | dump de schema sem dado — o jeito mais comum de um backup ser inútil |
-| — | contagem de `auth.users`, `usuario` e `supabase_migrations` | informativo (ver §5) |
+| # | Asserção | Sobre o quê | O que ela pega |
+|---|---|---|---|
+| 1 | `schema.sql` declara tabela em `public` | o backup | dump que saiu com 0 e trouxe só o cabeçalho |
+| 2 | **comparação simétrica** entre `schema.sql` e as migrações de `main` | o backup | schema truncado (falta) **e** SQL aplicado à mão em produção (sobra) |
+| 3 | `data.sql` restaura sem erro num alvo vazio | o backup | dump inconsistente, ordem de FK quebrada, arquivo truncado no meio |
+| 4 | `unidade`, `perfil`, `permissao`, `perfil_permissao` e `parametro` com linha **depois do truncate** | o backup | dump de schema sem dado — o jeito mais comum de um backup ser inútil |
+| — | contagem de `auth.users`, `usuario` e `supabase_migrations` | medição | responde o §5: zero em `supabase_migrations` significa que o histórico não vem no dump |
 
 Ponto de referência do que essas asserções esperam encontrar, medido no projeto **dev** em
 02/09/2026 (produção tem as mesmas quatro migrações aplicadas): 7 tabelas em `public`, `permissao`
@@ -143,10 +160,14 @@ aws s3 cp s3://gestao-im360-backup/producao/2026-10-04/ ./restauracao/ --recursi
   --endpoint-url "https://<CLOUDFLARE_ACCOUNT_ID>.r2.cloudflarestorage.com"
 cat restauracao/MANIFESTO.txt   # confira data, commit e o resultado do ensaio daquele dia
 
-# 2. Restaurar num projeto Supabase NOVO e vazio (nunca por cima de um banco com dado)
-backup/restaurar.sh restauracao "postgresql://postgres.<ref>:<senha>@<pooler>:5432/postgres"
+# 2. Criar um projeto Supabase NOVO e aplicar as migrações nele pelo CI
+#    (supabase link --project-ref <ref-novo> && supabase db push) — a ESTRUTURA
+#    vem do Git, sempre; o backup traz o DADO.
 
-# 3. Conferir
+# 3. Restaurar o dado por cima (nunca por cima de um banco que já tenha dado)
+backup/restaurar.sh restauracao "postgresql://postgres.<ref>:<senha>@<pooler>:5432/postgres" --somente-dados
+
+# 4. Conferir
 backup/conferir-restauracao.sh "postgresql://postgres.<ref>:<senha>@<pooler>:5432/postgres"
 ```
 
@@ -251,8 +272,28 @@ Segundo ajuste do mesmo passo: o laço **parava no primeiro arquivo**, então o 
 370 bytes de `roles.sql` e nada sobre os outros dois. Relatório que esconde o estado do resto obriga
 a rodar de novo só para saber o resto; agora ele mede os três e reprova no fim.
 
-Continua sem medição a pergunta do §5: se `supabase_migrations.schema_migrations` vem no dump. Ela
-depende do ensaio de restauração, que a estreia não chegou a executar.
+**⚠️ Segunda execução: um banco criado do zero não é um projeto Supabase novo.** Com o piso
+corrigido, o ensaio rodou pela primeira vez e morreu em
+`psql:dump/schema.sql:20: ERROR: schema "extensions" does not exist`.
+
+O erro desmonta uma premissa que estava escrita neste próprio documento: *"os papéis já existem,
+porque papel é objeto de cluster"*. Verdade para **papéis** — e falso para **schemas**. `extensions`,
+`auth`, `storage`, `graphql` e `vault` são criados **por banco**, não por cluster, então um
+`createdb` dentro do Postgres do Supabase é um banco **cru** dentro de um projeto Supabase, e não um
+projeto novo. O `schema.sql` do CLI, por sua vez, é escrito para um destino que já tem essa casca:
+ele emite `CREATE EXTENSION … WITH SCHEMA "extensions"` e não cria o schema. (Conferido no dev:
+`pgcrypto`, `uuid-ossp` e `pg_stat_statements` moram em `extensions`; `supabase_vault`, em `vault`.)
+
+A correção não foi criar os schemas que faltavam à mão — seria uma lista adivinhada, que envelhece
+sem avisar. Foi trocar o alvo pelo **destino real de uma restauração neste projeto**: um banco com as
+migrações de `main` aplicadas (o que `supabase db reset` produz), esvaziado, recebendo **só o
+`data.sql`**. Isso alinha o ensaio com o que o §2 já dizia e ninguém tinha levado até o fim — *a
+estrutura já tem backup, chama-se `supabase/migrations/`; o que o R2 guarda é o dado*. O `schema.sql`
+ganhou a asserção que lhe cabe, de comparação, em `backup/conferir-schema.sh`.
+
+Entrou junto um passo de **radiografia do dump** (nomes de schema, extensão e tabela; nunca valores),
+para que a próxima surpresa seja diagnosticável na mesma execução em vez de exigir uma rodada só para
+descobrir o que o arquivo contém.
 
 ---
 
