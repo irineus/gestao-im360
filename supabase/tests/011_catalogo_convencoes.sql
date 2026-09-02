@@ -4,7 +4,7 @@
 -- =============================================================================
 
 begin;
-select plan(7);
+select plan(9);
 
 create temporary view t_negocio as
   select c.oid, c.relname
@@ -138,9 +138,21 @@ select is(
             -- nenhuma política a favor de quem convida. Filtra unidade no corpo
             -- (`new.unidade_id`), como manda a correção do card 2.3. As seis
             -- fn_seed_* NÃO são definer: rodam na migração, como `postgres`.
-            'fn_usuario_direcao_inicial'
+            'fn_usuario_direcao_inicial',
+            -- card 4.3 — as três das credenciais de PC. As duas de aplicação
+            -- precisam alcançar `vault` (que nenhum papel do app enxerga) e
+            -- escrever o log em pc_credencial_acesso; a do trigger precisa
+            -- apagar o segredo do Vault junto com o PC. As três filtram a
+            -- unidade no corpo (as de aplicação) ou operam sobre a linha que o
+            -- trigger recebe — como manda a correção do card 2.3.
+            --
+            -- fn_pc_exclusao_valida NÃO está aqui, de propósito: ela só conta
+            -- linhas de tabelas que o próprio chamador pode ler, e entrar na
+            -- lista sem necessidade gasta a revisão consciente que a lista
+            -- existe para provocar (card 3.4 (a)).
+            'fn_pc_credencial_ler', 'fn_pc_credencial_gravar',
+            'fn_pc_credencial_apagar'
             -- card 5.2:  'fn_capacidade_efetiva', 'fn_ocupacao_bloco'
-            -- card 4.3:  'fn_pc_credencial_ler', 'fn_pc_credencial_gravar'
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'
@@ -189,6 +201,59 @@ select ok(
      join pg_roles r on r.oid = p.proowner
     where f.prosecdef),
   'C8: o dono de toda funcao security definer tem BYPASSRLS (premissa do card 3.3)'
+);
+
+-- ---------------------------------------------------------------------------
+-- C14 — nenhuma coluna de `public` guarda segredo (card 2.9 §10)
+--
+-- A política do card 2.9 é que a senha do PC viva CIFRADA no Vault e que `pc`
+-- guarde só o ponteiro. Nada no schema impõe isso: uma coluna
+-- `credencial_senha text` acrescentada numa migração futura passaria por toda
+-- a suíte — RLS, auditoria, políticas — sem uma linha vermelha, e a senha
+-- voltaria ao pg_dump semanal em texto puro.
+--
+-- A exceção é uma só e é nominal: `credencial_secret_id`, que é o ponteiro.
+-- ---------------------------------------------------------------------------
+select is(
+  (select coalesce(string_agg(c.relname || '.' || a.attname, ', '
+                              order by c.relname, a.attname), '')
+     from pg_attribute a
+     join pg_class c on c.oid = a.attrelid
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relkind = 'r'
+      and a.attnum > 0
+      and not a.attisdropped
+      and a.attname ~ '(senha|password|pwd|secret)'
+      and a.attname <> 'credencial_secret_id'),
+  '',
+  'C14: nenhuma coluna de tabela do schema public guarda segredo em claro'
+);
+
+-- ---------------------------------------------------------------------------
+-- C15 — o Vault fica fora do alcance dos papéis do app (card 2.9 §3 e §10)
+--
+-- `vault` não está nos `schemas` expostos do PostgREST, mas isso é
+-- configuração — e configuração se muda num clique, sem passar por revisão de
+-- código. O que sustenta a política é o PRIVILÉGIO, e é ele que se asserta.
+-- ---------------------------------------------------------------------------
+select is(
+  (select coalesce(string_agg(x.d, '; ' order by x.d), '')
+     from (
+       select 'authenticated tem usage em vault' as d
+        where has_schema_privilege('authenticated', 'vault', 'usage')
+       union all
+       select 'anon tem usage em vault'
+        where has_schema_privilege('anon', 'vault', 'usage')
+       union all
+       select 'authenticated le vault.decrypted_secrets'
+        where has_table_privilege('authenticated', 'vault.decrypted_secrets', 'select')
+       union all
+       select 'anon le vault.decrypted_secrets'
+        where has_table_privilege('anon', 'vault.decrypted_secrets', 'select')
+     ) x),
+  '',
+  'C15: authenticated e anon nao alcancam o schema vault nem a view de decifra'
 );
 
 select * from finish();

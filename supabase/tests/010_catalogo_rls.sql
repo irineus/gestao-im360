@@ -79,7 +79,34 @@ create temporary view p_esperada (tabela, cmd) as values
   ('permissao','r'),
   ('perfil_permissao','r'), ('perfil_permissao','a'), ('perfil_permissao','d'),
   ('usuario_perfil','r'),   ('usuario_perfil','a'),   ('usuario_perfil','d'),
-  ('parametro','r'),        ('parametro','a'),        ('parametro','w');
+  ('parametro','r'),        ('parametro','a'),        ('parametro','w'),
+  -- card 4.1 — catálogo curricular. `metodo` é a única sem delete: as três
+  -- linhas são enumeração do produto (check na coluna) e apagá-las levaria
+  -- junto todo o catálogo pendurado nelas; fora de uso é `ativo = false`.
+  ('metodo','r'),           ('metodo','a'),           ('metodo','w'),
+  ('material','r'),         ('material','a'),         ('material','w'),         ('material','d'),
+  ('curso','r'),            ('curso','a'),            ('curso','w'),            ('curso','d'),
+  ('curso_material','r'),   ('curso_material','a'),   ('curso_material','w'),   ('curso_material','d'),
+  ('modulo','r'),           ('modulo','a'),           ('modulo','w'),           ('modulo','d'),
+  ('combo','r'),            ('combo','a'),            ('combo','w'),            ('combo','d'),
+  ('combo_curso','r'),      ('combo_curso','a'),      ('combo_curso','w'),      ('combo_curso','d'),
+  -- card 4.2 — alunos. `aluno` não tem DELETE porque aluno não some, vira
+  -- CANCELADO (por isso o catálogo do card 2.4 não tem `alunos.excluir`), e
+  -- `aluno_status_hist` não tem update nem delete: é histórico imutável, e a
+  -- imutabilidade aqui É a ausência de política. As três linhas que faltam neste
+  -- bloco são a decisão escrita.
+  ('aluno','r'),            ('aluno','a'),            ('aluno','w'),
+  ('aluno_status_hist','r'), ('aluno_status_hist','a'),
+  -- card 4.3 — infraestrutura física. Três ausências, três decisões:
+  -- `pc_manutencao` sem DELETE (manutenção registrada é histórico), `professor`
+  -- sem DELETE (sai por ativo = false, senão a grade histórica perde o nome de
+  -- quem deu a aula) e `pc_credencial_acesso` sem update NEM delete — a
+  -- imutabilidade do log de credencial É esta ausência (card 2.9 §6).
+  ('sala','r'),             ('sala','a'),             ('sala','w'),             ('sala','d'),
+  ('pc','r'),               ('pc','a'),               ('pc','w'),               ('pc','d'),
+  ('pc_manutencao','r'),    ('pc_manutencao','a'),    ('pc_manutencao','w'),
+  ('professor','r'),        ('professor','a'),        ('professor','w'),
+  ('pc_credencial_acesso','r'), ('pc_credencial_acesso','a');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text
@@ -125,7 +152,29 @@ create temporary view p_codigo_usado as
 create temporary view p_codigo_catalogo (codigo) as values
   ('admin.ler'), ('admin.gerir_usuarios'), ('admin.gerir_perfis'),
   ('unidades.ler'), ('unidades.gerir'),
-  ('parametros.ler'), ('parametros.gerir');
+  ('parametros.ler'), ('parametros.gerir'),
+  -- card 4.1 — os quatro do domínio `materiais` (card 2.4 §3.3). As sete tabelas
+  -- do catálogo curricular usam exatamente estes, e a composição
+  -- (curso_material, combo_curso) grava com `materiais.editar` e não com
+  -- `materiais.criar`: montar a sequência de um curso é editar o curso.
+  ('materiais.ler'), ('materiais.criar'), ('materiais.editar'), ('materiais.excluir'),
+  -- card 4.2 — o domínio `alunos` MENOS os dois códigos que nenhuma política
+  -- cita, e essa ausência é o ponto: `alunos.editar_trilha` só aparece quando
+  -- `aluno_material` nascer (card 6.1), e `alunos.formar_sem_certificado` nunca
+  -- aparece em política nenhuma — ele é o gate de fn_aluno_pode_formar, dentro
+  -- de um trigger. Pôr qualquer um dos dois aqui reprovaria por "catalogado e
+  -- não usado", que é exatamente o que esta lista existe para dizer.
+  ('alunos.ler'), ('alunos.criar'), ('alunos.editar'),
+  ('alunos.alterar_status'), ('alunos.reverter_status'),
+  -- card 4.3 — os cinco do domínio `salas`, os três de `professores` e o 50º
+  -- código, `salas.acessar_credencial` (card 2.9), que aqui aparece pela
+  -- primeira vez em política: as duas de `pc_credencial_acesso`.
+  -- `salas.registrar_manutencao` é separado de `salas.editar` porque tem
+  -- consequência que editar não tem — manutenção sem substituto derruba a
+  -- capacidade do bloco (card 2.4 §3.3).
+  ('salas.ler'), ('salas.criar'), ('salas.editar'), ('salas.excluir'),
+  ('salas.registrar_manutencao'), ('salas.acessar_credencial'),
+  ('professores.ler'), ('professores.criar'), ('professores.editar');
 
 select is(
   (select coalesce(string_agg(msg, '; ' order by msg), '')

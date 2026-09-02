@@ -73,16 +73,16 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
    'APLICADA no card 3.6: as duas unidades da fixture chamam public.fn_seed_acesso(), a mesma função que a migração chama para a unidade real. Nada de catálogo nem de matriz é escrito na fixture — se fosse, o teste de paridade compararia a tela real com uma matriz de mentira e passaria.'),
 
   ('catalogo_curricular', 30, '4.1',
-   $$to_regclass('public.material') is not null$$, false,
-   'Seis materiais em três métodos, com os saldos 0/0/1/n/n/n do card 2.8 §4.2. Saldo depende de movimento_estoque (6.1); até lá, só o catálogo.'),
+   $$to_regclass('public.material') is not null$$, true,
+   'APLICADA no card 4.1: os três métodos vêm de public.fn_seed_metodos() — a mesma função da migração —, mais seis materiais, quatro cursos, três módulos e três combos por unidade. Os saldos 0/0/1/n/n/n do card 2.8 §4.2 dependem de movimento_estoque e ficam com a camada trilha_estoque (6.1); aqui vai o catálogo, e o estoque_minimo já distingue os seis.'),
 
   ('alunos', 40, '4.2',
-   $$to_regclass('public.aluno') is not null$$, false,
-   'Doze alunos cobrindo os quatro degraus da cascata da projeção, um em FIM e um em STANDBY antigo. Datas SEMPRE relativas a fn_hoje().'),
+   $$to_regclass('public.aluno') is not null$$, true,
+   'APLICADA no card 4.2: doze alunos por unidade, um por caso que alguma decisão criou — os quatro degraus da cascata da projeção, previsão vencida, STANDBY antigo, os dois terminais (FORMADO e CANCELADO), TRANCADO, ACELERAR e um sem combo. Datas SEMPRE relativas a fn_hoje(). O "em FIM" e o "com débito REP na borda" do card 2.8 §4.2 dependem de aluno_material e bloco_aluno: ficam com as camadas trilha_estoque (6.1) e turmas (5.1), e os alunos que os receberão já nascem aqui.'),
 
   ('infra_fisica', 50, '4.3',
-   $$to_regclass('public.pc') is not null$$, false,
-   'Uma sala com 10 PCs (capacidade real do laboratório) e uma com 6. A borda 10/11 é o teste de lotação do card 5.3.'),
+   $$to_regclass('public.pc') is not null$$, true,
+   'APLICADA no card 4.3: uma sala com 10 PCs (capacidade real do laboratório) e uma com 6, mais uma sala modular sem PC. A borda 10/11 é o teste de lotação do card 5.3. Os seis PCs da segunda sala NÃO estão todos operacionais de propósito: capacidade nominal (6), total de PCs (6) e PCs operacionais (4) são três números distintos, e é isso que faz fn_capacidade_efetiva (card 5.2) reprovar se somar a coluna errada. Duas manutenções (uma aberta sem substituto, uma fechada) e três professores, um inativo. Nenhuma credencial: senha de fixture no repositório é o que o card 2.9 §9 recusa, e os testes de credencial gravam a sua dentro da própria transação.'),
 
   ('turmas', 60, '5.1',
    $$to_regclass('public.bloco_aluno') is not null$$, false,
@@ -408,7 +408,325 @@ select tests.criar_usuario('direcao@escola-b.test',    'DIRECAO', tests.unidade(
 -- produção.
 
 -- =============================================================================
--- 4. Fecho: nada em `tests` alcançável por quem não é `postgres`
+-- 4. Escola-fixture — camada `catalogo_curricular` (card 4.1)
+-- =============================================================================
+-- Os três métodos NÃO são escritos aqui: vêm de `public.fn_seed_metodos()`, a
+-- mesma função que a migração do card 4.1 chama para a unidade real. É a lição
+-- da camada `acesso_seed_real` aplicada de novo — enumeração declarada duas
+-- vezes é enumeração livre para divergir, e a divergência não acusa nada.
+--
+-- O catálogo em si (materiais, cursos, módulos, combos) é da fixture e só dela:
+-- o catálogo REAL é dado de planilha, entra pelo importador do card 9.1 no
+-- ambiente dev e nunca aparece numa migração (decisão de 02/09/2026). Os números
+-- aqui são escolhidos para exercitar bordas, não para parecer com a escola.
+--
+-- Duas escolhas que valem explicação:
+--
+--   (a) os códigos de material SE REPETEM entre métodos ('01' existe em
+--       INTERATIVO, em INGLES e em MODULAR). É de propósito: é assim na planilha
+--       — cada catálogo tem a sua numeração — e é o que faz a fixture exercitar
+--       `material_codigo_uk (unidade_id, metodo_id, codigo)` em vez de passar
+--       igual se a unique estivesse errada em (unidade_id, codigo). Consequência
+--       para quem escrever teste daqui em diante: material se acha pelo PAR
+--       (método, código), nunca pelo código sozinho.
+--
+--   (b) o combo de Informática tem DOIS cursos, com ordens 1 e 2. Um combo de
+--       curso único não exercita `combo_curso_ordem_uk` nem a ordem da trilha
+--       que o card 6.2 gera a partir do combo — e a trilha resultante (01, 02,
+--       03, sem repetição) é justamente o que o 6.2 precisa ter contra o que
+--       comparar.
+--
+-- Saldos de estoque (0/0/1/n/n/n do card 2.8 §4.2) NÃO entram aqui: dependem de
+-- `movimento_estoque`, que nasce no card 6.1 com a camada `trilha_estoque`. O
+-- que este catálogo já traz é o `estoque_minimo` diferente por material, que é o
+-- que o pedido sugerido do card 2.3 soma.
+
+create or replace function tests.seed_catalogo(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_interativo uuid;
+  v_ingles     uuid;
+  v_modular    uuid;
+begin
+  perform public.fn_seed_metodos(p_unidade);
+
+  select id into v_interativo from metodo where unidade_id = p_unidade and codigo = 'INTERATIVO';
+  select id into v_ingles     from metodo where unidade_id = p_unidade and codigo = 'INGLES';
+  select id into v_modular    from metodo where unidade_id = p_unidade and codigo = 'MODULAR';
+
+  -- Seis materiais. `estoque_minimo` distinto por material: um valor único em
+  -- todos faria o pedido sugerido do card 2.3 passar com a parcela do mínimo
+  -- somada errado (ou não somada) sem que a conta mudasse.
+  insert into material (unidade_id, metodo_id, codigo, nome, categoria, estoque_minimo)
+  values
+    (p_unidade, v_interativo, '01', 'Informática Essencial 1', 'APOSTILA', 2),
+    (p_unidade, v_interativo, '02', 'Informática Essencial 2', 'APOSTILA', 1),
+    (p_unidade, v_interativo, '03', 'Informática Avançada 1',  'APOSTILA', 1),
+    (p_unidade, v_ingles,     '01', 'English Book 1',          'APOSTILA', 1),
+    (p_unidade, v_ingles,     '02', 'English Book 2',          'APOSTILA', 2),
+    (p_unidade, v_modular,    '01', 'Eletricista Instalador',  'LIVRO',    1)
+  on conflict (unidade_id, metodo_id, codigo) do nothing;
+
+  insert into curso (unidade_id, metodo_id, nome)
+  values
+    (p_unidade, v_interativo, 'Informática Essencial'),
+    (p_unidade, v_interativo, 'Informática Avançada'),
+    (p_unidade, v_ingles,     'Inglês Kids'),
+    (p_unidade, v_modular,    'Eletricista Instalador')
+  on conflict (unidade_id, metodo_id, nome) do nothing;
+
+  -- Sequência de cada curso. O join por chave natural (método + código do
+  -- material, nome do curso) é o que mantém isto legível e sem UUID literal —
+  -- convenção do card 2.8 §A.
+  insert into curso_material (unidade_id, curso_id, material_id, ordem)
+  select p_unidade, c.id, m.id, s.ordem
+    from (values
+      ('Informática Essencial',  'INTERATIVO', '01', 1),
+      ('Informática Essencial',  'INTERATIVO', '02', 2),
+      ('Informática Avançada',   'INTERATIVO', '03', 1),
+      ('Inglês Kids',            'INGLES',     '01', 1),
+      ('Inglês Kids',            'INGLES',     '02', 2),
+      -- No Modular o curso tem UM livro; o que avança é o módulo (abaixo).
+      ('Eletricista Instalador', 'MODULAR',    '01', 1)
+    ) as s(curso, metodo, material, ordem)
+    join metodo   me on me.unidade_id = p_unidade and me.codigo = s.metodo
+    join curso    c  on c.unidade_id  = p_unidade and c.metodo_id = me.id and c.nome = s.curso
+    join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id and m.codigo = s.material
+  on conflict (curso_id, material_id) do nothing;
+
+  -- Três módulos sobre o MESMO livro: é a forma do Modular (card 7.2), e uma
+  -- fixture com um módulo por material não exercitaria isso.
+  insert into modulo (unidade_id, curso_id, material_id, nome, ordem)
+  select p_unidade, c.id, m.id, s.nome, s.ordem
+    from (values
+      ('Módulo 1 — Comandos elétricos', 1),
+      ('Módulo 2 — Instalações prediais', 2),
+      ('Módulo 3 — Projetos', 3)
+    ) as s(nome, ordem)
+    join metodo   me on me.unidade_id = p_unidade and me.codigo = 'MODULAR'
+    join curso    c  on c.unidade_id  = p_unidade and c.metodo_id = me.id
+                    and c.nome = 'Eletricista Instalador'
+    join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id and m.codigo = '01'
+   where not exists (select 1 from modulo x where x.curso_id = c.id and x.ordem = s.ordem);
+
+  insert into combo (unidade_id, metodo_id, nome)
+  values
+    (p_unidade, v_interativo, 'Informática Completo'),
+    (p_unidade, v_ingles,     'Inglês Kids Completo'),
+    (p_unidade, v_modular,    'Eletricista Completo')
+  on conflict (unidade_id, nome) do nothing;
+
+  insert into combo_curso (unidade_id, combo_id, curso_id, ordem)
+  select p_unidade, cb.id, c.id, s.ordem
+    from (values
+      ('Informática Completo', 'Informática Essencial',  1),
+      ('Informática Completo', 'Informática Avançada',   2),
+      ('Inglês Kids Completo', 'Inglês Kids',            1),
+      ('Eletricista Completo', 'Eletricista Instalador', 1)
+    ) as s(combo, curso, ordem)
+    join combo cb on cb.unidade_id = p_unidade and cb.nome = s.combo
+    join curso c  on c.unidade_id  = p_unidade and c.nome  = s.curso
+  on conflict (combo_id, curso_id) do nothing;
+end $$;
+
+-- As duas unidades recebem o mesmo catálogo, pela mesma razão da camada
+-- `acesso`: números iguais dos dois lados é o que torna a asserção de isolamento
+-- comparável — mesmo conteúdo, e ainda assim zero vazamento entre elas.
+select tests.seed_catalogo(tests.unidade('ESCOLA_A'));
+select tests.seed_catalogo(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 5. Escola-fixture — camada `alunos` (card 4.2)
+-- =============================================================================
+-- Doze alunos, um por caso que alguma decisão do projeto criou — não uma amostra
+-- da planilha. O quadro do card 2.8 §4.2 pede "12 alunos cobrindo os 4 degraus
+-- da cascata da projeção, 1 em FIM, 1 em STANDBY antigo, 1 com débito REP na
+-- borda"; duas dessas três marcas dependem de tabelas que ainda não existem
+-- (`aluno_material` no card 6.1, `bloco_aluno` no 5.1), e o que se pode fazer
+-- agora — e é o que interessa — é já nascer o ALUNO que vai recebê-las, para que
+-- as camadas seguintes só acrescentem linhas, sem mexer nesta.
+--
+-- Três escolhas que valem explicação:
+--
+--   (a) DUAS datas por aluno, sempre relativas a fn_hoje(). `data_inicio` é
+--       quando a matrícula começou; `status_desde` é quando o status atual
+--       passou a valer, e num aluno recém-inserido os dois NÃO coincidem —
+--       Gabriela está em STANDBY há 45 dias e matriculada há 200. É essa
+--       diferença que o alerta de STANDBY prolongado (30 dias, card 5.5) lê, e
+--       uma fixture que igualasse as duas passaria sem exercitar nada.
+--
+--   (b) `codigo_sgf` fica NULO em três dos doze, de propósito. O índice é
+--       parcial (`where codigo_sgf is not null`) justamente porque a planilha
+--       tem aluno sem código, e três nulos são o que prova que nulos não colidem
+--       entre si — com um só, a asserção passaria igual se o índice estivesse
+--       escrito errado, sem o `where`.
+--
+--   (c) os dois status TERMINAIS estão presentes (Isabela CANCELADO, João Pedro
+--       FORMADO). São a única entrada possível para fn_aluno_reverter_status, e
+--       sem eles o teste da reversão teria de criar o próprio aluno — que é o
+--       caminho para um teste que passa porque montou o cenário que queria.
+create or replace function tests.seed_alunos(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  insert into aluno (unidade_id, codigo_sgf, nome, metodo_id, combo_id, status,
+                     status_desde, prev_conclusao_curso, data_inicio)
+  select p_unidade, s.codigo_sgf, s.nome, me.id, cb.id, s.status,
+         fn_hoje() - s.status_ha,
+         case when s.prev_em is null then null else fn_hoje() + s.prev_em end,
+         fn_hoje() - s.inicio_ha
+    from (values
+      -- nome, codigo_sgf, metodo, combo, status, dias desde o status,
+      -- prev_conclusao (dias a partir de hoje; negativo = vencida), dias de matrícula
+      ('Ana Paula Ribeiro',  '3001', 'INTERATIVO', 'Informática Completo', 'ATIVO',     180, null, 180),
+      ('Bruno Carvalho',     '3002', 'INTERATIVO', 'Informática Completo', 'ATIVO',      90,   90,  90),
+      ('Carla Menezes',      '3003', 'INTERATIVO', 'Informática Completo', 'ATIVO',      10, null,  10),
+      ('Diego Alves',        '3004', 'INTERATIVO', 'Informática Completo', 'ATIVO',     120,  -15, 120),
+      ('Eduarda Lima',       '3005', 'MODULAR',    'Eletricista Completo', 'ATIVO',      60, null,  60),
+      ('Felipe Nunes',       '3006', 'INGLES',     'Inglês Kids Completo', 'ACELERAR',   30,   60, 150),
+      ('Gabriela Souza',     '3007', 'INGLES',     'Inglês Kids Completo', 'STANDBY',    45, null, 200),
+      ('Henrique Dias',      '3008', 'INTERATIVO', 'Informática Completo', 'TRANCADO',   75, null, 300),
+      ('Isabela Rocha',      null,   'INTERATIVO', 'Informática Completo', 'CANCELADO',  20, null, 100),
+      ('João Pedro Martins', '3010', 'INTERATIVO', 'Informática Completo', 'FORMADO',     5, null, 400),
+      ('Karina Bastos',      null,   'INTERATIVO', null,                   'ATIVO',      15, null,  15),
+      ('Lucas Ferreira',     null,   'INTERATIVO', 'Informática Completo', 'ATIVO',      50, null,  50)
+    ) as s(nome, codigo_sgf, metodo, combo, status, status_ha, prev_em, inicio_ha)
+    join metodo me on me.unidade_id = p_unidade and me.codigo = s.metodo
+    -- `left join` e não `join`: Karina não tem combo, e um join interno a
+    -- deixaria de fora em silêncio — a fixture ficaria com onze alunos e o teste
+    -- de contagem acusaria em outro lugar, longe da causa.
+    left join combo cb on cb.unidade_id = p_unidade and cb.nome = s.combo
+   where not exists (select 1 from aluno a
+                      where a.unidade_id = p_unidade and a.nome = s.nome);
+end $$;
+
+-- Os alunos de A e de B são os mesmos, com os mesmos códigos SGF: é o que faz a
+-- asserção de isolamento significar alguma coisa. `codigo_sgf` é único por
+-- UNIDADE (card 2.1 §7), então repetir entre unidades é exatamente o caso que a
+-- unique precisa aceitar — e recusaria se estivesse escrita sem o unidade_id.
+select tests.seed_alunos(tests.unidade('ESCOLA_A'));
+select tests.seed_alunos(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 6. Escola-fixture — camada `infra_fisica` (card 4.3)
+-- =============================================================================
+-- Três salas e dezesseis PCs, escolhidos para exercitar bordas — não para
+-- parecer com a escola. Quatro escolhas que valem explicação:
+--
+--   (a) o laboratório tem EXATAMENTE 10 PCs operacionais, que é a capacidade
+--       real do laboratório (Decisões vigentes, 31/08/2026). A borda 10/11 é o
+--       teste de lotação do card 5.3: o 11º aluno tem de bater em BLOCO_LOTADO,
+--       e uma fixture com 9 ou com 12 PCs passaria sem exercitar isso.
+--
+--   (b) na segunda sala, capacidade nominal (6), total de PCs (6) e PCs
+--       OPERACIONAIS (4) são TRÊS NÚMEROS DISTINTOS. É o que faz
+--       `fn_capacidade_efetiva` (card 5.2) reprovar quando somar a coluna
+--       errada — com os três iguais, a função passaria contando qualquer coisa.
+--       Um PC em MANUTENCAO e um DESATIVADO: os dois saem da conta, e são
+--       estados diferentes que o card 5.4 trata de forma diferente.
+--
+--   (c) as duas manutenções são de tipos opostos de propósito: uma ABERTA
+--       (`data_fim` nulo) e sem substituto — o caso que derruba a capacidade e
+--       abre a pendência do card 5.4 — e uma FECHADA, que é histórico e não
+--       muda capacidade nenhuma. Uma fixture só com manutenção aberta faria
+--       "manutenção" e "PC parado" parecerem a mesma coisa.
+--
+--   (d) NENHUMA credencial é gravada aqui. Senha de fixture no repositório é
+--       exatamente o que o card 2.9 recusa, e o varredor de segredos do card
+--       3.11 já reprovou este projeto duas vezes por linhas que apenas PARECEM
+--       uma senha. Os testes de credencial gravam a sua com
+--       `fn_pc_credencial_gravar` dentro da própria transação, e ela morre no
+--       rollback.
+--
+-- Os PCs dos dois laboratórios TÊM histórico (manutenção), e é isso que dá ao
+-- teste da guarda de exclusão do card 4.3 os dois lados: um PC que recusa ser
+-- apagado e um que aceita.
+create or replace function tests.seed_infra_fisica(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_lab      uuid;
+  v_lab2     uuid;
+  v_pc_manut uuid;
+  v_pc_ok    uuid;
+begin
+  insert into sala (unidade_id, nome, tipo, capacidade_nominal)
+  select p_unidade, s.nome, s.tipo, s.cap
+    from (values
+      ('Laboratório 1',      'LABORATORIO',  10),
+      ('Laboratório 2',      'LABORATORIO',   6),
+      ('Sala Eletricista',   'SALA_MODULAR', 15)
+    ) as s(nome, tipo, cap)
+   where not exists (select 1 from sala x
+                      where x.unidade_id = p_unidade and x.nome = s.nome);
+
+  select id into v_lab  from sala where unidade_id = p_unidade and nome = 'Laboratório 1';
+  select id into v_lab2 from sala where unidade_id = p_unidade and nome = 'Laboratório 2';
+
+  -- Laboratório 1: dez PCs, todos operacionais. LAB1-01 .. LAB1-10.
+  insert into pc (unidade_id, sala_id, identificador, status)
+  select p_unidade, v_lab, format('LAB1-%s', lpad(i::text, 2, '0')), 'OPERACIONAL'
+    from generate_series(1, 10) as i
+   where not exists (select 1 from pc x
+                      where x.unidade_id = p_unidade
+                        and x.identificador = format('LAB1-%s', lpad(i::text, 2, '0')));
+
+  -- Laboratório 2: seis PCs, quatro operacionais.
+  insert into pc (unidade_id, sala_id, identificador, status)
+  select p_unidade, v_lab2, p.identificador, p.status
+    from (values
+      ('LAB2-01', 'OPERACIONAL'),
+      ('LAB2-02', 'OPERACIONAL'),
+      ('LAB2-03', 'OPERACIONAL'),
+      ('LAB2-04', 'OPERACIONAL'),
+      ('LAB2-05', 'MANUTENCAO'),
+      ('LAB2-06', 'DESATIVADO')
+    ) as p(identificador, status)
+   where not exists (select 1 from pc x
+                      where x.unidade_id = p_unidade and x.identificador = p.identificador);
+
+  select id into v_pc_manut from pc where unidade_id = p_unidade and identificador = 'LAB2-05';
+  select id into v_pc_ok    from pc where unidade_id = p_unidade and identificador = 'LAB1-01';
+
+  -- Aberta e sem substituto: é a que derruba a capacidade efetiva do bloco.
+  insert into pc_manutencao (unidade_id, pc_id, tipo, data_inicio, descricao)
+  select p_unidade, v_pc_manut, 'CORRETIVA', fn_hoje() - 3, 'fonte queimada'
+   where not exists (select 1 from pc_manutencao m where m.pc_id = v_pc_manut);
+
+  -- Fechada: histórico, não muda capacidade nenhuma.
+  insert into pc_manutencao (unidade_id, pc_id, tipo, data_inicio, data_fim, descricao)
+  select p_unidade, v_pc_ok, 'PREVENTIVA', fn_hoje() - 60, fn_hoje() - 59, 'limpeza e atualização'
+   where not exists (select 1 from pc_manutencao m where m.pc_id = v_pc_ok);
+
+  -- Três professores, um inativo — o inativo é o que prova que a grade do card
+  -- 5.6 filtra por `ativo` em vez de listar todo mundo que já deu aula.
+  insert into professor (unidade_id, nome, ativo)
+  select p_unidade, pr.nome, pr.ativo
+    from (values
+      ('Marcos Vieira',  true),
+      ('Renata Alves',   true),
+      ('Otávio Pacheco', false)
+    ) as pr(nome, ativo)
+   where not exists (select 1 from professor x
+                      where x.unidade_id = p_unidade and x.nome = pr.nome);
+end $$;
+
+-- As duas unidades recebem a mesma infraestrutura, com os MESMOS
+-- identificadores de PC: `pc_identificador_uk` é único por UNIDADE, então
+-- repetir entre unidades é exatamente o caso que a unique precisa aceitar — e
+-- recusaria se estivesse escrita sem o unidade_id.
+select tests.seed_infra_fisica(tests.unidade('ESCOLA_A'));
+select tests.seed_infra_fisica(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 7. Fecho: nada em `tests` alcançável por quem não é `postgres`
 -- =============================================================================
 -- `create function` concede EXECUTE a PUBLIC por padrão. A revogação do USAGE no
 -- schema já bastaria, mas as duas juntas sobrevivem a alguém conceder o schema

@@ -150,3 +150,54 @@ test('a lista permitida é a decidida em 02/09/2026', () => {
     'permissao', 'unidade', 'usuario', 'usuario_perfil',
   ]);
 });
+
+// --- create or replace numa migração posterior (achado do card 4.1) --------
+
+test('a definição que vale é a ÚLTIMA aplicada, não a primeira do conjunto', () => {
+  // O disfarce que "a primeira vence" deixaria passar: a migração 1 define uma
+  // função inofensiva e a migração 2 a SUBSTITUI por uma carga do catálogo.
+  // `create or replace` é a forma normal deste projeto — foi assim que o card
+  // 4.1 escreveu `fn_seed_metodos` —, então o caminho não é hipotético.
+  const antes = `create or replace function public.fn_seed_x(p uuid)
+returns void language plpgsql as $$
+begin
+  insert into public.metodo (unidade_id, codigo, nome) values (p, 'INTERATIVO', 'Interativo');
+end $$;`;
+
+  const depois = `create or replace function public.fn_seed_x(p uuid)
+returns void language plpgsql as $$
+begin
+  insert into public.curso (unidade_id, nome) values (p, 'Curso da planilha');
+end $$;
+
+do $$ begin perform public.fn_seed_x('00000000-0000-0000-0000-000000000000'::uuid); end $$;`;
+
+  const rel = varrerConjunto([
+    { arquivo: '20260101000000_antes.sql', sql: antes },
+    { arquivo: '20260102000000_depois.sql', sql: depois },
+  ]);
+
+  assert.equal(rel.aprovado, false);
+  assert.equal(barradas(rel).length, 1);
+  assert.match(barradas(rel)[0].motivo, /insert into curso/);
+  assert.deepEqual(barradas(rel)[0].caminho, ['fn_seed_x()']);
+});
+
+test('função definida só numa migração POSTERIOR não resolve chamada anterior', () => {
+  // O outro lado da mesma ordem: em tempo de aplicação a função ainda não
+  // existe, então não há corpo a seguir — e inventar um seria ler um arquivo que
+  // o Postgres ainda não viu.
+  const chama = `do $$ begin perform public.fn_futura('x'); end $$;`;
+  const define = `create or replace function public.fn_futura(p text)
+returns void language plpgsql as $$
+begin
+  insert into public.curso (unidade_id, nome) values (null, p);
+end $$;`;
+
+  const rel = varrerConjunto([
+    { arquivo: '20260101000000_chama.sql', sql: chama },
+    { arquivo: '20260102000000_define.sql', sql: define },
+  ]);
+
+  assert.equal(rel.aprovado, true, JSON.stringify(barradas(rel), null, 2));
+});

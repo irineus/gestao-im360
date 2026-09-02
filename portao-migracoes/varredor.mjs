@@ -348,8 +348,7 @@ export function varrerConjunto(arquivos) {
     try {
       const strings = [];
       const { regioes, funcoes: definidas } = decompor(sql, 1, strings);
-      for (const f of definidas) if (!funcoes.has(f.nome)) funcoes.set(f.nome, { ...f, arquivo });
-      unidades.push({ arquivo, regioes });
+      unidades.push({ arquivo, regioes, definidas });
     } catch (e) {
       if (!(e instanceof ErroDeLeitura)) throw e;
       erros.push({ arquivo, motivo: e.message });
@@ -359,6 +358,20 @@ export function varrerConjunto(arquivos) {
   const relatorio = { arquivos: [], erros, aprovado: erros.length === 0 };
 
   for (const u of unidades) {
+    // ⚠️ A definição que vale num arquivo é a ÚLTIMA aplicada até ele, e não a
+    //    primeira do conjunto (achado do card 4.1, ao exercitar o portão contra
+    //    duas migrações que definiam a mesma função). `create or replace` é a
+    //    forma normal deste projeto: com "a primeira vence", uma migração futura
+    //    podia substituir uma função inofensiva por uma carga do catálogo e o
+    //    portão continuaria lendo o corpo ANTIGO — aprovando exatamente o
+    //    disfarce que ele existe para barrar. As migrações chegam aqui em ordem
+    //    de aplicação (`listarMigracoes` ordena por nome, que começa pelo
+    //    timestamp), então o mapa é atualizado arquivo a arquivo, ANTES de
+    //    varrer o arquivo: função definida e chamada no mesmo arquivo continua
+    //    resolvendo, e função definida só depois não resolve — o que é correto,
+    //    porque em tempo de aplicação ela ainda não existe.
+    for (const f of u.definidas) funcoes.set(f.nome, { ...f, arquivo: u.arquivo });
+
     const permitidas = [];
     const barradas = [];
     const visitadas = new Set();
