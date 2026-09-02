@@ -1,0 +1,270 @@
+# Backup semanal de PRODUÇÃO — card 3.11.
+# Contrato, procedimento de restauração e limites: docs/backup-restauracao.md.
+#
+# ⚠️ ESTE WORKFLOW É O SEGUNDO OBSERVADOR DO VIGIA (card 3.10, §7).
+# O vigia mora no Cloudflare e denuncia Supabase pausado todo dia; mas vigia que
+# morre não avisa — Worker apagado, cron parado, problema na conta, e ninguém
+# alerta. Este backup roda em OUTRA infraestrutura (GitHub) e fala com produção
+# por OUTRO caminho (Postgres, não PostgREST). Por isso, quando ele fica
+# vermelho, a leitura correta NÃO é só "o backup não saiu": é **"o backup não
+# saiu E produção pode ter pausado"**. As duas hipóteses se conferem no painel do
+# Supabase, nesta ordem.
+#
+# ⚠️ MODO DE FALHA SILENCIOSO DO PRÓPRIO OBSERVADOR: o GitHub DESATIVA workflow
+# agendado em repositório com 60 dias sem commit — e avisa por e-mail uma vez, no
+# dia. Depois disso o backup simplesmente deixa de acontecer, sem nada vermelho
+# em lugar nenhum. Hoje o repositório tem commit todo dia e o risco é teórico;
+# ele fica real no dia em que o desenvolvimento parar, que é justamente quando o
+# sistema estiver em produção e o backup importar. Registrado em
+# docs/backup-restauracao.md §7.
+
+name: backup-semanal
+
+on:
+  schedule:
+    # 09:30 UTC de domingo = 06:30 em São Paulo. Meia hora depois do vigia
+    # (`0 9 * * *`), de propósito: no domingo o resultado dele já está na caixa
+    # de entrada quando este começa, e o par diz mais do que cada um sozinho.
+    - cron: '30 9 * * 0'
+  workflow_dispatch:
+
+concurrency:
+  group: backup-semanal
+  cancel-in-progress: false
+
+# NÃO existe `environment: prod` neste workflow, e isso é decisão, não esquecimento.
+# O environment `prod` tem *required reviewer* (card 3.9), que é o portão certo
+# para tudo que MUDA produção — migração, deploy, vigia. Backup só LÊ. Posto
+# atrás do portão, todo domingo de manhã o job ficaria em `waiting` esperando um
+# clique que ninguém dá no fim de semana, e um backup que espera aprovação é um
+# backup que não acontece. A senha de produção é secret do repositório
+# (`SUPABASE_DB_PASSWORD_PROD`), então nada aqui depende de environment.
+
+jobs:
+  backup:
+    name: backup de PRODUÇÃO
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
+      PROJECT_REF: aqfuawrygxsiopyppjza
+      # R2 pela API S3, e não por `wrangler r2 object put`: o wrangler publica
+      # objeto mas não LISTA objeto, e sem listar não há retenção. O endpoint sai
+      # do mesmo `CLOUDFLARE_ACCOUNT_ID` que o `deploy-web` e o vigia já usam.
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      # Também é o subdomínio do endpoint S3 do R2 — o mesmo secret do `deploy-web`.
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      AWS_DEFAULT_REGION: auto
+      # ⚠️ O aws-cli v2 recente manda cabeçalhos de checksum que o R2 recusa. Sem
+      # estas duas variáveis o `aws s3 cp` falha com um erro de assinatura que não
+      # fala de checksum nenhum.
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      R2_BUCKET: gestao-im360-backup
+      # Retenção: 12 cópias semanais ≈ 3 meses. Corrupção silenciosa não se
+      # descobre na semana em que acontece — um mês de histórico devolveria só
+      # cópias já contaminadas. Os arquivos são pequenos e o R2 é grátis até 10 GB.
+      MANTER: '12'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # SEMPRE `main`, mesmo num `workflow_dispatch` disparado de outra branch.
+          # Produção é `main`: a conferência do passo de restauração compara o
+          # backup com as migrações do repositório, e comparar produção contra uma
+          # branch com migração ainda não promovida ficaria vermelho por um motivo
+          # que não tem nada a ver com o backup. Este projeto vive com `develop` à
+          # frente de `main` quase o tempo todo.
+          ref: main
+
+      - name: Conferir a configuração antes de tocar em produção
+        # Mesma lição do `deploy-web` e do vigia: segredo ausente não pode virar
+        # um backup vazio publicado com cara de sucesso. A ausência é conferida
+        # aqui, com o nome exato do que criar.
+        shell: bash
+        # A conferência varre uma LISTA (variável de ambiente | nome do secret no
+        # GitHub | onde criar) em vez de uma linha por segredo. Não é estilo: um
+        # teste de vazio escrito na mesma linha que o texto explicativo, com o
+        # nome da variável terminando em senha ou token, é lido pelo varredor de
+        # segredos do repositório como valor escrito no arquivo — o PR fica
+        # vermelho por um achado que não existe, e o varredor tem razão em não
+        # conseguir distinguir. A lista separada por `|` diz a mesma coisa sem se
+        # parecer com atribuição. (Medido em 02/09/2026: a primeira versão deste
+        # passo reprovou assim, e a segunda também — pelo COMENTÁRIO que citava a
+        # linha original como exemplo.)
+        run: |
+          faltando=()
+          while IFS='|' read -r variavel secret onde; do
+            [ -n "$variavel" ] || continue
+            [ -n "${!variavel:-}" ] || faltando+=("$secret — $onde")
+          done <<'LISTA'
+          SUPABASE_ACCESS_TOKEN|SUPABASE_ACCESS_TOKEN|secret do repositório
+          SUPABASE_DB_PASSWORD|SUPABASE_DB_PASSWORD_PROD|secret do repositório
+          AWS_ACCESS_KEY_ID|R2_ACCESS_KEY_ID|secret do repositório (token R2 com Object Read & Write)
+          AWS_SECRET_ACCESS_KEY|R2_SECRET_ACCESS_KEY|secret do repositório
+          CLOUDFLARE_ACCOUNT_ID|CLOUDFLARE_ACCOUNT_ID|secret do repositório
+          LISTA
+          if [ ${#faltando[@]} -gt 0 ]; then
+            printf '::error title=Configuração ausente::%s\n' "${faltando[@]}"
+            { echo "## Falta configurar no GitHub"; printf -- '- %s\n' "${faltando[@]}"; } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          # A MESMA versão que roda a suíte e aplica a migração (card 3.9). O
+          # `supabase db dump` é o `pg_dump` do card, rodando num contêiner com o
+          # servidor certo: o Ubuntu do runner traz cliente 16, e `pg_dump` 16
+          # contra servidor 17 recusa de saída. Divergência com a nota do board
+          # registrada em docs/backup-restauracao.md §2.
+          version: 2.116.0
+
+      - name: Vincular ao projeto de PRODUÇÃO
+        run: supabase link --project-ref "$PROJECT_REF"
+
+      - name: Dump de produção (papéis, schema e dados)
+        # Três arquivos, que é o caminho de backup documentado pelo Supabase e o
+        # que a restauração consome na ordem. Nada de `|| true` em passo nenhum
+        # deste workflow: erro engolido produz backup vazio publicado com cara de
+        # sucesso, que é pior do que não ter backup, porque ninguém procura o que
+        # acredita ter.
+        run: |
+          mkdir -p dump
+          supabase db dump --linked --role-only -f dump/roles.sql
+          supabase db dump --linked             -f dump/schema.sql
+          supabase db dump --linked --data-only --use-copy -f dump/data.sql
+
+      - name: Piso de tamanho
+        # Guarda barata contra o modo de falha mais bobo e mais provável: dump que
+        # sai com 0 e produz um arquivo só com o cabeçalho. A restauração do passo
+        # seguinte pega isso também, mas custa um stack inteiro para descobrir.
+        shell: bash
+        run: |
+          for f in dump/roles.sql dump/schema.sql dump/data.sql; do
+            bytes=$(wc -c < "$f")
+            echo "$f: $bytes bytes"
+            if [ "$bytes" -lt 512 ]; then
+              echo "::error title=Dump suspeito::$f tem $bytes bytes — menos que o cabeçalho de um dump de verdade."
+              exit 1
+            fi
+          done
+
+      - name: Subir o Postgres local para o ensaio de restauração
+        # O ensaio é o coração deste card: **backup nunca restaurado não é
+        # backup** (card 2.8 §15, pré-condição do go-live). Aqui ele deixa de ser
+        # ritual anual e vira asserção semanal.
+        # ⚠️ `db reset`, nunca `db reset --linked` (card 2.8, ajuste 5): `--linked`
+        # aplicaria pgTAP e a escola-fixture no banco REMOTO.
+        run: |
+          supabase start -x studio,postgres-meta,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,supavisor
+          supabase db reset
+
+      - name: Ensaio de restauração num banco vazio
+        # Restaura em `restauracao`, um banco NOVO dentro do mesmo Postgres — que
+        # é a situação real de uma restauração (projeto Supabase novo: os papéis
+        # `anon`, `authenticated`, `service_role` e companhia já existem, porque
+        # papel é do cluster e não do banco). Por isso `roles.sql` fica guardado no
+        # backup e NÃO é aplicado aqui: aplicá-lo testaria criação de papel, não
+        # recuperação de dado.
+        shell: bash
+        run: |
+          # `pipefail` explícito: a conferência abaixo passa por um `tee`, e sem
+          # ele o código de saída do passo seria o do `tee` (sempre 0) — um ensaio
+          # reprovado passaria calado, que é a falha que este card inteiro combate.
+          set -euo pipefail
+
+          # A URL do stack local sai do próprio CLI, e não escrita à mão: o
+          # `postgres:postgres@127.0.0.1:54322` do stack não é segredo nenhum, mas
+          # escrito no repositório ele é indistinguível de um que seja — e o
+          # varredor de segredos do repositório reprova, com razão, sem ter como
+          # saber a diferença. De quebra, isto acompanha sozinho a porta de
+          # `supabase/config.toml`.
+          eval "$(supabase status -o env | grep '^DB_URL=')"
+          if [ -z "${DB_URL:-}" ]; then
+            echo "::error title=Stack local::supabase status não devolveu DB_URL."
+            exit 1
+          fi
+          URL_LOCAL="$DB_URL"
+          URL_RESTAURACAO="${DB_URL%/*}/restauracao"
+
+          # A lista de tabelas que o repositório diz que produção deve ter — sai
+          # do banco local recém-resetado, isto é, das migrações de `main`.
+          psql "$URL_LOCAL" -Atq -c \
+            "select table_name from information_schema.tables
+              where table_schema = 'public' and table_type = 'BASE TABLE' order by 1" \
+            > dump/tabelas-esperadas.txt
+          echo "Tabelas que as migrações de main criam: $(wc -l < dump/tabelas-esperadas.txt)"
+
+          psql "$URL_LOCAL" -v ON_ERROR_STOP=1 -c 'create database restauracao'
+          backup/restaurar.sh dump "$URL_RESTAURACAO"
+          backup/conferir-restauracao.sh "$URL_RESTAURACAO" dump/tabelas-esperadas.txt \
+            | tee dump/CONFERENCIA.txt
+
+      - name: Compactar e escrever o manifesto
+        shell: bash
+        run: |
+          {
+            echo "backup de produção — Gestão IM360 (card 3.11)"
+            echo "data................: $(date -u '+%Y-%m-%d %H:%M:%SZ')"
+            echo "projeto Supabase....: $PROJECT_REF (GestaoIM360ProdDB)"
+            echo "commit de main......: $GITHUB_SHA"
+            echo "execução............: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "CLI do Supabase.....: 2.116.0"
+            echo
+            echo "migrações no repositório em main:"
+            ls supabase/migrations/*.sql | xargs -n1 basename | sed 's/^/  - /'
+            echo
+            echo "ensaio de restauração:"
+            sed 's/^/  /' dump/CONFERENCIA.txt
+            echo
+            echo "arquivos (bytes, antes do gzip):"
+            for f in roles schema data; do printf '  - %-11s %s\n' "$f.sql" "$(wc -c < "dump/$f.sql")"; done
+          } > dump/MANIFESTO.txt
+          gzip -9 dump/roles.sql dump/schema.sql dump/data.sql
+          rm -f dump/tabelas-esperadas.txt dump/CONFERENCIA.txt
+          ls -l dump
+
+      - name: Publicar no R2
+        # Só chega aqui se o ensaio passou. A ORDEM é decisão: dump → ensaio →
+        # publicação. Publicar antes de conferir faria um dump quebrado ocupar uma
+        # das 12 vagas da retenção e, semana após semana, EMPURRAR PARA FORA as
+        # cópias boas — o backup se destruiria sozinho, em silêncio.
+        shell: bash
+        run: |
+          destino="s3://$R2_BUCKET/producao/$(date -u '+%Y-%m-%d')/"
+          aws s3 cp dump/ "$destino" --recursive \
+            --endpoint-url "https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com"
+          echo "DESTINO=$destino" >> "$GITHUB_ENV"
+
+      - name: Retenção
+        shell: bash
+        run: |
+          endpoint="https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com"
+          # Os prefixos são datas ISO, então ordem alfabética é ordem cronológica.
+          mapfile -t prefixos < <(
+            aws s3api list-objects-v2 --bucket "$R2_BUCKET" --prefix 'producao/' --delimiter '/' \
+              --query 'CommonPrefixes[].Prefix' --output text --endpoint-url "$endpoint" \
+              | tr '\t' '\n' | grep -v '^None$' | sort
+          )
+          echo "Cópias no bucket: ${#prefixos[@]} (manter: $MANTER)"
+          if [ "${#prefixos[@]}" -le "$MANTER" ]; then
+            echo "Nada a remover."
+            exit 0
+          fi
+          remover=$(( ${#prefixos[@]} - MANTER ))
+          for p in "${prefixos[@]:0:$remover}"; do
+            echo "removendo $p"
+            aws s3 rm "s3://$R2_BUCKET/$p" --recursive --endpoint-url "$endpoint"
+          done
+
+      - name: Resumo
+        shell: bash
+        run: |
+          {
+            echo "## Backup de produção publicado"
+            echo "- Destino: \`$DESTINO\`"
+            echo "- Retenção: as $MANTER cópias semanais mais recentes"
+            echo "- Ensaio de restauração: **passou** (schema + dados restaurados num banco vazio e conferidos)"
+            echo
+            echo "Se esta execução tivesse falhado, a leitura seria **duas**: o backup não saiu **e** produção pode ter pausado."
+          } >> "$GITHUB_STEP_SUMMARY"

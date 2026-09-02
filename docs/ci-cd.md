@@ -10,7 +10,7 @@ rodado em lugar nenhum** — portão que não reprova é exatamente a falha que 
 
 ---
 
-## 1. Os quatro workflows
+## 1. Os cinco workflows
 
 | Workflow | Dispara | Jobs | O que bloqueia |
 |---|---|---|---|
@@ -18,6 +18,13 @@ rodado em lugar nenhum** — portão que não reprova é exatamente a falha que 
 | **`db-migrations.yml`** | push em `develop`/`main` tocando `supabase/migrations/**`; `workflow_dispatch` | `testes` (chama o de cima) → `migrate` | o `supabase db push` em dev e em prod |
 | **`deploy-web.yml`** | push em `develop`/`main` tocando `app/**`, `assets/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação no Cloudflare Pages |
 | **`deploy-worker-vigia.yml`** | push em **`main`** tocando `worker-vigia/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação do Worker vigia (card 3.10) |
+| **`backup-semanal.yml`** | `schedule` domingo 09:30 UTC (06:30 em São Paulo); `workflow_dispatch` | `backup` (dump de produção → ensaio de restauração → R2) | nada — não é portão, é rotina (card 3.11) |
+
+O `backup-semanal` é o único que **não chama a suíte** e o único **sem `environment`**, e as duas
+coisas são decisão: ele não bloqueia entrega nenhuma, e é o único workflow que só **lê** produção.
+Posto atrás do *required reviewer* do environment `prod`, ele ficaria em `waiting` todo domingo à
+espera de um clique que ninguém dá no fim de semana — e backup que espera aprovação é backup que não
+acontece. Detalhe em `docs/backup-restauracao.md`.
 
 O vigia dispara só de `main` porque é **um** Worker para os **dois** ambientes — não há vigia de
 homologação e vigia de produção, o que ele vigia é o par. Detalhe em `docs/worker-vigia.md`.
@@ -238,6 +245,13 @@ teria de entrar nas Redirect URLs do Auth. Implementado o que o 3.8 decidiu — 
 | Secret do repositório | `SUPABASE_ANON_KEY_PROD` | sonda do vigia no projeto prod (card 3.10) | ✅ criado 02/09/2026 |
 | Secret do repositório | `RESEND_API_KEY` | e-mail de alerta do vigia (card 3.10) | ✅ criado 02/09/2026 (chave `gestao-im360-vigia`, *Sending access*) |
 | Token do Cloudflare | permissão *Workers Scripts — Edit* | `wrangler deploy` do vigia (card 3.10) | ✅ acrescentada ao token `gestao-im360` em 02/09/2026 — editar o token **não muda o valor**, então o secret continuou valendo |
+| Cloudflare R2 | bucket `gestao-im360-backup` | destino do backup semanal (card 3.11) | ⚠️ falta criar |
+| Secret do repositório | `R2_ACCESS_KEY_ID` | `aws s3` contra o R2 (card 3.11) | ⚠️ falta criar |
+| Secret do repositório | `R2_SECRET_ACCESS_KEY` | idem — só aparece uma vez, na criação | ⚠️ falta criar |
+
+⚠️ O token do R2 é **outro** token, e não o `CLOUDFLARE_API_TOKEN` de Pages e Workers: o R2 emite um
+par de chaves no formato S3 (*Object Read & Write*, escopo do bucket), que é o que o `aws s3`
+consome. O `CLOUDFLARE_ACCOUNT_ID` é reaproveitado — ele também é o subdomínio do endpoint S3.
 
 ⚠️ As duas chaves publicáveis aparecem **duas vezes** na tabela de propósito: como secret de
 environment (`SUPABASE_ANON_KEY`, para o build do app) e como secret de repositório com sufixo (para
