@@ -1,0 +1,29 @@
+# Vigia — card 3.10. Publicado pelo CI (.github/workflows/deploy-worker-vigia.yml),
+# nunca à mão: o card 3.9 tirou o deploy do app das mãos e não faz sentido a
+# infraestrutura que vigia esse app voltar a depender de alguém lembrar.
+
+name = "gestao-im360-vigia"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# O Worker não tem por que ser alcançável da internet: quem o dispara é o cron, e
+# o handler `fetch` existe só para conferência local com `wrangler dev`.
+workers_dev = false
+
+[triggers]
+# 09:00 UTC = 06:00 em São Paulo (o Brasil não tem horário de verão desde 2019).
+# Diário porque a pausa do free tier é por 7 dias sem atividade: uma vez por dia
+# dá seis dias de folga para uma execução falhar sem consequência.
+# Antes do expediente de propósito — o alerta chega a tempo de alguém agir antes
+# de a escola tentar usar o sistema.
+crons = ["0 9 * * *"]
+
+[vars]
+# Destinatário do alerta. Não é segredo: o mesmo endereço já está no seed em
+# `parametro.direcao_inicial_email` (card 3.6), e o repositório é público.
+ALERTA_PARA = "irineus@gmail.com"
+
+# Secrets (nunca aqui — `wrangler secret put`, feito pelo CI):
+#   SUPABASE_ANON_KEY_DEV   chave publicável do projeto de desenvolvimento
+#   SUPABASE_ANON_KEY_PROD  chave publicável do projeto de produção
+#   RESEND_API_KEY          chave da conta Resend do card 3.8
