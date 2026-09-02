@@ -1,0 +1,133 @@
+# Portão de testes — card 3.9 (estratégia do card 2.8, docs/estrategia-testes.md §12)
+#
+# Roda em TODO pull request e em todo push em `develop`/`main`, e é chamado como
+# workflow reutilizável pelos dois workflows que produzem consequência:
+# `db-migrations` (antes do `db push`) e `deploy-web` (antes de publicar). Sem
+# esse `needs:`, a suíte existiria e não reprovaria nada — que é exatamente a
+# falha que o card 2.8 combate.
+#
+# ⚠️ VERSÕES FIXAS, NUNCA `latest` (pendência técnica 2(d) das Decisões vigentes).
+# Com `latest`, uma versão nova do CLI ou do Flutter quebra o pipeline sem que
+# nada mude no repositório — e quebra junto a suíte que deveria estar dizendo a
+# verdade sobre o commit. Trocar a versão é um commit, com PR e revisão.
+
+name: testes
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+  workflow_call:
+
+concurrency:
+  # `github.workflow` entra no grupo DE PROPÓSITO: quando este workflow é
+  # chamado com `uses:`, esse valor é o nome do CHAMADOR. Sem ele, a execução
+  # por push e a chamada vinda do `db-migrations` cairiam no mesmo grupo e o
+  # `cancel-in-progress` mataria justamente aquela de que o `db push` depende —
+  # e qual das duas morre dependeria de qual começou primeiro.
+  group: testes-${{ github.workflow }}-${{ github.ref }}
+  # Só o PR cancela a execução anterior — empurrar de novo torna a antiga inútil.
+  # Push e chamada reutilizável NUNCA cancelam: a execução chamada pelo
+  # `db-migrations` é pré-condição do `db push`, e cancelá-la reprovaria o
+  # deploy por um motivo que não é o commit.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Banco: Postgres vazio -> TODAS as migrações desde a primeira -> seed -> pgTAP
+  # ---------------------------------------------------------------------------
+  banco:
+    name: banco (pgTAP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      - name: Subir o stack local
+        # A suíte fala com o Postgres direto, mas `gotrue` precisa subir: é ele
+        # que cria o schema `auth`, e a escola-fixture do card 3.4.5 insere em
+        # `auth.users`. O que sai são os serviços que nenhum teste toca.
+        # ⚠️ Chave de `--exclude` desconhecida NÃO dá erro: o CLI 2.116.0 sai com
+        # 0 e simplesmente não exclui nada (medido em 02/09/2026 com `-x inbucket`,
+        # que era chave válida no CLI 1.x e hoje se chama `mailpit`). Ou seja, a
+        # exclusão que se escreve errado deixa de acontecer em silêncio — por
+        # isso o passo seguinte imprime o que de fato subiu.
+        run: |
+          supabase start \
+            -x studio,postgres-meta,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,supavisor
+
+      - name: O que subiu de verdade
+        # Não é asserção — é o antídoto contra a exclusão silenciosa acima. Se um
+        # CLI futuro renomear uma chave, a lista aqui denuncia.
+        run: docker ps --format '{{.Names}}' | sort
+
+      - name: Aplicar as migrações do zero e o seed de teste
+        # `db reset` roda a sequência inteira desde a primeira migração num banco
+        # vazio e aplica `supabase/seed.sql`. É o que testa de graça a
+        # propriedade que mais importa numa migração: que a sequência sobe limpa.
+        # `db push` incremental nunca descobre que a migração 12 depende de algo
+        # que a 7 removeu.
+        # ⚠️ Nunca `--linked`: aplicaria pgTAP e a escola-fixture no banco remoto
+        # (card 2.8, ajuste 5).
+        run: supabase db reset
+
+      - name: Suíte pgTAP
+        run: supabase test db
+
+      - name: Suíte de concorrência (duas sessões)
+        # Fora do pgTAP por decisão do card 2.8 (e): uma suíte de conexão única
+        # jamais exercita o advisory lock do card 2.2 (c). Os scripts são
+        # entregáveis dos cards 5.3 e 6.3 — enquanto não existirem, o passo diz
+        # isso em voz alta em vez de passar calado.
+        shell: bash
+        run: |
+          shopt -s nullglob
+          scripts=(supabase/tests_concorrencia/*.sh)
+          if [ ${#scripts[@]} -eq 0 ]; then
+            echo "::notice title=Suíte de concorrência::nenhum script em supabase/tests_concorrencia/ — os dois primeiros são entregáveis dos cards 5.3 (admissão) e 6.3 (entrega). Ver docs/estrategia-testes.md §7."
+            echo "⚠️ Suíte de concorrência: **0 script**. Entregáveis dos cards 5.3 e 6.3." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          for s in "${scripts[@]}"; do
+            echo "── $s"
+            bash "$s"
+          done
+          echo "Suíte de concorrência: ${#scripts[@]} script(s), todos verdes." >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # App: os mesmos três comandos do portão local (app/README.md, "Verificar")
+  # ---------------------------------------------------------------------------
+  app:
+    name: app (Flutter)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          # Fixa pelo mesmo motivo do CLI. 3.47.2 é a versão do card 3.7 e traz
+          # o Dart 3.13.2 que `app/pubspec.yaml` exige (`sdk: ^3.13.2`) — uma
+          # versão anterior nem resolve as dependências.
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Formatação
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Análise estática
+        run: flutter analyze --fatal-infos
+
+      - name: Testes
+        # Leem `test/fixtures/codigos_erro.txt`, na RAIZ do repositório: o
+        # contrato de códigos de erro tem dois consumidores (o banco, pelo C12,
+        # e o app) e não é de nenhum dos dois sozinho (card 3.7).
+        run: flutter test

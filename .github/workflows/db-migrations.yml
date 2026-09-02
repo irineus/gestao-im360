@@ -6,6 +6,10 @@
 #   SUPABASE_ACCESS_TOKEN     token pessoal (supabase.com/dashboard/account/tokens)
 #   SUPABASE_DB_PASSWORD_DEV  senha do banco do projeto GestaoIM360DevDB
 #   SUPABASE_DB_PASSWORD_PROD senha do banco do projeto GestaoIM360ProdDB
+#
+# Produção tem DOIS portões humanos: o merge do PR de promoção e o *required
+# reviewer* do environment `prod`, que segura o deployment até alguém aprovar —
+# e é o único dos dois que mostra na tela qual migração está prestes a rodar.
 
 name: db-migrations
 
@@ -21,7 +25,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A suíte inteira num Postgres vazio, ANTES de tocar em dev ou prod
+  # (card 2.8 §12; card 3.9). Sem este `needs:`, a suíte existiria e não
+  # reprovaria nada — migração vermelha chegaria ao banco do mesmo jeito.
+  testes:
+    uses: ./.github/workflows/testes.yml
+
   migrate:
+    needs: testes
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
     env:
@@ -33,7 +44,11 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Fixa, nunca `latest` (card 3.9; pendência técnica 2(d)): com `latest`
+          # uma versão nova do CLI quebra o pipeline sem que nada mude no
+          # repositório. A mesma versão do job de testes — testar com um CLI e
+          # aplicar com outro é testar outro caminho.
+          version: 2.116.0
 
       - name: Vincular ao projeto (${{ github.ref_name == 'main' && 'PROD' || 'DEV' }})
         run: supabase link --project-ref "$PROJECT_REF"

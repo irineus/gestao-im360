@@ -24,7 +24,7 @@ tomadas nos cards 2.1–2.7; e os critérios de aceite dos quatro marcos do plan
 
 | Assunto | Dono |
 |---|---|
-| Implementar os workflows do GitHub Actions | card 3.9 (o YAML pronto está no Apêndice B) |
+| Implementar os workflows do GitHub Actions | card 3.9 — ✅ **feito em 02/09/2026**, em `docs/ci-cd.md`; o Apêndice B virou o registro do que mudou |
 | Escrever os helpers e a escola-fixture no repositório | card **3.4.5**, criado por este card (SQL pronto no Apêndice A) |
 | Os testes em si de cada regra | o card que cria a regra (§13, §17) |
 | Conferência de totais contra a planilha | cards 9.4 (dry-run) e 8.8 (marco 3), com o critério em §15 |
@@ -523,23 +523,32 @@ resultado vermelho significa alguma coisa. As três fontes previsíveis aqui:
 
 ## 12. CI: o que roda, quando, e o que bloqueia
 
-Hoje existe um único workflow (`db-migrations`), que só dispara em `supabase/migrations/**`. A
-estratégia exige dois, e a mudança pertence ao **card 3.9** (YAML pronto no Apêndice B).
+✅ **Implementado em 02/09/2026 pelo card 3.9.** Detalhe operacional — versões fixadas, lista de
+serviços excluídos, secrets que só Irineu cria — em **`docs/ci-cd.md`**, que passa a ser a fonte do
+pipeline. O que segue é a estratégia; onde os dois divergirem, vale o `ci-cd.md`.
+
+Saíram **três** workflows, e não dois: o terceiro é `deploy-web.yml`, que o card 3.8 deixou pendente
+(o Pages não tem Flutter no ambiente de build, então quem constrói é o CI).
 
 | Workflow | Dispara | Jobs | Bloqueia |
 |---|---|---|---|
-| **`testes.yml`** (novo) | **todo PR** e todo push em `develop`/`main` | `banco` (Postgres limpo → migrações do zero → `seed.sql` → `supabase test db`) e `app` (`dart format --set-exit-if-changed`, `flutter analyze --fatal-infos`, `flutter test`) | o merge do PR |
-| **`db-migrations.yml`** (existe) | push em `develop`/`main` tocando `supabase/migrations/**` | ganha um job `testes` **antes** do `db push`, com `needs:` — é o que a nota do card 3.9 já pedia ("suíte SQL num Postgres limpo → db push") | a aplicação em dev/prod |
+| **`testes.yml`** | **todo PR**, todo push em `develop`/`main` e `workflow_call` | `banco` (Postgres limpo → migrações do zero → `seed.sql` → `supabase test db` → concorrência) e `app` (`dart format --set-exit-if-changed`, `flutter analyze --fatal-infos`, `flutter test`) | o merge do PR |
+| **`db-migrations.yml`** | push em `develop`/`main` tocando `supabase/migrations/**` | job `testes` **antes** do `db push`, com `needs:` | a aplicação em dev/prod |
+| **`deploy-web.yml`** | push em `develop`/`main` tocando `app/**` | job `testes` antes de construir e publicar | a publicação no Pages |
 
-Três ajustes no que já existe, todos com motivo próprio:
+Três ajustes no que já existia, todos com motivo próprio, **os três fechados**:
 
-1. **`supabase/setup-cli` com versão fixa**, não `latest` (pendência técnica 2(d) das Decisões
-   vigentes): hoje uma versão nova do CLI quebra o pipeline sem que nada mude no repositório — e
+1. ✅ **`supabase/setup-cli` com versão fixa**, não `latest` (pendência técnica 2(d) das Decisões
+   vigentes): uma versão nova do CLI quebra o pipeline sem que nada mude no repositório — e
    quebraria a suíte de teste junto, que é justamente o que deveria estar dizendo a verdade.
-2. **`major_version` do Postgres em `supabase/config.toml`**, igual ao dos projetos remotos. Testar
-   em 15 e aplicar em 17 é testar outro banco.
-3. **`required reviewer` no environment `prod`** (pendência 2(c)): o portão humano da migração de
-   produção, além do clique de Irineu no PR de promoção.
+   Fixado em **2.116.0**, a mesma versão nos dois workflows. O Flutter foi fixado junto, em
+   **3.47.2**, pelo mesmo motivo e por um segundo: é a versão que traz o Dart `^3.13.2` que o
+   `pubspec.yaml` exige.
+2. ✅ **`major_version` do Postgres em `supabase/config.toml`**, igual ao dos projetos remotos.
+   Testar em 15 e aplicar em 17 é testar outro banco. Já estava em `17`.
+3. ✅ **`required reviewer` no environment `prod`** (pendência 2(c)): ligado por Irineu em
+   01/09/2026 e exercitado duas vezes; agora vale também para o **deploy** de produção, não só para
+   a migração.
 
 **Rodar do zero, sempre.** O job do banco aplica as migrações desde a primeira, num Postgres vazio.
 Isso testa de graça a propriedade que mais importa numa migração: que a sequência inteira sobe
@@ -833,6 +842,11 @@ dependendo disso.
 
 ## Apêndice B — `.github/workflows/testes.yml` (card 3.9)
 
+⚠️ **Este apêndice deixou de ser o que se copia.** O card 3.9 implementou os workflows em
+02/09/2026 e eles estão em `.github/workflows/`, documentados em `docs/ci-cd.md`. O YAML abaixo fica
+como **registro do esqueleto original**, porque cinco defeitos dele foram descobertos ao executar —
+listados logo depois. Mesmo papel que o Apêndice A ganhou no card 3.4.5.
+
 ```yaml
 name: testes
 
@@ -886,6 +900,24 @@ jobs:
     needs: testes                            # vermelho não chega a dev nem a prod
     ...
 ```
+
+### O que mudou ao implementar (card 3.9, 02/09/2026)
+
+O desenho se sustentou inteiro — dois jobs, do zero sempre, versões fixas, `needs:` antes do
+`db push`. O que não se sustentou foram cinco detalhes, **medidos, não deduzidos**:
+
+| # | No apêndice | O que acontece de verdade |
+|---|---|---|
+| 1 | `version: 2.20.5` | Não existe. A série estável do CLI está em **2.116.0**. Reprova o job na hora — o menos grave, porque é barulhento |
+| 2 | `flutter-version: '3.35.0'` | Anterior ao Dart `^3.13.2` que `app/pubspec.yaml` exige; o `pub get` nem resolve. Correto: **3.47.2** (card 3.7) |
+| 3 | `-x …,inbucket,…` | `inbucket` era chave do CLI 1.x e hoje se chama `mailpit`. **Chave desconhecida não dá erro:** `supabase start -x inbucket` sai com **0**, sem aviso, e não exclui nada — a exclusão escrita errada deixa de acontecer em silêncio |
+| 4 | `for s in …/*.sh; do bash "$s"; done` | Com o diretório vazio, o laço passa o próprio curinga como nome de arquivo e sai com **127** — CI vermelho desde o primeiro dia, e o desfecho pior não é o vermelho, é aprender a ignorá-lo. Corrigido com `nullglob` e mensagem explícita |
+| 5 | `uses: ./.github/workflows/testes.yml` | Exige `workflow_call` no chamado, que o esqueleto não tinha; e o `concurrency` sugerido faria a execução chamada e a disparada por push se cancelarem, com o resultado dependendo de qual começou primeiro — que é a definição de teste instável do §11 |
+
+O #3 é o que vale guardar: é a mesma família de falha silenciosa que este projeto já catalogou em
+RLS que reduz linhas, em view sem `security_invoker` e em Redirect URL recusada. Por isso o
+workflow imprime os contêineres que de fato subiram — não é asserção, é o antídoto contra o
+silêncio.
 
 ## Apêndice C — anatomia de um arquivo de teste
 

@@ -1,0 +1,130 @@
+# Build e publicação do app web no Cloudflare Pages — card 3.9
+# Contrato do deploy: docs/deploy-web.md (card 3.8).
+#
+#   develop -> projeto `gestao-im360-homolog` -> homolog.gestaoim360.com -> Supabase dev
+#   main    -> projeto `gestao-im360`         -> app.gestaoim360.com     -> Supabase prod
+#
+# O build NÃO roda no Cloudflare: não há Flutter no ambiente de build do Pages.
+# Quem constrói é este workflow, que publica o diretório pronto.
+#
+# A promoção para produção continua exigindo clique humano: o job usa o
+# environment `prod`, que tem *required reviewer* — o mesmo portão que já segura
+# a migração (Decisões vigentes, pendência técnica 2(c), ligada em 01/09/2026).
+#
+# ⚠️ O QUE SÓ IRINEU CONFIGURA, e sem o que este workflow falha no primeiro passo:
+#   - secret do repositório  CLOUDFLARE_API_TOKEN    (permissão "Cloudflare Pages — Edit")
+#   - secret do repositório  CLOUDFLARE_ACCOUNT_ID
+#   - secret do environment `dev`   SUPABASE_ANON_KEY  (chave publicável do projeto dev)
+#   - secret do environment `prod`  SUPABASE_ANON_KEY  (chave publicável do projeto prod)
+# A chave publicável é pública por desenho — vai no bundle que qualquer visitante
+# baixa (card 3.8 §1). Ela fica em secret mesmo assim por um motivo prático: assim
+# rotacionar a chave não exige um commit.
+
+name: deploy-web
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'app/**'
+      - 'assets/**'
+      - '.github/workflows/deploy-web.yml'
+      - '.github/workflows/testes.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  # Vermelho não é publicado. Mesma suíte do portão de PR, chamada aqui como
+  # pré-condição do deploy.
+  testes:
+    uses: ./.github/workflows/testes.yml
+
+  publicar:
+    name: publicar (${{ github.ref_name == 'main' && 'PRODUÇÃO' || 'homologação' }})
+    needs: testes
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+    defaults:
+      run:
+        working-directory: app
+    env:
+      PAGES_PROJECT: ${{ github.ref_name == 'main' && 'gestao-im360' || 'gestao-im360-homolog' }}
+      SUPABASE_URL: ${{ github.ref_name == 'main' && 'https://aqfuawrygxsiopyppjza.supabase.co' || 'https://ncdfolxdupbbfvtydngx.supabase.co' }}
+      APP_URL_BASE: ${{ github.ref_name == 'main' && 'https://app.gestaoim360.com' || 'https://homolog.gestaoim360.com' }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conferir a configuração antes de construir
+        # Card 3.8, ajuste 1 (bloqueante): build sem os `--dart-define` NÃO
+        # falha. Ele gera um bundle que sobe na tela "este build não recebeu a
+        # configuração do ambiente" — e seria publicado do mesmo jeito. Por isso
+        # a ausência é conferida ANTES, com o nome exato do que criar.
+        shell: bash
+        run: |
+          faltando=()
+          [ -n "$SUPABASE_ANON_KEY" ]    || faltando+=("SUPABASE_ANON_KEY — secret do environment '${{ github.ref_name == 'main' && 'prod' || 'dev' }}'")
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || faltando+=("CLOUDFLARE_API_TOKEN — secret do repositório")
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ]|| faltando+=("CLOUDFLARE_ACCOUNT_ID — secret do repositório")
+          if [ ${#faltando[@]} -gt 0 ]; then
+            printf '::error title=Configuração ausente::%s\n' "${faltando[@]}"
+            { echo "## Falta configurar no GitHub"; printf -- '- %s\n' "${faltando[@]}"; } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Construir o bundle web
+        # `--no-web-resources-cdn` NÃO é otimização, é disponibilidade: sem ele o
+        # build de release busca o CanvasKit no gstatic.com e, com o CDN
+        # inalcançável (filtro de rede da escola, proxy), o app abre em tela
+        # branca sem erro nenhum (card 3.8 §1).
+        run: |
+          flutter build web --release --no-web-resources-cdn \
+            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            --dart-define=APP_URL_BASE="$APP_URL_BASE"
+
+      - name: O bundle carrega a configuração DESTE ambiente
+        # `APP_URL_BASE` errado "erra baixo e cala" (card 3.8 §1): é dele que sai
+        # o `redirectTo` da recuperação de senha, então o bundle de produção
+        # apontando para a homologação manda a pessoa para a outra tela — e as
+        # duas são idênticas. As constantes de `String.fromEnvironment` ficam
+        # embutidas literalmente no `main.dart.js`, então dá para conferir.
+        shell: bash
+        run: |
+          grep -qF "$SUPABASE_URL"  build/web/main.dart.js || { echo "::error::o bundle não contém SUPABASE_URL=$SUPABASE_URL"; exit 1; }
+          grep -qF "$APP_URL_BASE"  build/web/main.dart.js || { echo "::error::o bundle não contém APP_URL_BASE=$APP_URL_BASE"; exit 1; }
+          test -f build/web/_headers || { echo "::error::_headers não foi copiado para o build"; exit 1; }
+          test ! -f build/web/404.html || { echo "::error::404.html no topo desliga o fallback de SPA do Pages"; exit 1; }
+
+      - name: Publicar no Cloudflare Pages
+        # Versão fixa pelo mesmo motivo do CLI do Supabase e do Flutter.
+        # `--branch` é o que decide entre deploy de produção e de preview: cada
+        # projeto do Pages tem a sua branch de produção (develop no de
+        # homologação, main no de produção), por isso o valor é o da branch.
+        run: |
+          npx --yes wrangler@4.128.0 pages deploy build/web \
+            --project-name "$PAGES_PROJECT" \
+            --branch "$GITHUB_REF_NAME" \
+            --commit-dirty=true
+
+      - name: Resumo
+        run: |
+          {
+            echo "## Publicado"
+            echo "- Projeto do Pages: \`$PAGES_PROJECT\` (branch \`$GITHUB_REF_NAME\`)"
+            echo "- Endereço: $APP_URL_BASE"
+            echo "- Supabase: $SUPABASE_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
