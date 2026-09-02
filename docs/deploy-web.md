@@ -12,6 +12,12 @@ dois projetos de Pages e a visita ao painel do Supabase são de Irineu — a ses
 de Pages no conector do Cloudflare (só Workers, KV, R2, D1 e Hyperdrive) e o painel do Auth não é
 versionado (§4).
 
+> ✅ **Executado em 01–02/09/2026.** Os dois ambientes estão no ar: **`app.gestaoim360.com`** e
+> **`homolog.gestaoim360.com`**, por *direct upload* (o build automatizado é o card 3.9). Painel do
+> Auth preenchido nos dois projetos e **SMTP próprio no ar** — Resend com `gestaoim360.com`
+> verificado, remetente `nao-responda@gestaoim360.com` (§11). O roteiro do §10 foi rodado contra os
+> dois endereços, com o fluxo de recuperação exercitado por e-mail real.
+
 ---
 
 ## 1. O artefato
@@ -316,3 +322,59 @@ Roteiro curto, na ordem em que as coisas quebram:
 
 O passo 5 é o que ninguém faz e o que mais dói depois — é o único que exercita a configuração que
 não está no repositório.
+
+---
+
+## 11. SMTP: o que ficou configurado (02/09/2026)
+
+O item que o card 3.5 §7 marcou como pendência, fechado com **Resend** — o mesmo provedor que Irineu
+já usa em outro projeto. Dois fatos que evitaram trabalho à toa:
+
+- **O free tier aceita 3 domínios, não 1.** A conta existente comportou `gestaoim360.com` ao lado do
+  domínio do outro projeto: nem conta nova, nem conector novo. Limites: 100 e-mails/dia, 3.000/mês,
+  SMTP incluído.
+- **Nada disso toca a raiz do domínio.** O DKIM fica em `resend._domainkey`, e o SPF e o MX em
+  `send.gestaoim360.com`. Se um dia a escola puser e-mail próprio em `gestaoim360.com` (Google
+  Workspace, por exemplo), os dois convivem sem conflito de SPF nem de MX.
+
+Configuração nos dois projetos Supabase (Authentication → Emails → SMTP Settings):
+
+```
+Host:          smtp.resend.com
+Port:          465
+Username:      resend
+Password:      <API key do Resend — só no painel, nunca no repositório>
+Sender email:  nao-responda@gestaoim360.com
+Sender name:   Gestão IM360        (em dev: "Gestão IM360 (Dev)")
+```
+
+O nome de remetente diferente em dev não é enfeite: os dois ambientes mandam do **mesmo endereço**, e
+sem isso não há como saber, olhando a caixa de entrada, qual deles pediu a recuperação.
+
+`nao-responda@` não precisa existir como caixa — o Resend assina pelo domínio. Quem responder ao
+convite fala com o vazio; se um dia isso incomodar, o Email Routing do Cloudflare resolve de graça e
+independente disto.
+
+⚠️ **O teto de 100/dia é do Resend, e o do Auth é outro.** Não adianta o provedor aguentar se o
+`Rate limits` do Supabase estiver segurando antes — conferir os dois antes de um dia de cadastro da
+equipe inteira. Foi o teto do Auth, e não o do provedor, que apareceu na tela durante os testes deste
+card (§8, ajuste 3).
+
+---
+
+## 12. O que a execução ensinou (01–02/09/2026)
+
+Três coisas que o contrato não previa e que ficam para quem repetir isto:
+
+1. **O custom domain não sobe junto com o deploy.** A homologação foi publicada com o bundle novo —
+   que já monta o link de recuperação para `homolog.gestaoim360.com` — antes de o domínio ser
+   anexado. O login por senha continuou funcionando, então **nada na tela denunciava**: só a consulta
+   de DNS (NXDOMAIN) mostrou que o link do e-mail levava a lugar nenhum. A ordem do §7 existe por
+   isso, e o passo 3 é o que se esquece.
+2. **Projeto Supabase novo já vem com `http://localhost:3000`** na Site URL e nas Redirect URLs. Foi
+   o que fez o primeiro convite de homologação apontar para a máquina local. Em produção as duas
+   entradas saem.
+3. **A única prova de que a lista de Redirect URLs está certa é seguir o link.** Lista errada não dá
+   erro: devolve a Site URL. Na conferência, o `redirect_to` do e-mail entregue foi seguido nos dois
+   ambientes e o `Location` caiu em `/redefinir-senha` — se tivesse caído na raiz, a lista estaria
+   errada e a tela não diria nada.
