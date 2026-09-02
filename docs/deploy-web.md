@@ -214,10 +214,11 @@ CSP** no console.
 
 ---
 
-## 5.9. ⚠️ O deploy do CI não chega ao endereço público (medido em 02/09/2026)
+## 5.9. O deploy do CI não chegava ao endereço público (card 3.9,5)
 
-**Defeito aberto, card 3.9,5, prioridade Alta.** Está escrito aqui porque este documento é a fonte do
-contrato de publicação, e o contrato **não está sendo cumprido**.
+**Medido em 02/09/2026, na sessão do card 3.12; corrigido pelo card 3.9,5.** Está escrito aqui
+porque este documento é a fonte do contrato de publicação, e o contrato **não estava sendo
+cumprido** desde que o card 3.9 criou o pipeline.
 
 Depois de um `deploy-web` **verde** em `develop` (run 33647857494, com `Deployment complete` do
 wrangler), o `main.dart.js` servido em cada endereço:
@@ -231,22 +232,65 @@ wrangler), o `main.dart.js` servido em cada endereço:
 | `gestao-im360.pages.dev` | `7311a8da919a3df0` |
 | **`app.gestaoim360.com`** | **`7311a8da919a3df0`** |
 
-**Os dois endereços públicos servem um deploy que não é o do CI** — quase certamente os *direct
-uploads* feitos à mão neste mesmo card 3.8.
+**Os dois endereços públicos serviam um deploy que não é o do CI** — os *direct uploads* feitos à
+mão no card 3.8.
 
-**Causa provável:** os dois projetos nasceram por *direct upload*, e num projeto assim a
-*production branch* fica com um valor que o CI nunca usa; `wrangler pages deploy --branch <x>` só
-publica em produção quando `<x>` bate com ela. Como não bate, **todo deploy do CI vira preview**.
+**Causa:** os dois projetos nasceram por *direct upload*, e num projeto assim a *production branch*
+fica com um valor que o CI nunca usa; `wrangler pages deploy --branch <x>` só publica em produção
+quando `<x>` bate com ela. Como não bate, **todo deploy do CI vira preview**.
 
 ⚠️ **O sintoma é a ausência de sintoma**, de novo: o workflow fica verde, o wrangler imprime
 `Deployment complete`, e o site continua no ar servindo a versão anterior — que **funciona**, o que
 remove o último sinal que restaria. É a mesma família de `--exclude` com chave desconhecida (card
 3.9) e de Redirect URL recusada (§4): a operação "dá certo" e não faz o que se pensa.
 
-**Consequência para o que este documento afirma no §10:** a conferência do card 3.9 mediu a coisa
-certa nas **URLs erradas**. Publicar e conferir `$APP_URL_BASE` logo depois não basta se ninguém
-compara o que foi servido com o que foi construído — e a correção do card 3.9,5 é exatamente essa
-asserção, além do ajuste de *Production branch* no painel.
+**A conferência do card 3.9 mediu a coisa certa nas URLs erradas.** Publicar e olhar o log não prova
+nada; o roteiro do §10, feito a olho, também não — as duas telas são idênticas e a versão anterior
+funciona. O que prova é comparar o que o endereço **público** devolve com o arquivo que acabou de
+sair do build.
+
+### A correção tem duas metades, e a segunda é a que dura
+
+**1. Configuração (painel do Cloudflare, só Irineu).** Em cada projeto de Pages: Workers & Pages →
+projeto → Settings → Builds & deployments → **Production branch** — `develop` no
+`gestao-im360-homolog` e `main` no `gestao-im360`. Depois, um `workflow_dispatch` do `deploy-web` em
+cada branch e reconferir.
+
+**2. Asserção no `deploy-web.yml` (card 3.9,5).** Passo **depois** de publicar: baixa
+`$APP_URL_BASE/main.dart.js` e exige que o sha256 seja o do `build/web/main.dart.js` que acabou de
+ser construído. Sem ela a metade 1 se desfaz num clique e ninguém repara — que é exatamente como
+este defeito atravessou três cards.
+
+Três decisões do passo, todas para ele não virar um teste instável (card 2.8 §11):
+
+- **seis tentativas com 10 s de espera** — propagação não é instantânea, e asserção que reprova por
+  pressa é pior que asserção nenhuma, porque ensina a ignorar vermelho;
+- **cache-buster na query** (`?deploy=<sha>&t=<epoch>-<tentativa>`), ainda que o `_headers` mande
+  `must-revalidate`: o que se mede aqui é o que o Pages guarda, não o que o navegador guardaria;
+- **`curl --compressed`** — o Cloudflare comprime a resposta, e comparar bytes comprimidos com o
+  arquivo do build daria diferença sempre. O `--compressed` devolve o conteúdo decodificado.
+
+Só corre em `main` e `develop`: um `workflow_dispatch` de outra branch é preview de propósito, e ali
+o endereço público servir outra coisa é o comportamento certo.
+
+### A asserção discrimina — exercitada nos três estados (02/09/2026)
+
+O script do passo foi extraído do YAML e rodado contra os endereços de verdade, antes de a
+metade 1 existir:
+
+| Caso | `APP_URL_BASE` | Veredito |
+|---|---|---|
+| endereço que **tem** o bundle | `develop.gestao-im360-homolog.pages.dev` | ✅ aprova na 1ª tentativa |
+| endereço público **com o defeito** | `homolog.gestaoim360.com` | ⛔ reprova (`dea0ec22…` construído × `d2b9569b…` servido) |
+| endereço que não responde | host inexistente | ⛔ reprova, com "não respondeu" no resumo |
+
+O primeiro caso é o que importa registrar: sem ele a asserção poderia estar reprovando tudo — e uma
+asserção que nunca aprova é tão inútil quanto uma que nunca reprova.
+
+⚠️ **Enquanto a metade 1 não for feita, o `deploy-web` fica VERMELHO nas duas branches.** É
+deliberado: vermelho que diz a verdade é melhor que verde que mente, e o resumo da execução traz o
+caminho exato do painel. O que estava no ar continua no ar — a asserção não desfaz publicação
+nenhuma, ela só recusa a fingir que houve uma.
 
 ---
 
@@ -363,6 +407,12 @@ Roteiro curto, na ordem em que as coisas quebram:
 
 O passo 5 é o que ninguém faz e o que mais dói depois — é o único que exercita a configuração que
 não está no repositório.
+
+⚠️ **Este roteiro pressupõe que o endereço público está servindo o que o CI publicou, e isso não se
+supõe: se afere.** Foi essa suposição que deixou o defeito do §5.9 atravessar três cards. Quem
+afere é o `deploy-web`, no passo de asserção depois de publicar — se ele ficou verde, o roteiro
+acima está olhando o build certo; se ficou vermelho, **não adianta rodar o roteiro**, porque a tela
+que abrir é a da versão anterior.
 
 ---
 
