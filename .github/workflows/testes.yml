@@ -98,6 +98,37 @@ jobs:
           echo "Suíte de concorrência: ${#scripts[@]} script(s), todos verdes." >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
+  # Migrações: nenhuma grava dado de negócio (card 4.0,5)
+  #
+  # Todo `.sql` em `supabase/migrations/` chega a PRODUÇÃO sozinho no merge em
+  # `main`. A decisão de 02/09/2026 restringe dado de planilha ao ambiente
+  # dev/homolog até a virada (card 9.7) — e regra que depende de alguém lembrar
+  # não serve, porque as duas falhas do projeto até aqui foram de esquecimento.
+  # Como este workflow é chamado pelo `db-migrations` com `needs:`, o portão roda
+  # também ANTES do `db push`, que é onde ele precisa reprovar.
+  # ---------------------------------------------------------------------------
+  migracoes:
+    name: migrações (portão)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Fixa pelo mesmo motivo do CLI e do Flutter (§2 de docs/ci-cd.md).
+          node-version: '24.16.0'
+
+      - name: Suíte do próprio portão
+        # Vem ANTES da varredura de propósito: portão que parou de ler o que
+        # devia diz "verde" sem que nada denuncie. Os casos sintéticos exigem o
+        # veredito certo em cada armadilha — corpo de função que passa, bloco
+        # `do $$` que reprova, função de seed chamada que reprova.
+        run: node --test "portao-migracoes/test/**/*.test.mjs"
+
+      - name: Varrer supabase/migrations
+        run: node portao-migracoes/varredor.mjs supabase/migrations
+
+  # ---------------------------------------------------------------------------
   # App: os mesmos três comandos do portão local (app/README.md, "Verificar")
   # ---------------------------------------------------------------------------
   app:
