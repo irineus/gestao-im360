@@ -9,8 +9,8 @@ import 'package:gestao_im360/widgets/shell_im360.dart';
 import 'apoio/app_de_teste.dart';
 
 /// Card 2.8 §9.1: `faixaDe(largura)` devolve menu/trilho/barra inferior nos
-/// limites 600 e 1024. A troca de linhas por cartões da `TabelaIm360` é do
-/// card 4.6, que cria o componente.
+/// limites 600 e 1024. A troca de linhas por cartões da `TabelaIm360` está em
+/// `tabela_im360_test.dart` (card 4.4, que criou o componente).
 void main() {
   group('faixaDe', () {
     test(

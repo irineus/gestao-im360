@@ -7,6 +7,7 @@ import '../sessao/sessao_provider.dart';
 import '../telas/acesso_bloqueado.dart';
 import '../telas/em_construcao.dart';
 import '../telas/login.dart';
+import '../telas/materiais/tela_materiais.dart';
 import '../telas/redefinir_senha.dart';
 import '../telas/selecao_unidade.dart';
 import '../telas/sem_acesso.dart';
@@ -17,6 +18,12 @@ import 'rotas.dart';
 /// Rota interna do estado de sessão bloqueado (sem espelho, sem perfil, erro).
 const _caminhoAcesso = '/acesso';
 
+/// As telas já entregues, por id de rota. O que não está aqui abre o
+/// placeholder que diz qual card entrega.
+final _telaDaRota = <String, WidgetBuilder>{
+  'materiais': (_) => const TelaMateriais(),
+};
+
 /// Cards que entregam cada tela — o placeholder diz o seu, para não virar
 /// destino permanente (docs/wireframes.md §18).
 const _cardDaRota = <String, String>{
@@ -26,7 +33,6 @@ const _cardDaRota = <String, String>{
   'turmas': '5.6',
   'turmas_modular': '7.3',
   'pendencias': '5.8',
-  'materiais': '6.7',
   'compras': '6.8',
   'projecao': '8.5',
   'certificados': '8.6',
@@ -132,6 +138,8 @@ class _TelaGuardada extends ConsumerWidget {
         paraOndeIr: primeiraRotaPermitida(permissoes)?.caminho,
       );
     }
+    final construtor = _telaDaRota[rota.id];
+    if (construtor != null) return construtor(context);
     return TelaEmConstrucao(rota: rota, card: _cardDaRota[rota.id] ?? '—');
   }
 }

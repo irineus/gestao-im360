@@ -49,6 +49,14 @@ final permissoesProvider = Provider<Set<String>>(
   (ref) => permissoesDe(ref.watch(sessaoProvider)),
 );
 
+/// A unidade do usuário — o que toda escrita carrega em `unidade_id`, porque
+/// a coluna não tem default e a política de `insert` exige
+/// `unidade_id = fn_unidade_atual()` (card 2.1). Nulo sem sessão pronta.
+final unidadeAtualProvider = Provider<String?>((ref) {
+  final estado = ref.watch(sessaoProvider);
+  return estado is SessaoAtiva ? estado.sessao.unidadeId : null;
+});
+
 class ControladorSessao extends Notifier<EstadoSessao> implements Listenable {
   final _ouvintes = <VoidCallback>[];
   StreamSubscription<AuthState>? _inscricao;
