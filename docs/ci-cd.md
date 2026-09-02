@@ -169,7 +169,7 @@ diretório pronto com `wrangler pages deploy`.
 *Approve and deploy* do environment `prod`. É o segundo que mostra na tela o que está prestes a ir
 ao ar.
 
-Três conferências antes e depois do build, todas por causa de falhas que **não dão erro**:
+Quatro conferências ao redor do build, todas por causa de falhas que **não dão erro**:
 
 1. **Antes de construir**, os três valores de ambiente têm de existir. Build sem `--dart-define`
    não falha: gera um bundle que sobe na tela "este build não recebeu a configuração do ambiente" —
@@ -182,6 +182,15 @@ Três conferências antes e depois do build, todas por causa de falhas que **nã
    a conferência é um `grep` — verificada em 02/09/2026, inclusive a contraprova (a URL do outro
    ambiente **não** está no bundle, ou seja, a asserção discrimina).
 3. `_headers` presente e `404.html` ausente — as duas armadilhas do Pages que o card 3.8 mediu.
+4. **Depois de publicar**, o endereço público tem de servir **o arquivo que acabou de ser
+   construído** (card 3.9,5). Publicar não é estar no ar: `wrangler pages deploy --branch <x>` só
+   publica em produção do projeto quando `<x>` bate com a *Production branch* do painel — senão o
+   deploy vira **preview**, ganha URL própria, imprime `Deployment complete`, o workflow fica verde
+   e o endereço público continua na versão anterior, **que funciona**. Foi o que aconteceu do card
+   3.9 ao 3.12 sem ninguém reparar: a conferência do card 3.9 mediu a coisa certa nas URLs erradas.
+   O passo baixa `$APP_URL_BASE/main.dart.js` e compara o sha256 com `build/web/main.dart.js`, em
+   até seis tentativas espaçadas de 10 s, com cache-buster e `curl --compressed`. Detalhe em
+   `docs/deploy-web.md` §5.9.
 
 `--no-web-resources-cdn` não é otimização, é disponibilidade (card 3.8 §1).
 
@@ -249,6 +258,13 @@ teria de entrar nas Redirect URLs do Auth. Implementado o que o 3.8 decidiu — 
 | Cloudflare R2 | bucket `gestao-im360-backup` | destino do backup semanal (card 3.11) | ⚠️ falta criar |
 | Secret do repositório | `R2_ACCESS_KEY_ID` | `aws s3` contra o R2 (card 3.11) | ⚠️ falta criar |
 | Secret do repositório | `R2_SECRET_ACCESS_KEY` | idem — só aparece uma vez, na criação | ⚠️ falta criar |
+
+| Painel do Cloudflare Pages | *Production branch* de `gestao-im360-homolog` = `develop` | sem isso o deploy do CI vira **preview** e o endereço público não muda (card 3.9,5) | ⚠️ falta configurar |
+| Painel do Cloudflare Pages | *Production branch* de `gestao-im360` = `main` | idem, em produção | ⚠️ falta configurar |
+
+⚠️ As duas últimas linhas **não são secrets** e por isso são as mais fáceis de esquecer: nada no
+GitHub as menciona, e o `deploy-web` ficava verde sem elas. Desde o card 3.9,5 não fica mais — a
+asserção depois de publicar reprova, e o resumo da execução traz o caminho do painel.
 
 ⚠️ O token do R2 é **outro** token, e não o `CLOUDFLARE_API_TOKEN` de Pages e Workers: o R2 emite um
 par de chaves no formato S3 (*Object Read & Write*, escopo do bucket), que é o que o `aws s3`
