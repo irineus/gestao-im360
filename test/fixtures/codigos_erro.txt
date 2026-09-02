@@ -37,6 +37,8 @@ REP_JA_CONTINUO
 REP_NAO_CONTINUO
 # 1 do card 2.9 (credenciais de PC)
 PC_INEXISTENTE
+# 1 do card 4.3 (guarda de exclusão de PC)
+PC_COM_HISTORICO
 # 1 do card 4.2 (transições de status do aluno)
 ALUNO_INEXISTENTE
 # 3 do card 3.5 (espelho auth.users -> usuario)
