@@ -409,10 +409,26 @@ apareça gravando exatamente em `unidade`, `parametro`, `permissao`, `perfil`, `
 asserção cai, em vez de o portão passar a mentir de verde.
 
 **A suíte roda antes da varredura**, de propósito: portão que parou de ler o que devia diz "verde"
-sem que nada denuncie — a doença que o card 2.8 catalogou. São 16 asserções sobre 13 arquivos SQL
+sem que nada denuncie — a doença que o card 2.8 catalogou. São 18 asserções sobre 13 arquivos SQL
 sintéticos em `portao-migracoes/test/casos/`, batizados `passa-` e `reprova-`, com um teste que
 percorre o diretório e exige de cada um o veredito que o nome promete (caso novo entra sem precisar
 de teste novo).
+
+**Correção de fato — a definição que vale é a ÚLTIMA aplicada, não a primeira do conjunto
+(02/09/2026, card 4.1).** Ao exercitar o portão contra uma migração de catálogo escrita de propósito
+com a carga escondida dentro da função, o veredito saiu **verde**. A causa não estava no disfarce: o
+varredor montava o mapa de funções com "a primeira definição vence", e o conjunto tinha dois arquivos
+definindo a mesma função. Isso não é artefato de bancada — **`create or replace` é a forma normal
+deste projeto** (foi assim que o card 4.1 escreveu `fn_seed_metodos`, como o 3.6 escreveu as
+`fn_seed_*`), então a migração 1 podia definir uma função inofensiva, a migração 3 substituí-la por
+uma carga do catálogo e chamá-la, e o portão continuaria lendo o corpo **antigo** — aprovando
+exatamente o disfarce que ele existe para barrar, com a agravante de o corpo aprovado estar no
+repositório para quem fosse conferir. O mapa passou a ser atualizado arquivo a arquivo, na ordem de
+aplicação (`listarMigracoes` ordena por nome, que começa pelo timestamp), **antes** de varrer cada
+arquivo: função definida e chamada no mesmo arquivo continua resolvendo, e função definida só numa
+migração posterior **não** resolve — o que é correto, porque em tempo de aplicação ela ainda não
+existe. As duas asserções novas são justamente essas duas metades, e a primeira foi vista **vermelha
+contra o código antigo** antes de a correção entrar.
 
 **Divergência registrada com a nota do card.** A nota lista sete tabelas permitidas e não inclui
 `usuario_perfil`. Ela está na lista implementada porque `fn_seed_direcao_inicial`, chamada pelo seed

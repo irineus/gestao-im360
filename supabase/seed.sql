@@ -73,8 +73,8 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
    'APLICADA no card 3.6: as duas unidades da fixture chamam public.fn_seed_acesso(), a mesma função que a migração chama para a unidade real. Nada de catálogo nem de matriz é escrito na fixture — se fosse, o teste de paridade compararia a tela real com uma matriz de mentira e passaria.'),
 
   ('catalogo_curricular', 30, '4.1',
-   $$to_regclass('public.material') is not null$$, false,
-   'Seis materiais em três métodos, com os saldos 0/0/1/n/n/n do card 2.8 §4.2. Saldo depende de movimento_estoque (6.1); até lá, só o catálogo.'),
+   $$to_regclass('public.material') is not null$$, true,
+   'APLICADA no card 4.1: os três métodos vêm de public.fn_seed_metodos() — a mesma função da migração —, mais seis materiais, quatro cursos, três módulos e três combos por unidade. Os saldos 0/0/1/n/n/n do card 2.8 §4.2 dependem de movimento_estoque e ficam com a camada trilha_estoque (6.1); aqui vai o catálogo, e o estoque_minimo já distingue os seis.'),
 
   ('alunos', 40, '4.2',
    $$to_regclass('public.aluno') is not null$$, false,
@@ -408,7 +408,138 @@ select tests.criar_usuario('direcao@escola-b.test',    'DIRECAO', tests.unidade(
 -- produção.
 
 -- =============================================================================
--- 4. Fecho: nada em `tests` alcançável por quem não é `postgres`
+-- 4. Escola-fixture — camada `catalogo_curricular` (card 4.1)
+-- =============================================================================
+-- Os três métodos NÃO são escritos aqui: vêm de `public.fn_seed_metodos()`, a
+-- mesma função que a migração do card 4.1 chama para a unidade real. É a lição
+-- da camada `acesso_seed_real` aplicada de novo — enumeração declarada duas
+-- vezes é enumeração livre para divergir, e a divergência não acusa nada.
+--
+-- O catálogo em si (materiais, cursos, módulos, combos) é da fixture e só dela:
+-- o catálogo REAL é dado de planilha, entra pelo importador do card 9.1 no
+-- ambiente dev e nunca aparece numa migração (decisão de 02/09/2026). Os números
+-- aqui são escolhidos para exercitar bordas, não para parecer com a escola.
+--
+-- Duas escolhas que valem explicação:
+--
+--   (a) os códigos de material SE REPETEM entre métodos ('01' existe em
+--       INTERATIVO, em INGLES e em MODULAR). É de propósito: é assim na planilha
+--       — cada catálogo tem a sua numeração — e é o que faz a fixture exercitar
+--       `material_codigo_uk (unidade_id, metodo_id, codigo)` em vez de passar
+--       igual se a unique estivesse errada em (unidade_id, codigo). Consequência
+--       para quem escrever teste daqui em diante: material se acha pelo PAR
+--       (método, código), nunca pelo código sozinho.
+--
+--   (b) o combo de Informática tem DOIS cursos, com ordens 1 e 2. Um combo de
+--       curso único não exercita `combo_curso_ordem_uk` nem a ordem da trilha
+--       que o card 6.2 gera a partir do combo — e a trilha resultante (01, 02,
+--       03, sem repetição) é justamente o que o 6.2 precisa ter contra o que
+--       comparar.
+--
+-- Saldos de estoque (0/0/1/n/n/n do card 2.8 §4.2) NÃO entram aqui: dependem de
+-- `movimento_estoque`, que nasce no card 6.1 com a camada `trilha_estoque`. O
+-- que este catálogo já traz é o `estoque_minimo` diferente por material, que é o
+-- que o pedido sugerido do card 2.3 soma.
+
+create or replace function tests.seed_catalogo(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_interativo uuid;
+  v_ingles     uuid;
+  v_modular    uuid;
+begin
+  perform public.fn_seed_metodos(p_unidade);
+
+  select id into v_interativo from metodo where unidade_id = p_unidade and codigo = 'INTERATIVO';
+  select id into v_ingles     from metodo where unidade_id = p_unidade and codigo = 'INGLES';
+  select id into v_modular    from metodo where unidade_id = p_unidade and codigo = 'MODULAR';
+
+  -- Seis materiais. `estoque_minimo` distinto por material: um valor único em
+  -- todos faria o pedido sugerido do card 2.3 passar com a parcela do mínimo
+  -- somada errado (ou não somada) sem que a conta mudasse.
+  insert into material (unidade_id, metodo_id, codigo, nome, categoria, estoque_minimo)
+  values
+    (p_unidade, v_interativo, '01', 'Informática Essencial 1', 'APOSTILA', 2),
+    (p_unidade, v_interativo, '02', 'Informática Essencial 2', 'APOSTILA', 1),
+    (p_unidade, v_interativo, '03', 'Informática Avançada 1',  'APOSTILA', 1),
+    (p_unidade, v_ingles,     '01', 'English Book 1',          'APOSTILA', 1),
+    (p_unidade, v_ingles,     '02', 'English Book 2',          'APOSTILA', 2),
+    (p_unidade, v_modular,    '01', 'Eletricista Instalador',  'LIVRO',    1)
+  on conflict (unidade_id, metodo_id, codigo) do nothing;
+
+  insert into curso (unidade_id, metodo_id, nome)
+  values
+    (p_unidade, v_interativo, 'Informática Essencial'),
+    (p_unidade, v_interativo, 'Informática Avançada'),
+    (p_unidade, v_ingles,     'Inglês Kids'),
+    (p_unidade, v_modular,    'Eletricista Instalador')
+  on conflict (unidade_id, metodo_id, nome) do nothing;
+
+  -- Sequência de cada curso. O join por chave natural (método + código do
+  -- material, nome do curso) é o que mantém isto legível e sem UUID literal —
+  -- convenção do card 2.8 §A.
+  insert into curso_material (unidade_id, curso_id, material_id, ordem)
+  select p_unidade, c.id, m.id, s.ordem
+    from (values
+      ('Informática Essencial',  'INTERATIVO', '01', 1),
+      ('Informática Essencial',  'INTERATIVO', '02', 2),
+      ('Informática Avançada',   'INTERATIVO', '03', 1),
+      ('Inglês Kids',            'INGLES',     '01', 1),
+      ('Inglês Kids',            'INGLES',     '02', 2),
+      -- No Modular o curso tem UM livro; o que avança é o módulo (abaixo).
+      ('Eletricista Instalador', 'MODULAR',    '01', 1)
+    ) as s(curso, metodo, material, ordem)
+    join metodo   me on me.unidade_id = p_unidade and me.codigo = s.metodo
+    join curso    c  on c.unidade_id  = p_unidade and c.metodo_id = me.id and c.nome = s.curso
+    join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id and m.codigo = s.material
+  on conflict (curso_id, material_id) do nothing;
+
+  -- Três módulos sobre o MESMO livro: é a forma do Modular (card 7.2), e uma
+  -- fixture com um módulo por material não exercitaria isso.
+  insert into modulo (unidade_id, curso_id, material_id, nome, ordem)
+  select p_unidade, c.id, m.id, s.nome, s.ordem
+    from (values
+      ('Módulo 1 — Comandos elétricos', 1),
+      ('Módulo 2 — Instalações prediais', 2),
+      ('Módulo 3 — Projetos', 3)
+    ) as s(nome, ordem)
+    join metodo   me on me.unidade_id = p_unidade and me.codigo = 'MODULAR'
+    join curso    c  on c.unidade_id  = p_unidade and c.metodo_id = me.id
+                    and c.nome = 'Eletricista Instalador'
+    join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id and m.codigo = '01'
+   where not exists (select 1 from modulo x where x.curso_id = c.id and x.ordem = s.ordem);
+
+  insert into combo (unidade_id, metodo_id, nome)
+  values
+    (p_unidade, v_interativo, 'Informática Completo'),
+    (p_unidade, v_ingles,     'Inglês Kids Completo'),
+    (p_unidade, v_modular,    'Eletricista Completo')
+  on conflict (unidade_id, nome) do nothing;
+
+  insert into combo_curso (unidade_id, combo_id, curso_id, ordem)
+  select p_unidade, cb.id, c.id, s.ordem
+    from (values
+      ('Informática Completo', 'Informática Essencial',  1),
+      ('Informática Completo', 'Informática Avançada',   2),
+      ('Inglês Kids Completo', 'Inglês Kids',            1),
+      ('Eletricista Completo', 'Eletricista Instalador', 1)
+    ) as s(combo, curso, ordem)
+    join combo cb on cb.unidade_id = p_unidade and cb.nome = s.combo
+    join curso c  on c.unidade_id  = p_unidade and c.nome  = s.curso
+  on conflict (combo_id, curso_id) do nothing;
+end $$;
+
+-- As duas unidades recebem o mesmo catálogo, pela mesma razão da camada
+-- `acesso`: números iguais dos dois lados é o que torna a asserção de isolamento
+-- comparável — mesmo conteúdo, e ainda assim zero vazamento entre elas.
+select tests.seed_catalogo(tests.unidade('ESCOLA_A'));
+select tests.seed_catalogo(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 5. Fecho: nada em `tests` alcançável por quem não é `postgres`
 -- =============================================================================
 -- `create function` concede EXECUTE a PUBLIC por padrão. A revogação do USAGE no
 -- schema já bastaria, mas as duas juntas sobrevivem a alguém conceder o schema

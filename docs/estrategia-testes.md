@@ -208,7 +208,7 @@ A saída é declarar cada camada com a **condição que a torna devida**, em `te
 |---|---|---|
 | `acesso` | 3.4.5 | ✅ aplicada |
 | `acesso_seed_real` | 3.6 | existir permissão em unidade que não é da fixture |
-| `catalogo_curricular` | 4.1 | existir `public.material` |
+| `catalogo_curricular` | 4.1 | ✅ aplicada (seis materiais, quatro cursos, três módulos e três combos por unidade; os três métodos vêm de `public.fn_seed_metodos()`, a mesma função da migração) |
 | `alunos` | 4.2 | existir `public.aluno` |
 | `infra_fisica` | 4.3 | existir `public.pc` |
 | `turmas` | 5.1 | existir `public.bloco_aluno` |
@@ -779,6 +779,7 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `010_catalogo_rls`, `011_catalogo_convencoes` | 3.3 (nasce) → cresce em toda migração | 3+ |
 | `012_catalogo_contratos` (C10, C11, C12, C13) | 3.6 (precisa do seed de permissões) | 3 |
 | `020_acesso_tem_permissao` | 3.4 | 3 |
+| `023_catalogo_curricular` | **4.1** | 4 |
 | `030_alunos_status` | 4.2 | 4 |
 | `040_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` | 5.3 | 5 |
 | `050_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` | 6.3 | 6 |
