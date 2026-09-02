@@ -182,12 +182,14 @@ Três coisas que o dump não traz e que precisam de um passo humano:
   projeto, então cópia restaurada em projeto novo não decifra. Na prática isso não é perda: a
   política do card 2.9 já prevê rotação das contas nas máquinas, e o §6 daquele documento registra
   que a cifra protege backup e vazamento, não o administrador do banco.
-- **Histórico de migrações** (`supabase_migrations.schema_migrations`), *se* ele não vier no dump. A
-  tabela **existe no banco** — conferido em 02/09/2026 no projeto dev, 4 linhas, uma por migração —,
-  mas se o dump de schema do CLI a inclui é outra pergunta, e é a conferência do §4 que a responde:
-  ela imprime a contagem toda semana justamente para que isso seja fato medido e não suposição. Se
-  não vier, o próximo `db push` tentaria reaplicar tudo, e a saída é
-  `supabase migration repair --status applied <versão>` para cada arquivo de `supabase/migrations/`.
+- **Histórico de migrações** (`supabase_migrations.schema_migrations`) — **medido em 02/09/2026: não
+  vem no dump.** Isso deixou de ser um problema no momento em que o passo 2 acima passou a ser
+  "aplicar as migrações pelo CI": é o próprio `db push` que grava o histórico, então ele nasce certo
+  no projeto novo. Só faria falta em quem tentasse restaurar aplicando o `schema.sql` — e é
+  justamente esse caminho que este documento não recomenda. A conferência semanal continua imprimindo
+  a contagem, porque o dia em que ela deixar de ser zero é o dia em que este parágrafo virou obsoleto.
+- **`storage`** — o dump **traz** as tabelas de `storage`, mas nunca os arquivos: eles vivem fora do
+  Postgres. Hoje isso não custa nada, porque este sistema não usa Supabase Storage; ver o limite no §7.
 
 ---
 
@@ -235,6 +237,14 @@ nada aqui depende de environment.
   produção, então não há corrida — mas o dump em si não é um instantâneo transacional dos três
   arquivos: `schema.sql` e `data.sql` são duas conexões. Com escrita concorrente rara (uma escola,
   domingo de manhã) o risco é aceito e escrito aqui em vez de resolvido.
+- **O ensaio restaura `public` e `auth`, não `storage`.** O arquivo do backup continua completo — o
+  que é filtrado é o que se aplica no ensaio. O alvo do CI não hospeda o schema `storage` (o
+  `supabase start` deste workflow exclui o `storage-api`), e incluí-lo só trocaria esse erro por uma
+  divergência de versão entre o storage de produção e o da imagem fixada, que ficaria vermelha sem
+  dizer nada sobre o backup. Não é perda hoje: este sistema **não usa Supabase Storage**, e um dump
+  SQL de `storage.objects` é metadado de arquivos que o dump não carrega — ensaiá-lo daria a ilusão
+  de cobrir o que ele não cobre. ⚠️ **No dia em que o sistema passar a guardar arquivo, isto vira
+  dívida**: o backup de Storage é outro mecanismo, não este.
 - **Restauração não é ensaiada contra o Supabase de verdade**, só contra um Postgres do stack local
   com os mesmos papéis e a mesma versão maior (17). Um projeto Supabase novo tem mais coisa
   (extensões pré-instaladas, `auth` já criado pelo GoTrue); o ensaio prova que os arquivos são
@@ -290,6 +300,30 @@ migrações de `main` aplicadas (o que `supabase db reset` produz), esvaziado, r
 `data.sql`**. Isso alinha o ensaio com o que o §2 já dizia e ninguém tinha levado até o fim — *a
 estrutura já tem backup, chama-se `supabase/migrations/`; o que o R2 guarda é o dado*. O `schema.sql`
 ganhou a asserção que lhe cabe, de comparação, em `backup/conferir-schema.sh`.
+
+**⚠️ Terceira execução: o alvo do CI não hospeda tudo o que o dump traz.** Com o alvo corrigido, o
+`schema.sql` passou na comparação, o `truncate` rodou, **todas as COPYs de `auth` entraram** — o que
+de passagem prova que não há divergência de versão entre o Auth de produção e o do stack local — e a
+restauração parou em `relation "storage.buckets" does not exist`, porque o `supabase start` deste
+workflow exclui o `storage-api`.
+
+A saída foi filtrar o que se **aplica** no ensaio (`--apenas-schemas public,auth`) sem tocar no que
+se **guarda**: o arquivo do backup continua completo. Incluir o `storage-api` no stack seria a
+correção óbvia e é pior — trocaria este erro por uma divergência de versão entre o storage de
+produção e o da imagem fixada, vermelha sem dizer nada sobre o backup. E não é perda: um dump SQL de
+`storage.objects` é metadado de arquivos que o dump não carrega (§7).
+
+O filtro rendeu ainda uma armadilha de escape que vale registrar, porque é da família das caladas: a
+linha que encerra um bloco `COPY` é *contrabarra seguida de ponto*, e escrita como literal ela
+atravessa as camadas de escape do shell, do `awk` e do YAML — bastou uma delas comê-la para o filtro
+**parar de reconhecer o fim do bloco e engolir todo o resto do arquivo em silêncio**, restaurando
+menos da metade dos dados sem erro nenhum. Foi pego exercitando o filtro na máquina, com um arquivo
+de mentira, antes de subir. Agora o delimitador é montado com `sprintf("%c.", 92)`.
+
+**A radiografia respondeu de graça a pergunta que estava aberta desde o §5:** `data.sql` cobre
+`auth.*` (inclusive `users`), as sete tabelas de `public` e `storage.*`, e **não** cobre
+`supabase_migrations`. Como o procedimento de restauração aplica as migrações pelo CI, que é quem
+grava esse histórico, a ausência deixou de importar.
 
 Entrou junto um passo de **radiografia do dump** (nomes de schema, extensão e tabela; nunca valores),
 para que a próxima surpresa seja diagnosticável na mesma execução em vez de exigir uma rodada só para

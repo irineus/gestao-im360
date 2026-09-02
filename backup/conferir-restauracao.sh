@@ -101,10 +101,12 @@ done
 # severidade é diferente.
 #
 # As três contagens abaixo são MEDIÇÕES, e o alvo foi esvaziado antes de
-# restaurar — inclusive `supabase_migrations.schema_migrations`. Então zero ali
-# responde a pergunta que o §5 do documento deixou em aberto: o histórico de
-# migrações NÃO vem no dump, e uma restauração de verdade precisa do
-# `supabase migration repair` depois.
+# restaurar — inclusive `supabase_migrations.schema_migrations`. Medido em
+# 02/09/2026: o dump cobre `auth.*`, as tabelas de `public` e `storage.*`, e
+# **não** cobre `supabase_migrations` — então essa contagem vem zero, e uma
+# restauração de verdade precisa de `supabase migration repair` depois (§5).
+# A contagem continua impressa toda semana porque o dia em que ela deixar de ser
+# zero é o dia em que essa instrução do procedimento virou desnecessária.
 for alvo in 'auth.users' 'public.usuario' 'supabase_migrations.schema_migrations'; do
   if [ -n "$(consulta "select to_regclass('$alvo')")" ]; then
     echo "$alvo: $(consulta "select count(*) from $alvo") linha(s)"
