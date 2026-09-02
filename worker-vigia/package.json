@@ -1,0 +1,11 @@
+{
+  "name": "gestao-im360-vigia",
+  "private": true,
+  "type": "module",
+  "description": "Worker Cloudflare que mantém os projetos Supabase acordados e avisa quando não respondem (card 3.10). Sem dependências de propósito: nada a instalar, nada a auditar.",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "dev": "wrangler dev",
+    "conferir": "node conferir.mjs"
+  }
+}
