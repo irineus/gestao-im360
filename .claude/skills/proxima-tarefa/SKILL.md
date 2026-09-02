@@ -13,7 +13,7 @@ Este projeto é rastreado no Notion. Este repositório contém o código e os do
 - Database (página): `f3bd0f112cde4ed699d616fc7fc30dff`
 - Decisões vigentes (página): `3cd2f3f4-b9b2-8106-95cd-fc8d937bd953`
 - Repositório: `github.com/irineus/gestao-im360` — branches `main` (prod) e `develop` (dev)
-- Propriedades do card: `Tarefa` (título — **não existe coluna `Nome`**), `Fase` (select, prefixo numérico e acentos exatos), `Ordem` (número, aceita decimal), `Status` ("A fazer" / "Em andamento" / "Concluído"), `Prioridade` ("Alta" / "Média" / "Baixa"), `Notas` (texto).
+- Propriedades do card: `Tarefa` (título — **não existe coluna `Nome`**), `Fase` (select, prefixo numérico e acentos exatos), `Ordem` (número, aceita decimal), `Status` ("A fazer" / "Em andamento" / "Concluído"), `Prioridade` ("Alta" / "Média" / "Baixa"), `Notas` (texto), e as três da estimativa (card 3.13, 02/09/2026): `Concluído em` (data — na query use `date:Concluído em:start`), `Tamanho` ("P"/"M"/"G"/"GG" = 1/3/5/8 pontos) e `Tipo` ("Documento/decisão" / "Schema/migração" / "Função/regra" / "View" / "Tela" / "Infra/CI" / "Marco/validação" / "Externo").
 - NÃO confundir com o board do Desmalha (`d50a2925-fb74-4f67-b0db-af03ef41d1b4`) — projeto diferente. Se o pedido citar carnê-leão/Desmalha, esta skill não se aplica.
 
 ## Pré-requisito
@@ -78,7 +78,7 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 2. **Notas do card**: `update_properties` **sobrescreve** o campo — buscar o valor atual primeiro e reenviar o texto completo, preservando a linha "Origem:". Prefixar o que foi feito com `CONCLUÍDO <data>:`.
 3. **Decisões vigentes**, se a tarefa gerou decisão (arquitetura, schema, regra, parâmetro, risco): `update_content` na seção correspondente (**nunca** `replace_content`) + linha no Histórico com data e card de origem. Decisão revogada vai para "Decisões superadas" com o motivo.
 4. **Continuidade**: atualizar `docs/README-continuidade.md` (tabela de documentos, marcos) quando a tarefa criar documento novo ou mudar o estado do projeto.
-5. **Status = Concluído.**
+5. **Status = Concluído** e **`Concluído em` = a data de hoje**. As duas coisas, sempre — a data alimenta a estimativa de entrega (`docs/estimativa-entrega.md`), e card concluído sem data é um buraco na série. Se o card ainda não tiver `Tamanho` e `Tipo`, preencher também.
 6. **Fechar o ciclo do Git — faz parte da tarefa, não é extra.** São duas perguntas clicáveis a Irineu, na ordem: PR + merge em `develop`, depois promoção para `main`.
 
 ## Ciclo do Git ao concluir — acordo de 01/09/2026
@@ -144,7 +144,7 @@ git branch -D <branch>
 
 ## Criar cards novos
 
-- Sempre no data source do board deste projeto, com Fase e Ordem coerentes.
+- Sempre no data source do board deste projeto, com Fase e Ordem coerentes, **e já com `Tamanho` e `Tipo`** — card sem tamanho não entra na estimativa e some da conta de prazo.
 - Inserção no meio da sequência: `Ordem` decimal (ex.: 2.5) — não renumerar os demais.
 - Pendência registrada nas Decisões vigentes que prometa "card na Fase N" deve virar card de verdade; pendência sem card é pendência esquecida.
 

@@ -74,13 +74,20 @@ ter alerta nenhum.
 
 ## 3. Configuração — o que só Irineu faz
 
-| Onde | Nome | Para quê |
-|---|---|---|
-| Secret do repositório | `CLOUDFLARE_API_TOKEN` | ⚠️ o token do card 3.9 foi criado para o Pages; precisa **ganhar** a permissão *Workers Scripts — Edit* |
-| Secret do repositório | `CLOUDFLARE_ACCOUNT_ID` | já existe (card 3.9) |
-| Secret do repositório | `SUPABASE_ANON_KEY_DEV` | chave publicável do projeto dev |
-| Secret do repositório | `SUPABASE_ANON_KEY_PROD` | chave publicável do projeto prod |
-| Secret do repositório | `RESEND_API_KEY` | conta Resend do card 3.8, para o alerta |
+✅ **Tudo feito em 02/09/2026** — a tabela fica como registro do que é preciso para reconstruir isto
+do zero, e do que conferir se um dia o vigia parar.
+
+| Onde | Nome | Para quê | Estado |
+|---|---|---|---|
+| Token do Cloudflare | permissão *Workers Scripts — Edit* | `wrangler deploy` e `wrangler secret put` | ✅ acrescentada ao token `gestao-im360`, que já tinha a de Pages |
+| Secret do repositório | `CLOUDFLARE_API_TOKEN` | idem | ✅ do card 3.9 — **editar o token não muda o valor**, então o secret não precisou ser tocado |
+| Secret do repositório | `CLOUDFLARE_ACCOUNT_ID` | idem | ✅ do card 3.9 |
+| Secret do repositório | `SUPABASE_ANON_KEY_DEV` | chave publicável do projeto dev | ✅ |
+| Secret do repositório | `SUPABASE_ANON_KEY_PROD` | chave publicável do projeto prod | ✅ |
+| Secret do repositório | `RESEND_API_KEY` | conta Resend do card 3.8, para o alerta | ✅ chave própria `gestao-im360-vigia`, *Sending access*, restrita a `gestaoim360.com` |
+
+A chave do Resend é **própria do vigia**, e não a que o Supabase usa para convite e recuperação: assim
+revogar o vigia não derruba o e-mail do app, e vice-versa.
 
 As duas chaves publicáveis são as **mesmas** que já estão nos environments `dev` e `prod` como
 `SUPABASE_ANON_KEY`. Aqui precisam de nome distinto e escopo de repositório por um motivo prático:
@@ -180,6 +187,30 @@ caminho de reprovação funciona com o corpo de erro de verdade.
 
 ---
 
+## 6.1. O vigia entrou no ar (02/09/2026)
+
+PR #46 (`develop` → `main`), run `33621528675` do `deploy-worker-vigia`, aprovado no environment
+`prod` — o job ficou em **`waiting`** até o *Approve and deploy*, de modo que **o portão duplo da
+produção passou a valer também para a infraestrutura**, e não só para o app e para a migração.
+
+O que a execução mediu, na ordem em que aconteceu:
+
+```
+homologação: ok (HTTP 200 · 0 linha(s) · 951 ms) — produção: ok (HTTP 200 · 0 linha(s) · 1371 ms)
+Uploaded gestao-im360-vigia (0.79 sec)
+Deployed gestao-im360-vigia triggers (0.64 sec)
+  schedule: 0 9 * * *
+✨ Success! Uploaded secret SUPABASE_ANON_KEY_DEV / SUPABASE_ANON_KEY_PROD / RESEND_API_KEY
+Worker Startup Time: 4 ms
+```
+
+A primeira linha é a que faltava: **a sonda de produção respondeu `200`**, com a chave certa, e isso
+foi medido **antes** de qualquer chave entrar no Worker — que é exatamente para isso que o passo
+existe. A sessão que escreveu o card não tinha conseguido fazer essa medição (o acesso ao host de
+produção estava bloqueado no ambiente dela) e registrou a lacuna em vez de supor; o CI a fechou.
+
+Primeira execução agendada: **03/09/2026, 06:00** em São Paulo.
+
 ## 7. Limites assumidos
 
 - **Vigia que morre não avisa.** Se o Worker for apagado, se o cron parar de disparar ou se a conta
@@ -201,7 +232,7 @@ caminho de reprovação funciona com o corpo de erro de verdade.
 
 | # | O quê | Onde | Bloqueante |
 |---|---|---|---|
-| 1 | `CLOUDFLARE_API_TOKEN` precisa da permissão *Workers Scripts — Edit* | Irineu, antes do primeiro deploy do vigia | **sim** — sem ela o `wrangler deploy` falha |
-| 2 | Os três secrets novos do repositório (§3) | Irineu | **sim** — o workflow reprova no primeiro passo |
+| 1 | ~~`CLOUDFLARE_API_TOKEN` precisa da permissão *Workers Scripts — Edit*~~ | ✅ feito 02/09/2026 | resolvido |
+| 2 | ~~Os três secrets novos do repositório (§3)~~ | ✅ feito 02/09/2026 | resolvido |
 | 3 | O backup do card 3.11 é o segundo observador; anotar lá que a falha dele também significa "produção pode ter pausado" | card 3.11 | não |
 | 4 | Quando o Sentry entrar (card 3.12), avaliar mandar a falha do vigia para lá além do e-mail | card 3.12 | não |

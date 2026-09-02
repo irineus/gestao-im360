@@ -234,10 +234,10 @@ teria de entrar nas Redirect URLs do Auth. Implementado o que o 3.8 decidiu — 
 | Secret do repositório | `CLOUDFLARE_ACCOUNT_ID` | idem | ✅ criado 02/09/2026 |
 | Secret do environment `dev` | `SUPABASE_ANON_KEY` | chave publicável do projeto dev, no bundle de homologação | ✅ criado 02/09/2026 |
 | Secret do environment `prod` | `SUPABASE_ANON_KEY` | chave publicável do projeto prod, no bundle de produção | ✅ criado 02/09/2026 |
-| Secret do repositório | `SUPABASE_ANON_KEY_DEV` | sonda do vigia no projeto dev (card 3.10) | ⛔ falta |
-| Secret do repositório | `SUPABASE_ANON_KEY_PROD` | sonda do vigia no projeto prod (card 3.10) | ⛔ falta |
-| Secret do repositório | `RESEND_API_KEY` | e-mail de alerta do vigia (card 3.10) | ⛔ falta |
-| Token do Cloudflare | permissão *Workers Scripts — Edit* | `wrangler deploy` do vigia (card 3.10) | ⛔ falta — o token de hoje é só de Pages |
+| Secret do repositório | `SUPABASE_ANON_KEY_DEV` | sonda do vigia no projeto dev (card 3.10) | ✅ criado 02/09/2026 |
+| Secret do repositório | `SUPABASE_ANON_KEY_PROD` | sonda do vigia no projeto prod (card 3.10) | ✅ criado 02/09/2026 |
+| Secret do repositório | `RESEND_API_KEY` | e-mail de alerta do vigia (card 3.10) | ✅ criado 02/09/2026 (chave `gestao-im360-vigia`, *Sending access*) |
+| Token do Cloudflare | permissão *Workers Scripts — Edit* | `wrangler deploy` do vigia (card 3.10) | ✅ acrescentada ao token `gestao-im360` em 02/09/2026 — editar o token **não muda o valor**, então o secret continuou valendo |
 
 ⚠️ As duas chaves publicáveis aparecem **duas vezes** na tabela de propósito: como secret de
 environment (`SUPABASE_ANON_KEY`, para o build do app) e como secret de repositório com sufixo (para
@@ -327,4 +327,4 @@ E no CI, que é onde o resto se prova:
 | 2 | **5.3 / 6.3** | Os dois scripts de `supabase/tests_concorrencia/` — hoje o passo roda zero e avisa | bloqueante do marco 2 |
 | 3 | **3.12** | Ao ligar o Sentry, acrescentar o host de ingestão ao `connect-src` do `_headers` **no mesmo commit** — a CSP bloqueia sem avisar (herdado do card 3.8) | bloqueante |
 | 4 | **todos** | Trocar uma versão fixada do §2 é um commit com PR: quem atualizar precisa rodar a suíte antes | informativo |
-| 5 | **Irineu** | Os quatro itens ⛔ do §10 que o card 3.10 acrescentou (três secrets e a permissão de Workers no token) | bloqueante do vigia |
+| 5 | ~~**Irineu**~~ | ~~Os quatro itens do §10 que o card 3.10 acrescentou~~ — ✅ **feitos em 02/09/2026**; o `deploy-worker-vigia` ficou verde na estreia e o vigia está no ar | resolvido |
