@@ -218,7 +218,10 @@ Primeira execução agendada: **03/09/2026, 06:00** em São Paulo.
   verdade exige um vigia externo (serviço de terceiros), e isso está fora do escopo da v1. O que
   existe hoje é um segundo observador **incidental**: o backup semanal do card 3.11 roda um `pg_dump`
   contra produção e o GitHub avisa por e-mail quando um workflow agendado falha — semanal, e só de
-  produção. Registrado nas Notas do card 3.11.
+  produção. ✅ **Existe desde 02/09/2026**, em `.github/workflows/backup-semanal.yml` e documentado em
+  `docs/backup-restauracao.md`, que registra no §1 a leitura dupla de uma falha dele ("o backup não
+  saiu **e** produção pode ter pausado"). ⚠️ Ele tem o seu próprio modo de falha silencioso: o GitHub
+  desativa workflow agendado em repositório com 60 dias sem commit.
 - **Sem estado**: sem aviso de recuperação, sem "há N dias assim", sem silenciar temporariamente.
 - **A eficácia contra a pausa não foi verificada** — só se verifica não pausando durante sete dias.
   O que existe é a decisão do plano e, principalmente, o fato de que o próprio vigia denuncia se ela
@@ -234,5 +237,5 @@ Primeira execução agendada: **03/09/2026, 06:00** em São Paulo.
 |---|---|---|---|
 | 1 | ~~`CLOUDFLARE_API_TOKEN` precisa da permissão *Workers Scripts — Edit*~~ | ✅ feito 02/09/2026 | resolvido |
 | 2 | ~~Os três secrets novos do repositório (§3)~~ | ✅ feito 02/09/2026 | resolvido |
-| 3 | O backup do card 3.11 é o segundo observador; anotar lá que a falha dele também significa "produção pode ter pausado" | card 3.11 | não |
+| 3 | ~~O backup do card 3.11 é o segundo observador; anotar lá que a falha dele também significa "produção pode ter pausado"~~ | ✅ feito 02/09/2026 — `docs/backup-restauracao.md` §1, e o aviso está no cabeçalho do próprio workflow | resolvido |
 | 4 | Quando o Sentry entrar (card 3.12), avaliar mandar a falha do vigia para lá além do e-mail | card 3.12 | não |
