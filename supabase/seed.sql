@@ -77,8 +77,8 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
    'APLICADA no card 4.1: os três métodos vêm de public.fn_seed_metodos() — a mesma função da migração —, mais seis materiais, quatro cursos, três módulos e três combos por unidade. Os saldos 0/0/1/n/n/n do card 2.8 §4.2 dependem de movimento_estoque e ficam com a camada trilha_estoque (6.1); aqui vai o catálogo, e o estoque_minimo já distingue os seis.'),
 
   ('alunos', 40, '4.2',
-   $$to_regclass('public.aluno') is not null$$, false,
-   'Doze alunos cobrindo os quatro degraus da cascata da projeção, um em FIM e um em STANDBY antigo. Datas SEMPRE relativas a fn_hoje().'),
+   $$to_regclass('public.aluno') is not null$$, true,
+   'APLICADA no card 4.2: doze alunos por unidade, um por caso que alguma decisão criou — os quatro degraus da cascata da projeção, previsão vencida, STANDBY antigo, os dois terminais (FORMADO e CANCELADO), TRANCADO, ACELERAR e um sem combo. Datas SEMPRE relativas a fn_hoje(). O "em FIM" e o "com débito REP na borda" do card 2.8 §4.2 dependem de aluno_material e bloco_aluno: ficam com as camadas trilha_estoque (6.1) e turmas (5.1), e os alunos que os receberão já nascem aqui.'),
 
   ('infra_fisica', 50, '4.3',
    $$to_regclass('public.pc') is not null$$, false,
@@ -539,7 +539,81 @@ select tests.seed_catalogo(tests.unidade('ESCOLA_A'));
 select tests.seed_catalogo(tests.unidade('ESCOLA_B'));
 
 -- =============================================================================
--- 5. Fecho: nada em `tests` alcançável por quem não é `postgres`
+-- 5. Escola-fixture — camada `alunos` (card 4.2)
+-- =============================================================================
+-- Doze alunos, um por caso que alguma decisão do projeto criou — não uma amostra
+-- da planilha. O quadro do card 2.8 §4.2 pede "12 alunos cobrindo os 4 degraus
+-- da cascata da projeção, 1 em FIM, 1 em STANDBY antigo, 1 com débito REP na
+-- borda"; duas dessas três marcas dependem de tabelas que ainda não existem
+-- (`aluno_material` no card 6.1, `bloco_aluno` no 5.1), e o que se pode fazer
+-- agora — e é o que interessa — é já nascer o ALUNO que vai recebê-las, para que
+-- as camadas seguintes só acrescentem linhas, sem mexer nesta.
+--
+-- Três escolhas que valem explicação:
+--
+--   (a) DUAS datas por aluno, sempre relativas a fn_hoje(). `data_inicio` é
+--       quando a matrícula começou; `status_desde` é quando o status atual
+--       passou a valer, e num aluno recém-inserido os dois NÃO coincidem —
+--       Gabriela está em STANDBY há 45 dias e matriculada há 200. É essa
+--       diferença que o alerta de STANDBY prolongado (30 dias, card 5.5) lê, e
+--       uma fixture que igualasse as duas passaria sem exercitar nada.
+--
+--   (b) `codigo_sgf` fica NULO em três dos doze, de propósito. O índice é
+--       parcial (`where codigo_sgf is not null`) justamente porque a planilha
+--       tem aluno sem código, e três nulos são o que prova que nulos não colidem
+--       entre si — com um só, a asserção passaria igual se o índice estivesse
+--       escrito errado, sem o `where`.
+--
+--   (c) os dois status TERMINAIS estão presentes (Isabela CANCELADO, João Pedro
+--       FORMADO). São a única entrada possível para fn_aluno_reverter_status, e
+--       sem eles o teste da reversão teria de criar o próprio aluno — que é o
+--       caminho para um teste que passa porque montou o cenário que queria.
+create or replace function tests.seed_alunos(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  insert into aluno (unidade_id, codigo_sgf, nome, metodo_id, combo_id, status,
+                     status_desde, prev_conclusao_curso, data_inicio)
+  select p_unidade, s.codigo_sgf, s.nome, me.id, cb.id, s.status,
+         fn_hoje() - s.status_ha,
+         case when s.prev_em is null then null else fn_hoje() + s.prev_em end,
+         fn_hoje() - s.inicio_ha
+    from (values
+      -- nome, codigo_sgf, metodo, combo, status, dias desde o status,
+      -- prev_conclusao (dias a partir de hoje; negativo = vencida), dias de matrícula
+      ('Ana Paula Ribeiro',  '3001', 'INTERATIVO', 'Informática Completo', 'ATIVO',     180, null, 180),
+      ('Bruno Carvalho',     '3002', 'INTERATIVO', 'Informática Completo', 'ATIVO',      90,   90,  90),
+      ('Carla Menezes',      '3003', 'INTERATIVO', 'Informática Completo', 'ATIVO',      10, null,  10),
+      ('Diego Alves',        '3004', 'INTERATIVO', 'Informática Completo', 'ATIVO',     120,  -15, 120),
+      ('Eduarda Lima',       '3005', 'MODULAR',    'Eletricista Completo', 'ATIVO',      60, null,  60),
+      ('Felipe Nunes',       '3006', 'INGLES',     'Inglês Kids Completo', 'ACELERAR',   30,   60, 150),
+      ('Gabriela Souza',     '3007', 'INGLES',     'Inglês Kids Completo', 'STANDBY',    45, null, 200),
+      ('Henrique Dias',      '3008', 'INTERATIVO', 'Informática Completo', 'TRANCADO',   75, null, 300),
+      ('Isabela Rocha',      null,   'INTERATIVO', 'Informática Completo', 'CANCELADO',  20, null, 100),
+      ('João Pedro Martins', '3010', 'INTERATIVO', 'Informática Completo', 'FORMADO',     5, null, 400),
+      ('Karina Bastos',      null,   'INTERATIVO', null,                   'ATIVO',      15, null,  15),
+      ('Lucas Ferreira',     null,   'INTERATIVO', 'Informática Completo', 'ATIVO',      50, null,  50)
+    ) as s(nome, codigo_sgf, metodo, combo, status, status_ha, prev_em, inicio_ha)
+    join metodo me on me.unidade_id = p_unidade and me.codigo = s.metodo
+    -- `left join` e não `join`: Karina não tem combo, e um join interno a
+    -- deixaria de fora em silêncio — a fixture ficaria com onze alunos e o teste
+    -- de contagem acusaria em outro lugar, longe da causa.
+    left join combo cb on cb.unidade_id = p_unidade and cb.nome = s.combo
+   where not exists (select 1 from aluno a
+                      where a.unidade_id = p_unidade and a.nome = s.nome);
+end $$;
+
+-- Os alunos de A e de B são os mesmos, com os mesmos códigos SGF: é o que faz a
+-- asserção de isolamento significar alguma coisa. `codigo_sgf` é único por
+-- UNIDADE (card 2.1 §7), então repetir entre unidades é exatamente o caso que a
+-- unique precisa aceitar — e recusaria se estivesse escrita sem o unidade_id.
+select tests.seed_alunos(tests.unidade('ESCOLA_A'));
+select tests.seed_alunos(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 6. Fecho: nada em `tests` alcançável por quem não é `postgres`
 -- =============================================================================
 -- `create function` concede EXECUTE a PUBLIC por padrão. A revogação do USAGE no
 -- schema já bastaria, mas as duas juntas sobrevivem a alguém conceder o schema

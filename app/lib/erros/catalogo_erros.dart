@@ -1,8 +1,8 @@
 /// Tradução `codigo` -> mensagem em tela.
 ///
 /// Fonte dos textos: docs/design-system.md §7.1 (card 2.7), mais `PC_INEXISTENTE`
-/// (card 2.9) e os três do card 3.5. O contrato do conjunto é
-/// `test/fixtures/codigos_erro.txt`, na raiz do repositório.
+/// (card 2.9), os três do card 3.5 e `ALUNO_INEXISTENTE` (card 4.2). O contrato
+/// do conjunto é `test/fixtures/codigos_erro.txt`, na raiz do repositório.
 ///
 /// O app trata SEMPRE pelo código, nunca pelo texto do banco (card 2.2 §1.2):
 /// o texto pode mudar numa migração; o código é estável.
@@ -65,6 +65,12 @@ abstract final class CatalogoErros {
     // Vale também para PC de outra unidade: quem não pode ver não descobre que
     // existe (docs/politica-credenciais-pcs.md §4).
     'PC_INEXISTENTE': 'Este computador não foi encontrado.',
+
+    // --- card 4.2 (transições de status do aluno)
+    // Vale também para aluno de outra unidade, pela mesma razão do
+    // PC_INEXISTENTE acima. Não se confunde com ALUNO_INATIVO: aquele fala de
+    // um aluno que existe e está no status errado para a ação.
+    'ALUNO_INEXISTENTE': 'Este aluno não foi encontrado.',
 
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':

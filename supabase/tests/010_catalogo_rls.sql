@@ -89,7 +89,14 @@ create temporary view p_esperada (tabela, cmd) as values
   ('curso_material','r'),   ('curso_material','a'),   ('curso_material','w'),   ('curso_material','d'),
   ('modulo','r'),           ('modulo','a'),           ('modulo','w'),           ('modulo','d'),
   ('combo','r'),            ('combo','a'),            ('combo','w'),            ('combo','d'),
-  ('combo_curso','r'),      ('combo_curso','a'),      ('combo_curso','w'),      ('combo_curso','d');
+  ('combo_curso','r'),      ('combo_curso','a'),      ('combo_curso','w'),      ('combo_curso','d'),
+  -- card 4.2 — alunos. `aluno` não tem DELETE porque aluno não some, vira
+  -- CANCELADO (por isso o catálogo do card 2.4 não tem `alunos.excluir`), e
+  -- `aluno_status_hist` não tem update nem delete: é histórico imutável, e a
+  -- imutabilidade aqui É a ausência de política. As três linhas que faltam neste
+  -- bloco são a decisão escrita.
+  ('aluno','r'),            ('aluno','a'),            ('aluno','w'),
+  ('aluno_status_hist','r'), ('aluno_status_hist','a');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text
@@ -140,7 +147,15 @@ create temporary view p_codigo_catalogo (codigo) as values
   -- do catálogo curricular usam exatamente estes, e a composição
   -- (curso_material, combo_curso) grava com `materiais.editar` e não com
   -- `materiais.criar`: montar a sequência de um curso é editar o curso.
-  ('materiais.ler'), ('materiais.criar'), ('materiais.editar'), ('materiais.excluir');
+  ('materiais.ler'), ('materiais.criar'), ('materiais.editar'), ('materiais.excluir'),
+  -- card 4.2 — o domínio `alunos` MENOS os dois códigos que nenhuma política
+  -- cita, e essa ausência é o ponto: `alunos.editar_trilha` só aparece quando
+  -- `aluno_material` nascer (card 6.1), e `alunos.formar_sem_certificado` nunca
+  -- aparece em política nenhuma — ele é o gate de fn_aluno_pode_formar, dentro
+  -- de um trigger. Pôr qualquer um dos dois aqui reprovaria por "catalogado e
+  -- não usado", que é exatamente o que esta lista existe para dizer.
+  ('alunos.ler'), ('alunos.criar'), ('alunos.editar'),
+  ('alunos.alterar_status'), ('alunos.reverter_status');
 
 select is(
   (select coalesce(string_agg(msg, '; ' order by msg), '')
