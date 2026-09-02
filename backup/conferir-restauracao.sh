@@ -11,12 +11,15 @@
 # que prova alguma coisa é a asserção POSITIVA: as tabelas que se esperava estão
 # lá, e as que sustentam o sistema têm linha.
 #
-# O arquivo de tabelas esperadas, quando informado, sai do banco local com as
-# migrações de `main` aplicadas — isto é, do que o REPOSITÓRIO diz que produção
-# tem. A comparação é SIMÉTRICA (falta e sobra), como o teste C8: tabela que
-# existe em produção e não existe nas migrações é SQL aplicado à mão, que a regra
-# inegociável do CLAUDE.md proíbe, e é justamente o que ninguém descobriria de
-# outro jeito.
+# O QUE ESTE SCRIPT PROVA, E O QUE NÃO PROVA (revisto em 02/09/2026): o alvo do
+# ensaio é um banco com as migrações de `main` já aplicadas e as tabelas
+# ESVAZIADAS, que é o destino real de uma restauração neste projeto — projeto
+# Supabase novo, migrações pelo CI, `data.sql` por cima. Logo, a lista de tabelas
+# do alvo vem das migrações e não do backup: conferi-la aqui é sanidade do alvo,
+# e a asserção que de fato fala do backup é a de `backup/conferir-schema.sh`,
+# comparando o `schema.sql` guardado com as migrações. O que ESTE script prova é
+# que **o dado voltou**: as tabelas foram esvaziadas antes, então cada contagem
+# maior que zero abaixo é linha que saiu do `data.sql`.
 
 set -euo pipefail
 
@@ -96,6 +99,12 @@ done
 # vínculo sozinho, porque o bootstrap do card 3.6 é também um trigger em
 # `usuario`. Perder `permissao` ou `parametro` não se recupera assim; por isso a
 # severidade é diferente.
+#
+# As três contagens abaixo são MEDIÇÕES, e o alvo foi esvaziado antes de
+# restaurar — inclusive `supabase_migrations.schema_migrations`. Então zero ali
+# responde a pergunta que o §5 do documento deixou em aberto: o histórico de
+# migrações NÃO vem no dump, e uma restauração de verdade precisa do
+# `supabase migration repair` depois.
 for alvo in 'auth.users' 'public.usuario' 'supabase_migrations.schema_migrations'; do
   if [ -n "$(consulta "select to_regclass('$alvo')")" ]; then
     echo "$alvo: $(consulta "select count(*) from $alvo") linha(s)"
