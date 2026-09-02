@@ -18,6 +18,18 @@ workers_dev = false
 # de a escola tentar usar o sistema.
 crons = ["0 9 * * *"]
 
+# Bucket do backup semanal (card 3.12, vigiando o card 3.11). Só de LEITURA no
+# uso do vigia — ele lista para saber a idade da cópia mais nova e nada mais.
+#
+# ⚠️ PRÉ-CONDIÇÃO DE DEPLOY: o bucket precisa EXISTIR, senão o `wrangler deploy`
+# recusa o Worker. Isso é deliberado e é a forma do projeto: reprovar nomeando o
+# que falta, em vez de publicar um vigia que não vigia. Enquanto o deploy novo
+# não passar, o vigia JÁ PUBLICADO continua no ar sondando os dois Supabase —
+# deploy que falha não derruba o que está rodando.
+[[r2_buckets]]
+binding = "BACKUP"
+bucket_name = "gestao-im360-backup"
+
 [vars]
 # Destinatário do alerta. Não é segredo: o mesmo endereço já está no seed em
 # `parametro.direcao_inicial_email` (card 3.6), e o repositório é público.

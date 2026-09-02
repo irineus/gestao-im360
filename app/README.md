@@ -6,9 +6,10 @@ abre um placeholder que diz **qual card** a entrega.
 
 ## Rodar
 
-Os três valores de ambiente entram em *build time*, com `--dart-define`. Sem
-eles o app sobe numa tela que diz o que falta, em vez de dar erro de rede em
-toda consulta.
+Os valores de ambiente entram em *build time*, com `--dart-define`. Sem os três
+primeiros o app sobe numa tela que diz o que falta, em vez de dar erro de rede em
+toda consulta; os dois últimos são da observabilidade (card 3.12) e a ausência
+deles **não** impede o app de rodar — só o deixa sem Sentry.
 
 ```bash
 flutter run -d chrome \
@@ -27,6 +28,8 @@ em <http://127.0.0.1:54324>.
 | `SUPABASE_URL` | URL do projeto (dev `ncdfolxdupbbfvtydngx`, prod `aqfuawrygxsiopyppjza`) |
 | `SUPABASE_ANON_KEY` | chave anônima/publicável — **pública por desenho**, vai no bundle. A *service key* nunca entra aqui: `service_role` tem `BYPASSRLS` (card 3.3) |
 | `APP_URL_BASE` | base pública do app, usada para montar o `redirectTo` da recuperação de senha. Precisa estar nas **Redirect URLs** dos dois projetos, com o curinga `/**` (`docs/deploy-web.md` §4) |
+| `SENTRY_DSN` | DSN do projeto `irineu-pinheiro/gestao-im360` (card 3.12). **Sem ele o Sentry não inicializa** — é o que mantém `flutter run` e a suíte sem mandar nada para lugar nenhum. Público por desenho, como a chave anônima: autoriza escrever evento, nunca ler. ⚠️ Ao mudar o DSN, conferir o `connect-src` de `web/_headers` — CSP que barra a ingestão bloqueia o envio **em silêncio** (`docs/observabilidade.md` §4) |
+| `APP_AMBIENTE` | rótulo do ambiente no Sentry: `homologacao` ou `producao`. Fora do CI, deixar em branco — o default é `local` |
 
 ## Empacotar para o Cloudflare Pages
 

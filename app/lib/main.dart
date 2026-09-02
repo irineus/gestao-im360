@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/ambiente.dart';
 import 'config/estrategia_url.dart';
+import 'observabilidade/observabilidade.dart';
 import 'rotas/roteador.dart';
 import 'theme/dimensoes.dart';
 import 'theme/preferencia_tema.dart';
@@ -16,6 +17,14 @@ Future<void> main() async {
   // roteador (card 3.8).
   usarUrlPorCaminho();
 
+  // O Sentry envolve TUDO o que vem abaixo, inclusive a tela de build não
+  // configurado (card 3.12): build sem `--dart-define` é justamente o defeito
+  // de empacotamento que se quer ver no painel, e não só na tela de quem
+  // abriu o app. Sem `SENTRY_DSN` isto é um `await rodarApp()` e mais nada.
+  await iniciarObservabilidade(_subir);
+}
+
+Future<void> _subir() async {
   if (!Ambiente.configurado) {
     // Subir desconectado daria erro de rede em toda consulta, e o diagnóstico
     // seria feito na tela errada. Melhor dizer o que falta.
