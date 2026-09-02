@@ -325,6 +325,21 @@ de mentira, antes de subir. Agora o delimitador é montado com `sprintf("%c.", 9
 `supabase_migrations`. Como o procedimento de restauração aplica as migrações pelo CI, que é quem
 grava esse histórico, a ausência deixou de importar.
 
+**✅ Quarta execução: verde, de ponta a ponta** (run `33633531035`, 2m33s). O que ela mediu, e que
+passa a ser o ponto de referência do backup:
+
+| | |
+|---|---|
+| `roles.sql` / `schema.sql` / `data.sql` | 370 / 53.379 / 50.033 bytes |
+| `schema.sql` × migrações de `main` | 7 tabelas dos dois lados, sem falta nem sobra |
+| restaurado do `data.sql` | `unidade` 1, `perfil` 4, `permissao` 50, `perfil_permissao` 123, `parametro` 16, `auth.users` 1, `usuario` 1 |
+| `supabase_migrations` | 0 — confirmado que não vem no dump |
+| publicado | `producao/2026-09-02/` com os três `.gz` e o `MANIFESTO.txt` |
+| retenção | 1 cópia no bucket, nada a remover |
+
+As contagens batem exatamente com o ponto de referência medido no dev no §4 — o que, além de aprovar
+o backup, confirma que produção e dev estão com as mesmas quatro migrações e o mesmo seed.
+
 Entrou junto um passo de **radiografia do dump** (nomes de schema, extensão e tabela; nunca valores),
 para que a próxima surpresa seja diagnosticável na mesma execução em vez de exigir uma rodada só para
 descobrir o que o arquivo contém.
@@ -336,7 +351,7 @@ descobrir o que o arquivo contém.
 | # | O quê | Onde | Bloqueante |
 |---|---|---|---|
 | 1 | ~~Criar o bucket R2 e os dois secrets do §6~~ | ✅ feito 02/09/2026 por Irineu | resolvido |
-| 2 | Exercitar o `workflow_dispatch` até o verde e registrar o que a execução ensinou — a estreia está no §8; falta o ensaio de restauração rodar, e com ele a resposta sobre `supabase_migrations` | card 3.11 | sim |
+| 2 | ~~Exercitar o `workflow_dispatch` até o verde e registrar o que a execução ensinou~~ | ✅ feito 02/09/2026, quatro execuções — §8 | resolvido |
 | 3 | Vigiar a **idade do backup mais novo no R2** a partir do vigia (Cloudflare), fechando o modo de falha do §7 — exige binding de R2 no Worker | card 3.12 | não |
 | 4 | Pré-condição do go-live "backup restaurado em teste" (card 2.8 §15) passa a ser satisfeita pelo ensaio semanal; conferir a redação do critério | card 9.7 | não |
 | 5 | Depois do cutover, reavaliar frequência e retenção com dado de negócio em produção | card 9.8 | não |
