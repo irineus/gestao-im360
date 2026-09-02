@@ -277,24 +277,58 @@ Comportamento (card 4.3/4.5):
 
 ## 11. Ajustes que este card exige
 
-| # | Ajuste | Card | Bloqueante |
-|---|---|---|:--:|
-| 1 | `pc`: trocar `credencial_ref text` por `credencial_secret_id`/`credencial_em`/`credencial_por` | 4.3 | ✔ |
-| 2 | Habilitar a extensão `supabase_vault` na migração e conferir que `vault` não está exposto no PostgREST | 3.3 | ✔ |
-| 3 | `salas.acessar_credencial` no seed de permissões e na matriz (direção, monitor) | 3.6 | ✔ |
-| 4 | Tabela `pc_credencial_acesso` com as políticas fora do padrão do §6 | 4.3 | ✔ |
-| 5 | `PC_INEXISTENTE` no catálogo de erros do card 2.2 e no fixture de contrato | 2.2 / 3.7 | ✔ |
-| 6 | C4, C8 e C12 atualizados; C14 e C15 criados | 3.4.5 / 3.9 | ✔ |
-| 7 | Trigger `tg_pc_credencial_apaga` | 4.3 | |
-| 8 | Ficha do PC com carimbo, botão e diálogo do §8 | 4.5 | |
-| 9 | Extrator descarta a coluna de senha; planilha congelada sanitizada | 9.2 / 9.7 | |
+| # | Ajuste | Card | Bloqueante | Estado |
+|---|---|---|:--:|---|
+| 1 | `pc`: trocar `credencial_ref text` por `credencial_secret_id`/`credencial_em`/`credencial_por` | 4.3 | ✔ | ✅ 02/09/2026 |
+| 2 | Habilitar a extensão `supabase_vault` na migração e conferir que `vault` não está exposto no PostgREST | 3.3 | ✔ | ✅ 02/09/2026, **de outra forma** (ver abaixo) |
+| 3 | `salas.acessar_credencial` no seed de permissões e na matriz (direção, monitor) | 3.6 | ✔ | ✅ 01/09/2026 |
+| 4 | Tabela `pc_credencial_acesso` com as políticas fora do padrão do §6 | 4.3 | ✔ | ✅ 02/09/2026 |
+| 5 | `PC_INEXISTENTE` no catálogo de erros do card 2.2 e no fixture de contrato | 2.2 / 3.7 | ✔ | ✅ 01/09/2026 |
+| 6 | C4, C8 e C12 atualizados; C14 e C15 criados | 3.4.5 / 3.9 | ✔ | ✅ C4/C8/C14/C15 em 02/09/2026; **C12 continua aberto** (a suíte `012_catalogo_contratos` ainda não existe) |
+| 7 | Trigger de limpeza do Vault | 4.3 | | ✅ 02/09/2026, como `fn_pc_credencial_apagar` + `tg_pc_credencial_apaga` |
+| 8 | Ficha do PC com carimbo, botão e diálogo do §8 | 4.5 | | aberto |
+| 9 | Extrator descarta a coluna de senha; planilha congelada sanitizada | 9.2 / 9.7 | | aberto |
+
+**Três divergências do card 4.3 com este documento, todas medidas e nenhuma de fundo:**
+
+1. **Não havia extensão a habilitar (ajuste #2).** `supabase_vault` já vem instalada de fábrica, no
+   schema `vault`, em todo projeto Supabase — `create extension` seria um no-op que dá a impressão
+   de estar controlando alguma coisa. A migração passou a **exigir** em vez de criar: um bloco que
+   levanta exceção se a extensão ou o schema não existirem. Num projeto Supabase é silencioso; num
+   Postgres sem a casca da plataforma — o alvo do ensaio de restauração do card 3.11 — ele para o
+   `db push` com a causa escrita, em vez de deixar as duas funções nascerem quebradas. E função de
+   credencial quebrada só se descobre no dia em que alguém precisa da senha.
+
+2. **A função de limpeza chama-se `fn_pc_credencial_apagar` (ajuste #7).** O §7 batizava a FUNÇÃO de
+   `tg_pc_credencial_apaga`, e neste projeto `tg_` é prefixo de TRIGGER e `fn_` de função (cards 2.2
+   §16 e 4.2). Duas convenções vivas no mesmo schema é o tipo de coisa que ninguém encontra porque
+   as duas linhas parecem certas.
+
+3. **O `DETAIL` de `PC_INEXISTENTE` passou a `json_build_object`.** O §4 escrevia
+   `detail = 'PC_INEXISTENTE'` em texto puro, o que daria ao projeto duas convenções de `DETAIL`; o
+   card 3.7 já tinha registrado o ajuste apontando para cá, e o app tolera as duas de propósito.
+
+**Um ajuste NOVO que o card 4.3 acrescenta, e que este documento não previa:** a cascata das FKs
+`pc_manutencao.pc_id` e `pc_credencial_acesso.pc_id` (`on delete cascade`) **não passa pela RLS da
+tabela referenciadora** — medido. Apagar um PC apagava junto, sem erro, o log de acesso que o §6
+declara imutável. Fechado com `tg_pc_exclusao_valida` (`PT409` / **`PC_COM_HISTORICO`**), que recusa
+apagar PC com manutenção, leitura de credencial ou papel de substituto. É o que faz o "excluir
+sala/PC **sem histórico**" do catálogo do card 2.4 deixar de ser uma frase e virar estrutura.
 
 ## 12. O que fica em aberto
 
-- **Verificar em dev, no card 4.3, que o dono das funções da migração enxerga
-  `vault.decrypted_secrets`.** É o único ponto do desenho que depende de detalhe da plataforma. Se
-  não enxergar, a saída não é construir criptografia própria: é voltar a `credencial_ref` apontando
-  para cofre externo, com o custo de adoção descrito no §2 assumido explicitamente.
+- ✅ **RESPONDIDO em 02/09/2026 (card 4.3): o dono das funções ENXERGA `vault.decrypted_secrets`, e
+  o desenho fica de pé.** Medido no stack local com as migrações e o seed aplicados: `postgres` tem
+  `select` na view de decifra e `usage` no schema `vault`; `authenticated` e `anon` não têm nem uma
+  coisa nem outra. Deixou de ser premissa e virou o teste **C15**, que reprova no dia em que alguém
+  conceder `usage` em `vault` ao papel do app — e a leitura ponta a ponta (gravar, ler, conferir o
+  par devolvido) é exercitada em `031_infraestrutura_fisica.sql`. Enunciado original preservado:
+  *verificar em dev, no card 4.3, que o dono das funções da migração enxerga
+  `vault.decrypted_secrets`. É o único ponto do desenho que depende de detalhe da plataforma. Se não
+  enxergar, a saída não é construir criptografia própria: é voltar a `credencial_ref` apontando para
+  cofre externo, com o custo de adoção descrito no §2 assumido explicitamente.* ⚠️ A medição é do
+  **stack local**, que é um Postgres da mesma imagem do Supabase; a conferência no projeto **dev**
+  acontece depois do `db push` do CI.
 - **Rotação periódica não entra na v1.** Não há rotina, nem prazo, nem alerta de senha velha —
   `credencial_em` na tela é o suficiente para alguém reparar. Se virar necessidade, é card da Fase 11.
 - **Recomendação à escola, fora do escopo do sistema:** que a conta de login de cada PC do laboratório

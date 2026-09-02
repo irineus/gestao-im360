@@ -81,8 +81,8 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
    'APLICADA no card 4.2: doze alunos por unidade, um por caso que alguma decisão criou — os quatro degraus da cascata da projeção, previsão vencida, STANDBY antigo, os dois terminais (FORMADO e CANCELADO), TRANCADO, ACELERAR e um sem combo. Datas SEMPRE relativas a fn_hoje(). O "em FIM" e o "com débito REP na borda" do card 2.8 §4.2 dependem de aluno_material e bloco_aluno: ficam com as camadas trilha_estoque (6.1) e turmas (5.1), e os alunos que os receberão já nascem aqui.'),
 
   ('infra_fisica', 50, '4.3',
-   $$to_regclass('public.pc') is not null$$, false,
-   'Uma sala com 10 PCs (capacidade real do laboratório) e uma com 6. A borda 10/11 é o teste de lotação do card 5.3.'),
+   $$to_regclass('public.pc') is not null$$, true,
+   'APLICADA no card 4.3: uma sala com 10 PCs (capacidade real do laboratório) e uma com 6, mais uma sala modular sem PC. A borda 10/11 é o teste de lotação do card 5.3. Os seis PCs da segunda sala NÃO estão todos operacionais de propósito: capacidade nominal (6), total de PCs (6) e PCs operacionais (4) são três números distintos, e é isso que faz fn_capacidade_efetiva (card 5.2) reprovar se somar a coluna errada. Duas manutenções (uma aberta sem substituto, uma fechada) e três professores, um inativo. Nenhuma credencial: senha de fixture no repositório é o que o card 2.9 §9 recusa, e os testes de credencial gravam a sua dentro da própria transação.'),
 
   ('turmas', 60, '5.1',
    $$to_regclass('public.bloco_aluno') is not null$$, false,
@@ -613,7 +613,120 @@ select tests.seed_alunos(tests.unidade('ESCOLA_A'));
 select tests.seed_alunos(tests.unidade('ESCOLA_B'));
 
 -- =============================================================================
--- 6. Fecho: nada em `tests` alcançável por quem não é `postgres`
+-- 6. Escola-fixture — camada `infra_fisica` (card 4.3)
+-- =============================================================================
+-- Três salas e dezesseis PCs, escolhidos para exercitar bordas — não para
+-- parecer com a escola. Quatro escolhas que valem explicação:
+--
+--   (a) o laboratório tem EXATAMENTE 10 PCs operacionais, que é a capacidade
+--       real do laboratório (Decisões vigentes, 31/08/2026). A borda 10/11 é o
+--       teste de lotação do card 5.3: o 11º aluno tem de bater em BLOCO_LOTADO,
+--       e uma fixture com 9 ou com 12 PCs passaria sem exercitar isso.
+--
+--   (b) na segunda sala, capacidade nominal (6), total de PCs (6) e PCs
+--       OPERACIONAIS (4) são TRÊS NÚMEROS DISTINTOS. É o que faz
+--       `fn_capacidade_efetiva` (card 5.2) reprovar quando somar a coluna
+--       errada — com os três iguais, a função passaria contando qualquer coisa.
+--       Um PC em MANUTENCAO e um DESATIVADO: os dois saem da conta, e são
+--       estados diferentes que o card 5.4 trata de forma diferente.
+--
+--   (c) as duas manutenções são de tipos opostos de propósito: uma ABERTA
+--       (`data_fim` nulo) e sem substituto — o caso que derruba a capacidade e
+--       abre a pendência do card 5.4 — e uma FECHADA, que é histórico e não
+--       muda capacidade nenhuma. Uma fixture só com manutenção aberta faria
+--       "manutenção" e "PC parado" parecerem a mesma coisa.
+--
+--   (d) NENHUMA credencial é gravada aqui. Senha de fixture no repositório é
+--       exatamente o que o card 2.9 recusa, e o varredor de segredos do card
+--       3.11 já reprovou este projeto duas vezes por linhas que apenas PARECEM
+--       uma senha. Os testes de credencial gravam a sua com
+--       `fn_pc_credencial_gravar` dentro da própria transação, e ela morre no
+--       rollback.
+--
+-- Os PCs dos dois laboratórios TÊM histórico (manutenção), e é isso que dá ao
+-- teste da guarda de exclusão do card 4.3 os dois lados: um PC que recusa ser
+-- apagado e um que aceita.
+create or replace function tests.seed_infra_fisica(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_lab      uuid;
+  v_lab2     uuid;
+  v_pc_manut uuid;
+  v_pc_ok    uuid;
+begin
+  insert into sala (unidade_id, nome, tipo, capacidade_nominal)
+  select p_unidade, s.nome, s.tipo, s.cap
+    from (values
+      ('Laboratório 1',      'LABORATORIO',  10),
+      ('Laboratório 2',      'LABORATORIO',   6),
+      ('Sala Eletricista',   'SALA_MODULAR', 15)
+    ) as s(nome, tipo, cap)
+   where not exists (select 1 from sala x
+                      where x.unidade_id = p_unidade and x.nome = s.nome);
+
+  select id into v_lab  from sala where unidade_id = p_unidade and nome = 'Laboratório 1';
+  select id into v_lab2 from sala where unidade_id = p_unidade and nome = 'Laboratório 2';
+
+  -- Laboratório 1: dez PCs, todos operacionais. LAB1-01 .. LAB1-10.
+  insert into pc (unidade_id, sala_id, identificador, status)
+  select p_unidade, v_lab, format('LAB1-%s', lpad(i::text, 2, '0')), 'OPERACIONAL'
+    from generate_series(1, 10) as i
+   where not exists (select 1 from pc x
+                      where x.unidade_id = p_unidade
+                        and x.identificador = format('LAB1-%s', lpad(i::text, 2, '0')));
+
+  -- Laboratório 2: seis PCs, quatro operacionais.
+  insert into pc (unidade_id, sala_id, identificador, status)
+  select p_unidade, v_lab2, p.identificador, p.status
+    from (values
+      ('LAB2-01', 'OPERACIONAL'),
+      ('LAB2-02', 'OPERACIONAL'),
+      ('LAB2-03', 'OPERACIONAL'),
+      ('LAB2-04', 'OPERACIONAL'),
+      ('LAB2-05', 'MANUTENCAO'),
+      ('LAB2-06', 'DESATIVADO')
+    ) as p(identificador, status)
+   where not exists (select 1 from pc x
+                      where x.unidade_id = p_unidade and x.identificador = p.identificador);
+
+  select id into v_pc_manut from pc where unidade_id = p_unidade and identificador = 'LAB2-05';
+  select id into v_pc_ok    from pc where unidade_id = p_unidade and identificador = 'LAB1-01';
+
+  -- Aberta e sem substituto: é a que derruba a capacidade efetiva do bloco.
+  insert into pc_manutencao (unidade_id, pc_id, tipo, data_inicio, descricao)
+  select p_unidade, v_pc_manut, 'CORRETIVA', fn_hoje() - 3, 'fonte queimada'
+   where not exists (select 1 from pc_manutencao m where m.pc_id = v_pc_manut);
+
+  -- Fechada: histórico, não muda capacidade nenhuma.
+  insert into pc_manutencao (unidade_id, pc_id, tipo, data_inicio, data_fim, descricao)
+  select p_unidade, v_pc_ok, 'PREVENTIVA', fn_hoje() - 60, fn_hoje() - 59, 'limpeza e atualização'
+   where not exists (select 1 from pc_manutencao m where m.pc_id = v_pc_ok);
+
+  -- Três professores, um inativo — o inativo é o que prova que a grade do card
+  -- 5.6 filtra por `ativo` em vez de listar todo mundo que já deu aula.
+  insert into professor (unidade_id, nome, ativo)
+  select p_unidade, pr.nome, pr.ativo
+    from (values
+      ('Marcos Vieira',  true),
+      ('Renata Alves',   true),
+      ('Otávio Pacheco', false)
+    ) as pr(nome, ativo)
+   where not exists (select 1 from professor x
+                      where x.unidade_id = p_unidade and x.nome = pr.nome);
+end $$;
+
+-- As duas unidades recebem a mesma infraestrutura, com os MESMOS
+-- identificadores de PC: `pc_identificador_uk` é único por UNIDADE, então
+-- repetir entre unidades é exatamente o caso que a unique precisa aceitar — e
+-- recusaria se estivesse escrita sem o unidade_id.
+select tests.seed_infra_fisica(tests.unidade('ESCOLA_A'));
+select tests.seed_infra_fisica(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 7. Fecho: nada em `tests` alcançável por quem não é `postgres`
 -- =============================================================================
 -- `create function` concede EXECUTE a PUBLIC por padrão. A revogação do USAGE no
 -- schema já bastaria, mas as duas juntas sobrevivem a alguém conceder o schema

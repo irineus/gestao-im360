@@ -96,7 +96,17 @@ create temporary view p_esperada (tabela, cmd) as values
   -- imutabilidade aqui É a ausência de política. As três linhas que faltam neste
   -- bloco são a decisão escrita.
   ('aluno','r'),            ('aluno','a'),            ('aluno','w'),
-  ('aluno_status_hist','r'), ('aluno_status_hist','a');
+  ('aluno_status_hist','r'), ('aluno_status_hist','a'),
+  -- card 4.3 — infraestrutura física. Três ausências, três decisões:
+  -- `pc_manutencao` sem DELETE (manutenção registrada é histórico), `professor`
+  -- sem DELETE (sai por ativo = false, senão a grade histórica perde o nome de
+  -- quem deu a aula) e `pc_credencial_acesso` sem update NEM delete — a
+  -- imutabilidade do log de credencial É esta ausência (card 2.9 §6).
+  ('sala','r'),             ('sala','a'),             ('sala','w'),             ('sala','d'),
+  ('pc','r'),               ('pc','a'),               ('pc','w'),               ('pc','d'),
+  ('pc_manutencao','r'),    ('pc_manutencao','a'),    ('pc_manutencao','w'),
+  ('professor','r'),        ('professor','a'),        ('professor','w'),
+  ('pc_credencial_acesso','r'), ('pc_credencial_acesso','a');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text
@@ -155,7 +165,16 @@ create temporary view p_codigo_catalogo (codigo) as values
   -- de um trigger. Pôr qualquer um dos dois aqui reprovaria por "catalogado e
   -- não usado", que é exatamente o que esta lista existe para dizer.
   ('alunos.ler'), ('alunos.criar'), ('alunos.editar'),
-  ('alunos.alterar_status'), ('alunos.reverter_status');
+  ('alunos.alterar_status'), ('alunos.reverter_status'),
+  -- card 4.3 — os cinco do domínio `salas`, os três de `professores` e o 50º
+  -- código, `salas.acessar_credencial` (card 2.9), que aqui aparece pela
+  -- primeira vez em política: as duas de `pc_credencial_acesso`.
+  -- `salas.registrar_manutencao` é separado de `salas.editar` porque tem
+  -- consequência que editar não tem — manutenção sem substituto derruba a
+  -- capacidade do bloco (card 2.4 §3.3).
+  ('salas.ler'), ('salas.criar'), ('salas.editar'), ('salas.excluir'),
+  ('salas.registrar_manutencao'), ('salas.acessar_credencial'),
+  ('professores.ler'), ('professores.criar'), ('professores.editar');
 
 select is(
   (select coalesce(string_agg(msg, '; ' order by msg), '')

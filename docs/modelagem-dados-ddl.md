@@ -429,6 +429,10 @@ create table public.pc (
              check (status in ('OPERACIONAL','MANUTENCAO','DESATIVADO')),
   -- NUNCA senha em texto puro. Aqui vai apenas a referência ao cofre externo.
   -- Política definitiva: card 2.9 (Definir política para credenciais dos PCs).
+  -- ⚠️ SUPERADO em 01/09/2026 pelo card 2.9 e aplicado em 02/09/2026 pelo 4.3:
+  -- a coluna abaixo NÃO existe. O segredo é o par {usuario, senha} inteiro,
+  -- cifrado em vault.secrets, e `pc` guarda credencial_secret_id +
+  -- credencial_em + credencial_por. Ver docs/politica-credenciais-pcs.md §3.
   credencial_ref text,
   observacao text,
   criado_em timestamptz not null default now(), criado_por uuid,
