@@ -326,9 +326,12 @@ sala/PC **sem histórico**" do catálogo do card 2.4 deixar de ser uma frase e v
   *verificar em dev, no card 4.3, que o dono das funções da migração enxerga
   `vault.decrypted_secrets`. É o único ponto do desenho que depende de detalhe da plataforma. Se não
   enxergar, a saída não é construir criptografia própria: é voltar a `credencial_ref` apontando para
-  cofre externo, com o custo de adoção descrito no §2 assumido explicitamente.* ⚠️ A medição é do
-  **stack local**, que é um Postgres da mesma imagem do Supabase; a conferência no projeto **dev**
-  acontece depois do `db push` do CI.
+  cofre externo, com o custo de adoção descrito no §2 assumido explicitamente.* ✅ **Reconferido no
+  projeto dev** (`ncdfolxdupbbfvtydngx`) logo depois do `db push` do CI, em 02/09/2026: os mesmos
+  quatro privilégios, e as cinco tabelas com RLS **forçada**, 16 políticas e **zero linhas** — que é
+  o que a decisão de 02/09/2026 exige. A medição do stack local não bastava sozinha: ele é um
+  Postgres da mesma imagem, mas quem serve o app é o projeto, e o card 3.11 já mediu que a casca da
+  plataforma é criada **por banco**.
 - **Rotação periódica não entra na v1.** Não há rotina, nem prazo, nem alerta de senha velha —
   `credencial_em` na tela é o suficiente para alguém reparar. Se virar necessidade, é card da Fase 11.
 - **Recomendação à escola, fora do escopo do sistema:** que a conta de login de cada PC do laboratório
