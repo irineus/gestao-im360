@@ -179,7 +179,18 @@ jobs:
           grep -qF "$APP_URL_BASE"  build/web/main.dart.js || { echo "::error::o bundle não contém APP_URL_BASE=$APP_URL_BASE"; exit 1; }
           # Card 3.12: o rótulo que o Sentry vai carimbar em cada erro. Errado,
           # ele manda investigar produção por causa de um erro de homologação.
-          grep -qF "$APP_AMBIENTE" build/web/main.dart.js || { echo "::error::o bundle não contém APP_AMBIENTE=$APP_AMBIENTE"; exit 1; }
+          #
+          # ⚠️ SÓ VALE COM O SENTRY LIGADO, e isso foi medido (02/09/2026, run
+          # 33646706789, o primeiro deploy depois do card 3.12). `SENTRY_DSN`
+          # vazio é uma constante de compilação: `observabilidadeLigada` resolve
+          # para `false` ainda no dart2js, o ramo do `SentryFlutter.init` é
+          # eliminado como código morto, e com ele some a ÚNICA referência a
+          # `Ambiente.ambiente` — a string `homologacao` deixa de existir no
+          # bundle. Conferir a presença dela aí seria exigir uma decoração: sem
+          # Sentry o rótulo não tem consumidor nenhum.
+          if [ -n "$SENTRY_DSN" ]; then
+            grep -qF "$APP_AMBIENTE" build/web/main.dart.js || { echo "::error::o bundle não contém APP_AMBIENTE=$APP_AMBIENTE"; exit 1; }
+          fi
           # Contraprova (card 3.9): o bundle NÃO pode carregar o endereço do
           # outro ambiente. Ela pegou, em 02/09/2026, uma tentativa de derivar
           # o rótulo do ambiente a partir do `SUPABASE_URL`, que embutia o ref
