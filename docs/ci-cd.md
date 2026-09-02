@@ -10,15 +10,19 @@ rodado em lugar nenhum** — portão que não reprova é exatamente a falha que 
 
 ---
 
-## 1. Os três workflows
+## 1. Os quatro workflows
 
 | Workflow | Dispara | Jobs | O que bloqueia |
 |---|---|---|---|
-| **`testes.yml`** | todo *pull request*; push em `develop`/`main`; e `workflow_call` | `banco` (pgTAP + concorrência) e `app` (formatação, análise, testes) | o merge do PR |
+| **`testes.yml`** | todo *pull request*; push em `develop`/`main`; e `workflow_call` | `banco` (pgTAP + concorrência), `app` (formatação, análise, testes) e `vigia` (`node --test`) | o merge do PR |
 | **`db-migrations.yml`** | push em `develop`/`main` tocando `supabase/migrations/**`; `workflow_dispatch` | `testes` (chama o de cima) → `migrate` | o `supabase db push` em dev e em prod |
 | **`deploy-web.yml`** | push em `develop`/`main` tocando `app/**`, `assets/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação no Cloudflare Pages |
+| **`deploy-worker-vigia.yml`** | push em **`main`** tocando `worker-vigia/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação do Worker vigia (card 3.10) |
 
-Os dois workflows de consequência **chamam** o de testes com `uses:` e dependem dele com `needs:`.
+O vigia dispara só de `main` porque é **um** Worker para os **dois** ambientes — não há vigia de
+homologação e vigia de produção, o que ele vigia é o par. Detalhe em `docs/worker-vigia.md`.
+
+Os três workflows de consequência **chamam** o de testes com `uses:` e dependem dele com `needs:`.
 Não é redundância com o disparo por PR: o PR protege o que entra em `develop`, e o `needs:` protege
 o que **sai** de `develop` para um banco ou para o ar. Sem ele, uma migração vermelha chegaria ao
 banco do mesmo jeito.
@@ -36,7 +40,8 @@ propósito — ver §4.
 |---|---|---|
 | CLI do Supabase | **2.116.0** | `testes.yml` e `db-migrations.yml` |
 | Flutter | **3.47.2** | `testes.yml` e `deploy-web.yml` |
-| Wrangler | **4.128.0** | `deploy-web.yml` |
+| Wrangler | **4.128.0** | `deploy-web.yml` e `deploy-worker-vigia.yml` |
+| Node | **24.16.0** | `testes.yml` (job `vigia`) e `deploy-worker-vigia.yml` |
 
 Com `latest`, uma versão nova quebra o pipeline sem que nada mude no repositório — e quebra junto a
 suíte que deveria estar dizendo a verdade sobre o commit. Fixar transforma a atualização em um
@@ -104,6 +109,16 @@ flutter test
 
 São exatamente os de `app/README.md`, "Verificar antes de empurrar" — o portão do CI não pode ser
 mais exigente que o da máquina, senão ninguém consegue prever o resultado antes de empurrar.
+
+### Job `vigia`
+
+```bash
+node --test "worker-vigia/test/**/*.test.mjs"
+```
+
+Um passo só, e **sem `npm ci`**: o Worker do card 3.10 não tem dependência nenhuma, então não há
+`node_modules` para instalar nem para auditar. Os testes usam um `fetch` de mentira e não falam com
+Supabase nenhum — quem faz isso é `worker-vigia/conferir.mjs`, no deploy, com as chaves na mão.
 
 Os testes leem `test/fixtures/codigos_erro.txt`, na **raiz** do repositório: o contrato de códigos
 de erro tem dois consumidores (o banco, pelo teste C12, e o app) e não é de nenhum dos dois sozinho
@@ -219,6 +234,14 @@ teria de entrar nas Redirect URLs do Auth. Implementado o que o 3.8 decidiu — 
 | Secret do repositório | `CLOUDFLARE_ACCOUNT_ID` | idem | ✅ criado 02/09/2026 |
 | Secret do environment `dev` | `SUPABASE_ANON_KEY` | chave publicável do projeto dev, no bundle de homologação | ✅ criado 02/09/2026 |
 | Secret do environment `prod` | `SUPABASE_ANON_KEY` | chave publicável do projeto prod, no bundle de produção | ✅ criado 02/09/2026 |
+| Secret do repositório | `SUPABASE_ANON_KEY_DEV` | sonda do vigia no projeto dev (card 3.10) | ⛔ falta |
+| Secret do repositório | `SUPABASE_ANON_KEY_PROD` | sonda do vigia no projeto prod (card 3.10) | ⛔ falta |
+| Secret do repositório | `RESEND_API_KEY` | e-mail de alerta do vigia (card 3.10) | ⛔ falta |
+| Token do Cloudflare | permissão *Workers Scripts — Edit* | `wrangler deploy` do vigia (card 3.10) | ⛔ falta — o token de hoje é só de Pages |
+
+⚠️ As duas chaves publicáveis aparecem **duas vezes** na tabela de propósito: como secret de
+environment (`SUPABASE_ANON_KEY`, para o build do app) e como secret de repositório com sufixo (para
+o vigia). Um job enxerga **um** environment só, e o vigia precisa das duas ao mesmo tempo.
 
 ⚠️ O nome `SUPABASE_ANON_KEY` é **o mesmo nos dois environments, de propósito** — é o environment
 que decide qual valor o job enxerga. Criado como secret **do repositório**, o build de produção
@@ -252,6 +275,10 @@ flutter pub get
 dart format --output=none --set-exit-if-changed .
 flutter analyze --fatal-infos
 flutter test
+
+# vigia (nada a instalar: o Worker não tem dependência)
+cd ..
+node --test "worker-vigia/test/**/*.test.mjs"
 ```
 
 Se outro projeto local do Supabase já estiver ocupando as portas 54321-54324, o `supabase start`
@@ -300,3 +327,4 @@ E no CI, que é onde o resto se prova:
 | 2 | **5.3 / 6.3** | Os dois scripts de `supabase/tests_concorrencia/` — hoje o passo roda zero e avisa | bloqueante do marco 2 |
 | 3 | **3.12** | Ao ligar o Sentry, acrescentar o host de ingestão ao `connect-src` do `_headers` **no mesmo commit** — a CSP bloqueia sem avisar (herdado do card 3.8) | bloqueante |
 | 4 | **todos** | Trocar uma versão fixada do §2 é um commit com PR: quem atualizar precisa rodar a suíte antes | informativo |
+| 5 | **Irineu** | Os quatro itens ⛔ do §10 que o card 3.10 acrescentou (três secrets e a permissão de Workers no token) | bloqueante do vigia |

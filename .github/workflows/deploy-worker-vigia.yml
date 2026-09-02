@@ -1,0 +1,111 @@
+# Publicação do Worker vigia no Cloudflare — card 3.10.
+# Contrato e operação: docs/worker-vigia.md.
+#
+# O vigia é UM só e olha os DOIS ambientes — não há vigia de homologação e vigia
+# de produção, porque o que ele vigia é justamente o par. Por isso publica só a
+# partir de `main`: é infraestrutura de produção, e passa pelo mesmo portão
+# humano do environment `prod` que já segura a migração e o deploy do app.
+#
+# ⚠️ O QUE SÓ IRINEU CONFIGURA, e sem o que este workflow falha no primeiro passo:
+#   - CLOUDFLARE_API_TOKEN precisa incluir a permissão **Workers Scripts — Edit**.
+#     O token do card 3.9 foi criado para o Pages; sem essa permissão o `wrangler
+#     deploy` devolve "Authentication error [code: 10000]" e não diz o que falta.
+#   - secret do repositório  SUPABASE_ANON_KEY_DEV   (chave publicável do projeto dev)
+#   - secret do repositório  SUPABASE_ANON_KEY_PROD  (chave publicável do projeto prod)
+#   - secret do repositório  RESEND_API_KEY          (conta Resend do card 3.8)
+# As duas chaves publicáveis são as MESMAS que já estão nos environments `dev` e
+# `prod` como `SUPABASE_ANON_KEY`. Aqui elas precisam de nome distinto e escopo de
+# repositório por um motivo prático: um job só enxerga UM environment, e este
+# precisa das duas ao mesmo tempo. São públicas por desenho (vão no bundle que
+# qualquer visitante baixa) — ficam em secret para que rotacionar não exija commit.
+
+name: deploy-worker-vigia
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker-vigia/**'
+      - '.github/workflows/deploy-worker-vigia.yml'
+      - '.github/workflows/testes.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-worker-vigia
+  cancel-in-progress: false
+
+jobs:
+  testes:
+    uses: ./.github/workflows/testes.yml
+
+  publicar:
+    name: publicar o vigia (PRODUÇÃO)
+    needs: testes
+    runs-on: ubuntu-latest
+    environment: prod
+    defaults:
+      run:
+        working-directory: worker-vigia
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SUPABASE_ANON_KEY_DEV: ${{ secrets.SUPABASE_ANON_KEY_DEV }}
+      SUPABASE_ANON_KEY_PROD: ${{ secrets.SUPABASE_ANON_KEY_PROD }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Fixa pelo mesmo motivo do CLI do Supabase, do Flutter e do wrangler.
+          node-version: '24.16.0'
+
+      - name: Conferir a configuração antes de publicar
+        # Mesma lição do `deploy-web`: segredo ausente não faz o deploy falhar
+        # sozinho — faz o vigia subir e falhar depois, às 06:00, sem ninguém por
+        # perto. A ausência é conferida aqui, com o nome exato do que criar.
+        shell: bash
+        run: |
+          faltando=()
+          [ -n "$CLOUDFLARE_API_TOKEN" ]   || faltando+=("CLOUDFLARE_API_TOKEN — secret do repositório (precisa de 'Workers Scripts — Edit')")
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ]  || faltando+=("CLOUDFLARE_ACCOUNT_ID — secret do repositório")
+          [ -n "$SUPABASE_ANON_KEY_DEV" ]  || faltando+=("SUPABASE_ANON_KEY_DEV — secret do repositório")
+          [ -n "$SUPABASE_ANON_KEY_PROD" ] || faltando+=("SUPABASE_ANON_KEY_PROD — secret do repositório")
+          [ -n "$RESEND_API_KEY" ]         || faltando+=("RESEND_API_KEY — secret do repositório")
+          if [ ${#faltando[@]} -gt 0 ]; then
+            printf '::error title=Configuração ausente::%s\n' "${faltando[@]}"
+            { echo "## Falta configurar no GitHub"; printf -- '- %s\n' "${faltando[@]}"; } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: As duas sondas passam com estas chaves
+        # Roda a sonda de verdade contra os dois Supabase, com o mesmo código que
+        # o Worker executa, ANTES de instalar as chaves nele. Chave trocada ou
+        # rotacionada não derruba nada hoje: produziria um e-mail de alarme falso
+        # por dia, e alarme falso recorrente é como se ensina a ignorar o alerta
+        # de verdade. Reprovar aqui é a única hora em que alguém está olhando.
+        run: node conferir.mjs
+
+      - name: Publicar o Worker
+        run: npx --yes wrangler@4.128.0 deploy
+
+      - name: Instalar os segredos do Worker
+        # Depois do deploy porque `secret put` exige que o Worker exista (na
+        # primeira publicação ele acabou de nascer). A janela entre os dois passos
+        # é de segundos, e o cron é diário — mas se ela pegar uma execução, o
+        # vigia falha ALTO (`conferirConfiguracao` no início de toda execução), em
+        # vez de sondar com chave vazia e chamar isso de resultado.
+        shell: bash
+        run: |
+          for nome in SUPABASE_ANON_KEY_DEV SUPABASE_ANON_KEY_PROD RESEND_API_KEY; do
+            printf '%s' "${!nome}" | npx --yes wrangler@4.128.0 secret put "$nome"
+          done
+
+      - name: Resumo
+        run: |
+          {
+            echo "## Vigia publicado"
+            echo "- Worker: \`gestao-im360-vigia\`"
+            echo "- Cron: \`0 9 * * *\` (06:00 em São Paulo)"
+            echo "- Sondas conferidas antes da publicação: homologação e produção"
+          } >> "$GITHUB_STEP_SUMMARY"

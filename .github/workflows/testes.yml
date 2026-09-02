@@ -131,3 +131,27 @@ jobs:
         # contrato de códigos de erro tem dois consumidores (o banco, pelo C12,
         # e o app) e não é de nenhum dos dois sozinho (card 3.7).
         run: flutter test
+
+  # ---------------------------------------------------------------------------
+  # Vigia: o Worker do card 3.10, que mantém os dois Supabase acordados
+  # ---------------------------------------------------------------------------
+  vigia:
+    name: vigia (Worker)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker-vigia
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Fixa pelo mesmo motivo do CLI e do Flutter.
+          node-version: '24.16.0'
+
+      - name: Suíte do vigia
+        # `node --test` puro: o Worker não tem dependência nenhuma, então não há
+        # `npm ci` aqui — nada a instalar e nada a auditar. Os testes usam um
+        # `fetch` de mentira; nenhum deles fala com o Supabase de verdade (quem
+        # faz isso é `conferir.mjs`, no deploy, com as chaves na mão).
+        run: node --test "test/**/*.test.mjs"

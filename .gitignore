@@ -15,6 +15,12 @@ supabase/.branches/
 .env
 .env.*
 *.key
+# Chaves do vigia para rodar `wrangler dev` na máquina (card 3.10). As de verdade
+# vivem em secret do repositório; este arquivo nunca é commitado.
+worker-vigia/.dev.vars
+
+# Cloudflare / wrangler
+.wrangler/
 
 # SO / editor
 .DS_Store
