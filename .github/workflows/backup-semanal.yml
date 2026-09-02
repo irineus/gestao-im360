@@ -138,16 +138,34 @@ jobs:
         # Guarda barata contra o modo de falha mais bobo e mais provável: dump que
         # sai com 0 e produz um arquivo só com o cabeçalho. A restauração do passo
         # seguinte pega isso também, mas custa um stack inteiro para descobrir.
+        #
+        # ⚠️ O PISO É POR ARQUIVO, e `roles.sql` é o motivo (medido na estreia,
+        # 02/09/2026): `--role-only` num projeto Supabase dumpa só os papéis
+        # PRÓPRIOS do banco, e este projeto não criou nenhum — `anon`,
+        # `authenticated`, `service_role` e companhia são da plataforma. O arquivo
+        # legítimo tem 370 bytes, só cabeçalho, e um piso único reprovava um fato.
+        # Ele continua no backup porque o dia em que crescer é o dia em que alguém
+        # criou um papel próprio, e aí ele passa a ser necessário para restaurar.
+        #
+        # O laço também não para no primeiro arquivo: relatório que esconde o
+        # estado dos outros dois obriga a rodar de novo para saber o resto.
         shell: bash
         run: |
-          for f in dump/roles.sql dump/schema.sql dump/data.sql; do
-            bytes=$(wc -c < "$f")
-            echo "$f: $bytes bytes"
-            if [ "$bytes" -lt 512 ]; then
-              echo "::error title=Dump suspeito::$f tem $bytes bytes — menos que o cabeçalho de um dump de verdade."
-              exit 1
+          falhou=0
+          while IFS='|' read -r arquivo piso significado; do
+            [ -n "$arquivo" ] || continue
+            bytes=$(wc -c < "dump/$arquivo")
+            printf '%-11s %9s bytes (piso %s — %s)\n' "$arquivo" "$bytes" "$piso" "$significado"
+            if [ "$bytes" -lt "$piso" ]; then
+              echo "::error title=Dump suspeito::dump/$arquivo tem $bytes bytes, abaixo do piso de $piso."
+              falhou=1
             fi
-          done
+          done <<'LISTA'
+          roles.sql|1|papéis próprios do banco; este projeto não tem nenhum, então só o cabeçalho é o esperado
+          schema.sql|512|estrutura dos schemas de aplicação
+          data.sql|512|dados
+          LISTA
+          [ "$falhou" -eq 0 ]
 
       - name: Subir o Postgres local para o ensaio de restauração
         # O ensaio é o coração deste card: **backup nunca restaurado não é
