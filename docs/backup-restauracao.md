@@ -222,12 +222,18 @@ nada aqui depende de environment.
 
 ## 7. Limites assumidos
 
-- ⚠️ **O observador tem o seu próprio modo de falha silencioso.** O GitHub **desativa workflow
-  agendado em repositório com 60 dias sem commit** — avisa por e-mail uma vez e o backup
-  simplesmente deixa de acontecer, sem nada vermelho em lugar nenhum. Hoje o repositório tem commit
-  todo dia e o risco é teórico; ele vira real justamente quando o desenvolvimento parar, isto é,
-  quando o sistema estiver em produção e o backup importar. Mitigação de verdade seria alguém de
-  fora olhar a idade do objeto mais novo no R2 — anotado como ajuste para o card 3.12.
+- ✅ **O modo de falha silencioso do observador passou a ser vigiado (02/09/2026, card 3.12).** O
+  GitHub **desativa workflow agendado em repositório com 60 dias sem commit** — avisa por e-mail uma
+  vez e o backup simplesmente deixa de acontecer, sem nada vermelho em lugar nenhum. O risco vira
+  real justamente quando o desenvolvimento parar, isto é, quando o sistema estiver em produção e o
+  backup importar. A mitigação que este documento previa — alguém de fora olhando a idade do objeto
+  mais novo no R2 — **existe**: o **vigia** (Worker Cloudflare, execução diária das 06:00) lista o
+  bucket e reprova quando a cópia mais nova passa de **9 dias** ou está **incompleta**, e o e-mail
+  nomeia a causa mais provável (*Actions → backup-semanal → Enable workflow*). É outra
+  infraestrutura de propósito: o backup mora no GitHub, o vigia roda no Cloudflare. A idade sai do
+  **prefixo de data** (`producao/YYYY-MM-DD/`) e não do `uploaded` do objeto — recopiar um backup
+  velho o deixaria novinho, e a idade mentiria na hora errada. Ver `docs/observabilidade.md` §9 e
+  `docs/worker-vigia.md`. ⚠️ Sobra o limite de sempre: **vigia que morre não avisa**.
 - **Semanal, e só de produção.** Perda máxima aceita: 7 dias. Homologação não é copiada: o dado dela
   é recarregável pelo importador do card 9.1.
 - **Aviso de falha é o e-mail padrão do GitHub** para workflow agendado que falha, e ele chega a

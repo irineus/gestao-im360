@@ -65,6 +65,112 @@ export const AMBIENTES = [
  */
 export const CAMINHO_SONDA = '/rest/v1/parametro?select=chave&limit=1';
 
+/**
+ * O backup semanal de produção (card 3.11), vigiado a partir daqui desde o card
+ * 3.12.
+ *
+ * ⚠️ POR QUE ESTA VERIFICAÇÃO EXISTE, e ela é o oposto de zelo: o card 3.11
+ * registrou um modo de falha silencioso do próprio backup — **o GitHub desativa
+ * workflow agendado em repositório com 60 dias sem commit**, e o risco vira real
+ * justamente quando o desenvolvimento parar, que é quando ninguém mais está
+ * olhando o painel de Actions. O backup pararia de sair sem uma linha de aviso,
+ * e a descoberta seria no dia em que ele fizesse falta. Quem vigia o vigia é
+ * outra infraestrutura: o backup mora no GitHub, isto roda no Cloudflare.
+ *
+ * A idade sai do **prefixo de data da cópia**, não do `uploaded` do objeto: o
+ * prefixo é a data do DUMP, e é essa que responde "quão velho é o dado que eu
+ * teria de volta". `uploaded` responde outra coisa — recopiar um backup velho o
+ * deixaria novinho, e a idade mentiria exatamente na hora errada.
+ */
+export const BACKUP = {
+  /** `s3://<bucket>/producao/YYYY-MM-DD/…` (backup-semanal.yml, "Publicar no R2"). */
+  prefixo: 'producao/',
+  /**
+   * Asserção POSITIVA, pela mesma razão que a sonda não se contenta com "não
+   * deu erro": prefixo que existe passaria com a pasta vazia. `data.sql.gz` é
+   * a razão de o backup existir — o card 3.11 anota que dump de schema sem dado
+   * é o jeito mais comum de um backup ser inútil — e o MANIFESTO é o que o
+   * workflow escreve por último a mais, marcando cópia completa.
+   */
+  exigidos: ['data.sql.gz', 'MANIFESTO.txt'],
+  /**
+   * O backup é semanal (domingo). Em operação normal a cópia mais nova tem no
+   * máximo 7 dias; 9 dá folga para uma execução atrasada sem alarme falso e
+   * ainda denuncia a PRIMEIRA semana perdida, em vez de esperar a segunda.
+   */
+  idadeMaximaDias: 9,
+};
+
+/**
+ * Decide sobre o backup a partir da lista de chaves. Pura de propósito: é o que
+ * permite exercitar bucket vazio, cópia incompleta e cópia velha sem R2 nenhum.
+ */
+export function avaliarBackup(chaves, opcoes = {}) {
+  const { quando = new Date(), idadeMaximaDias = BACKUP.idadeMaximaDias } = opcoes;
+
+  const porData = new Map();
+  for (const chave of chaves) {
+    const partes = /^producao\/(\d{4}-\d{2}-\d{2})\/(.+)$/.exec(chave);
+    if (!partes) continue;
+    if (!porData.has(partes[1])) porData.set(partes[1], new Set());
+    porData.get(partes[1]).add(partes[2]);
+  }
+
+  if (porData.size === 0) {
+    return { ok: false, motivo: 'o bucket não tem nenhuma cópia em `producao/`' };
+  }
+
+  // Prefixos são datas ISO, então ordem alfabética é ordem cronológica — a
+  // mesma propriedade de que a retenção do card 3.11 depende.
+  const data = [...porData.keys()].sort().at(-1);
+  const arquivos = porData.get(data);
+  const idadeDias = Math.floor((quando.getTime() - Date.parse(`${data}T00:00:00Z`)) / 86400000);
+
+  const faltando = BACKUP.exigidos.filter((nome) => !arquivos.has(nome));
+  if (faltando.length) {
+    return { ok: false, data, idadeDias, motivo: `a cópia de ${data} está incompleta: falta ${faltando.join(', ')}` };
+  }
+  if (idadeDias < 0) {
+    return { ok: false, data, idadeDias, motivo: `a cópia mais nova é de ${data}, uma data no futuro` };
+  }
+  if (idadeDias > idadeMaximaDias) {
+    return { ok: false, data, idadeDias, motivo: `a cópia mais nova é de ${data}, ${idadeDias} dias atrás (limite: ${idadeMaximaDias})` };
+  }
+  return { ok: true, data, idadeDias };
+}
+
+/**
+ * Lê o bucket e avalia.
+ *
+ * **Não lança, e isso é decisão**: qualquer problema aqui — binding ausente, R2
+ * fora do ar — vira `ok: false` com motivo, e não uma exceção. Uma exceção
+ * derrubaria a execução ANTES das sondas do Supabase, trocando uma proteção que
+ * funciona por outra que acabou de nascer. Falhar aqui alerta; falhar aqui não
+ * cega o resto.
+ */
+export async function conferirBackup(env, opcoes = {}) {
+  const balde = opcoes.balde ?? env?.BACKUP;
+  if (!balde) {
+    return {
+      ok: false,
+      motivo: 'o binding R2 `BACKUP` não existe neste Worker — ver worker-vigia/wrangler.toml e docs/backup-restauracao.md §6',
+    };
+  }
+
+  try {
+    const chaves = [];
+    let cursor;
+    do {
+      const pagina = await balde.list({ prefix: BACKUP.prefixo, limit: 1000, cursor });
+      for (const objeto of pagina.objects ?? []) chaves.push(objeto.key);
+      cursor = pagina.truncated ? pagina.cursor : undefined;
+    } while (cursor);
+    return avaliarBackup(chaves, opcoes);
+  } catch (erro) {
+    return { ok: false, motivo: `não consegui ler o bucket: ${erro?.message ?? erro}` };
+  }
+}
+
 /** Remetente do alerta. O Resend do card 3.8 serve `gestaoim360.com`; o nome
  *  distingue quem mandou, como já distingue dev de prod na caixa de entrada. */
 export const REMETENTE_PADRAO = 'Gestão IM360 (Vigia) <nao-responda@gestaoim360.com>';
@@ -169,14 +275,22 @@ function emSaoPaulo(quando) {
   }).format(quando);
 }
 
-export function montarAlerta(falhas, quando = new Date()) {
+/**
+ * Monta o e-mail. `backup` é opcional e só entra quando reprovou.
+ *
+ * Continua sendo **um e-mail por execução** (decisão do card 3.10): dois
+ * assuntos num envelope, e não dois envelopes. Alerta que se multiplica é
+ * alerta que se aprende a arquivar sem ler.
+ */
+export function montarAlerta(falhas, quando = new Date(), backup = null) {
   const nomes = falhas.map((f) => f.rotulo).join(' e ');
-  const linhas = [
-    `O vigia diário não conseguiu falar com o Supabase de ${nomes}.`,
-    '',
-    `Quando: ${emSaoPaulo(quando)} (São Paulo)`,
-    '',
-  ];
+  const backupRuim = backup && !backup.ok;
+
+  const abertura = falhas.length
+    ? `O vigia diário não conseguiu falar com o Supabase de ${nomes}.`
+    : 'O vigia diário encontrou um problema no backup de produção.';
+
+  const linhas = [abertura, '', `Quando: ${emSaoPaulo(quando)} (São Paulo)`, ''];
 
   for (const falha of falhas) {
     linhas.push(`── ${falha.rotulo}`);
@@ -185,18 +299,46 @@ export function montarAlerta(falhas, quando = new Date()) {
     linhas.push('');
   }
 
-  linhas.push('O que verificar, nesta ordem:');
-  linhas.push('1. O projeto está pausado? Painel do Supabase → Restore project.');
-  linhas.push('   Projeto pausado é o app fora do ar, não só a sonda falhando.');
-  linhas.push('2. A chave publicável foi rotacionada? Então o alerta é falso, e o');
-  linhas.push('   segredo SUPABASE_ANON_KEY_* do repositório precisa ser atualizado');
-  linhas.push('   junto com o bundle publicado (docs/worker-vigia.md §3).');
-  linhas.push('3. Fora isso, é indisponibilidade do Supabase — status.supabase.com.');
-  linhas.push('');
+  if (backupRuim) {
+    linhas.push('── backup semanal de produção');
+    linhas.push(`   ${backup.motivo}`);
+    linhas.push('');
+  }
+
+  if (falhas.length) {
+    linhas.push('O que verificar no Supabase, nesta ordem:');
+    linhas.push('1. O projeto está pausado? Painel do Supabase → Restore project.');
+    linhas.push('   Projeto pausado é o app fora do ar, não só a sonda falhando.');
+    linhas.push('2. A chave publicável foi rotacionada? Então o alerta é falso, e o');
+    linhas.push('   segredo SUPABASE_ANON_KEY_* do repositório precisa ser atualizado');
+    linhas.push('   junto com o bundle publicado (docs/worker-vigia.md §3).');
+    linhas.push('3. Fora isso, é indisponibilidade do Supabase — status.supabase.com.');
+    linhas.push('');
+  }
+
+  if (backupRuim) {
+    linhas.push('O que verificar no backup, nesta ordem:');
+    linhas.push('1. O workflow `backup-semanal` foi DESATIVADO? O GitHub desliga');
+    linhas.push('   workflow agendado em repositório com 60 dias sem commit, e não');
+    linhas.push('   avisa — é o modo de falha que este aviso existe para pegar.');
+    linhas.push('   Actions → backup-semanal → Enable workflow.');
+    linhas.push('2. A última execução ficou vermelha? O log diz em que passo parou;');
+    linhas.push('   dump reprovado NÃO é publicado, de propósito (card 3.11).');
+    linhas.push('3. O bucket ou os segredos do R2 mudaram? docs/backup-restauracao.md §6.');
+    linhas.push('');
+    linhas.push('Um `workflow_dispatch` do backup-semanal resolve a semana corrente;');
+    linhas.push('só não resolve a causa, e a causa volta no domingo seguinte.');
+    linhas.push('');
+  }
+
   linhas.push('Enquanto durar, este e-mail chega uma vez por dia. Silêncio amanhã');
   linhas.push('significa que voltou — o vigia não guarda estado e não avisa recuperação.');
 
-  return { assunto: `[Gestão IM360] Supabase de ${nomes} não respondeu`, texto: linhas.join('\n') };
+  const assunto = falhas.length
+    ? `[Gestão IM360] Supabase de ${nomes} não respondeu${backupRuim ? ' — e o backup está atrasado' : ''}`
+    : '[Gestão IM360] O backup de produção não está saindo';
+
+  return { assunto, texto: linhas.join('\n') };
 }
 
 export async function enviarAlerta(env, alerta, buscar = fetch) {
@@ -220,10 +362,15 @@ export async function enviarAlerta(env, alerta, buscar = fetch) {
   return resposta.status;
 }
 
-export function resumir(resultados) {
-  return resultados
+export function resumir(resultados, backup = null) {
+  const sondas = resultados
     .map((r) => `${r.rotulo}: ${r.ok ? 'ok' : 'FALHOU'} (${r.tentativas.map(descreverTentativa).join(' | ')})`)
     .join(' — ');
+  if (!backup) return sondas;
+  const dito = backup.ok
+    ? `backup: ok (cópia de ${backup.data}, ${backup.idadeDias} dia(s))`
+    : `backup: FALHOU (${backup.motivo})`;
+  return `${sondas} — ${dito}`;
 }
 
 /**
@@ -245,21 +392,27 @@ export async function executar(env, opcoes = {}) {
     resultados.push(await sondar(ambiente, env, resto));
   }
 
+  // O backup é conferido DEPOIS das sondas e sem poder derrubá-las (card 3.12):
+  // `conferirBackup` devolve motivo em vez de lançar. Vigia novo não pode custar
+  // a vigilância que já funcionava.
+  const backup = await conferirBackup(env, { ...resto, quando });
+
   const falhas = resultados.filter((r) => !r.ok);
+  const algoRuim = falhas.length > 0 || !backup.ok;
   let alertaEnviado = false;
 
-  if (falhas.length && alertar) {
+  if (algoRuim && alertar) {
     try {
-      await enviarAlerta(env, montarAlerta(falhas, quando), resto.buscar ?? fetch);
+      await enviarAlerta(env, montarAlerta(falhas, quando, backup), resto.buscar ?? fetch);
       alertaEnviado = true;
     } catch (erro) {
       // O alerta que não sai é a falha mais cara das duas: a primeira alguém
       // ainda descobre abrindo o app, a segunda ninguém descobre nunca.
-      throw new Error(`${resumir(resultados)} — E O ALERTA NÃO SAIU: ${erro.message}`, {
+      throw new Error(`${resumir(resultados, backup)} — E O ALERTA NÃO SAIU: ${erro.message}`, {
         cause: erro,
       });
     }
   }
 
-  return { resultados, falhas, alertaEnviado };
+  return { resultados, falhas, backup, algoRuim, alertaEnviado };
 }

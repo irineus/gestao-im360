@@ -11,6 +11,21 @@
 # para qualquer caminho. Por isso também: **nunca criar `web/404.html`**, que é
 # o que desliga esse comportamento e quebra todo link direto (`/alunos`,
 # `/redefinir-senha`).
+#
+# ⚠️ `connect-src` E O SENTRY (card 3.12): host de ingestão fora desta lista é
+# envio bloqueado pelo navegador **em silêncio** — nenhuma exceção, nenhuma tela
+# diferente, só um painel do Sentry que não recebe nada; e "não recebeu nada" é
+# indistinguível de "não houve erro", que é exatamente o que se quer acreditar.
+# Por isso o host entra no MESMO commit que liga o SDK, e por isso o passo
+# "A CSP deixa passar o Sentry" do `deploy-web.yml` extrai o host do `SENTRY_DSN`
+# e reprova o build quando esta linha não o cobre.
+#
+# O curinga é de subdomínio, e é deliberado: toda ingestão da organização na
+# região dos EUA é `o<id>.ingest.us.sentry.io`, e o `<id>` muda se o projeto for
+# recriado. Fixar o host exato aqui compraria uma precisão que ninguém confere e
+# venderia a falha silenciosa de volta. O que o curinga NÃO cobre — outra região
+# (`.de.sentry.io`), Sentry próprio — é justamente o que o passo do `deploy-web`
+# pega, porque aí a comparação com o DSN falha.
 
 /*
   X-Content-Type-Options: nosniff
@@ -18,5 +33,5 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
   Cross-Origin-Opener-Policy: same-origin
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https://ncdfolxdupbbfvtydngx.supabase.co https://aqfuawrygxsiopyppjza.supabase.co
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https://ncdfolxdupbbfvtydngx.supabase.co https://aqfuawrygxsiopyppjza.supabase.co https://*.ingest.us.sentry.io
   Cache-Control: public, max-age=0, must-revalidate

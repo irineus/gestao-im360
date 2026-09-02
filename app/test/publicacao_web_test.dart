@@ -37,6 +37,24 @@ void main() {
       expect(File('${web.path}/404.html').existsSync(), isFalse);
     });
 
+    test('a CSP deixa passar a ingestão do Sentry', () {
+      // Card 3.12. Host fora do `connect-src` é envio bloqueado pelo navegador
+      // EM SILÊNCIO: nenhuma exceção, nenhuma tela diferente — só um painel do
+      // Sentry que não recebe nada, e "não recebeu nada" é indistinguível de
+      // "não houve erro". O erro que a asserção pega é o provável: alguém
+      // enxuga a CSP num card futuro e a observabilidade morre sem barulho.
+      //
+      // O `deploy-web` faz a outra metade, que este teste não alcança: extrai
+      // o host do `SENTRY_DSN` de verdade e confere que esta linha o cobre.
+      final csp = File('${web.path}/_headers')
+          .readAsLinesSync()
+          .firstWhere((l) => l.contains('Content-Security-Policy:'));
+      final connectSrc = csp
+          .split(';')
+          .firstWhere((d) => d.trim().startsWith('connect-src'));
+      expect(connectSrc, contains('ingest.us.sentry.io'));
+    });
+
     test('NÃO existe _redirects com regra de SPA', () {
       // No Pages "os redirects são sempre seguidos, exista ou não um asset para
       // a requisição": a regra `/*  /index.html  200` que se copia da internet

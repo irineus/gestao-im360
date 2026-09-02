@@ -17,6 +17,7 @@ O vigia faz essa requisição e, com a **mesma** requisição, vigia:
 |---|---|
 | **Mantém acordado** | um `select` por dia em cada um dos dois projetos conta como atividade |
 | **Vigia** | se a resposta não for a esperada, manda e-mail |
+| **Confere o backup** | desde o card 3.12: a cópia mais nova no R2 tem no máximo 9 dias e está completa (§9) |
 
 As duas metades não são funcionalidades separadas empilhadas por conveniência. Elas se verificam:
 **se o `select` diário não estiver evitando a pausa, quem descobre é o próprio vigia**, no dia em que
@@ -220,8 +221,10 @@ Primeira execução agendada: **03/09/2026, 06:00** em São Paulo.
   contra produção e o GitHub avisa por e-mail quando um workflow agendado falha — semanal, e só de
   produção. ✅ **Existe desde 02/09/2026**, em `.github/workflows/backup-semanal.yml` e documentado em
   `docs/backup-restauracao.md`, que registra no §1 a leitura dupla de uma falha dele ("o backup não
-  saiu **e** produção pode ter pausado"). ⚠️ Ele tem o seu próprio modo de falha silencioso: o GitHub
-  desativa workflow agendado em repositório com 60 dias sem commit.
+  saiu **e** produção pode ter pausado"). ✅ **E o inverso passou a valer em 02/09/2026 (card 3.12):**
+  o vigia confere a idade do backup (§9), então os dois observadores agora olham um para o outro —
+  o que fecha o modo de falha silencioso que o backup tinha (o GitHub desativa workflow agendado em
+  repositório com 60 dias sem commit).
 - **Sem estado**: sem aviso de recuperação, sem "há N dias assim", sem silenciar temporariamente.
 - **A eficácia contra a pausa não foi verificada** — só se verifica não pausando durante sete dias.
   O que existe é a decisão do plano e, principalmente, o fato de que o próprio vigia denuncia se ela
@@ -238,4 +241,38 @@ Primeira execução agendada: **03/09/2026, 06:00** em São Paulo.
 | 1 | ~~`CLOUDFLARE_API_TOKEN` precisa da permissão *Workers Scripts — Edit*~~ | ✅ feito 02/09/2026 | resolvido |
 | 2 | ~~Os três secrets novos do repositório (§3)~~ | ✅ feito 02/09/2026 | resolvido |
 | 3 | ~~O backup do card 3.11 é o segundo observador; anotar lá que a falha dele também significa "produção pode ter pausado"~~ | ✅ feito 02/09/2026 — `docs/backup-restauracao.md` §1, e o aviso está no cabeçalho do próprio workflow | resolvido |
-| 4 | Quando o Sentry entrar (card 3.12), avaliar mandar a falha do vigia para lá além do e-mail | card 3.12 | não |
+| 4 | Mandar a falha do vigia para o Sentry além do e-mail — daria histórico e agrupamento, que é o que o vigia não tem (ele não guarda estado, não sabe há quantos dias está ruim). **Avaliado no card 3.12 e deixado de fora por decisão de escopo de Irineu (02/09/2026)**; o custo é o DSN como quarto secret do Worker e um envelope Sentry escrito à mão em JSON puro, porque o vigia não tem dependência nenhuma por decisão deste card | card próprio | não |
+
+---
+
+## 9. Vigilância do backup semanal (card 3.12, 02/09/2026)
+
+A execução diária confere a idade da cópia mais nova no bucket R2 `gestao-im360-backup`, pelo binding
+`BACKUP` declarado em `worker-vigia/wrangler.toml`.
+
+**Por que fica aqui e não no GitHub.** O card 3.11 registrou um modo de falha silencioso do próprio
+backup: o GitHub **desativa workflow agendado em repositório com 60 dias sem commit**, e o risco vira
+real justamente quando o desenvolvimento parar — quando ninguém mais abre o painel de Actions. Um
+observador que more na mesma infraestrutura que o observado morre junto com ele. O backup mora no
+GitHub; isto roda no Cloudflare.
+
+| Decisão | Por quê |
+|---|---|
+| A idade sai do **prefixo de data** (`producao/YYYY-MM-DD/`), não do `uploaded` do objeto | o prefixo é a data do *dump*, e é essa que responde "quão velho é o dado que eu teria de volta". Recopiar um backup velho deixaria `uploaded` novinho e a idade mentiria na hora errada |
+| **Asserção positiva**: a cópia precisa ter `data.sql.gz` **e** `MANIFESTO.txt` | prefixo que existe passaria com a pasta vazia — mesma razão pela qual a sonda não aceita qualquer 200. E dump de schema sem dado é o jeito mais comum de um backup ser inútil (card 3.11) |
+| Limite de **9 dias** | o backup é semanal, então em operação normal a cópia mais nova tem no máximo 7. Nove dá folga para uma execução atrasada sem alarme falso e ainda denuncia a **primeira** semana perdida, em vez de esperar a segunda |
+| `conferirBackup` **devolve motivo, não lança** — inclusive sem o binding | uma exceção derrubaria a execução **antes** das sondas do Supabase, trocando uma proteção que funciona por outra que acabou de nascer. Falhar aqui alerta; falhar aqui não cega o resto |
+| Continua **um e-mail por execução** | decisão do card 3.10, preservada: dois assuntos num envelope, não dois envelopes. Alerta que se multiplica é alerta que se aprende a arquivar sem ler |
+
+O texto do alerta nomeia a causa mais provável em primeiro lugar — *Actions → backup-semanal → Enable
+workflow* — porque é a que não deixa rastro em lugar nenhum.
+
+⚠️ **Pré-condição de deploy:** o bucket precisa existir, senão o `wrangler deploy` recusa o Worker. É
+deliberado, e o vigia já publicado continua no ar enquanto isso — deploy que falha não derruba o que
+está rodando. O `CLOUDFLARE_API_TOKEN` precisa de **Workers R2 Storage — Read**.
+
+✅ **Exercitado no workerd de verdade** (`wrangler dev`, 02/09/2026), e não só na suíte: com o bucket
+local vazio o vigia reprovou com *"o bucket não tem nenhuma cópia em `producao/`"*; com uma cópia
+completa de `2026-08-31` passou, com `data: 2026-08-31` e `idadeDias: 2`. Isso confirma que a API real
+de `env.BACKUP.list()` (`objects[].key`, `truncated`, `cursor`) — inclusive a paginação — bate com o
+que a suíte simula.
