@@ -215,15 +215,22 @@ teria de entrar nas Redirect URLs do Auth. Implementado o que o 3.8 decidiu — 
 | Secret do repositório | `SUPABASE_DB_PASSWORD_DEV` | `db push` no dev | ✅ existe |
 | Secret do repositório | `SUPABASE_DB_PASSWORD_PROD` | `db push` no prod | ✅ existe |
 | Environment `prod` | *required reviewer* | portão humano da produção | ✅ ligado (`irineus`) |
-| Secret do repositório | **`CLOUDFLARE_API_TOKEN`** | `wrangler pages deploy` — permissão *Cloudflare Pages: Edit* | ⛔ **falta** |
-| Secret do repositório | **`CLOUDFLARE_ACCOUNT_ID`** | idem | ⛔ **falta** |
-| Secret do environment `dev` | **`SUPABASE_ANON_KEY`** | chave publicável do projeto dev, no bundle de homologação | ⛔ **falta** |
-| Secret do environment `prod` | **`SUPABASE_ANON_KEY`** | chave publicável do projeto prod, no bundle de produção | ⛔ **falta** |
+| Secret do repositório | `CLOUDFLARE_API_TOKEN` | `wrangler pages deploy` — permissão *Account · Cloudflare Pages · Edit* | ✅ criado 02/09/2026 |
+| Secret do repositório | `CLOUDFLARE_ACCOUNT_ID` | idem | ✅ criado 02/09/2026 |
+| Secret do environment `dev` | `SUPABASE_ANON_KEY` | chave publicável do projeto dev, no bundle de homologação | ✅ criado 02/09/2026 |
+| Secret do environment `prod` | `SUPABASE_ANON_KEY` | chave publicável do projeto prod, no bundle de produção | ✅ criado 02/09/2026 |
 
-⚠️ **Enquanto os quatro últimos não existirem, o `deploy-web` falha** — no primeiro passo, com o
-nome exato do que criar no log e no resumo da execução. É deliberado: publicar um bundle sem
-configuração seria pior, porque o build não reclama e o app sobe dizendo que não foi configurado.
-O `testes.yml` e o `db-migrations.yml` não dependem de nada disso e seguem verdes.
+⚠️ O nome `SUPABASE_ANON_KEY` é **o mesmo nos dois environments, de propósito** — é o environment
+que decide qual valor o job enxerga. Criado como secret **do repositório**, o build de produção
+pegaria a chave de homologação e **ninguém veria**, porque as duas telas são idênticas. Os valores
+são os que os dois sites já serviam antes do primeiro deploy automatizado, lidos do `main.dart.js`
+publicado: assim o build do CI reproduz o que estava no ar, em vez de trocar a chave em silêncio.
+
+**Enquanto os quatro não existiam, o `deploy-web` falhava no primeiro passo**, com o nome exato do
+que criar no log e no resumo da execução — deliberado, e exercitado de verdade em 02/09/2026 (run
+`33583326416`): publicar um bundle sem configuração seria pior, porque o build não reclama e o app
+sobe dizendo que não foi configurado. `testes.yml` e `db-migrations.yml` nunca dependeram de nada
+disso.
 
 A chave publicável é **pública por desenho** — vai no bundle que qualquer visitante baixa (card 3.8
 §1) — e mesmo assim fica em secret, por um motivo prático: assim rotacionar a chave não exige um
@@ -267,8 +274,21 @@ Rodado de verdade, não lido — com o CLI, o Flutter e a lista de exclusão **e
   as quatro conferências do §7 passando — mais a contraprova de que a URL de produção **não** está
   naquele bundle.
 
-O que só o CI pode provar (o `needs:` segurando o `db push`, o *required reviewer* segurando o
-deploy de produção) se prova na primeira execução de verdade, e está anotado no resultado do card.
+E no CI, que é onde o resto se prova:
+
+- **PR #41** (run `33583171242`): os dois jobs verdes. Subiram **cinco** contêineres (`db`, `auth`,
+  `kong`, `rest`, `inbucket`) — a exclusão do §3 funcionou; as quatro migrações aplicaram do zero;
+  **115 PASS**; e o passo de concorrência **emitiu o aviso em vez de sair com 127**.
+- **`deploy-web` sem os segredos** (run `33583326416`, primeira execução): falhou no passo 3, de
+  conferência, nomeando os três que faltavam — antes de construir e antes de publicar.
+- **`deploy-web` com os segredos** (mesmo run, reexecutado): verde. `homolog.gestaoim360.com` passou
+  a servir um bundle construído pelo CI, conferido depois de publicado — chave publicável do dev,
+  `https://ncdfolxdupbbfvtydngx.supabase.co`, `APP_URL_BASE` de homologação e `/alunos` respondendo
+  200. **É o primeiro deploy automatizado do projeto**; até aqui os dois ambientes tinham subido por
+  *direct upload* (card 3.8).
+- **`deploy-web` em `main`** (run `33583932993`): os testes verdes e o job `publicar (PRODUÇÃO)`
+  parado em **`waiting`**, no environment `prod`, à espera do *Approve and deploy*. O portão duplo
+  da produção, que até aqui só valia para migração, **estreou para o app**.
 
 ---
 
