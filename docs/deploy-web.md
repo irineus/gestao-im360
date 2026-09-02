@@ -214,6 +214,42 @@ CSP** no console.
 
 ---
 
+## 5.9. ⚠️ O deploy do CI não chega ao endereço público (medido em 02/09/2026)
+
+**Defeito aberto, card 3.9,5, prioridade Alta.** Está escrito aqui porque este documento é a fonte do
+contrato de publicação, e o contrato **não está sendo cumprido**.
+
+Depois de um `deploy-web` **verde** em `develop` (run 33647857494, com `Deployment complete` do
+wrangler), o `main.dart.js` servido em cada endereço:
+
+| URL | sha1 (16) |
+|---|---|
+| `develop.gestao-im360-homolog.pages.dev` (o que o CI publicou) | `ac1c466c98ab1bd6` |
+| `gestao-im360-homolog.pages.dev` (produção do projeto) | `95065fafef1c765f` |
+| **`homolog.gestaoim360.com`** | **`95065fafef1c765f`** |
+| `main.gestao-im360.pages.dev` | `b9f31c94602de060` |
+| `gestao-im360.pages.dev` | `7311a8da919a3df0` |
+| **`app.gestaoim360.com`** | **`7311a8da919a3df0`** |
+
+**Os dois endereços públicos servem um deploy que não é o do CI** — quase certamente os *direct
+uploads* feitos à mão neste mesmo card 3.8.
+
+**Causa provável:** os dois projetos nasceram por *direct upload*, e num projeto assim a
+*production branch* fica com um valor que o CI nunca usa; `wrangler pages deploy --branch <x>` só
+publica em produção quando `<x>` bate com ela. Como não bate, **todo deploy do CI vira preview**.
+
+⚠️ **O sintoma é a ausência de sintoma**, de novo: o workflow fica verde, o wrangler imprime
+`Deployment complete`, e o site continua no ar servindo a versão anterior — que **funciona**, o que
+remove o último sinal que restaria. É a mesma família de `--exclude` com chave desconhecida (card
+3.9) e de Redirect URL recusada (§4): a operação "dá certo" e não faz o que se pensa.
+
+**Consequência para o que este documento afirma no §10:** a conferência do card 3.9 mediu a coisa
+certa nas **URLs erradas**. Publicar e conferir `$APP_URL_BASE` logo depois não basta se ninguém
+compara o que foi servido com o que foi construído — e a correção do card 3.9,5 é exatamente essa
+asserção, além do ajuste de *Production branch* no painel.
+
+---
+
 ## 6. O achado que mudou o app: fragmento é do Auth
 
 O card 3.7 deixou o app com a estratégia de URL padrão do Flutter web, que põe a rota no
