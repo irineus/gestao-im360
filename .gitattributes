@@ -1,0 +1,13 @@
+# Card 3.11.
+#
+# Os scripts de shell precisam chegar ao runner do GitHub com fim de linha LF.
+# A máquina de Irineu é Windows com `core.autocrlf` ligado, e um `.sh` com CRLF
+# não roda no Linux: o kernel lê `#!/usr/bin/env bash\r` e responde
+# `bad interpreter: /usr/bin/env bash^M` — erro que fala do interpretador e não
+# do fim de linha, e que só aparece no CI, nunca na máquina de quem escreveu.
+*.sh text eol=lf
+
+# Mesmo motivo para os arquivos que o CI executa ou compara linha a linha.
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.sql  text eol=lf
