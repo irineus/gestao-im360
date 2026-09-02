@@ -167,23 +167,43 @@ jobs:
           LISTA
           [ "$falhou" -eq 0 ]
 
-      - name: Subir o Postgres local para o ensaio de restauração
+      - name: Radiografia do dump
+        # Nomes de tabela, schema e extensão — nunca valores. Serve para dois
+        # fins: responde de graça a pergunta do §5 do documento (se
+        # `supabase_migrations` vem no dump, aparece como `COPY`), e faz cada
+        # execução vermelha ser diagnosticável de uma vez, em vez de exigir uma
+        # rodada só para descobrir o que o arquivo contém.
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "── schemas e extensões declarados em schema.sql"
+          grep -E '^CREATE (SCHEMA|EXTENSION)' dump/schema.sql | sed 's/^/  /' || echo "  (nenhum)"
+          echo "── tabelas criadas em schema.sql"
+          grep -oE '^CREATE TABLE [^ (]+' dump/schema.sql | sort | sed 's/^/  /' || echo "  (nenhuma)"
+          echo "── tabelas com dado em data.sql"
+          grep -oE '^COPY [^ (]+' dump/data.sql | sort | sed 's/^/  /' || echo "  (nenhuma)"
+
+      - name: Subir o alvo do ensaio de restauração
         # O ensaio é o coração deste card: **backup nunca restaurado não é
         # backup** (card 2.8 §15, pré-condição do go-live). Aqui ele deixa de ser
         # ritual anual e vira asserção semanal.
+        #
+        # ⚠️ O ALVO É O BANCO DO STACK COM AS MIGRAÇÕES APLICADAS, e não um banco
+        # criado do zero (corrigido em 02/09/2026, depois de a primeira tentativa
+        # morrer em `schema "extensions" does not exist`). Papel é objeto de
+        # CLUSTER e já existe; SCHEMA é por banco, e um `createdb` dentro do
+        # Postgres do Supabase não ganha `extensions`, `auth`, `storage` nem
+        # `vault` — não é um projeto Supabase novo, é um banco cru dentro de um.
+        # O destino real de uma restauração é um projeto novo com as migrações já
+        # aplicadas, e é isso que `db reset` produz.
+        #
         # ⚠️ `db reset`, nunca `db reset --linked` (card 2.8, ajuste 5): `--linked`
         # aplicaria pgTAP e a escola-fixture no banco REMOTO.
         run: |
           supabase start -x studio,postgres-meta,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,supavisor
           supabase db reset
 
-      - name: Ensaio de restauração num banco vazio
-        # Restaura em `restauracao`, um banco NOVO dentro do mesmo Postgres — que
-        # é a situação real de uma restauração (projeto Supabase novo: os papéis
-        # `anon`, `authenticated`, `service_role` e companhia já existem, porque
-        # papel é do cluster e não do banco). Por isso `roles.sql` fica guardado no
-        # backup e NÃO é aplicado aqui: aplicá-lo testaria criação de papel, não
-        # recuperação de dado.
+      - name: Ensaio de restauração
         shell: bash
         run: |
           # `pipefail` explícito: a conferência abaixo passa por um `tee`, e sem
@@ -192,31 +212,53 @@ jobs:
           set -euo pipefail
 
           # A URL do stack local sai do próprio CLI, e não escrita à mão: o
-          # `postgres:postgres@127.0.0.1:54322` do stack não é segredo nenhum, mas
-          # escrito no repositório ele é indistinguível de um que seja — e o
-          # varredor de segredos do repositório reprova, com razão, sem ter como
-          # saber a diferença. De quebra, isto acompanha sozinho a porta de
-          # `supabase/config.toml`.
+          # usuário e a senha do stack não são segredo nenhum, mas escritos no
+          # repositório são indistinguíveis de um que seja — e o varredor de
+          # segredos reprova, com razão, sem ter como saber a diferença. De
+          # quebra, isto acompanha sozinho a porta de `supabase/config.toml`.
           eval "$(supabase status -o env | grep '^DB_URL=')"
           if [ -z "${DB_URL:-}" ]; then
             echo "::error title=Stack local::supabase status não devolveu DB_URL."
             exit 1
           fi
-          URL_LOCAL="$DB_URL"
-          URL_RESTAURACAO="${DB_URL%/*}/restauracao"
 
           # A lista de tabelas que o repositório diz que produção deve ter — sai
           # do banco local recém-resetado, isto é, das migrações de `main`.
-          psql "$URL_LOCAL" -Atq -c \
-            "select table_name from information_schema.tables
-              where table_schema = 'public' and table_type = 'BASE TABLE' order by 1" \
-            > dump/tabelas-esperadas.txt
+          psql "$DB_URL" -Atq -c             "select table_name from information_schema.tables
+              where table_schema = 'public' and table_type = 'BASE TABLE' order by 1"             > dump/tabelas-esperadas.txt
           echo "Tabelas que as migrações de main criam: $(wc -l < dump/tabelas-esperadas.txt)"
 
-          psql "$URL_LOCAL" -v ON_ERROR_STOP=1 -c 'create database restauracao'
-          backup/restaurar.sh dump "$URL_RESTAURACAO"
-          backup/conferir-restauracao.sh "$URL_RESTAURACAO" dump/tabelas-esperadas.txt \
-            | tee dump/CONFERENCIA.txt
+          # 1. `schema.sql` é CONFERIDO, não aplicado — ele é a foto, e a foto
+          #    serve para denunciar divergência entre produção e as migrações.
+          backup/conferir-schema.sh dump/schema.sql dump/tabelas-esperadas.txt
+
+          # 2. Esvaziar o alvo. O `db reset` deixou as tabelas com o que o seed do
+          #    card 3.6 e a escola-fixture semeiam; um projeto Supabase recém-criado
+          #    com as migrações aplicadas teria só o seed, e mesmo esse tem de sair,
+          #    senão a restauração bate em chave duplicada e, pior, uma tabela que
+          #    o dump NÃO trouxesse continuaria com linha e passaria na conferência.
+          #    `supabase_migrations` entra aqui de propósito: esvaziada antes, a
+          #    contagem depois responde se o histórico de migrações vem no dump.
+          #    ⚠️ Isto roda no stack LOCAL, que é descartado com o runner.
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+          do $$
+          declare t record;
+          begin
+            for t in select schemaname, tablename from pg_tables where schemaname = 'public' loop
+              execute format('truncate table %I.%I cascade', t.schemaname, t.tablename);
+            end loop;
+            truncate table auth.users cascade;
+            if to_regclass('supabase_migrations.schema_migrations') is not null then
+              truncate table supabase_migrations.schema_migrations;
+            end if;
+          end $$;
+          SQL
+
+          # 3. Restaurar só o dado, que é o que o Git não guarda.
+          backup/restaurar.sh dump "$DB_URL" --somente-dados
+
+          # 4. Conferir.
+          backup/conferir-restauracao.sh "$DB_URL" dump/tabelas-esperadas.txt             | tee dump/CONFERENCIA.txt
 
       - name: Compactar e escrever o manifesto
         shell: bash
