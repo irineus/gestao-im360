@@ -128,5 +128,10 @@ acima do previsto, e é isso que a medição captura e o chute inicial não capt
 
 **Premissas que, se mudarem, invalidam a estimativa:** (a) ritmo de ~3,0 dias-plenos por semana;
 (b) escopo do board congelado — card novo entra como pontos novos, sem exceção; (c) as telas de
-negócio custam o que o dimensionamento diz; (d) nenhuma janela do calendário escolar proíbe a virada
-na data resultante — **isso ainda não foi verificado com Irineu** e está anotado no card 7.5.
+negócio custam o que o dimensionamento diz.
+
+**Uma premissa a menos (02/09/2026, resposta de Irineu):** ~~nenhuma janela do calendário escolar
+proíbe a virada na data resultante~~ — **não há janela de calendário escolar; a virada pode cair em
+qualquer data.** Isso importa mais do que parece: a data do go-live passa a ser determinada só por
+esforço e latência, sem precisar esperar início de semestre ou fim de bimestre. Não há o que
+perguntar sobre isso nas próximas rodadas.
