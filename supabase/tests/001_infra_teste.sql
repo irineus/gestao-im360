@@ -219,17 +219,23 @@ select is(
 -- 7. O portão reprova mesmo? (prova por construção)
 -- ===========================================================================
 -- Portão que nunca foi visto vermelho é decoração — é a crítica que o card 2.8
--- faz à suíte que existe e não reprova nada. Aqui a tabela que torna a camada
--- `catalogo_curricular` devida é criada dentro da própria transação, e some no
--- rollback junto com o resto.
-create table public.material (id uuid primary key);
+-- faz à suíte que existe e não reprova nada. Aqui a tabela que torna a próxima
+-- camada devida é criada dentro da própria transação, e some no rollback junto
+-- com o resto.
+--
+-- A sentinela era `public.material` até o card 4.1; de lá em diante essa tabela
+-- EXISTE, o `create table` morreria com "already exists" e a asserção deixaria
+-- de dizer o que promete. A sentinela acompanha a fronteira: agora é
+-- `public.aluno`, a tabela da camada `alunos` (card 4.2), e no 4.2 passa a ser
+-- `public.pc` (camada `infra_fisica`, card 4.3).
+create table public.aluno (id uuid primary key);
 
 select is(
   (select string_agg(camada, ',' order by camada) from tests.fixture_camadas_devidas()),
-  'catalogo_curricular',
+  'alunos',
   'criada a tabela que a camada povoa, o portao acusa a camada que ficou para tras');
 
-drop table public.material;
+drop table public.aluno;
 
 select * from finish();
 rollback;

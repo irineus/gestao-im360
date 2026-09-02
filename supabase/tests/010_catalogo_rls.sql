@@ -79,7 +79,17 @@ create temporary view p_esperada (tabela, cmd) as values
   ('permissao','r'),
   ('perfil_permissao','r'), ('perfil_permissao','a'), ('perfil_permissao','d'),
   ('usuario_perfil','r'),   ('usuario_perfil','a'),   ('usuario_perfil','d'),
-  ('parametro','r'),        ('parametro','a'),        ('parametro','w');
+  ('parametro','r'),        ('parametro','a'),        ('parametro','w'),
+  -- card 4.1 — catálogo curricular. `metodo` é a única sem delete: as três
+  -- linhas são enumeração do produto (check na coluna) e apagá-las levaria
+  -- junto todo o catálogo pendurado nelas; fora de uso é `ativo = false`.
+  ('metodo','r'),           ('metodo','a'),           ('metodo','w'),
+  ('material','r'),         ('material','a'),         ('material','w'),         ('material','d'),
+  ('curso','r'),            ('curso','a'),            ('curso','w'),            ('curso','d'),
+  ('curso_material','r'),   ('curso_material','a'),   ('curso_material','w'),   ('curso_material','d'),
+  ('modulo','r'),           ('modulo','a'),           ('modulo','w'),           ('modulo','d'),
+  ('combo','r'),            ('combo','a'),            ('combo','w'),            ('combo','d'),
+  ('combo_curso','r'),      ('combo_curso','a'),      ('combo_curso','w'),      ('combo_curso','d');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text
@@ -125,7 +135,12 @@ create temporary view p_codigo_usado as
 create temporary view p_codigo_catalogo (codigo) as values
   ('admin.ler'), ('admin.gerir_usuarios'), ('admin.gerir_perfis'),
   ('unidades.ler'), ('unidades.gerir'),
-  ('parametros.ler'), ('parametros.gerir');
+  ('parametros.ler'), ('parametros.gerir'),
+  -- card 4.1 — os quatro do domínio `materiais` (card 2.4 §3.3). As sete tabelas
+  -- do catálogo curricular usam exatamente estes, e a composição
+  -- (curso_material, combo_curso) grava com `materiais.editar` e não com
+  -- `materiais.criar`: montar a sequência de um curso é editar o curso.
+  ('materiais.ler'), ('materiais.criar'), ('materiais.editar'), ('materiais.excluir');
 
 select is(
   (select coalesce(string_agg(msg, '; ' order by msg), '')
