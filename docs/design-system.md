@@ -462,8 +462,8 @@ lib/
     shell_im360.dart        // §3   — card 3.7
     badge_status.dart       // §5.1 — card 4.6
     badge_tipo.dart         // §5.1 — card 5.7
-    tabela_im360.dart       // §5.2/§5.3 — card 4.6 (primeira tabela: alunos)
-    formulario.dart         // §5.4 — card 4.6
+    tabela_im360.dart       // §5.2/§5.3 — card 4.4 (a primeira tabela acabou sendo o catálogo, não alunos)
+    formulario.dart         // §5.4 — card 4.4
     card_dashboard.dart     // §5.5 — card 5.9
     estados.dart            // §5.6 — card 3.7 (o shell já precisa de SemAcesso)
     grade_vagas.dart        // §6   — card 5.6

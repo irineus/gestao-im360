@@ -84,4 +84,52 @@ void main() {
     const original = ErroApp(mensagem: 'x', codigo: 'Y');
     expect(identical(traduzirErro(original), original), isTrue);
   });
+
+  group('integridade (card 4.4)', () {
+    // Os dois SQLSTATEs que uma tela de cadastro produz chegam SEM `codigo`
+    // no DETAIL, porque quem os levanta é o Postgres e não uma função do
+    // card 2.2. Sem tradução própria cairiam no fallback com o número na
+    // cara do usuário — e virariam evento no Sentry a cada tentativa.
+    test('23503 (em uso) tem mensagem própria e conta como traduzido', () {
+      final erro = traduzirErro(
+        const PostgrestException(
+          message: 'violates foreign key constraint',
+          code: '23503',
+        ),
+      );
+      expect(erro.codigo, '23503');
+      expect(erro.mensagem, mensagensIntegridade['23503']);
+      expect(erro.traduzido, isTrue);
+    });
+
+    test('23505 (duplicado) idem', () {
+      final erro = traduzirErro(
+        const PostgrestException(message: 'duplicate key', code: '23505'),
+      );
+      expect(erro.mensagem, mensagensIntegridade['23505']);
+      expect(erro.traduzido, isTrue);
+    });
+
+    test('um DETAIL com codigo vence o SQLSTATE — o catálogo continua sendo '
+        'a primeira fonte', () {
+      final erro = traduzirErro(
+        const PostgrestException(
+          message: 'x',
+          code: '23505',
+          details: '{"codigo":"TRILHA_JA_EXISTE"}',
+        ),
+      );
+      expect(erro.codigo, 'TRILHA_JA_EXISTE');
+      expect(erro.mensagem, CatalogoErros.mensagens['TRILHA_JA_EXISTE']);
+    });
+
+    test('ErroApp construído pelo app pode se declarar traduzido', () {
+      const erro = ErroApp(mensagem: 'texto pronto', traduzido: true);
+      expect(erro.traduzido, isTrue);
+      const derivado = ErroApp(mensagem: 'x', codigo: 'SEM_PERMISSAO');
+      expect(derivado.traduzido, isTrue);
+      const fallback = ErroApp(mensagem: 'x', codigo: '42501');
+      expect(fallback.traduzido, isFalse);
+    });
+  });
 }

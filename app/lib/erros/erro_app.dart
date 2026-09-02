@@ -9,7 +9,12 @@ import 'catalogo_erros.dart';
 ///
 /// A tela nunca lê `mensagem` do banco: lê daqui.
 class ErroApp implements Exception {
-  const ErroApp({required this.mensagem, this.codigo, this.original});
+  const ErroApp({
+    required this.mensagem,
+    this.codigo,
+    this.original,
+    bool? traduzido,
+  }) : traduzidoDeclarado = traduzido;
 
   /// Código estável do `DETAIL` (card 2.2 §1.2), quando o erro veio de uma
   /// regra de negócio. Nulo em erro de rede, de Auth ou inesperado.
@@ -21,9 +26,14 @@ class ErroApp implements Exception {
   /// O erro original, para o Sentry (card 3.12). Nunca vai para a tela.
   final Object? original;
 
-  /// Verdadeiro quando o catálogo tem tradução própria — o oposto do fallback,
-  /// que a `EstadoErro` usa para decidir se mostra o código técnico em apoio.
-  bool get traduzido => CatalogoErros.mapeado(codigo);
+  /// Declarado por quem construiu o erro já com texto pronto (card 4.4);
+  /// nulo = deriva do catálogo.
+  final bool? traduzidoDeclarado;
+
+  /// Verdadeiro quando o app tem tradução própria — o oposto do fallback, que
+  /// a `EstadoErro` usa para decidir se mostra o código técnico em apoio e que
+  /// o Sentry usa para decidir se o erro merece evento (card 3.12).
+  bool get traduzido => traduzidoDeclarado ?? CatalogoErros.mapeado(codigo);
 
   @override
   String toString() => 'ErroApp(${codigo ?? '-'}): $mensagem';
@@ -35,6 +45,24 @@ const mensagemCredencialInvalida = 'E-mail ou senha inválidos.';
 
 const _mensagemRede =
     'Não foi possível falar com o servidor. Verifique a conexão e tente de novo.';
+
+/// Os dois SQLSTATEs de **integridade** que uma tela de cadastro produz, e que
+/// são resposta de regra (a constraint é a regra, card 2.2 §2.1), não defeito:
+/// `23503` (chave estrangeira — apagar o que está em uso) e `23505` (chave
+/// única — código ou nome repetido). Chegam sem `codigo` no `DETAIL`, porque
+/// quem os levanta é o Postgres, não uma função do card 2.2.
+///
+/// Sem esta tabela cairiam no fallback com o número na cara do usuário e
+/// virariam evento no Sentry a cada tentativa (card 3.12). Fica **fora** do
+/// catálogo do card 2.7 §7.1 de propósito: aquele é o contrato dos códigos do
+/// `DETAIL`, conferido pelo C12 contra as funções do banco, e um SQLSTATE não é
+/// código de função nenhuma.
+const mensagensIntegridade = <String, String>{
+  '23503':
+      'Este cadastro está em uso e não pode ser excluído. Marque-o como '
+      'inativo em vez de excluir.',
+  '23505': 'Já existe um cadastro com este código ou nome.',
+};
 
 /// Gancho de observabilidade (card 3.12). `main` o aponta para o Sentry; nos
 /// testes e num build sem `SENTRY_DSN` ele continua nulo e nada é enviado.
@@ -63,6 +91,15 @@ ErroApp _traduzir(Object erro) {
 
   if (erro is PostgrestException) {
     final codigo = _codigoDoDetalhe(erro.details);
+    final integridade = codigo == null ? mensagensIntegridade[erro.code] : null;
+    if (integridade != null) {
+      return ErroApp(
+        codigo: erro.code,
+        mensagem: integridade,
+        original: erro,
+        traduzido: true,
+      );
+    }
     return ErroApp(
       codigo: codigo,
       mensagem: CatalogoErros.mensagem(
