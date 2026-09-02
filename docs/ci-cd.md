@@ -14,7 +14,7 @@ rodado em lugar nenhum** — portão que não reprova é exatamente a falha que 
 
 | Workflow | Dispara | Jobs | O que bloqueia |
 |---|---|---|---|
-| **`testes.yml`** | todo *pull request*; push em `develop`/`main`; e `workflow_call` | `banco` (pgTAP + concorrência), `app` (formatação, análise, testes) e `vigia` (`node --test`) | o merge do PR |
+| **`testes.yml`** | todo *pull request*; push em `develop`/`main`; e `workflow_call` | `banco` (pgTAP + concorrência), `migrações` (portão do card 4.0,5), `app` (formatação, análise, testes) e `vigia` (`node --test`) | o merge do PR |
 | **`db-migrations.yml`** | push em `develop`/`main` tocando `supabase/migrations/**`; `workflow_dispatch` | `testes` (chama o de cima) → `migrate` | o `supabase db push` em dev e em prod |
 | **`deploy-web.yml`** | push em `develop`/`main` tocando `app/**`, `assets/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação no Cloudflare Pages |
 | **`deploy-worker-vigia.yml`** | push em **`main`** tocando `worker-vigia/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação do Worker vigia (card 3.10) |
@@ -169,7 +169,7 @@ diretório pronto com `wrangler pages deploy`.
 *Approve and deploy* do environment `prod`. É o segundo que mostra na tela o que está prestes a ir
 ao ar.
 
-Três conferências antes e depois do build, todas por causa de falhas que **não dão erro**:
+Quatro conferências ao redor do build, todas por causa de falhas que **não dão erro**:
 
 1. **Antes de construir**, os três valores de ambiente têm de existir. Build sem `--dart-define`
    não falha: gera um bundle que sobe na tela "este build não recebeu a configuração do ambiente" —
@@ -182,6 +182,15 @@ Três conferências antes e depois do build, todas por causa de falhas que **nã
    a conferência é um `grep` — verificada em 02/09/2026, inclusive a contraprova (a URL do outro
    ambiente **não** está no bundle, ou seja, a asserção discrimina).
 3. `_headers` presente e `404.html` ausente — as duas armadilhas do Pages que o card 3.8 mediu.
+4. **Depois de publicar**, o endereço público tem de servir **o arquivo que acabou de ser
+   construído** (card 3.9,5). Publicar não é estar no ar: `wrangler pages deploy --branch <x>` só
+   publica em produção do projeto quando `<x>` bate com a *Production branch* do painel — senão o
+   deploy vira **preview**, ganha URL própria, imprime `Deployment complete`, o workflow fica verde
+   e o endereço público continua na versão anterior, **que funciona**. Foi o que aconteceu do card
+   3.9 ao 3.12 sem ninguém reparar: a conferência do card 3.9 mediu a coisa certa nas URLs erradas.
+   O passo baixa `$APP_URL_BASE/main.dart.js` e compara o sha256 com `build/web/main.dart.js`, em
+   até seis tentativas espaçadas de 10 s, com cache-buster e `curl --compressed`. Detalhe em
+   `docs/deploy-web.md` §5.9.
 
 `--no-web-resources-cdn` não é otimização, é disponibilidade (card 3.8 §1).
 
@@ -250,6 +259,13 @@ teria de entrar nas Redirect URLs do Auth. Implementado o que o 3.8 decidiu — 
 | Secret do repositório | `R2_ACCESS_KEY_ID` | `aws s3` contra o R2 (card 3.11) | ⚠️ falta criar |
 | Secret do repositório | `R2_SECRET_ACCESS_KEY` | idem — só aparece uma vez, na criação | ⚠️ falta criar |
 
+| Painel do Cloudflare Pages | *Production branch* de `gestao-im360-homolog` = `develop` | sem isso o deploy do CI vira **preview** e o endereço público não muda (card 3.9,5) | ⚠️ falta configurar |
+| Painel do Cloudflare Pages | *Production branch* de `gestao-im360` = `main` | idem, em produção | ⚠️ falta configurar |
+
+⚠️ As duas últimas linhas **não são secrets** e por isso são as mais fáceis de esquecer: nada no
+GitHub as menciona, e o `deploy-web` ficava verde sem elas. Desde o card 3.9,5 não fica mais — a
+asserção depois de publicar reprova, e o resumo da execução traz o caminho do painel.
+
 ⚠️ O token do R2 é **outro** token, e não o `CLOUDFLARE_API_TOKEN` de Pages e Workers: o R2 emite um
 par de chaves no formato S3 (*Object Read & Write*, escopo do bucket), que é o que o `aws s3`
 consome. O `CLOUDFLARE_ACCOUNT_ID` é reaproveitado — ele também é o subdomínio do endpoint S3.
@@ -294,6 +310,10 @@ flutter test
 # vigia (nada a instalar: o Worker não tem dependência)
 cd ..
 node --test "worker-vigia/test/**/*.test.mjs"
+
+# migrações (portão do card 4.0,5 — também sem dependência nenhuma)
+node --test "portao-migracoes/test/**/*.test.mjs"
+node portao-migracoes/varredor.mjs supabase/migrations
 ```
 
 Se outro projeto local do Supabase já estiver ocupando as portas 54321-54324, o `supabase start`
@@ -343,3 +363,68 @@ E no CI, que é onde o resto se prova:
 | 3 | **3.12** | Ao ligar o Sentry, acrescentar o host de ingestão ao `connect-src` do `_headers` **no mesmo commit** — a CSP bloqueia sem avisar (herdado do card 3.8) | bloqueante |
 | 4 | **todos** | Trocar uma versão fixada do §2 é um commit com PR: quem atualizar precisa rodar a suíte antes | informativo |
 | 5 | ~~**Irineu**~~ | ~~Os quatro itens do §10 que o card 3.10 acrescentou~~ — ✅ **feitos em 02/09/2026**; o `deploy-worker-vigia` ficou verde na estreia e o vigia está no ar | resolvido |
+
+---
+
+## 14. Job `migrações`: nenhuma migração grava dado de negócio (card 4.0,5)
+
+```bash
+node --test "portao-migracoes/test/**/*.test.mjs"   # o portão sabe ler?
+node portao-migracoes/varredor.mjs supabase/migrations
+```
+
+**Por que existe.** Todo `.sql` posto em `supabase/migrations/` chega a **produção sozinho** no merge
+em `main`. A decisão de 02/09/2026 (Decisões vigentes §1, "Dado de negócio só em dev até a virada")
+restringe o dado da planilha ao projeto dev/homolog até o cutover do card 9.7. E o card 3.6 criou o
+precedente do **seed-como-migração**: depois dele, escrever a carga do catálogo como migração é o
+caminho mais natural — e produção receberia dado de planilha sem ninguém decidir. As duas falhas do
+projeto até aqui foram de esquecimento, não de julgamento; regra que depende de lembrar não serve.
+
+**Lista permitida, não lista proibida.** Uma migração pode gravar em `unidade`, `perfil`,
+`permissao`, `perfil_permissao`, `usuario`, `usuario_perfil`, `parametro` e `metodo` — dado de
+**configuração**, que *precisa* estar em produção, senão `tem_permissao()` é falso para todo mundo.
+Qualquer outra tabela reprova, **inclusive as que ainda não existem**: tabela nova nasce protegida
+sem ninguém se lembrar de nada. Lista proibida deixaria de fora toda tabela futura e falharia em
+silêncio. Ampliar a lista é um commit em `portao-migracoes/varredor.mjs` — que é exatamente a
+conversa que o portão existe para provocar.
+
+**O que o varredor distingue** (é o ponto delicado, onde um `grep` ingênuo se perde):
+
+| Forma | Veredito | Por quê |
+|---|---|---|
+| `insert into aluno …` no nível superior | reprova | carga de dado de negócio |
+| `insert into pendencia` no **corpo** de `create function` | passa | corpo é código que roda depois; é o `gerar_pendencias` do 5.5 e o `registrar_entrega` do 6.3 |
+| `do $$ … insert into material … $$` | reprova | bloco `do` executa **na hora da migração** — é por onde a carga entraria disfarçada |
+| `create function fn_seed_x() …; select fn_seed_x();` | reprova | a migração **chama**: o corpo passa a contar, transitivamente, e o motivo mostra o caminho `fn_a() → fn_b()` |
+| `create trigger … execute function fn()` | passa | registra quem roda depois; não chama nada agora |
+| `on update cascade`, `for update`, `grant insert` | passa | não são escrita; `update` só conta com `set` |
+| comentário e literal que citam `insert into aluno` | passa | comentários e literais saem antes da busca |
+| `execute 'insert into ' \|\| v_tabela` | reprova | comando montado em tempo de execução: o que o portão não consegue ler, reprova (fail-closed) |
+| `$$` não fechado | reprova | idem — SQL ilegível não passa por não ter sido entendido |
+
+O caso limite que o portão precisa continuar aprovando é o **seed do card 3.6**: ele grava dado, e
+dado permitido. A suíte exige verde nas quatro migrações que já existem **e** exige que o seed
+apareça gravando exatamente em `unidade`, `parametro`, `permissao`, `perfil`, `perfil_permissao` e
+`usuario_perfil` — se o portão parar de enxergar a chamada `perform fn_seed_acesso(…)`, essa
+asserção cai, em vez de o portão passar a mentir de verde.
+
+**A suíte roda antes da varredura**, de propósito: portão que parou de ler o que devia diz "verde"
+sem que nada denuncie — a doença que o card 2.8 catalogou. São 16 asserções sobre 13 arquivos SQL
+sintéticos em `portao-migracoes/test/casos/`, batizados `passa-` e `reprova-`, com um teste que
+percorre o diretório e exige de cada um o veredito que o nome promete (caso novo entra sem precisar
+de teste novo).
+
+**Divergência registrada com a nota do card.** A nota lista sete tabelas permitidas e não inclui
+`usuario_perfil`. Ela está na lista implementada porque `fn_seed_direcao_inicial`, chamada pelo seed
+do 3.6, liga o primeiro usuário ao perfil DIRECAO — é a mesma configuração de acesso que a nota já
+permite em `perfil` e `perfil_permissao`, e sem ela o seed que o próprio card manda exigir verde
+ficaria vermelho. A outra diferença é de forma: o card falava em "passo novo no `testes.yml`", e
+saiu um **job**, para que o vermelho apareça com nome próprio na lista de checks do PR em vez de
+esconder-se dentro do job de outra coisa.
+
+**Alcance — o portão cobre um caminho, o do repositório.** Não cobre SQL aplicado à mão em produção
+(já proibido pelas regras inegociáveis) nem dado criado pela **tela** em produção; esse é coberto
+pela pré-condição (10) do card 9.7, que confere por contagem que produção está vazia antes da carga.
+Dentro do próprio repositório ficam de fora, assumidamente, o `create table … as select` (que não
+tem como carregar tabela de negócio já criada por uma migração anterior) e o que uma extensão
+externa fizesse por conta própria.

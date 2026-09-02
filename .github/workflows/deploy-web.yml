@@ -20,6 +20,15 @@
 #     sem ele o build sai sem observabilidade e o passo abaixo AVISA em vez de
 #     reprovar. Build sem Sentry é um build pior; build sem Supabase é um build
 #     quebrado, e a diferença precisa aparecer no comportamento do portão.
+#
+# ⚠️ E O QUE NÃO É SECRET, mas sem o que o deploy fica verde SEM IR AO AR:
+#   - painel do Cloudflare Pages, em CADA projeto, Settings -> Builds &
+#     deployments -> Production branch: `develop` no `gestao-im360-homolog` e
+#     `main` no `gestao-im360` (card 3.9,5). Sem isso todo deploy do CI vira
+#     preview e o endereço público segue na versão anterior. O passo
+#     "O endereço público serve o bundle que acabou de ser construído",
+#     no fim deste job, é quem denuncia.
+#
 # A chave publicável é pública por desenho — vai no bundle que qualquer visitante
 # baixa (card 3.8 §1). Ela fica em secret mesmo assim por um motivo prático: assim
 # rotacionar a chave não exige um commit.
@@ -210,6 +219,85 @@ jobs:
             --project-name "$PAGES_PROJECT" \
             --branch "$GITHUB_REF_NAME" \
             --commit-dirty=true
+
+      - name: O endereço público serve o bundle que acabou de ser construído
+        # Card 3.9,5 — a asserção que impede o defeito de voltar, e a razão de
+        # ele ter atravessado três cards sem ninguém reparar.
+        #
+        # Publicar não é a mesma coisa que estar no ar. `wrangler pages deploy
+        # --branch <x>` só publica em PRODUÇÃO do projeto quando `<x>` bate com a
+        # *Production branch* configurada no painel; num projeto nascido de
+        # *direct upload* ela é outra, e então TODO deploy do CI vira preview:
+        # ganha URL própria, imprime `Deployment complete`, o workflow fica
+        # verde — e o endereço público continua servindo a versão anterior, que
+        # FUNCIONA. O sintoma é a ausência de sintoma, a mesma família de
+        # `--exclude` com chave desconhecida e de Redirect URL recusada.
+        #
+        # Medido em 02/09/2026 (card 3.9,5): `homolog.gestaoim360.com` servia
+        # `95065faf…` enquanto o CI acabava de publicar `ac1c466c…`; produção
+        # idem. Os dois endereços serviam os *direct uploads* feitos à mão no
+        # card 3.8. A conferência do card 3.9 mediu a coisa certa nas URLs
+        # erradas: publicar e olhar o log não prova nada — o que prova é comparar
+        # o que o endereço PÚBLICO devolve com o arquivo que acabou de sair do
+        # build.
+        #
+        # Só corre nas duas branches de publicação: um `workflow_dispatch` de
+        # outra branch é preview de propósito, e ali o endereço público servir
+        # outra coisa é o comportamento certo, não o defeito.
+        if: github.ref_name == 'main' || github.ref_name == 'develop'
+        shell: bash
+        run: |
+          set -uo pipefail
+          esperado="$(sha256sum build/web/main.dart.js | cut -d' ' -f1)"
+          echo "construído agora: $esperado"
+
+          # Propagação não é instantânea, e teste que reprova por pressa é teste
+          # instável (card 2.8 §11). O cache-buster na query vai junto ainda que
+          # o `_headers` mande `must-revalidate`: o que se mede aqui é o que o
+          # Pages guarda, não o que o navegador guardaria.
+          servido=""
+          for tentativa in 1 2 3 4 5 6; do
+            url="$APP_URL_BASE/main.dart.js?deploy=$GITHUB_SHA&t=$(date +%s)-$tentativa"
+            if curl -sSL --compressed --fail --max-time 60 -o "$RUNNER_TEMP/servido.js" "$url"; then
+              servido="$(sha256sum "$RUNNER_TEMP/servido.js" | cut -d' ' -f1)"
+              echo "tentativa $tentativa: $APP_URL_BASE serve $servido"
+              if [ "$servido" = "$esperado" ]; then
+                break
+              fi
+            else
+              servido=""
+              echo "tentativa $tentativa: não consegui baixar $APP_URL_BASE/main.dart.js"
+            fi
+            if [ "$tentativa" -lt 6 ]; then
+              sleep 10
+            fi
+          done
+
+          if [ "$servido" = "$esperado" ]; then
+            echo "$APP_URL_BASE serve o bundle deste deploy"
+            exit 0
+          fi
+
+          echo "::error title=O deploy não chegou ao endereço público::$APP_URL_BASE não serve o bundle recém-construído. Confira a Production branch do projeto $PAGES_PROJECT no painel do Cloudflare Pages."
+          {
+            echo "## O deploy ficou verde e não foi ao ar"
+            echo
+            echo "| | sha256 |"
+            echo "|---|---|"
+            echo "| construído agora (\`build/web/main.dart.js\`) | \`$esperado\` |"
+            echo "| servido por \`$APP_URL_BASE\` | \`${servido:-não respondeu}\` |"
+            echo
+            echo "**Causa mais provável:** a *Production branch* do projeto \`$PAGES_PROJECT\` não é"
+            echo "\`$GITHUB_REF_NAME\`, então este deploy virou **preview** — ganhou URL própria e o"
+            echo "endereço público continuou na versão anterior."
+            echo
+            echo "**Correção (painel do Cloudflare, só Irineu):** Workers & Pages → \`$PAGES_PROJECT\` →"
+            echo "Settings → Builds & deployments → **Production branch** = \`$GITHUB_REF_NAME\`."
+            echo "Depois, um \`workflow_dispatch\` deste workflow nesta branch."
+            echo
+            echo "Detalhe em \`docs/deploy-web.md\` §5.9."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - name: Resumo
         run: |
