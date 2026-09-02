@@ -178,8 +178,8 @@ jobs:
           set -euo pipefail
           echo "── schemas e extensões declarados em schema.sql"
           grep -E '^CREATE (SCHEMA|EXTENSION)' dump/schema.sql | sed 's/^/  /' || echo "  (nenhum)"
-          echo "── tabelas criadas em schema.sql"
-          grep -oE '^CREATE TABLE [^ (]+' dump/schema.sql | sort | sed 's/^/  /' || echo "  (nenhuma)"
+          echo "── tabelas de public criadas em schema.sql"
+          grep -oiE 'create table (if not exists )?"?public"?[.]"?[a-z0-9_]+' dump/schema.sql | sed -E 's/.*[.]"?//' | sort || echo "  (nenhuma)"
           echo "── tabelas com dado em data.sql"
           grep -oE '^COPY [^ (]+' dump/data.sql | sort | sed 's/^/  /' || echo "  (nenhuma)"
 
@@ -255,7 +255,16 @@ jobs:
           SQL
 
           # 3. Restaurar só o dado, que é o que o Git não guarda.
-          backup/restaurar.sh dump "$DB_URL" --somente-dados
+          #    ⚠️ `--apenas-schemas public,auth`: o ARQUIVO do backup continua
+          #    completo (ele traz `storage` também), mas o alvo do ensaio não
+          #    hospeda o schema `storage` — o `supabase start` deste workflow
+          #    exclui o `storage-api`, e incluí-lo só trocaria este erro por uma
+          #    divergência de versão entre o storage de produção e o da imagem
+          #    fixada, que ficaria vermelha sem dizer nada sobre o backup.
+          #    Não é perda: este sistema não usa Supabase Storage, e um dump SQL
+          #    de `storage.objects` é metadado de arquivos que o dump NÃO carrega
+          #    — ensaiá-lo daria a ilusão de cobrir o que ele não cobre. Ver §7.
+          backup/restaurar.sh dump "$DB_URL" --somente-dados --apenas-schemas public,auth
 
           # 4. Conferir.
           backup/conferir-restauracao.sh "$DB_URL" dump/tabelas-esperadas.txt             | tee dump/CONFERENCIA.txt
@@ -274,6 +283,7 @@ jobs:
             echo "migrações no repositório em main:"
             ls supabase/migrations/*.sql | xargs -n1 basename | sed 's/^/  - /'
             echo
+            echo "ensaio: data.sql restaurado (schemas public e auth) e conferido; schema.sql comparado com as migrações"
             echo "ensaio de restauração:"
             sed 's/^/  /' dump/CONFERENCIA.txt
             echo
@@ -324,7 +334,8 @@ jobs:
             echo "## Backup de produção publicado"
             echo "- Destino: \`$DESTINO\`"
             echo "- Retenção: as $MANTER cópias semanais mais recentes"
-            echo "- Ensaio de restauração: **passou** (schema + dados restaurados num banco vazio e conferidos)"
+            echo "- Ensaio de restauração: **passou** (\`data.sql\` restaurado em alvo vazio com as migrações de \`main\`, schemas \`public\` e \`auth\`)"
+            echo "- \`schema.sql\`: conferido contra as migrações de \`main\`"
             echo
             echo "Se esta execução tivesse falhado, a leitura seria **duas**: o backup não saiu **e** produção pode ter pausado."
           } >> "$GITHUB_STEP_SUMMARY"

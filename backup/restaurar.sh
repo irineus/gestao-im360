@@ -8,6 +8,9 @@
 #   --somente-dados   aplica só data.sql — é o modo do ensaio semanal e o do
 #                     procedimento real de restauração deste projeto
 #   --com-papeis      aplica roles.sql antes de tudo
+#   --apenas-schemas public,auth
+#                     restaura só os blocos COPY desses schemas. O ARQUIVO
+#                     continua completo; o que muda é o que se aplica AGORA.
 #
 # Aceita os arquivos como saíram do dump (`.sql`) ou como estão no R2 (`.sql.gz`).
 #
@@ -45,12 +48,16 @@ shift 2
 
 SOMENTE_DADOS=0
 COM_PAPEIS=0
-for modo in "$@"; do
-  case "$modo" in
-    --somente-dados) SOMENTE_DADOS=1 ;;
-    --com-papeis)    COM_PAPEIS=1 ;;
-    *) echo "modo desconhecido: $modo" >&2; exit 64 ;;
+APENAS_SCHEMAS=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --somente-dados)  SOMENTE_DADOS=1 ;;
+    --com-papeis)     COM_PAPEIS=1 ;;
+    --apenas-schemas) shift; APENAS_SCHEMAS="${1:-}"
+                      [ -n "$APENAS_SCHEMAS" ] || { echo "--apenas-schemas exige uma lista" >&2; exit 64; } ;;
+    *) echo "modo desconhecido: $1" >&2; exit 64 ;;
   esac
+  shift
 done
 
 # Devolve o caminho do arquivo, seja ele .sql ou .sql.gz; vazio se não existir.
@@ -61,15 +68,46 @@ localizar() {
   fi
 }
 
+# Deixa passar só os blocos COPY dos schemas pedidos. Um bloco COPY termina numa
+# linha com `\.` sozinha, e `pg_dump` escapa esse par quando ele aparece dentro
+# de um valor — então o delimitador é confiável.
+filtrar_schemas() {
+  awk -v alvos="$APENAS_SCHEMAS" '
+    # `fim` é a linha que encerra um bloco COPY: contrabarra seguida de ponto.
+    # Montada com sprintf de propósito — escrita como literal, ela atravessaria
+    # as camadas de escape do shell, do awk e do YAML, e basta uma delas comê-la
+    # para o filtro parar de reconhecer o fim do bloco e engolir TODO o resto do
+    # arquivo em silêncio. Foi o que aconteceu na primeira versão deste filtro.
+    BEGIN { n = split(alvos, a, ","); for (i = 1; i <= n; i++) ok[a[i]] = 1
+            fim = sprintf("%c.", 92) }
+    pulando { if ($0 == fim) pulando = 0; next }
+    /^COPY / {
+      linha = $0
+      sub(/^COPY +/, "", linha); gsub(/"/, "", linha)
+      split(linha, parte, ".")
+      if (!(parte[1] in ok)) { pulando = 1; next }
+    }
+    { print }
+  '
+}
+
 aplicar() {
   local arquivo="$1"
-  echo "── aplicando $arquivo"
+  local filtrar="${2:-nao}"
+  if [ "$filtrar" = "sim" ] && [ -n "$APENAS_SCHEMAS" ]; then
+    echo "── aplicando $arquivo (apenas os schemas: $APENAS_SCHEMAS)"
+  else
+    echo "── aplicando $arquivo"
+    filtrar="nao"
+  fi
   # `--single-transaction`: ou entra tudo, ou não entra nada. Restauração parcial
   # é a pior das três hipóteses, porque parece sucesso.
-  if [[ "$arquivo" == *.gz ]]; then
-    gzip -dc "$arquivo" | psql "$URL" -v ON_ERROR_STOP=1 --single-transaction -q -f -
+  local ler=(cat "$arquivo")
+  [[ "$arquivo" == *.gz ]] && ler=(gzip -dc "$arquivo")
+  if [ "$filtrar" = "sim" ]; then
+    "${ler[@]}" | filtrar_schemas | psql "$URL" -v ON_ERROR_STOP=1 --single-transaction -q -f -
   else
-    psql "$URL" -v ON_ERROR_STOP=1 --single-transaction -q -f "$arquivo"
+    "${ler[@]}" | psql "$URL" -v ON_ERROR_STOP=1 --single-transaction -q -f -
   fi
 }
 
@@ -91,6 +129,6 @@ if [ "$SOMENTE_DADOS" -eq 0 ]; then
   aplicar "$(exigir schema)"
 fi
 
-aplicar "$(exigir data)"
+aplicar "$(exigir data)" sim
 
 echo "Restauração concluída em $(echo "$URL" | sed 's#://[^@]*@#://***@#')"
