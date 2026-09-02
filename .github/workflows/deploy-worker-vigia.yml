@@ -13,6 +13,12 @@
 #   - secret do repositório  SUPABASE_ANON_KEY_DEV   (chave publicável do projeto dev)
 #   - secret do repositório  SUPABASE_ANON_KEY_PROD  (chave publicável do projeto prod)
 #   - secret do repositório  RESEND_API_KEY          (conta Resend do card 3.8)
+#   - **bucket R2 `gestao-im360-backup`** (card 3.11) — desde o card 3.12 o vigia
+#     também confere a idade do backup, e `worker-vigia/wrangler.toml` declara o
+#     binding `BACKUP`. Bucket inexistente faz o `wrangler deploy` recusar o
+#     Worker: é de propósito, e o vigia JÁ PUBLICADO segue no ar sondando os dois
+#     Supabase enquanto isso — deploy que falha não derruba o que está rodando.
+#     O `CLOUDFLARE_API_TOKEN` precisa também de **Workers R2 Storage — Read**.
 # As duas chaves publicáveis são as MESMAS que já estão nos environments `dev` e
 # `prod` como `SUPABASE_ANON_KEY`. Aqui elas precisam de nome distinto e escopo de
 # repositório por um motivo prático: um job só enxerga UM environment, e este

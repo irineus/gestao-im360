@@ -36,12 +36,29 @@ const mensagemCredencialInvalida = 'E-mail ou senha inválidos.';
 const _mensagemRede =
     'Não foi possível falar com o servidor. Verifique a conexão e tente de novo.';
 
+/// Gancho de observabilidade (card 3.12). `main` o aponta para o Sentry; nos
+/// testes e num build sem `SENTRY_DSN` ele continua nulo e nada é enviado.
+///
+/// Ele mora AQUI, e não nas cinco telas que hoje chamam [traduzirErro], por uma
+/// razão que este projeto já pagou duas vezes: **regra que depende de alguém
+/// lembrar não serve**. Com o gancho no ponto de tradução, toda tela futura
+/// entra coberta sem precisar saber que o Sentry existe; com uma chamada por
+/// tela, a primeira tela da Fase 4 já nasceria de fora — e a falha seria
+/// silenciosa, porque o Sentry simplesmente não receberia nada.
+void Function(ErroApp erro)? aoTraduzirErro;
+
 /// Traduz qualquer exceção do Supabase para [ErroApp].
 ///
 /// A ordem importa: um `PostgrestException` de regra de negócio carrega o
 /// `codigo` no `details`; sem ele, cai no texto genérico que sempre mostra o
 /// código técnico.
 ErroApp traduzirErro(Object erro) {
+  final traduzido = _traduzir(erro);
+  aoTraduzirErro?.call(traduzido);
+  return traduzido;
+}
+
+ErroApp _traduzir(Object erro) {
   if (erro is ErroApp) return erro;
 
   if (erro is PostgrestException) {

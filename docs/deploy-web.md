@@ -203,9 +203,50 @@ CSP** no console.
 
 `connect-src` é a linha que mais vai doer se for esquecida:
 
-- **card 3.12 (Sentry)** precisa acrescentar o host de ingestão, ou os eventos são bloqueados **em
-  silêncio** — o Sentry não reclama de CSP, ele simplesmente não recebe nada;
+- ✅ **card 3.12 (Sentry) — feito em 02/09/2026**: `https://*.ingest.us.sentry.io` entrou no
+  `connect-src` no mesmo commit que ligou o SDK, exatamente porque o evento bloqueado por CSP é
+  bloqueado **em silêncio** — o Sentry não reclama, ele simplesmente não recebe nada, e isso é
+  indistinguível de "não houve erro". A linha passou a ter **duas** asserções: uma no
+  `publicacao_web_test.dart` (o `connect-src` cita a ingestão) e outra no `deploy-web.yml`, que
+  extrai o host do `SENTRY_DSN` de verdade e reprova o build quando a CSP não o cobre. Detalhe em
+  `docs/observabilidade.md` §4;
 - **Realtime do Supabase**, se um dia for usado, precisa dos mesmos hosts em `wss:`.
+
+---
+
+## 5.9. ⚠️ O deploy do CI não chega ao endereço público (medido em 02/09/2026)
+
+**Defeito aberto, card 3.9,5, prioridade Alta.** Está escrito aqui porque este documento é a fonte do
+contrato de publicação, e o contrato **não está sendo cumprido**.
+
+Depois de um `deploy-web` **verde** em `develop` (run 33647857494, com `Deployment complete` do
+wrangler), o `main.dart.js` servido em cada endereço:
+
+| URL | sha1 (16) |
+|---|---|
+| `develop.gestao-im360-homolog.pages.dev` (o que o CI publicou) | `ac1c466c98ab1bd6` |
+| `gestao-im360-homolog.pages.dev` (produção do projeto) | `95065fafef1c765f` |
+| **`homolog.gestaoim360.com`** | **`95065fafef1c765f`** |
+| `main.gestao-im360.pages.dev` | `b9f31c94602de060` |
+| `gestao-im360.pages.dev` | `7311a8da919a3df0` |
+| **`app.gestaoim360.com`** | **`7311a8da919a3df0`** |
+
+**Os dois endereços públicos servem um deploy que não é o do CI** — quase certamente os *direct
+uploads* feitos à mão neste mesmo card 3.8.
+
+**Causa provável:** os dois projetos nasceram por *direct upload*, e num projeto assim a
+*production branch* fica com um valor que o CI nunca usa; `wrangler pages deploy --branch <x>` só
+publica em produção quando `<x>` bate com ela. Como não bate, **todo deploy do CI vira preview**.
+
+⚠️ **O sintoma é a ausência de sintoma**, de novo: o workflow fica verde, o wrangler imprime
+`Deployment complete`, e o site continua no ar servindo a versão anterior — que **funciona**, o que
+remove o último sinal que restaria. É a mesma família de `--exclude` com chave desconhecida (card
+3.9) e de Redirect URL recusada (§4): a operação "dá certo" e não faz o que se pensa.
+
+**Consequência para o que este documento afirma no §10:** a conferência do card 3.9 mediu a coisa
+certa nas **URLs erradas**. Publicar e conferir `$APP_URL_BASE` logo depois não basta se ninguém
+compara o que foi servido com o que foi construído — e a correção do card 3.9,5 é exatamente essa
+asserção, além do ajuste de *Production branch* no painel.
 
 ---
 
@@ -275,7 +316,7 @@ deploy. Ele deixa de ser o endereço divulgado, e é só o `APP_URL_BASE` que pr
 | # | Para | O quê | Peso |
 |---|---|---|---|
 | 1 | **3.9** | O workflow tem de construir com `--no-web-resources-cdn` e com os três `--dart-define` do ambiente certo, e publicar `app/build/web`. Build sem os `--dart-define` **não falha**: sobe a tela "este build não recebeu a configuração do ambiente" | bloqueante |
-| 2 | **3.12** | Acrescentar o host de ingestão do Sentry ao `connect-src` do `_headers`, no mesmo commit que ligar o Sentry — CSP bloqueia sem avisar | bloqueante |
+| 2 | ~~**3.12**~~ | ~~Acrescentar o host de ingestão do Sentry ao `connect-src` do `_headers`, no mesmo commit que ligar o Sentry — CSP bloqueia sem avisar~~ ✅ **feito em 02/09/2026**, com asserção dos dois lados (`docs/observabilidade.md` §4) | ~~bloqueante~~ |
 | 3 | **2.7 / 4.7** | `over_email_send_rate_limit` chega à tela como código cru ("código over_email_send_rate_limit"). É um erro do Auth, não do banco, e o catálogo do card 2.7 §7.1 só cobre os códigos do `DETAIL`. Precisa de texto: "muitos pedidos de e-mail seguidos; espere alguns minutos" | média |
 | 4 | **10.1** | Os ícones do PWA e o favicon agora saem da marca (§9). Falta o conjunto de ícones das lojas, que é outro tamanho e outra régua de safe area | baixa |
 | 5 | **3.10** | O Worker de "keep alive" do free tier é do card 3.10 e não foi criado aqui; a conta só tem os Workers do Entrelares | informativo |

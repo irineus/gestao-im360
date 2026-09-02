@@ -16,6 +16,10 @@
 #   - secret do repositório  CLOUDFLARE_ACCOUNT_ID
 #   - secret do environment `dev`   SUPABASE_ANON_KEY  (chave publicável do projeto dev)
 #   - secret do environment `prod`  SUPABASE_ANON_KEY  (chave publicável do projeto prod)
+#   - secret do repositório  SENTRY_DSN  (card 3.12) — OPCIONAL, e é o único assim:
+#     sem ele o build sai sem observabilidade e o passo abaixo AVISA em vez de
+#     reprovar. Build sem Sentry é um build pior; build sem Supabase é um build
+#     quebrado, e a diferença precisa aparecer no comportamento do portão.
 # A chave publicável é pública por desenho — vai no bundle que qualquer visitante
 # baixa (card 3.8 §1). Ela fica em secret mesmo assim por um motivo prático: assim
 # rotacionar a chave não exige um commit.
@@ -54,7 +58,12 @@ jobs:
       PAGES_PROJECT: ${{ github.ref_name == 'main' && 'gestao-im360' || 'gestao-im360-homolog' }}
       SUPABASE_URL: ${{ github.ref_name == 'main' && 'https://aqfuawrygxsiopyppjza.supabase.co' || 'https://ncdfolxdupbbfvtydngx.supabase.co' }}
       APP_URL_BASE: ${{ github.ref_name == 'main' && 'https://app.gestaoim360.com' || 'https://homolog.gestaoim360.com' }}
+      # Rótulo do ambiente no Sentry (card 3.12). Sai da MESMA expressão sobre
+      # `github.ref_name` que as duas de cima — é isso que impede o erro no
+      # Sentry dizer "produção" apontando para o banco de homologação.
+      APP_AMBIENTE: ${{ github.ref_name == 'main' && 'producao' || 'homologacao' }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
@@ -76,6 +85,67 @@ jobs:
             { echo "## Falta configurar no GitHub"; printf -- '- %s\n' "${faltando[@]}"; } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+          # `SENTRY_DSN` avisa em vez de reprovar (card 3.12): o app trata a
+          # ausência subindo sem observabilidade, de propósito. O que NÃO pode
+          # acontecer é a ausência passar calada — é assim que se descobre, seis
+          # meses depois, que o painel está vazio porque nunca recebeu nada.
+          if [ -z "$SENTRY_DSN" ]; then
+            echo "::warning title=Sem observabilidade::SENTRY_DSN não está configurado — este bundle sobe sem Sentry. Ver docs/observabilidade.md §3."
+            echo "⚠️ **Sem Sentry**: \`SENTRY_DSN\` ausente; o bundle sobe sem observabilidade." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: A CSP deixa passar a ingestão do Sentry
+        # Card 3.12, e é a metade que o teste Dart não alcança: ele confere que
+        # o `connect-src` cita `ingest.us.sentry.io`, mas não sabe qual é o DSN
+        # de verdade. Aqui os dois lados se encontram.
+        #
+        # Por que isto existe: CSP que barra o host de ingestão bloqueia o envio
+        # EM SILÊNCIO — sem exceção, sem log, sem nada na tela. O sintoma é um
+        # Sentry que não recebe nada, indistinguível de "não houve erro". É a
+        # mesma família de falha calada que este projeto já catalogou em RLS que
+        # reduz linhas, em view sem `security_invoker` e em Redirect URL
+        # recusada; a diferença é que esta apaga junto o que a denunciaria.
+        if: env.SENTRY_DSN != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          # DSN: https://<chave>@<host>/<id do projeto>
+          host="$(printf '%s' "$SENTRY_DSN" | sed -E 's#^https?://[^@]*@##; s#/.*$##')"
+          [ -n "$host" ] || { echo "::error title=DSN ilegível::não consegui extrair o host de SENTRY_DSN"; exit 1; }
+          echo "host de ingestão: $host"
+
+          conectar="$(grep -F 'Content-Security-Policy:' web/_headers | tr ';' '\n' | grep -F 'connect-src')"
+          echo "connect-src:${conectar#*connect-src}"
+
+          # Casa o host contra cada origem, tratando o curinga de subdomínio
+          # (`https://*.ingest.us.sentry.io`) como o navegador o trata: ele cobre
+          # um rótulo à esquerda do sufixo, e nada mais.
+          coberto=0
+          for origem in $conectar; do
+            alvo="${origem#https://}"; alvo="${alvo#http://}"; alvo="${alvo%%/*}"
+            case "$alvo" in
+              '*.'*)
+                sufixo="${alvo#\*.}"
+                case "$host" in
+                  *.*."$sufixo") ;;
+                  *."$sufixo") coberto=1 ;;
+                esac ;;
+              "$host") coberto=1 ;;
+            esac
+          done
+
+          if [ "$coberto" -ne 1 ]; then
+            echo "::error title=CSP bloqueia o Sentry::o host $host não é coberto pelo connect-src de app/web/_headers. Os eventos seriam bloqueados pelo navegador em silêncio."
+            {
+              echo "## A CSP bloquearia o Sentry"
+              echo "- host de ingestão do \`SENTRY_DSN\`: \`$host\`"
+              echo "- o \`connect-src\` de \`app/web/_headers\` não o cobre"
+              echo
+              echo "Acrescente o host (ou \`https://*.<sufixo>\`) ao \`connect-src\` **no mesmo commit**."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "a CSP cobre $host"
 
       - uses: subosito/flutter-action@v2
         with:
@@ -94,7 +164,8 @@ jobs:
           flutter build web --release --no-web-resources-cdn \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
-            --dart-define=APP_URL_BASE="$APP_URL_BASE"
+            --dart-define=APP_URL_BASE="$APP_URL_BASE" \
+            --dart-define=SENTRY_DSN="$SENTRY_DSN"
 
       - name: O bundle carrega a configuração DESTE ambiente
         # `APP_URL_BASE` errado "erra baixo e cala" (card 3.8 §1): é dele que sai
@@ -106,6 +177,26 @@ jobs:
         run: |
           grep -qF "$SUPABASE_URL"  build/web/main.dart.js || { echo "::error::o bundle não contém SUPABASE_URL=$SUPABASE_URL"; exit 1; }
           grep -qF "$APP_URL_BASE"  build/web/main.dart.js || { echo "::error::o bundle não contém APP_URL_BASE=$APP_URL_BASE"; exit 1; }
+          # Card 3.12: o rótulo que o Sentry vai carimbar em cada erro. Errado,
+          # ele manda investigar produção por causa de um erro de homologação.
+          #
+          # ⚠️ SÓ VALE COM O SENTRY LIGADO, e isso foi medido (02/09/2026, run
+          # 33646706789, o primeiro deploy depois do card 3.12). `SENTRY_DSN`
+          # vazio é uma constante de compilação: `observabilidadeLigada` resolve
+          # para `false` ainda no dart2js, o ramo do `SentryFlutter.init` é
+          # eliminado como código morto, e com ele some a ÚNICA referência a
+          # `Ambiente.ambiente` — a string `homologacao` deixa de existir no
+          # bundle. Conferir a presença dela aí seria exigir uma decoração: sem
+          # Sentry o rótulo não tem consumidor nenhum.
+          if [ -n "$SENTRY_DSN" ]; then
+            grep -qF "$APP_AMBIENTE" build/web/main.dart.js || { echo "::error::o bundle não contém APP_AMBIENTE=$APP_AMBIENTE"; exit 1; }
+          fi
+          # Contraprova (card 3.9): o bundle NÃO pode carregar o endereço do
+          # outro ambiente. Ela pegou, em 02/09/2026, uma tentativa de derivar
+          # o rótulo do ambiente a partir do `SUPABASE_URL`, que embutia o ref
+          # de produção em todo bundle — ver lib/config/ambiente.dart.
+          outro="${{ github.ref_name == 'main' && 'https://homolog.gestaoim360.com' || 'https://app.gestaoim360.com' }}"
+          ! grep -qF "$outro" build/web/main.dart.js || { echo "::error::o bundle contém o endereço do OUTRO ambiente ($outro)"; exit 1; }
           test -f build/web/_headers || { echo "::error::_headers não foi copiado para o build"; exit 1; }
           test ! -f build/web/404.html || { echo "::error::404.html no topo desliga o fallback de SPA do Pages"; exit 1; }
 
@@ -127,4 +218,5 @@ jobs:
             echo "- Projeto do Pages: \`$PAGES_PROJECT\` (branch \`$GITHUB_REF_NAME\`)"
             echo "- Endereço: $APP_URL_BASE"
             echo "- Supabase: $SUPABASE_URL"
+            echo "- Sentry: ${SENTRY_DSN:+ligado (environment \`${{ github.ref_name == 'main' && 'producao' || 'homologacao' }}\`)}${SENTRY_DSN:-**desligado** (sem \`SENTRY_DSN\`)}"
           } >> "$GITHUB_STEP_SUMMARY"

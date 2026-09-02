@@ -12,7 +12,10 @@ import assert from 'node:assert/strict';
 import * as entrada from '../src/index.js';
 import {
   AMBIENTES,
+  BACKUP,
   CAMINHO_SONDA,
+  avaliarBackup,
+  conferirBackup,
   conferirConfiguracao,
   executar,
   montarAlerta,
@@ -29,6 +32,35 @@ const AMBIENTE_COMPLETO = {
 };
 
 const semEspera = { dormir: async () => {}, esperaMs: 0 };
+
+/** Data fixa: o vigia roda 09:00 UTC = 06:00 em São Paulo. */
+const AGORA = new Date('2026-09-02T09:00:00Z');
+
+/** Chaves de uma cópia completa naquela data. */
+const copia = (data) =>
+  ['roles.sql.gz', 'schema.sql.gz', 'data.sql.gz', 'MANIFESTO.txt'].map(
+    (nome) => `producao/${data}/${nome}`,
+  );
+
+/** Bucket R2 de mentira, com a paginação que o `list` de verdade tem. */
+function baldeFalso(chaves, { porPagina = 1000, quebrar = null } = {}) {
+  return {
+    async list({ cursor } = {}) {
+      if (quebrar) throw quebrar;
+      const inicio = cursor ? Number(cursor) : 0;
+      const fatia = chaves.slice(inicio, inicio + porPagina);
+      const fim = inicio + fatia.length;
+      return {
+        objects: fatia.map((key) => ({ key })),
+        truncated: fim < chaves.length,
+        cursor: String(fim),
+      };
+    },
+  };
+}
+
+/** Backup saudável: cópia de anteontem, completa. */
+const backupBom = { balde: baldeFalso(copia('2026-08-31')), quando: AGORA };
 
 function resposta(status, corpo) {
   return { status, ok: status >= 200 && status < 300, text: async () => corpo };
@@ -143,9 +175,11 @@ test('alerta: assunto nomeia o ambiente e o texto carrega o que a sonda viu', ()
 
 test('execução verde: nenhuma chamada ao Resend', async () => {
   const buscar = buscarFalso([resposta(200, '[]')]);
-  const r = await executar(AMBIENTE_COMPLETO, { buscar, ...semEspera });
+  const r = await executar(AMBIENTE_COMPLETO, { buscar, ...semEspera, ...backupBom });
 
   assert.equal(r.falhas.length, 0);
+  assert.equal(r.backup.ok, true);
+  assert.equal(r.algoRuim, false);
   assert.equal(r.alertaEnviado, false);
   assert.equal(r.resultados.length, AMBIENTES.length);
   assert.equal(buscar.chamadas.some((c) => c.url.includes('resend')), false);
@@ -163,7 +197,7 @@ test('execução com falha: um e-mail, com destinatário e assunto certos', asyn
     return buscar(url, opcoes);
   };
 
-  const r = await executar(AMBIENTE_COMPLETO, { buscar: espiao, ...semEspera });
+  const r = await executar(AMBIENTE_COMPLETO, { buscar: espiao, ...semEspera, ...backupBom });
 
   assert.equal(r.falhas.length, 1);
   assert.equal(r.falhas[0].ambiente, 'producao');
@@ -184,7 +218,7 @@ test('alerta recusado pelo Resend derruba a execução, dizendo as duas coisas',
   };
 
   await assert.rejects(
-    () => executar(AMBIENTE_COMPLETO, { buscar, ...semEspera }),
+    () => executar(AMBIENTE_COMPLETO, { buscar, ...semEspera, ...backupBom }),
     (erro) => {
       assert.match(erro.message, /FALHOU/);
       assert.match(erro.message, /ALERTA NÃO SAIU/);
@@ -214,4 +248,149 @@ test('scheduled fica vermelho quando alguma sonda reprova', async () => {
   } finally {
     globalThis.fetch = original;
   }
+});
+
+// ---------------------------------------------------------------------------
+// Vigilância do backup semanal — card 3.12
+//
+// O que estes testes protegem é o modo de falha que o card 3.11 registrou sobre
+// o PRÓPRIO backup: o GitHub desativa workflow agendado em repositório com 60
+// dias sem commit, e o backup para de sair sem uma linha de aviso. O risco vira
+// real justamente quando o desenvolvimento parar — quando ninguém mais abre o
+// painel de Actions.
+// ---------------------------------------------------------------------------
+
+test('backup: cópia recente e completa passa', () => {
+  const r = avaliarBackup(copia('2026-08-31'), { quando: AGORA });
+  assert.equal(r.ok, true);
+  assert.equal(r.data, '2026-08-31');
+  assert.equal(r.idadeDias, 2);
+});
+
+test('backup: bucket vazio REPROVA', () => {
+  // Não é caso de laboratório: é o estado do bucket enquanto o backup nunca
+  // tiver rodado com sucesso, e o desfecho silencioso seria acreditar que sim.
+  const r = avaliarBackup([], { quando: AGORA });
+  assert.equal(r.ok, false);
+  assert.match(r.motivo, /nenhuma cópia/);
+});
+
+test('backup: cópia velha REPROVA, nomeando a data e o limite', () => {
+  const r = avaliarBackup(copia('2026-08-01'), { quando: AGORA });
+  assert.equal(r.ok, false);
+  assert.equal(r.idadeDias, 32);
+  assert.match(r.motivo, /2026-08-01/);
+  assert.match(r.motivo, /limite: 9/);
+});
+
+test('backup: 9 dias passa, 10 reprova — o limite é o limite', () => {
+  assert.equal(avaliarBackup(copia('2026-08-24'), { quando: AGORA }).ok, true, '9 dias');
+  assert.equal(avaliarBackup(copia('2026-08-23'), { quando: AGORA }).ok, false, '10 dias');
+});
+
+test('backup: cópia INCOMPLETA reprova, ainda que seja de hoje', () => {
+  // A asserção é positiva pela mesma razão que a sonda não aceita qualquer 200:
+  // prefixo que existe passaria com a pasta vazia, e `data.sql.gz` é a razão de
+  // o backup existir — dump de schema sem dado é o jeito mais comum de um
+  // backup ser inútil (card 3.11).
+  const semDado = ['producao/2026-09-02/schema.sql.gz', 'producao/2026-09-02/MANIFESTO.txt'];
+  const r = avaliarBackup(semDado, { quando: AGORA });
+  assert.equal(r.ok, false);
+  assert.match(r.motivo, /incompleta/);
+  assert.match(r.motivo, /data\.sql\.gz/);
+});
+
+test('backup: a cópia MAIS NOVA é que manda, mesmo com velhas no bucket', () => {
+  const chaves = [...copia('2026-06-01'), ...copia('2026-07-01'), ...copia('2026-08-31')];
+  const r = avaliarBackup(chaves, { quando: AGORA });
+  assert.equal(r.ok, true);
+  assert.equal(r.data, '2026-08-31');
+});
+
+test('backup: chave fora do padrão é ignorada, não confundida com cópia', () => {
+  const r = avaliarBackup(['producao/', 'lixo.txt', 'producao/rascunho/x', ...copia('2026-08-31')], {
+    quando: AGORA,
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.data, '2026-08-31');
+});
+
+test('backup: sem o binding R2, REPROVA — e não lança', async () => {
+  // Fail-closed sem cegar o resto: "não consegui conferir" é falha, mas uma
+  // exceção aqui derrubaria a execução antes das sondas do Supabase e trocaria
+  // uma proteção que funciona por outra que acabou de nascer.
+  const r = await conferirBackup({}, { quando: AGORA });
+  assert.equal(r.ok, false);
+  assert.match(r.motivo, /binding R2/);
+});
+
+test('backup: R2 fora do ar REPROVA com o motivo, sem lançar', async () => {
+  const r = await conferirBackup(
+    { BACKUP: baldeFalso([], { quebrar: new Error('R2 indisponível') }) },
+    { quando: AGORA },
+  );
+  assert.equal(r.ok, false);
+  assert.match(r.motivo, /R2 indisponível/);
+});
+
+test('backup: a listagem pagina — 12 cópias não cabem numa página de 3', async () => {
+  // `list` do R2 devolve no máximo 1000 por página e sinaliza `truncated`.
+  // Parar na primeira página faria a cópia mais nova sumir da conta e o alerta
+  // disparar sozinho toda semana, que é como se aprende a ignorá-lo.
+  const datas = ['2026-06-14', '2026-06-21', '2026-08-31'];
+  const chaves = datas.flatMap(copia);
+  const r = await conferirBackup({ BACKUP: baldeFalso(chaves, { porPagina: 3 }) }, { quando: AGORA });
+  assert.equal(r.ok, true);
+  assert.equal(r.data, '2026-08-31');
+});
+
+test('backup ruim com Supabase de pé: alerta próprio, e a execução fica vermelha', async () => {
+  const chamadas = [];
+  const buscar = async (url, opcoes) => {
+    chamadas.push({ url, opcoes });
+    return url.includes('resend') ? resposta(200, '{"id":"abc"}') : resposta(200, '[]');
+  };
+
+  const r = await executar(AMBIENTE_COMPLETO, {
+    buscar,
+    ...semEspera,
+    balde: baldeFalso(copia('2026-01-01')),
+    quando: AGORA,
+  });
+
+  assert.equal(r.falhas.length, 0, 'as sondas passaram');
+  assert.equal(r.backup.ok, false);
+  assert.equal(r.algoRuim, true, 'backup velho tem de deixar a execução vermelha');
+  assert.equal(r.alertaEnviado, true);
+
+  const email = chamadas.filter((c) => c.url.includes('resend'));
+  assert.equal(email.length, 1, 'um e-mail por execução');
+  const corpo = JSON.parse(email[0].opcoes.body);
+  assert.match(corpo.subject, /backup de produção não está saindo/);
+  assert.match(corpo.text, /Enable workflow/, 'o e-mail tem de dizer a causa mais provável');
+});
+
+test('alerta com os dois problemas cabe num envelope só', () => {
+  const falha = {
+    rotulo: 'produção',
+    alvo: 'https://exemplo.supabase.co' + CAMINHO_SONDA,
+    tentativas: [{ ok: false, status: 540, corpo: 'paused', ms: 9 }],
+  };
+  const { assunto, texto } = montarAlerta([falha], AGORA, {
+    ok: false,
+    motivo: 'a cópia mais nova é de 2026-01-01, 244 dias atrás (limite: 9)',
+  });
+
+  assert.match(assunto, /produção/);
+  assert.match(assunto, /backup está atrasado/);
+  assert.match(texto, /HTTP 540/);
+  assert.match(texto, /244 dias atrás/);
+});
+
+test('o limite do backup cobre a semana perdida, não a atrasada', () => {
+  // 7 dias é a operação normal (semanal). O limite tem de dar folga para uma
+  // execução atrasada sem alarme falso E denunciar a PRIMEIRA semana perdida,
+  // em vez de esperar a segunda.
+  assert.ok(BACKUP.idadeMaximaDias > 7, 'abaixo disso, alarme falso toda semana');
+  assert.ok(BACKUP.idadeMaximaDias < 14, 'acima disso, uma semana perdida passa batida');
 });

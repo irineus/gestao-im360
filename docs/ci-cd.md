@@ -241,6 +241,7 @@ teria de entrar nas Redirect URLs do Auth. Implementado o que o 3.8 decidiu — 
 | Secret do repositório | `CLOUDFLARE_ACCOUNT_ID` | idem | ✅ criado 02/09/2026 |
 | Secret do environment `dev` | `SUPABASE_ANON_KEY` | chave publicável do projeto dev, no bundle de homologação | ✅ criado 02/09/2026 |
 | Secret do environment `prod` | `SUPABASE_ANON_KEY` | chave publicável do projeto prod, no bundle de produção | ✅ criado 02/09/2026 |
+| Secret do repositório | `SENTRY_DSN` | observabilidade do app (card 3.12) — **o único opcional**: sem ele o `deploy-web` avisa e publica um bundle sem Sentry, em vez de reprovar | ⚠️ falta criar |
 | Secret do repositório | `SUPABASE_ANON_KEY_DEV` | sonda do vigia no projeto dev (card 3.10) | ✅ criado 02/09/2026 |
 | Secret do repositório | `SUPABASE_ANON_KEY_PROD` | sonda do vigia no projeto prod (card 3.10) | ✅ criado 02/09/2026 |
 | Secret do repositório | `RESEND_API_KEY` | e-mail de alerta do vigia (card 3.10) | ✅ criado 02/09/2026 (chave `gestao-im360-vigia`, *Sending access*) |
