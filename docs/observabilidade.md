@@ -180,6 +180,16 @@ mais.
 A contraprova ficou mais forte: o passo do `deploy-web` agora **exige** que o bundle não contenha o
 endereço do outro ambiente, em vez de isso ser uma conferência manual de quem publica.
 
+⚠️ **E a conferência do rótulo só vale com o Sentry ligado — medido no primeiro deploy depois deste
+card** (02/09/2026, run 33646706789, que ficou vermelho por isso). `SENTRY_DSN` vazio é uma
+**constante de compilação**: `observabilidadeLigada` resolve para `false` ainda no dart2js, o ramo do
+`SentryFlutter.init` é eliminado como código morto e, com ele, some a **única** referência a
+`Ambiente.ambiente` — a string `homologacao` deixa de existir no bundle. Exigir a presença dela sem
+Sentry seria exigir uma **decoração**: o rótulo não tem consumidor nenhum nesse build. O passo passou
+a ser condicional, como o da CSP. Vale como lição geral para os próximos cards: **`String.fromEnvironment`
+só sobrevive no bundle enquanto houver código vivo que a leia**, então conferir a presença de um
+valor no `main.dart.js` é conferir o consumidor dele, e não o define.
+
 ---
 
 ## 8. Logs do Supabase
