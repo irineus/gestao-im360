@@ -48,7 +48,7 @@ São três arquivos, que é o caminho de backup documentado pelo Supabase:
 
 | Arquivo | Conteúdo | Papel na restauração |
 |---|---|---|
-| `roles.sql.gz` | papéis do banco | só se o destino for um Postgres cru, fora do Supabase |
+| `roles.sql.gz` | papéis **próprios** do banco — hoje **nenhum**, ver §8 | só se o destino for um Postgres cru, fora do Supabase |
 | `schema.sql.gz` | estrutura dos schemas de aplicação | aplicado primeiro |
 | `data.sql.gz` | dados (`COPY`) | aplicado por último |
 | `MANIFESTO.txt` | data, commit de `main`, migrações, tamanhos, resultado do ensaio | leitura humana |
@@ -221,12 +221,47 @@ nada aqui depende de environment.
 
 ---
 
-## 8. Ajustes que este card deixa
+## 8. O que a estreia ensinou (02/09/2026)
+
+Primeiro `workflow_dispatch`, run `33628486024`, logo depois de Irineu criar o bucket e os dois
+secrets.
+
+**O que funcionou de primeira, e não era pouco.** O `supabase link --project-ref` alcançou produção,
+o CLI baixou a imagem `ghcr.io/supabase/postgres:17.6.1.166` — a mesma versão do servidor, que é
+justamente o problema que o §2 explica — e os três dumps saíram limpos. Ou seja: a conexão pelo
+pooler, as credenciais e a versão do cliente, que eram as três incógnitas técnicas do card, estão
+resolvidas e medidas.
+
+**⚠️ `--role-only` num projeto Supabase não dumpa os papéis da plataforma — e o piso reprovou um
+fato.** `roles.sql` saiu com **370 bytes**, só cabeçalho, e o passo de piso de tamanho, com um limite
+único de 512 bytes para os três arquivos, marcou a execução como vermelha. O arquivo está **certo**:
+`--role-only` dumpa os papéis **próprios** do banco, e este projeto não criou nenhum — `anon`,
+`authenticated`, `service_role` e `supabase_admin` são geridos pela plataforma e não pertencem a
+este backup (num destino Supabase eles já existem, que é o motivo pelo qual o ensaio do §4 não
+aplica `roles.sql`).
+
+A lição não é "afrouxar o piso": é que **um piso genérico não sabe o que cada arquivo significa**, e
+uma guarda que não distingue verdade de defeito produz alarme falso — o mesmo desfecho de não ter
+guarda, porque se aprende a ignorá-la. O piso passou a ser **por arquivo**, com o significado escrito
+ao lado: `schema.sql` e `data.sql` mantêm os 512 bytes, e `roles.sql` só precisa existir. Ele
+continua no backup porque o dia em que crescer é o dia em que alguém criou um papel próprio — e aí
+ele passa a ser necessário para restaurar.
+
+Segundo ajuste do mesmo passo: o laço **parava no primeiro arquivo**, então o log da estreia mostrou
+370 bytes de `roles.sql` e nada sobre os outros dois. Relatório que esconde o estado do resto obriga
+a rodar de novo só para saber o resto; agora ele mede os três e reprova no fim.
+
+Continua sem medição a pergunta do §5: se `supabase_migrations.schema_migrations` vem no dump. Ela
+depende do ensaio de restauração, que a estreia não chegou a executar.
+
+---
+
+## 9. Ajustes que este card deixa
 
 | # | O quê | Onde | Bloqueante |
 |---|---|---|---|
-| 1 | Criar o bucket R2 e os dois secrets do §6 — sem eles o workflow reprova no primeiro passo | Irineu | sim, para o backup existir |
-| 2 | Exercitar o primeiro `workflow_dispatch` e registrar aqui o que a execução ensinou (em especial: `supabase_migrations` vem no dump?) | card 3.11, após a promoção | sim |
+| 1 | ~~Criar o bucket R2 e os dois secrets do §6~~ | ✅ feito 02/09/2026 por Irineu | resolvido |
+| 2 | Exercitar o `workflow_dispatch` até o verde e registrar o que a execução ensinou — a estreia está no §8; falta o ensaio de restauração rodar, e com ele a resposta sobre `supabase_migrations` | card 3.11 | sim |
 | 3 | Vigiar a **idade do backup mais novo no R2** a partir do vigia (Cloudflare), fechando o modo de falha do §7 — exige binding de R2 no Worker | card 3.12 | não |
 | 4 | Pré-condição do go-live "backup restaurado em teste" (card 2.8 §15) passa a ser satisfeita pelo ensaio semanal; conferir a redação do critério | card 9.7 | não |
 | 5 | Depois do cutover, reavaliar frequência e retenção com dado de negócio em produção | card 9.8 | não |
