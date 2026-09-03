@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Redefinir sua senha do Gestão IM360</title>
+</head>
+<!--
+  Template de RECUPERAÇÃO DE SENHA do Supabase Auth — card 4.7,6
+  (docs/emails-auth.md). Mesma casca do convite; ver lá os avisos sobre
+  `{{ .ConfirmationURL }}`, HTML de e-mail e imagem bloqueada.
+
+  ⚠️ Aqui o `redirect_to` vem do app (`resetPasswordForEmail`, card 3.5), e o
+     link volta com `type=recovery` no fragmento — tratado pelo evento
+     `passwordRecovery` do `supabase_flutter`. Destino fora das Redirect URLs
+     do painel NÃO dá erro: o Auth manda a pessoa para a Site URL e a tela de
+     nova senha nunca aparece (medido no card 3.8). O template não tem como
+     defender disso; quem defende é a lista do painel.
+-->
+<body style="margin:0;padding:0;background-color:#F6F7F9;">
+
+<div style="display:none;font-size:1px;color:#F6F7F9;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">
+  Crie uma nova senha pelo link. Vale 24 horas. Se não foi você, ignore.
+</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F6F7F9;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:560px;background-color:#FFFFFF;border:1px solid #D9DDE5;border-radius:12px;">
+
+        <tr>
+          <td style="background-color:#E2620F;height:4px;line-height:4px;font-size:0;border-radius:12px 12px 0 0;">&nbsp;</td>
+        </tr>
+
+        <tr>
+          <td style="padding:32px 40px 0 40px;">
+            <!-- Estilo tipográfico no `img` = estilo do texto alternativo; ver
+                 o comentário no convite. -->
+            <img src="https://app.gestaoim360.com/marca/gestao-im360-horizontal.png"
+                 width="184" height="51" alt="Gestão IM360" border="0"
+                 style="display:block;width:184px;height:51px;border:0;outline:none;text-decoration:none;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;line-height:51px;font-weight:700;color:#171C26;">
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 40px 0 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+            <h1 style="margin:0;font-size:22px;line-height:30px;font-weight:700;color:#171C26;">
+              Redefinir sua senha
+            </h1>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:16px 40px 0 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3A4252;">
+            <p style="margin:0 0 16px 0;">
+              Recebemos um pedido para redefinir a senha do acesso de
+              <strong style="color:#171C26;">{{ .Email }}</strong> no Gestão IM360.
+            </p>
+            <p style="margin:0;">
+              Se foi você, use o botão abaixo para criar uma senha nova.
+            </p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:28px 40px 0 40px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" bgcolor="#BE4E08" style="background-color:#BE4E08;border-radius:8px;">
+                  <a href="{{ .ConfirmationURL }}"
+                     style="display:inline-block;padding:14px 28px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:20px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:8px;">
+                    Criar nova senha
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 40px 0 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#656F82;">
+            <p style="margin:0 0 8px 0;">O link vale <strong style="color:#3A4252;">24 horas</strong>.</p>
+            <!-- A frase que faz este e-mail ser seguro de receber: pedido de
+                 recuperação não exige prova de identidade nenhuma, então
+                 qualquer pessoa que saiba o endereço dispara este envio. Quem
+                 recebe sem ter pedido precisa saber que nada aconteceu. -->
+            <p style="margin:0;">Se não foi você que pediu, <strong style="color:#3A4252;">ignore este e-mail</strong> — sua senha continua a mesma.</p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 40px 0 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8B94A6;">
+            <p style="margin:0 0 6px 0;">Se o botão não funcionar, copie este endereço no navegador:</p>
+            <p style="margin:0;word-break:break-all;"><a href="{{ .ConfirmationURL }}" style="color:#BE4E08;text-decoration:underline;">{{ .ConfirmationURL }}</a></p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:28px 40px 0 40px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr><td style="background-color:#ECEEF2;height:1px;line-height:1px;font-size:0;">&nbsp;</td></tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:16px 40px 32px 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8B94A6;">
+            <p style="margin:0;">
+              Este é um envio automático de um endereço que não recebe respostas. Dúvidas: fale com a direção da escola.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:560px;">
+        <tr>
+          <td align="center" style="padding:16px 40px 0 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8B94A6;">
+            Gestão IM360
+          </td>
+        </tr>
+      </table>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

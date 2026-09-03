@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Sem estes dois, Gmail e Outlook em modo escuro INVERTEM as cores por conta
+     própria e o cartão branco vira cinza-chumbo com o laranja da marca fora da
+     paleta. Declarar `light` faz os clientes que respeitam a dica deixarem em
+     paz; os que não respeitam continuam invertendo, e é por isso que nenhuma
+     informação deste e-mail depende de cor. -->
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Seu acesso ao Gestão IM360</title>
+</head>
+<!--
+  Template de CONVITE do Supabase Auth — card 4.7,6 (docs/emails-auth.md).
+
+  ⚠️ O LINK É `{{ .ConfirmationURL }}` E NÃO PODE SER TROCADO POR `{{ .Token }}`.
+     O convite chega pela Admin API (Edge Function `convidar-usuario` ou painel)
+     e devolve a SESSÃO no fragmento da URL, com `type=invite`. É esse `type`
+     que `main.dart` lê antes do `Supabase.initialize` para levar a pessoa à
+     tela de definir senha (card 4.7, app/lib/config/link_inicial.dart). Um link
+     montado com token não traz o fragmento: a pessoa entraria sem senha
+     definida, que é exatamente o defeito que o card 3.8 encontrou.
+
+  ⚠️ HTML de e-mail não é HTML de página: tabelas, estilo INLINE, nada de flex,
+     grid, `<style>` externo ou `position`. O que está em `<head>` sobrevive na
+     maioria dos clientes, mas o Gmail no Android o descarta — por isso todo
+     estilo que importa está inline.
+
+  ⚠️ A IMAGEM PODE NÃO CARREGAR, e neste e-mail é o caso mais provável de todos:
+     é o primeiro contato do remetente com a pessoa, e Gmail e Outlook bloqueiam
+     imagem de remetente desconhecido por padrão. O layout foi feito para ficar
+     completo sem ela — a barra laranja e o título carregam a identidade, e o
+     `alt` diz o nome. Nunca pôr informação só na imagem.
+-->
+<body style="margin:0;padding:0;background-color:#F6F7F9;">
+
+<!-- Linha de pré-visualização: é o texto que o Gmail mostra ao lado do assunto
+     na caixa de entrada. Sem ela, o cliente usa a primeira frase visível, que
+     aqui seria "Gestão IM360" — repetido e inútil. -->
+<div style="display:none;font-size:1px;color:#F6F7F9;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">
+  Falta um passo: definir a sua senha. O link vale 24 horas.
+</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F6F7F9;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:560px;background-color:#FFFFFF;border:1px solid #D9DDE5;border-radius:12px;">
+
+        <!-- Barra da marca. `laranja-500` é a cor de marca e o guia de
+             identidade a proíbe como texto e como fundo de botão (3,51:1
+             contra branco) — aqui ela é elemento gráfico, que é o papel dela. -->
+        <tr>
+          <td style="background-color:#E2620F;height:4px;line-height:4px;font-size:0;border-radius:12px 12px 0 0;">&nbsp;</td>
+        </tr>
+
+        <tr>
+          <td style="padding:32px 40px 0 40px;">
+            <!-- O estilo tipográfico no `img` não é para a imagem: é para o
+                 TEXTO ALTERNATIVO. Cliente que bloqueia imagem aplica o CSS do
+                 `img` ao `alt`, e sem isto o nome da marca aparece na serifada
+                 padrão do cliente — que é o caso mais comum deste e-mail. -->
+            <img src="https://app.gestaoim360.com/marca/gestao-im360-horizontal.png"
+                 width="184" height="51" alt="Gestão IM360" border="0"
+                 style="display:block;width:184px;height:51px;border:0;outline:none;text-decoration:none;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:19px;line-height:51px;font-weight:700;color:#171C26;">
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 40px 0 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+            <h1 style="margin:0;font-size:22px;line-height:30px;font-weight:700;color:#171C26;">
+              Seu acesso ao Gestão IM360 está pronto
+            </h1>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:16px 40px 0 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#3A4252;">
+            <!-- `.Data` é o user_metadata do convite. A Edge Function sempre
+                 manda `nome` (campo obrigatório do formulário); um convite
+                 feito pelo painel do Supabase não manda, e aí o `else` evita o
+                 "Olá, ." -->
+            <p style="margin:0 0 16px 0;">{{ if .Data.nome }}Olá, {{ .Data.nome }}.{{ else }}Olá.{{ end }}</p>
+            <p style="margin:0 0 16px 0;">
+              A direção da escola criou um acesso para você no <strong style="color:#171C26;">Gestão IM360</strong>,
+              o sistema de gestão de alunos, turmas, vagas e material didático.
+            </p>
+            <p style="margin:0;">
+              Falta um passo: <strong style="color:#171C26;">definir a sua senha</strong>. É o que o botão
+              abaixo faz — sem isso, o acesso ainda não funciona.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Botão. Tabela e não `<a>` com padding, porque o Outlook ignora
+             padding em link. `laranja-600` é a cor de AÇÃO (4,90:1 com branco);
+             a de marca é a 500, e o guia manda não unificar as duas. -->
+        <tr>
+          <td style="padding:28px 40px 0 40px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" bgcolor="#BE4E08" style="background-color:#BE4E08;border-radius:8px;">
+                  <a href="{{ .ConfirmationURL }}"
+                     style="display:inline-block;padding:14px 28px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:20px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:8px;">
+                    Definir minha senha
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:20px 40px 0 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;color:#656F82;">
+            <!-- 24 horas é o `otp_expiry = 86400` do supabase/config.toml. Se
+                 aquele número mudar, esta frase mente. -->
+            <p style="margin:0;">O link vale <strong style="color:#3A4252;">24 horas</strong>. Depois disso, peça um novo convite à direção.</p>
+          </td>
+        </tr>
+
+        <!-- O endereço em texto: cliente que remove link (e webmail corporativo
+             que reescreve href) deixa a pessoa sem caminho nenhum. -->
+        <tr>
+          <td style="padding:20px 40px 0 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8B94A6;">
+            <p style="margin:0 0 6px 0;">Se o botão não funcionar, copie este endereço no navegador:</p>
+            <p style="margin:0;word-break:break-all;"><a href="{{ .ConfirmationURL }}" style="color:#BE4E08;text-decoration:underline;">{{ .ConfirmationURL }}</a></p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:28px 40px 0 40px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr><td style="background-color:#ECEEF2;height:1px;line-height:1px;font-size:0;">&nbsp;</td></tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:16px 40px 32px 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8B94A6;">
+            <p style="margin:0 0 6px 0;">
+              Você recebeu este e-mail porque a direção da escola cadastrou o endereço
+              <strong style="color:#656F82;">{{ .Email }}</strong> no Gestão IM360.
+            </p>
+            <p style="margin:0;">
+              Este é um envio automático de um endereço que não recebe respostas. Dúvidas: fale com a direção da escola.
+            </p>
+          </td>
+        </tr>
+
+      </table>
+
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:560px;">
+        <tr>
+          <td align="center" style="padding:16px 40px 0 40px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8B94A6;">
+            Gestão IM360
+          </td>
+        </tr>
+      </table>
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
