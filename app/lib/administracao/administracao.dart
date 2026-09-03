@@ -57,17 +57,20 @@ class UsuarioAdmin {
     required this.email,
     this.ativo = true,
     this.perfisIds = const {},
+    this.convitePendente = false,
   });
 
   factory UsuarioAdmin.deLinha(
     Map<String, dynamic> linha, {
     Set<String> perfisIds = const {},
+    bool convitePendente = false,
   }) => UsuarioAdmin(
     id: '${linha['id']}',
     nome: '${linha['nome']}',
     email: '${linha['email']}',
     ativo: linha['ativo'] as bool? ?? true,
     perfisIds: perfisIds,
+    convitePendente: convitePendente,
   );
 
   final String id;
@@ -83,14 +86,27 @@ class UsuarioAdmin {
   /// (ajuste do card 3.7).
   bool get semPerfil => perfisIds.isEmpty;
 
-  UsuarioAdmin copiar({String? nome, bool? ativo, Set<String>? perfisIds}) =>
-      UsuarioAdmin(
-        id: id,
-        nome: nome ?? this.nome,
-        email: email,
-        ativo: ativo ?? this.ativo,
-        perfisIds: perfisIds ?? this.perfisIds,
-      );
+  /// Ainda não abriu o link do convite nem definiu senha
+  /// (`auth.users.email_confirmed_at is null`, via `fn_convites_pendentes`).
+  ///
+  /// É o mesmo pivô que o GoTrue usa para decidir entre reenviar o convite e
+  /// recusar com `email_exists` (card 4.7,7), então diz **exatamente** para
+  /// quem "Reenviar convite" funciona — e não uma aproximação disso.
+  final bool convitePendente;
+
+  UsuarioAdmin copiar({
+    String? nome,
+    bool? ativo,
+    Set<String>? perfisIds,
+    bool? convitePendente,
+  }) => UsuarioAdmin(
+    id: id,
+    nome: nome ?? this.nome,
+    email: email,
+    ativo: ativo ?? this.ativo,
+    perfisIds: perfisIds ?? this.perfisIds,
+    convitePendente: convitePendente ?? this.convitePendente,
+  );
 
   /// Só o que o app pode mudar: nome e ativo. E-mail é do Auth; unidade não
   /// muda de usuário.
@@ -293,6 +309,33 @@ String rotuloPerfis(UsuarioAdmin usuario, Map<String, Perfil> perfisPorId) {
 /// Desativado sem perfil não é problema: não entra de qualquer jeito.
 int contarSemPerfil(Iterable<UsuarioAdmin> usuarios) =>
     usuarios.where((u) => u.ativo && u.semPerfil).length;
+
+/// A situação da pessoa em uma palavra, na coluna da lista. A ordem é a
+/// decisão: desativado vence convite pendente, porque reenviar convite a quem
+/// não pode entrar não resolve nada — e é o estado mais consequente dos dois.
+String situacaoUsuario(UsuarioAdmin usuario) => !usuario.ativo
+    ? 'Desativado'
+    : usuario.convitePendente
+    ? 'Convite pendente'
+    : 'Ativo';
+
+/// A linha de apoio do cartão no mobile, onde não há coluna "Situação" para o
+/// convite pendente aparecer: os perfis (ou a falta deles) e, quando for o
+/// caso, o convite ainda não aceito. Os dois cabem, e respondem perguntas
+/// diferentes — "o que essa pessoa pode" e "ela já entrou alguma vez".
+String apoioUsuario(UsuarioAdmin usuario, Map<String, Perfil> perfisPorId) {
+  if (!usuario.ativo) return 'Desativado';
+  final perfis = usuario.semPerfil
+      ? '⚠ sem perfil'
+      : rotuloPerfis(usuario, perfisPorId);
+  return usuario.convitePendente ? '$perfis · convite pendente' : perfis;
+}
+
+/// Quando "Reenviar convite" é oferecido (card 4.7,7): só a quem ainda não
+/// aceitou **e** está ativo. Para quem já definiu senha o GoTrue recusa com
+/// `email_exists`, e botão que só sabe falhar é pior do que botão nenhum.
+bool podeReenviarConvite(UsuarioAdmin usuario) =>
+    usuario.ativo && usuario.convitePendente;
 
 /// O que muda em `usuario_perfil` para o usuário ficar com [desejados]:
 /// inserir o que falta, apagar o que sobra. A tabela não tem `update`

@@ -75,6 +75,70 @@ void main() {
       );
     });
 
+    test('situacaoUsuario: desativado vence convite pendente', () {
+      const convidada = UsuarioAdmin(
+        id: 'u',
+        nome: 'n',
+        email: 'e',
+        convitePendente: true,
+      );
+      expect(situacaoUsuario(convidada), 'Convite pendente');
+      expect(
+        situacaoUsuario(convidada.copiar(ativo: false)),
+        'Desativado',
+        reason: 'quem não pode entrar não tem convite a reenviar',
+      );
+      expect(
+        situacaoUsuario(const UsuarioAdmin(id: 'u', nome: 'n', email: 'e')),
+        'Ativo',
+      );
+    });
+
+    test('podeReenviarConvite: só quem ainda não aceitou E está ativo', () {
+      // Para quem já definiu senha o GoTrue recusa com email_exists: oferecer
+      // o botão seria oferecer um clique que só sabe falhar (card 4.7,7).
+      const aceitou = UsuarioAdmin(id: 'u', nome: 'n', email: 'e');
+      expect(podeReenviarConvite(aceitou), isFalse);
+      expect(podeReenviarConvite(aceitou.copiar(convitePendente: true)), isTrue);
+      expect(
+        podeReenviarConvite(
+          aceitou.copiar(convitePendente: true, ativo: false),
+        ),
+        isFalse,
+      );
+    });
+
+    test('apoioUsuario acumula os perfis e o convite pendente', () {
+      const base = UsuarioAdmin(
+        id: 'u',
+        nome: 'n',
+        email: 'e',
+        perfisIds: {'p-monitor'},
+      );
+      expect(apoioUsuario(base, perfisPorId), 'MONITOR');
+      expect(
+        apoioUsuario(base.copiar(convitePendente: true), perfisPorId),
+        'MONITOR · convite pendente',
+      );
+      expect(
+        apoioUsuario(
+          const UsuarioAdmin(
+            id: 'u',
+            nome: 'n',
+            email: 'e',
+            convitePendente: true,
+          ),
+          perfisPorId,
+        ),
+        '⚠ sem perfil · convite pendente',
+        reason: 'sem perfil e convite pendente são coisas diferentes',
+      );
+      expect(
+        apoioUsuario(base.copiar(ativo: false, convitePendente: true), perfisPorId),
+        'Desativado',
+      );
+    });
+
     test('planejarPerfis: insere o que falta, remove o que sobra', () {
       final plano = planejarPerfis({'a', 'b'}, {'b', 'c'});
       expect(plano.inserir, {'c'});

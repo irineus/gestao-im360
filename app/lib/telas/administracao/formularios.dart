@@ -23,7 +23,11 @@ void _recarregar(WidgetRef ref) =>
 /// Textos de consequência (design-system §5.4 e §7.3; acesso-autenticacao §6).
 const avisoConvite =
     'A pessoa recebe um e-mail com o link do convite e, ao abrir, define a '
-    'senha. Sem perfil ela entra e não vê nada — marque ao menos um.';
+    'senha. Sem perfil ela entra e não vê nada — marque ao menos um. '
+    'Usar o mesmo e-mail de quem ainda não aceitou reenvia o convite.';
+const avisoConvitePendente =
+    'Esta pessoa ainda não abriu o convite nem definiu a senha. Reenviar manda '
+    'um e-mail novo; o link anterior deixa de valer.';
 const avisoDesativar =
     'Desativar nega tudo na hora, mas a sessão já aberta continua até o token '
     'expirar (1 h). Para cortar imediatamente, use "Ban user" no painel do '
@@ -36,6 +40,11 @@ const avisoPerfilInativo =
 
 const chaveCampoEmail = Key('campo_email');
 const chaveCampoNome = Key('campo_nome');
+
+/// O que cada formulário devolve ao fechar — a aba escolhe a confirmação
+/// efêmera por este valor, e não pelo texto dela (design-system §5.8).
+const resultadoUsuarioSalvo = 'salvo';
+const resultadoConviteReenviado = 'convite-reenviado';
 
 // ---------------------------------------------------------------------------
 // Convite
@@ -174,7 +183,47 @@ class _FormularioUsuarioState extends ConsumerState<FormularioUsuario> {
       titulo: 'Usuário',
       chave: _chave,
       somenteLeitura: somenteLeitura,
-      aviso: desativando ? avisoDesativar : null,
+      aviso: desativando
+          ? avisoDesativar
+          : podeReenviarConvite(usuario)
+          ? avisoConvitePendente
+          : null,
+      // O achado de 03/09/2026 que gerou o card 4.7,7: reenviar convite já
+      // funcionava (convidar de novo com o mesmo e-mail devolve o mesmo
+      // usuário e dispara e-mail novo), mas nada dizia isso, então quem
+      // precisou reenviar concluiu que não dava. A ação mora aqui, na linha da
+      // pessoa, que é onde se procura por ela — e não num botão de convidar.
+      //
+      // Só aparece para quem ainda não aceitou: para quem já definiu senha o
+      // GoTrue recusa com `email_exists`, e a tela mostraria "Já existe um
+      // usuário com este e-mail." depois do clique. Correto e inútil.
+      acoes: [
+        if (podeReenviarConvite(usuario))
+          AcaoFormulario(
+            rotulo: 'Reenviar convite',
+            exigePermissao: 'admin.gerir_usuarios',
+            confirmacao: const ConfirmacaoAcao(
+              titulo: 'Reenviar convite',
+              mensagem: avisoConvitePendente,
+              rotulo: 'Reenviar convite',
+            ),
+            executar: () async {
+              await ref
+                  .read(administracaoRepositorioProvider)
+                  .convidar(
+                    email: usuario.email,
+                    nome: usuario.nome,
+                    redirecionarPara: Ambiente.urlRedefinicaoSenha,
+                  );
+              // Nada muda em `usuario_perfil`: reenviar é só o e-mail. Os
+              // perfis marcados no formulário, se a pessoa mexeu neles, saem
+              // pelo Salvar — misturar as duas coisas num clique só faria a
+              // confirmação mentir sobre o que aconteceu.
+              _recarregar(ref);
+              return resultadoConviteReenviado;
+            },
+          ),
+      ],
       campos: [
         TextFormField(
           initialValue: usuario.email,
@@ -225,7 +274,7 @@ class _FormularioUsuarioState extends ConsumerState<FormularioUsuario> {
         final plano = planejarPerfis(usuario.perfisIds, _perfis);
         if (!plano.vazio) await repositorio.definirPerfis(usuario.id, plano);
         _recarregar(ref);
-        return 'salvo';
+        return resultadoUsuarioSalvo;
       },
     );
   }
