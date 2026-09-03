@@ -700,7 +700,7 @@ corrida com a interface.
 | `ALUNO_SEM_TURMA` | `ALUNO_SEM_TURMA:<aluno_id>` | ALTA | `rt_pendencias_diaria` | alocação em bloco/turma, ou saída de ATIVO/ACELERAR |
 | `STANDBY_PROLONGADO` | `STANDBY:<aluno_id>` | MEDIA | `rt_pendencias_diaria` (`status_desde` + `standby_alerta_dias`) | mudança de status |
 | `PREVISAO_VENCIDA` | `PREVISAO:<aluno_id>` | MEDIA | `rt_pendencias_diaria` | nova `prev_conclusao_curso` ou formatura |
-| `ACELERAR_SEM_2O_BLOCO` | `ACELERAR:<aluno_id>` | INFO | `rt_pendencias_diaria` | 2º bloco ativo, ou volta a ATIVO |
+| `ACELERAR_SEM_2O_BLOCO` | `ACELERAR:<aluno_id>` | **BAIXA** (INFO não existe no `check` do DDL — card 2.3 §10 #4, corrigido no 5.5) | `rt_pendencias_diaria` | 2º bloco ativo, ou volta a ATIVO |
 | `BLOCO_ACIMA_CAPACIDADE` | `CAPACIDADE:<bloco_id>` | ALTA | `fn_revalidar_blocos_sala` | a própria função, quando normaliza |
 | `COMPRA_SEM_ESTOQUE` | `COMPRA_SEM_ESTOQUE:<aluno_id>` | ALTA | `fn_registrar_entrega` (trilha sem estoque nenhum) | `tg_movimento_resolve_pendencia` |
 | `ALUNO_ULTIMO_LIVRO` | `ULTIMO_LIVRO:<aluno_id>` | BAIXA | `fn_registrar_entrega` | formatura, ou estorno que tira do FIM |
@@ -807,7 +807,7 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | `fn_capacidade_efetiva`, `fn_ocupacao_bloco`, `fn_vagas_livres` — as três juntas, ver §4.2 | 5.2 |
 | `tg_bloco_aluno_admissao`, `fn_bloco_admitir/remover`, reposições | 5.3 ✅ |
 | `fn_revalidar_blocos_sala` | 5.4 |
-| `fn_pendencia_abrir/resolver`, `rt_pendencias_diaria`, `rt_diaria` e o job `pg_cron` | 5.5 |
+| `fn_pendencia_abrir/resolver/resolver_id`, `fn_pendencias_fechar_ausentes`, `rt_pendencias_diaria`, `rt_diaria` e o job `pg_cron` | 5.5 ✅ |
 | `fn_trilha_gerar`, `fn_trilha_proximo_material`, edição da trilha | 6.2 |
 | `tp_entrega_resultado`, `fn_registrar_entrega`, `fn_estornar_entrega`, `fn_saldo_material` | 6.3 |
 | `fn_pedido_receber`, `fn_ajustar_estoque`, `tg_movimento_valida_sinal`, `tg_movimento_resolve_pendencia` | 6.5 |
@@ -815,7 +815,7 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | `rt_projecao_demanda` | 8.1 |
 | `fn_certificado_*`, `tg_certificado_*` | 8.3 |
 | `tp_rep_situacao`, `fn_rep_situacao`, `fn_rep_avaliar_virada`, `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (critério fechado no card 2.5) | 5.3 ✅ |
-| `rt_rep_avaliar` | 5.5 |
+| `rt_rep_avaliar` | 5.5 ✅ |
 
 Ordem de dependência igual à das migrações: 3.4 → 4.2 → 4.3 → 5.2 → 5.3 → 5.4 → 5.5 → 6.2 → 6.3 →
 6.5 → 7.2 → 8.1 → 8.3.
@@ -831,11 +831,11 @@ simples — que é exatamente por que o card 2.1 escolheu `text` + `check` em ve
 | # | Ajuste | Onde | Card |
 |---|---|---|---|
 | 1 | `bloco_aluno_reposicao.status`: acrescentar **`FALTOU`** ao `check` | `drop constraint` / `add constraint` | 5.1 |
-| 2 | `pendencia.tipo`: acrescentar `ESTOQUE_ZERO`, `ESTOQUE_ABAIXO_MINIMO`, `SUGERIR_FORMADO`, `TRILHA_DIVERGENTE_COMBO`, `CERTIFICADO_INCONSISTENTE`, `REP_VIRADA`, `ROTINA_FALHOU` ao `check` | idem | 5.5 |
+| 2 | `pendencia.tipo`: acrescentar `ESTOQUE_ZERO`, `ESTOQUE_ABAIXO_MINIMO`, `SUGERIR_FORMADO`, `TRILHA_DIVERGENTE_COMBO`, `CERTIFICADO_INCONSISTENTE`, `REP_VIRADA`, `ROTINA_FALHOU` ao `check` | idem | 5.5 ✅ (**sem `alter`**: a tabela nasceu no próprio card, então os quinze tipos entraram direto no `check` — divergência registrada) |
 | 3 | `certificado_checklist`: acrescentar `formatura_por` / `formatura_em` | `add column` | 8.3 |
 | 4 | `aluno_material_hist`: acrescentar `observacao text` | `add column` | 6.2 |
 | 5 | `bloco_aluno`: acrescentar `tipo_desde date not null default current_date` + trigger `tg_bloco_aluno_tipo_desde` | `add column` + trigger | 5.1 |
-| 6 | `rt_pendencias_diaria`: a contagem de blocos para `ACELERAR_SEM_2O_BLOCO` filtra `tipo <> 'REP'` | corpo da rotina | 5.5 |
+| 6 | `rt_pendencias_diaria`: a contagem de blocos para `ACELERAR_SEM_2O_BLOCO` filtra `tipo <> 'REP'` | corpo da rotina | 5.5 ✅ (com **contraprova** no teste 090: os mesmos dois blocos, os dois de aula, fecham a pendência) |
 | 7 | `fn_reposicao_registrar` devolve `text` (o veredito da virada) em vez de `void` | assinatura | 5.1 → **5.3** ✅ (a função não existia no 5.1: nasceu devolvendo `text`) |
 | 8 | Tipo composto novo `tp_rep_situacao` — passam a ser dois, com `tp_entrega_resultado` | `create type` | 5.3 ✅ |
 | 9 | Erros novos: `REP_JA_CONTINUO` (409) e `REP_NAO_CONTINUO` (409) | catálogo §12 | 5.3 ✅ |

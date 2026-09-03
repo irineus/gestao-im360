@@ -622,11 +622,11 @@ Mesmo formato do §14 do card 2.2 e do §8 do card 2.5: o que precisa mudar em d
 | 1 | Criar `fn_hoje()` e trocar **todo** `current_date` de view, função e rotina por ela | 2.1 §3, 2.2, 2.5 | 3.4 | **bloqueante** para a correção dos números à noite (§3.3) |
 | 2 | `default current_date` → `default public.fn_hoje()` em `aluno.status_desde`, `aluno.data_inicio`, `bloco_aluno.tipo_desde`, `turma_modular_aluno.data_entrada` | 2.1 §7, §8, §9 | 4.2 / 5.1 / 7.1 | alta — data errada gravada, não só exibida |
 | 3 | ✅ **Feito em 03/09/2026 (card 5.2).** `fn_capacidade_efetiva` e `fn_ocupacao_bloco` são `security definer` + `search_path` fixo + filtro `unidade_id = fn_unidade_atual()` no corpo, e entraram na lista fechada do C8. `fn_vagas_livres` ficou **invoker**: não lê tabela, só compõe as duas | 2.2 §4.1, §4.2 | 5.2 | **bloqueante** — como invoker, a grade mostra tudo lotado para quem não tem `salas.ler` (§3.4) |
-| 4 | Severidade `INFO` de `ACELERAR_SEM_2O_BLOCO` no catálogo do card 2.2 **não existe** no `check` do DDL (`BAIXA`,`MEDIA`,`ALTA`) — adotar `BAIXA` | 2.2 §10.1 | 5.5 | **bloqueante** — o insert falharia no `check` de `pendencia.severidade` |
-| 5 | Índice `pendencia (unidade_id, severidade) where resolvida_em is null` para a central | 2.1 §10 | 5.5 | baixa — desempenho |
+| 4 ✅ | **Feito em 03/09/2026 (card 5.5).** Severidade `INFO` de `ACELERAR_SEM_2O_BLOCO` no catálogo do card 2.2 **não existe** no `check` do DDL (`BAIXA`,`MEDIA`,`ALTA`) — adotado `BAIXA`. Exercitado: escrito `INFO`, `rt_pendencias_diaria` morre no `check` já na primeira execução | 2.2 §10.1 | 5.5 | **bloqueante** — o insert falharia no `check` de `pendencia.severidade` |
+| 5 ✅ | **Feito em 03/09/2026 (card 5.5):** `pendencia_severidade_ix` | 2.1 §10 | 5.5 | baixa — desempenho |
 | 6 | `aluno_status_ix` de `(unidade_id, status)` para `(unidade_id, metodo_id, status)`, que é como o dashboard agrupa | 2.1 §7 | 4.2 | baixa — desempenho |
 | 7 | `permissao.dominio` no DDL exemplifica singular (`aluno`, `turma`); o card 2.2 fixou plural (`alunos.`, `turmas.`). Adotar **plural** e corrigir o comentário do DDL | 2.1 §4 | 2.4 | baixa — consistência |
-| 8 | Nome da pendência: o board escreve `ACELERAR_SEM_SEGUNDO_BLOCO` numa nota; DDL e card 2.2 usam `ACELERAR_SEM_2O_BLOCO`. Vale o DDL | — | 5.5 | baixa — consistência |
+| 8 ✅ | **Feito em 03/09/2026 (card 5.5):** vale o DDL, `ACELERAR_SEM_2O_BLOCO` | — | 5.5 | baixa — consistência |
 
 ---
 
@@ -660,7 +660,7 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | Objeto | Card | Fase |
 |---|---|---|
 | `fn_hoje()` | 3.4 | 3 |
-| `v_pendencias_abertas` | 5.5 | 5 |
+| `v_pendencias_abertas` | **5.5** ✅ — a primeira view do projeto, e com ela nasceu o C5 (toda view `security_invoker`, zero matview) | 5 |
 | `v_bloco_vagas_semana`, `fn_grade_semana` | 5.6 (grade) / 5.9 (dashboard) | 5 |
 | `v_estoque_atual`, `v_demanda_imediata_aluno`, `v_demanda_imediata`, `v_pedido_sugerido` | 6.4 | 6 |
 | `v_turma_modular_lotacao` | 7.4 | 7 |

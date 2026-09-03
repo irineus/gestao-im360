@@ -269,12 +269,12 @@ schema. Nenhum card de migração fecha com ela vermelha.**
 | C2 | Toda tabela de negócio tem `unidade_id` e as quatro colunas de auditoria (`criado_em/por`, `atualizado_em/por`) | `CLAUDE.md`; 2.1 |
 | C3 | Toda tabela tem trigger de auditoria (`fn_auditoria`) | 2.1 |
 | C4 | Nenhuma tabela de negócio sem política, **exceto** a lista fechada de ausências intencionais: `movimento_estoque` (sem `update`/`delete`), `permissao` (sem escrita) | 2.1 (b), 2.4 (c) e (e) — ausência intencional documentada vira asserção, senão vira esquecimento |
-| C5 | Toda view tem `security_invoker=on` em `reloptions`; **zero** `relkind='m'` no schema | 2.3 (a) e (b) |
+| C5 ✅ **5.5** | Toda view tem `security_invoker=on` em `reloptions`; **zero** `relkind='m'` no schema | 2.3 (a) e (b) |
 | C6 | Nenhum `current_date` em corpo de função, definição de view ou `default` de coluna | 2.3 (c) — o bug das 21h |
 | C7 | Toda função tem `search_path` fixo em `proconfig` | 2.2 §1.1 |
 | C8 | Toda função `security definer` está numa **lista fechada** versionada no teste | 2.2 §2.2, 2.3, 2.4 (#9.5) — `definer` novo tem de passar por revisão consciente |
 | C9 | Nenhuma função tem `execute` para `public` ou `anon`; nenhuma `rt_*` tem `execute` para `authenticated` | 2.2 §1.1, §11 |
-| C10 | Todo tipo passado a `fn_pendencia_abrir` no código está no `check` de `pendencia.tipo`, e toda severidade usada está no `check` de `severidade` | 2.2 §14, 2.3 (#4), Ordem 5 (#3) — a família inteira do formato 1 |
+| C10 ✅ **5.5** (metade) | Todo tipo passado a `fn_pendencia_abrir` no código está no `check` de `pendencia.tipo`. A metade da **severidade** ficou de fora do teste estático de propósito: ela é o 4º argumento posicional e o 2º e o 3º são expressões com vírgulas dentro (`format(…)`), então a expressão regular acertaria hoje e passaria a mentir no primeiro `format` novo — teste estático que cega em silêncio. No lugar, uma asserção de **runtime** no `090_rotinas`, depois de a rotina ter escrito: nenhuma severidade fora do `check`. Exercitada: com `INFO` (o caso que o card 2.3 nomeia) a suíte reprova | 2.2 §14, 2.3 (#4), Ordem 5 (#3) — a família inteira do formato 1 |
 | C11 | Todo código em `tem_permissao('…')`/`fn_exige_permissao('…')` (em funções e em `polqual`/`polwithcheck`) existe em `permissao`; e todo `permissao` tem ao menos um consumidor | 2.4 (a) — nos dois sentidos |
 | C12 | Todo `codigo` de erro levantado no código está no fixture de contrato (§10); nenhum a mais, nenhum a menos | 2.2 §1.2, 2.7 (h) |
 | C13 | `pg_advisory_xact_lock` aparece no corpo de `fn_bloco_admitir` e `fn_registrar_entrega` | 2.2 (c) — não prova que funciona (§7), prova que não sumiu num refactor |
@@ -814,8 +814,8 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `060_estoque_compras` | 6.5 | 6 |
 | `070_modular` | 7.2 | 7 |
 | `080_projecao` | 8.1 | 8 |
-| `085_rep_virada` | **5.3** ✅ (funções REP entram na mesma migração) — mede o VEREDITO e não a pendência, que é do 5.5; a seção 6 do arquivo é o portão que reprova no dia em que `pendencia` nascer | 5 |
-| `090_rotinas` | 5.5 (primeira rotina) → cresce em 8.1 | 5+ |
+| `085_rep_virada` | **5.3** ✅ (funções REP entram na mesma migração) — mede o VEREDITO; a seção 6 era o portão da pendência, **disparou em 03/09/2026 (card 5.5)** e virou a asserção estrutural de que as duas funções da virada fecham a pendência, cada uma com o seu sufixo. O comportamento ponta a ponta ficou no `090_rotinas`, que é o arquivo da pendência | 5 |
+| `090_rotinas` (a tabela `pendencia`, as três funções do §10, rt_pendencias_diaria/rt_rep_avaliar/rt_diaria, o job `pg_cron` e a view `v_pendencias_abertas`) | **5.5** ✅ (primeira rotina) → cresce em 8.1 | 5+ |
 | `095_views_paridade` | 6.4 (primeiras views) → cresce em 5.6, 5.9, 8.7 | 5+ |
 | `catalogo_erros_test`, `guardas_rota_test`, `permissao_widget_test`, `faixa_test`, `tnum_test` | 3.7 | 3 |
 | Golden dos badges | 4.6 (status) e 5.7 (tipo) | 4–5 |

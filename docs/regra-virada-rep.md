@@ -333,8 +333,8 @@ coexistem hoje, mas depender disso é frágil e o custo de separar é zero.
 |---|---|---|---|---|
 | 1 | `bloco_aluno.tipo_desde date not null default current_date` + trigger `tg_bloco_aluno_tipo_desde` que a atualiza quando `tipo` muda | `add column` + trigger | 5.1 | **sim** |
 | 2 | `bloco_aluno_reposicao.status`: valor `FALTOU` — já é o ajuste 1 do §14 do card 2.2; o critério de reincidência (§3.4) **depende** dele | `drop`/`add constraint` | 5.1 | **sim** |
-| 3 | `pendencia.tipo`: valor `REP_VIRADA` — já é o ajuste 2 do §14 do card 2.2 | idem | 5.5 | **sim** |
-| 4 | `rt_pendencias_diaria`: a contagem de blocos para `ACELERAR_SEM_2O_BLOCO` filtra `tipo <> 'REP'` | corpo da rotina | 5.5 | não |
+| 3 ✅ | `pendencia.tipo`: valor `REP_VIRADA` — feito em 03/09/2026 (card 5.5), direto no `create table` | idem | 5.5 | **sim** |
+| 4 ✅ | `rt_pendencias_diaria`: a contagem de blocos para `ACELERAR_SEM_2O_BLOCO` filtra `tipo <> 'REP'` — feito em 03/09/2026 (card 5.5), com contraprova no teste 090 | corpo da rotina | 5.5 | não |
 | 5 | `fn_reposicao_registrar` passa a devolver `text` (o veredito) em vez de `void` | assinatura | 5.1 | não |
 | 6 | Tipo composto novo `tp_rep_situacao` (o card 2.2 declarava um só, `tp_entrega_resultado`) | `create type` | 5.3 | não |
 | 7 | Erros novos no catálogo: `REP_JA_CONTINUO` (409) e `REP_NAO_CONTINUO` (409) | catálogo §12 do card 2.2 | 5.3 | não |

@@ -121,7 +121,16 @@ create temporary view p_esperada (tabela, cmd) as values
   -- `bloco_aluno.bloco_id`, e é o que tg_bloco_exclusao_valida fecha.
   ('bloco_horario','r'),         ('bloco_horario','a'),         ('bloco_horario','w'), ('bloco_horario','d'),
   ('bloco_aluno','r'),           ('bloco_aluno','a'),           ('bloco_aluno','w'),
-  ('bloco_aluno_reposicao','r'), ('bloco_aluno_reposicao','a'), ('bloco_aluno_reposicao','w');
+  ('bloco_aluno_reposicao','r'), ('bloco_aluno_reposicao','a'), ('bloco_aluno_reposicao','w'),
+  -- card 5.5 — pendências. Duas particularidades, as duas decisão do card 2.4 §4:
+  -- o `insert` é a ÚNICA política do projeto que não exige permissão de domínio
+  -- nenhuma (pendência é anotação do sistema, aberta por quase toda função de
+  -- aplicação, e enumerar os autores num `or` daria uma lista que cresce a cada
+  -- card e cujo esquecimento vira erro opaco de RLS numa tela que não fala de
+  -- pendência); e não há DELETE, porque pendência encerrada é `resolvida_em`
+  -- preenchida — apagar a linha tiraria da história justamente o que se quer
+  -- olhar depois, quantas vezes este bloco já estourou a capacidade.
+  ('pendencia','r'),        ('pendencia','a'),        ('pendencia','w');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text
@@ -196,7 +205,12 @@ create temporary view p_codigo_catalogo (codigo) as values
   -- tg_reposicao_admissao (card 5.3). Pô-lo aqui reprovaria por "catalogado e
   -- não usado", que é exatamente o que esta lista existe para dizer.
   ('turmas.ler'), ('turmas.criar'), ('turmas.editar'), ('turmas.excluir'),
-  ('turmas.alocar');
+  ('turmas.alocar'),
+  -- card 5.5 — os dois do domínio `pendencias`. `pendencias.ler` guarda a
+  -- leitura e `pendencias.resolver` guarda o UPDATE; o insert de `pendencia` não
+  -- cita permissão nenhuma (card 2.4 §4), e é por isso que este par é o
+  -- conjunto completo do domínio.
+  ('pendencias.ler'), ('pendencias.resolver');
 
 select is(
   (select coalesce(string_agg(msg, '; ' order by msg), '')
