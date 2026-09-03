@@ -440,11 +440,15 @@ card 3.6, e mudam com um clique na tela de Administração depois.
 
 1. **Permissão por coluna** (achado #8) — a solução é trigger, não RLS. O desenho fica no card 8.3,
    junto com as funções de certificado.
-2. **Log de alteração da matriz.** As Decisões vigentes (§4) pedem "log de alterações" como
-   mitigação do risco de permissões mal definidas. `perfil_permissao` tem auditoria de
-   `criado_em/por`, mas o `delete` (desmarcar a caixa) não deixa rastro. Uma tabela
-   `perfil_permissao_hist`, ou `ativo` em vez de `delete`, resolve — **card novo na Fase 4**, junto
-   da tela de Administração (4.7).
+2. ~~**Log de alteração da matriz.**~~ ✅ **RESOLVIDO em 03/09/2026 pelo card 4.7.5**:
+   `perfil_permissao_hist`, escrita por trigger `security definer` em `perfil_permissao`, imutável
+   por ausência de política, FKs `restrict`; e `fn_seed_matriz` deixou de devolver o código que
+   alguém tirou de todos os perfis. Ficou a **tabela**, não o `ativo = false`: a segunda saída
+   mudaria a política desta tabela, o join de `tem_permissao` e o guarda do seed para guardar uma
+   transição só. Fonte: `docs/administracao.md` §4. Enunciado original: As Decisões vigentes (§4)
+   pedem "log de alterações" como mitigação do risco de permissões mal definidas.
+   `perfil_permissao` tem auditoria de `criado_em/por`, mas o `delete` (desmarcar a caixa) não
+   deixa rastro.
 3. **Perfil por unidade.** `perfil` tem `unidade_id`, então a segunda unidade da Fase 11 terá
    perfis próprios. Se a direção quiser um perfil global, é decisão da Fase 11, não desta.
 4. **Importação (tela 13)** entra com `admin.ler` mais os domínios do que importa; o conjunto exato

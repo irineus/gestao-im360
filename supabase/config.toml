@@ -66,10 +66,20 @@ enabled = false
 enabled = false
 
 [edge_runtime]
-# Nenhuma Edge Function na v1: as regras de negócio vivem no banco
-# (CLAUDE.md, "Regras inegociáveis"). Ligar só se o convite do card 4.7 exigir
-# a Admin API — decisão daquele card, com a justificativa registrada.
-enabled = false
+# Uma Edge Function só, e é o caso indispensável que o CLAUDE.md prevê: o
+# convite de usuário (card 4.7) exige a Admin API do Auth, e a service key
+# nunca chega ao Flutter (card 3.3). As regras de negócio continuam no banco.
+# Ligado aqui para `supabase functions serve` exercitar a função contra o
+# stack local; o CI exclui `edge-runtime` no `supabase start` porque nenhum
+# teste pgTAP passa por ele (docs/ci-cd.md §3).
+enabled = true
+policy = "oneshot"
+
+[functions.convidar-usuario]
+# O gateway confere a assinatura do JWT antes de a função rodar; a função
+# ainda verifica tem_permissao('admin.gerir_usuarios') no banco com esse token
+# (docs/acesso-autenticacao.md §3.2). Duas barreiras, a segunda é a que decide.
+verify_jwt = true
 
 # =============================================================================
 # Auth — e-mail/senha, sem cadastro público (card 3.5)

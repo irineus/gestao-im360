@@ -15,7 +15,7 @@
 -- =============================================================================
 
 begin;
-select plan(22);
+select plan(23);
 
 create temporary view u_real as
   select id from public.unidade where codigo = 'MATRIZ';
@@ -177,12 +177,10 @@ select is(
   50::bigint,
   'reexecutar o seed nao duplica o catalogo');
 
--- O outro lado do mesmo guarda: código que ainda não foi distribuído a ninguém
--- CONTINUA chegando quando o seed roda. É o que faz uma migração futura poder
--- acrescentar um código ao catálogo e à matriz sem `insert` avulso — e é também
--- o caso residual assumido na migração: desmarcar de TODOS os perfis é
--- indistinguível de "nunca foi dado" enquanto não houver o histórico do card
--- 4.7.5.
+-- O caso residual que este arquivo assumia até o card 4.7.5: desmarcar de
+-- TODOS os perfis era indistinguível de "nunca foi dado", e o seed devolvia o
+-- código no deploy seguinte. Com perfil_permissao_hist, a remoção fica
+-- registrada e o seed NÃO devolve (detalhe em 032_matriz_historico).
 delete from public.perfil_permissao pp
  using public.permissao pm
  where pp.permissao_id = pm.id
@@ -192,12 +190,30 @@ delete from public.perfil_permissao pp
 select public.fn_seed_acesso((select id from u_real));
 
 select ok(
+  not exists (select 1 from public.perfil_permissao pp
+                join public.permissao pm on pm.id = pp.permissao_id
+               where pm.unidade_id = (select id from u_real)
+                 and pm.codigo = 'compras.receber_excedente'),
+  'codigo tirado de TODOS os perfis nao volta: o historico do card 4.7.5 distingue de "nunca dado"');
+
+-- O outro lado do mesmo guarda: código que nunca foi distribuído a ninguém —
+-- sem linha na matriz E sem histórico — CONTINUA chegando quando o seed roda.
+-- É o que faz uma migração futura poder acrescentar um código ao catálogo e à
+-- matriz sem `insert` avulso. Simulado apagando o histórico daquele código
+-- como postgres: pela tela isso é impossível, e é o ponto.
+delete from public.perfil_permissao_hist h
+ where h.unidade_id = (select id from u_real)
+   and h.permissao_codigo = 'compras.receber_excedente';
+
+select public.fn_seed_acesso((select id from u_real));
+
+select ok(
   exists (select 1 from public.perfil_permissao pp
             join public.perfil    pe on pe.id = pp.perfil_id
             join public.permissao pm on pm.id = pp.permissao_id
            where pe.unidade_id = (select id from u_real)
              and pe.codigo = 'DIRECAO' and pm.codigo = 'compras.receber_excedente'),
-  'codigo sem linha nenhuma na unidade E distribuido — e assim que codigo novo chega');
+  'codigo sem linha nenhuma E sem historico E distribuido — e assim que codigo novo chega');
 
 -- ===========================================================================
 -- 5. Bootstrap do primeiro usuário de direção — as duas metades

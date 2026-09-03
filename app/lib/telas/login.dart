@@ -18,6 +18,14 @@ class TelaLogin extends ConsumerStatefulWidget {
   ConsumerState<TelaLogin> createState() => _TelaLoginState();
 }
 
+/// A pista que faltava (achado do card 3.8, fechado no 4.7): quem chegou por
+/// convite e fechou a página sem definir a senha cai aqui, e a credencial
+/// inválida é indistinguível de senha errada — a saída é o link de
+/// redefinição, e a tela agora diz isso.
+const dicaConviteSemSenha =
+    'Chegou por convite e ainda não definiu a senha? Use "Esqueci minha '
+    'senha" para criá-la.';
+
 class _TelaLoginState extends ConsumerState<TelaLogin> {
   final _formulario = GlobalKey<FormState>();
   final _email = TextEditingController();
@@ -151,11 +159,25 @@ class _TelaLoginState extends ConsumerState<TelaLogin> {
                         color: cores.errorContainer,
                         borderRadius: BorderRadius.circular(Dim.raio),
                       ),
-                      child: Text(
-                        _erro!,
-                        style: Tipografia.corpoTabela.copyWith(
-                          color: cores.error,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _erro!,
+                            style: Tipografia.corpoTabela.copyWith(
+                              color: cores.error,
+                            ),
+                          ),
+                          if (_erro == mensagemCredencialInvalida) ...[
+                            const SizedBox(height: Dim.e4),
+                            Text(
+                              dicaConviteSemSenha,
+                              style: Tipografia.apoio.copyWith(
+                                color: cores.error,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ],

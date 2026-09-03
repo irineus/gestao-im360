@@ -151,7 +151,14 @@ select is(
             -- lista sem necessidade gasta a revisão consciente que a lista
             -- existe para provocar (card 3.4 (a)).
             'fn_pc_credencial_ler', 'fn_pc_credencial_gravar',
-            'fn_pc_credencial_apagar'
+            'fn_pc_credencial_apagar',
+            -- card 4.7.5 — o trigger que escreve perfil_permissao_hist. Dispara
+            -- na transação de quem marcou ou desmarcou a caixa (admin.gerir_perfis),
+            -- e a tabela de histórico não tem política de insert para ninguém —
+            -- de propósito, senão um POST direto gravaria uma remoção que não
+            -- aconteceu. Não devolve dado ao chamador e grava a unidade da
+            -- própria linha que mudou; por isso não carrega filtro no corpo.
+            'fn_perfil_permissao_historico'
             -- card 5.2:  'fn_capacidade_efetiva', 'fn_ocupacao_bloco'
           )),
   '',
