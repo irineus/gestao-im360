@@ -157,6 +157,25 @@ otp_length = 6
 # um convite mandado no fim da tarde.
 otp_expiry = 86400
 
+# Assunto e corpo dos dois e-mails que este sistema manda — card 4.7,6,
+# documentados em docs/emails-auth.md. Os arquivos em supabase/templates/ são a
+# FONTE; o que serve dev e prod é a cópia colada no painel de cada projeto
+# (Authentication → Emails), porque `[auth.email.template]` só vale para o stack
+# local. Divergir é possível e o §4 do documento é a lista de conferência.
+#
+# ⚠️ Só estes dois estão traduzidos, e é de propósito: são os únicos que o
+#    sistema dispara. `confirmation` não existe com `enable_signup = false`,
+#    `magic_link` e `reauthentication` não são chamados pelo app, e
+#    `email_change` só é alcançável por alguém editando o e-mail no painel —
+#    ver docs/emails-auth.md §5.
+[auth.email.template.invite]
+subject = "Seu acesso ao Gestão IM360"
+content_path = "./supabase/templates/convite.html"
+
+[auth.email.template.recovery]
+subject = "Redefinir sua senha do Gestão IM360"
+content_path = "./supabase/templates/recuperacao-senha.html"
+
 # [auth.email.smtp] fica DELIBERADAMENTE fora deste arquivo — ver o aviso do
 # topo. O SMTP próprio é configurado no painel de cada projeto (pendência de
 # Irineu, docs/acesso-autenticacao.md §7): sem ele o Supabase usa o serviço
