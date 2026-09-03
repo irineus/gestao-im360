@@ -9,94 +9,11 @@ import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/estados.dart';
+import '../../widgets/confirmacao.dart';
 import '../../widgets/formulario.dart';
+import '../../widgets/painel_detalhe.dart';
 import 'editor_sequencia.dart';
 import 'formularios.dart';
-
-/// Largura do painel de detalhe — mais largo que um formulário, porque a
-/// sequência tem código e nome lado a lado.
-const larguraDetalhe = 760.0;
-
-/// Confirmação efêmera (design-system §5.8): salvou, excluiu.
-void confirmarEfemero(BuildContext context, String texto) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(texto)));
-}
-
-/// Cabeçalho e rodapé comuns aos dois painéis de detalhe.
-class _Painel extends StatelessWidget {
-  const _Painel({
-    required this.titulo,
-    required this.subtitulo,
-    required this.acoes,
-    required this.filho,
-  });
-
-  final String titulo;
-  final String subtitulo;
-  final List<Widget> acoes;
-  final Widget filho;
-
-  @override
-  Widget build(BuildContext context) {
-    final cores = Theme.of(context).colorScheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Dim.e24, Dim.e16, Dim.e12, Dim.e8),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(titulo, style: Tipografia.subtitulo),
-                    Text(
-                      subtitulo,
-                      style: Tipografia.apoio.copyWith(
-                        color: cores.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ...acoes,
-              IconButton(
-                tooltip: 'Fechar',
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Flexible(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(Dim.e24),
-            child: filho,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-Widget _titulo(BuildContext context, String texto, String apoio) => Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    Text(texto, style: Tipografia.rotulo),
-    Text(
-      apoio,
-      style: Tipografia.apoio.copyWith(
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-    ),
-    const SizedBox(height: Dim.e8),
-  ],
-);
 
 bool _mesmaLista(List<String> a, List<String> b) {
   if (a.length != b.length) return false;
@@ -195,7 +112,7 @@ class _DetalheCursoState extends ConsumerState<DetalheCurso> {
     }
     if (curso == null) {
       // Excluído por outra pessoa enquanto o painel estava aberto.
-      return const _Painel(
+      return const PainelDetalhe(
         titulo: 'Curso',
         subtitulo: '',
         acoes: [],
@@ -232,7 +149,7 @@ class _DetalheCursoState extends ConsumerState<DetalheCurso> {
     final emEdicao = _sequencia ?? const <String>[];
     final alterada = !_mesmaLista(emEdicao, gravada);
 
-    return _Painel(
+    return PainelDetalhe(
       titulo: cursoAtual.nome,
       subtitulo: [
         metodo?.nome ?? '—',
@@ -261,10 +178,10 @@ class _DetalheCursoState extends ConsumerState<DetalheCurso> {
       filho: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _titulo(
-            context,
-            'Sequência de apostilas',
-            'A ordem daqui é a ordem da trilha gerada na matrícula. Arraste '
+          const TituloSecao(
+            texto: 'Sequência de apostilas',
+            apoio:
+                'A ordem daqui é a ordem da trilha gerada na matrícula. Arraste '
                 'para reordenar; nada é gravado até "Salvar sequência".',
           ),
           sequencia.when(
@@ -314,10 +231,10 @@ class _DetalheCursoState extends ConsumerState<DetalheCurso> {
           ),
           if (metodo?.modular ?? false) ...[
             const Divider(height: Dim.e32),
-            _titulo(
-              context,
-              'Módulos',
-              'A turma Modular avança pelos módulos em conjunto; vários '
+            const TituloSecao(
+              texto: 'Módulos',
+              apoio:
+                  'A turma Modular avança pelos módulos em conjunto; vários '
                   'módulos podem usar o mesmo livro. Arraste para reordenar.',
             ),
             modulos.when(
@@ -469,7 +386,7 @@ class _DetalheComboState extends ConsumerState<DetalheCombo> {
       if (c.id == widget.comboId) combo = c;
     }
     if (combo == null) {
-      return const _Painel(
+      return const PainelDetalhe(
         titulo: 'Combo',
         subtitulo: '',
         acoes: [],
@@ -501,7 +418,7 @@ class _DetalheComboState extends ConsumerState<DetalheCombo> {
     final emEdicao = _cursos ?? const <String>[];
     final alterada = !_mesmaLista(emEdicao, gravada);
 
-    return _Painel(
+    return PainelDetalhe(
       titulo: comboAtual.nome,
       subtitulo: [
         metodo?.nome ?? '—',
@@ -530,10 +447,10 @@ class _DetalheComboState extends ConsumerState<DetalheCombo> {
       filho: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _titulo(
-            context,
-            'Cursos do combo',
-            'Na matrícula, a trilha do aluno é a sequência de cada curso, na '
+          const TituloSecao(
+            texto: 'Cursos do combo',
+            apoio:
+                'Na matrícula, a trilha do aluno é a sequência de cada curso, na '
                 'ordem daqui. Arraste para reordenar; nada é gravado até '
                 '"Salvar cursos".',
           ),

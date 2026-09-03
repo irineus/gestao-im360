@@ -1,8 +1,9 @@
 # App Flutter — Gestão IM360
 
 Esqueleto do card **3.7**: login, camada de sessão, shell responsivo e guardas
-de rota. As telas de negócio chegam nos cards das fases 4 a 9 — hoje cada rota
-abre um placeholder que diz **qual card** a entrega.
+de rota. As telas de negócio chegam nos cards das fases 4 a 9 — entregues até
+aqui: Materiais (4.4) e Salas e PCs (4.5); as demais rotas abrem um placeholder
+que diz **qual card** a entrega.
 
 ## Rodar
 
@@ -69,6 +70,16 @@ lib/
     catalogo_repositorio.dart interface + implementação PostgREST (tabelas, nunca view)
     catalogo_provider.dart    FutureProviders por consulta, filtros por aba e a versão
                               do catálogo que toda escrita incrementa para recarregar
+  infraestrutura/             card 4.5 — salas, PCs, manutenções e professores
+    infraestrutura.dart       modelos das quatro tabelas do 4.3 + lógica pura: capacidade
+                              efetiva da sala, manutenção em aberto, ação contextual do PC,
+                              datas dd/mm/aaaa e filtros
+    infraestrutura_repositorio.dart
+                              interface + PostgREST nas tabelas; a credencial só pelas RPCs
+                              fn_pc_credencial_ler / fn_pc_credencial_gravar (card 2.9)
+    infraestrutura_provider.dart
+                              FutureProviders, filtros por aba e a versão que toda escrita
+                              incrementa
   erros/
     catalogo_erros.dart       codigo -> mensagem (design-system §7.1)
     erro_app.dart             extrai o codigo do DETAIL das exceções do Supabase; traduz
@@ -89,10 +100,19 @@ lib/
       formularios.dart        material, curso, combo, módulo e o nome dos métodos
       detalhes.dart           painel do curso (sequência + módulos) e do combo (cursos)
       editor_sequencia.dart   lista ordenada com alça própria, remover e adicionar
+    salas/                    card 4.5 — tela 10: Salas e PCs, com Professores na 2ª aba
+      tela_salas.dart         abas Salas e PCs / Professores, cada uma uma TabelaIm360
+      filtros_salas.dart      busca, tipo, "só ativas" / "só ativos" — estado no provider
+      detalhe_sala.dart       painel da sala: PCs com situação e ação contextual
+                              (Manutenção / Encerrar / Reativar)
+      formularios.dart        sala, PC (com a ficha da credencial do card 2.9 §8),
+                              manutenção, encerramento, reativação, professor
   theme/                      cópia do apêndice §10 do card 2.7 + preferência clara/escura
   widgets/
     botoes.dart               BotaoAcao: sem permissão oculta, sem estado desabilita com motivo
+    confirmacao.dart          confirmarEfemero — a snackbar de "salvo" / "excluído"
     estados.dart              carregando / vazio / erro / sem acesso
+    painel_detalhe.dart       PainelDetalhe e TituloSecao — cabeçalho e seções dos painéis
     formulario.dart           FormularioIm360 (design-system §5.4): validação de formato,
                               banner de erro pelo codigo, primário travado ao executar,
                               ações extras com confirmação; mostrarFormulario decide

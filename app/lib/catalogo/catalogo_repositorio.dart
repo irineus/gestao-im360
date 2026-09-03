@@ -42,13 +42,6 @@ abstract interface class CatalogoRepositorio {
   Future<void> salvarCursosDoCombo(String comboId, List<String> cursoIds);
 }
 
-/// Mensagem do caso em que a RLS devolve **zero linhas** numa exclusão. Sem
-/// política de `delete` o Postgres não levanta erro — apaga nada e diz sucesso
-/// (card 3.4 (d)); dizer "excluído" aqui seria mentir com cara de confirmação.
-const mensagemNadaExcluido =
-    'Nada foi excluído: o registro não existe mais ou você não tem permissão '
-    'para excluí-lo.';
-
 class CatalogoRepositorioSupabase implements CatalogoRepositorio {
   CatalogoRepositorioSupabase(this._cliente, {required this.unidadeId});
 

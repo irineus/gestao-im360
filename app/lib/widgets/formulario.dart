@@ -329,5 +329,12 @@ String? validarInteiroNaoNegativo(String? valor) {
   return null;
 }
 
+String? validarInteiroPositivo(String? valor) {
+  if (valor == null || valor.trim().isEmpty) return 'Campo obrigatório.';
+  final numero = int.tryParse(valor.trim());
+  if (numero == null || numero < 1) return 'Informe um número inteiro ≥ 1.';
+  return null;
+}
+
 /// Só dígitos — para os campos numéricos.
 final somenteDigitos = FilteringTextInputFormatter.digitsOnly;

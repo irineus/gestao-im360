@@ -9,6 +9,7 @@ import '../telas/em_construcao.dart';
 import '../telas/login.dart';
 import '../telas/materiais/tela_materiais.dart';
 import '../telas/redefinir_senha.dart';
+import '../telas/salas/tela_salas.dart';
 import '../telas/selecao_unidade.dart';
 import '../telas/sem_acesso.dart';
 import '../widgets/estados.dart';
@@ -22,6 +23,7 @@ const _caminhoAcesso = '/acesso';
 /// placeholder que diz qual card entrega.
 final _telaDaRota = <String, WidgetBuilder>{
   'materiais': (_) => const TelaMateriais(),
+  'salas': (_) => const TelaSalas(),
 };
 
 /// Cards que entregam cada tela — o placeholder diz o seu, para não virar
@@ -36,7 +38,6 @@ const _cardDaRota = <String, String>{
   'compras': '6.8',
   'projecao': '8.5',
   'certificados': '8.6',
-  'salas': '4.5',
   'administracao': '4.7',
   'importacao': '9.1',
 };
