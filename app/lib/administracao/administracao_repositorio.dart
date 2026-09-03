@@ -13,7 +13,8 @@ import 'administracao.dart';
 /// chega ao Flutter — daí a Edge Function `convidar-usuario`
 /// (docs/acesso-autenticacao.md §3.2).
 abstract interface class AdministracaoRepositorio {
-  /// Todos os usuários da unidade, cada um com os ids dos perfis atribuídos.
+  /// Todos os usuários da unidade, cada um com os ids dos perfis atribuídos e
+  /// com [UsuarioAdmin.convitePendente] já resolvido (card 4.7,7).
   Future<List<UsuarioAdmin>> usuarios();
 
   /// Só nome e ativo mudam por aqui; o e-mail é do Auth.
@@ -66,6 +67,9 @@ class AdministracaoRepositorioSupabase implements AdministracaoRepositorio {
   /// Nome da Edge Function (`supabase/functions/convidar-usuario`).
   static const funcaoConvite = 'convidar-usuario';
 
+  /// RPC do card 4.7,7 — ids de quem ainda não aceitou o convite.
+  static const funcaoConvitesPendentes = 'fn_convites_pendentes';
+
   // --- usuários -------------------------------------------------------------
 
   @override
@@ -83,11 +87,19 @@ class AdministracaoRepositorioSupabase implements AdministracaoRepositorio {
           .putIfAbsent('${a['usuario_id']}', () => {})
           .add('${a['perfil_id']}');
     }
+    // Quem ainda não aceitou o convite: `email_confirmed_at` mora em
+    // auth.users, que nenhum papel do app alcança — daí a função definer do
+    // card 4.7,7. Uma chamada para a lista inteira, como a de perfis acima.
+    final pendentes = {
+      for (final id in await _cliente.rpc(funcaoConvitesPendentes) as List)
+        '$id',
+    };
     return [
       for (final linha in linhas)
         UsuarioAdmin.deLinha(
           linha,
           perfisIds: perfisPorUsuario['${linha['id']}'] ?? const {},
+          convitePendente: pendentes.contains('${linha['id']}'),
         ),
     ];
   }

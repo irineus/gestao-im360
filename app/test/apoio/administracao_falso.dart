@@ -113,6 +113,17 @@ class AdministracaoFalso implements AdministracaoRepositorio {
         nome: 'semperfil',
         email: 'semperfil@escola-a.test',
       ),
+      // Convidada e ainda sem abrir o link — o único estado em que "Reenviar
+      // convite" aparece (card 4.7,7). Com perfil, de propósito: convite
+      // pendente e falta de perfil são coisas diferentes e a tela não pode
+      // confundir as duas.
+      UsuarioAdmin(
+        id: 'u-convidada',
+        nome: 'Marta Convidada',
+        email: 'convidada@escola-a.test',
+        perfisIds: {'p-pedagogico'},
+        convitePendente: true,
+      ),
       UsuarioAdmin(
         id: 'u-desativado',
         nome: 'Antigo Diretor',
@@ -245,7 +256,9 @@ class AdministracaoFalso implements AdministracaoRepositorio {
     if (existente.isNotEmpty) return existente.first.id;
     // O espelho do card 3.5: a linha de `usuario` nasce com o convite.
     final id = _novoId('u');
-    usuarios_.add(UsuarioAdmin(id: id, nome: nome, email: email));
+    usuarios_.add(
+      UsuarioAdmin(id: id, nome: nome, email: email, convitePendente: true),
+    );
     return id;
   }
 

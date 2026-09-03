@@ -15,7 +15,7 @@
 -- =============================================================================
 
 begin;
-select plan(18);
+select plan(22);
 
 -- ===========================================================================
 -- 0. Os triggers estão instalados onde precisam estar
@@ -211,6 +211,70 @@ select throws_ok(
   '23503',
   null,
   'delete em auth.users e barrado pela FK enquanto o espelho existir');
+
+-- ===========================================================================
+-- 7. fn_convites_pendentes() — quem ainda não aceitou (card 4.7,7)
+-- ===========================================================================
+-- O que a função responde não é "quem parece novo": é "para quem convidar de
+-- novo REENVIA em vez de recusar com email_exists", e o pivô do GoTrue para
+-- isso é `email_confirmed_at`. Daí os dois lados serem asserção: o convidado
+-- que ainda não abriu o link aparece, e quem já definiu senha (os oito da
+-- fixture, criados confirmados) não aparece — oferecer o reenvio a esse último
+-- seria oferecer um botão que só sabe falhar.
+--
+-- Os inserts abaixo são o convite de verdade: sem `email_confirmed_at`, que é
+-- exatamente como o GoTrue grava a linha do convidado.
+insert into auth.users (id, email, aud, role, encrypted_password,
+                        created_at, updated_at, raw_user_meta_data)
+values ('88888888-8888-4888-8888-888888888888', 'pendente@escola-a.test',
+        'authenticated', 'authenticated', '', now(), now(),
+        jsonb_build_object('unidade_id', tests.unidade('ESCOLA_A')::text,
+                           'nome', 'Pendente da Silva'));
+
+insert into auth.users (id, email, aud, role, encrypted_password,
+                        created_at, updated_at, raw_user_meta_data)
+values ('99999999-9999-4999-8999-999999999999', 'pendente@escola-b.test',
+        'authenticated', 'authenticated', '', now(), now(),
+        jsonb_build_object('unidade_id', tests.unidade('ESCOLA_B')::text,
+                           'nome', 'Pendente de Outra Unidade'));
+
+select tests.autenticar(tests.uid('direcao@escola-a.test'));
+
+select ok(
+  exists (select 1 from public.fn_convites_pendentes() x
+           where x = '88888888-8888-4888-8888-888888888888'),
+  'convidado sem email_confirmed_at aparece em fn_convites_pendentes');
+
+-- Pelo e-mail, e não por tests.uid(): depois de tests.autenticar a sessão é
+-- `authenticated` e o schema `tests` fica fora de alcance (regra de ouro do
+-- card 3.4.5). `public.usuario` a direção lê, que é justamente o ponto.
+select ok(
+  not exists (select 1
+                from public.usuario u
+                join public.fn_convites_pendentes() x on x = u.id
+               where u.email = 'secretaria@escola-a.test'),
+  'quem ja aceitou o convite NAO aparece em fn_convites_pendentes');
+
+-- A função é security definer e o dono tem BYPASSRLS: sem o filtro no corpo,
+-- a direção da ESCOLA_A veria o convidado da ESCOLA_B (correção do card 2.3).
+select ok(
+  not exists (select 1 from public.fn_convites_pendentes() x
+               where x = '99999999-9999-4999-8999-999999999999'),
+  'convidado de OUTRA unidade NAO aparece em fn_convites_pendentes');
+
+reset role;
+
+-- `admin.ler` é o portão, o mesmo da política usuario_sel: quem não enxerga a
+-- lista não recebe o estado das linhas dela. O monitor não tem admin.ler na
+-- matriz inicial (card 2.4).
+select tests.autenticar(tests.uid('monitor@escola-a.test'));
+
+select is(
+  (select count(*)::int from public.fn_convites_pendentes()),
+  0,
+  'sem admin.ler fn_convites_pendentes devolve vazio');
+
+reset role;
 
 select * from finish();
 rollback;

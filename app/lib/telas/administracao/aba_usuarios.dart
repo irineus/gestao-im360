@@ -45,7 +45,12 @@ class AbaUsuarios extends ConsumerWidget {
       construtor: (_) => FormularioUsuario(usuario: usuario),
     );
     if (resultado != null && context.mounted) {
-      confirmarEfemero(context, 'Usuário salvo.');
+      confirmarEfemero(
+        context,
+        resultado == resultadoConviteReenviado
+            ? 'Convite reenviado.'
+            : 'Usuário salvo.',
+      );
     }
   }
 
@@ -105,21 +110,23 @@ class AbaUsuarios extends ConsumerWidget {
           flex: 3,
           larguraMin: 160,
         ),
+        // flex 2, e não 1: `larguraMin` só decide se a coluna SAI quando não
+        // cabe — quem reparte a largura das que ficam é o flex. Com 1 em dez,
+        // "Convite pendente" saía truncado como "Convite p…", que é a marca do
+        // card 4.7,7 chegando pela metade (visto no stack local, 03/09/2026).
         ColunaIm360(
           titulo: 'Situação',
-          texto: (u) => u.ativo ? 'Ativo' : 'Desativado',
+          texto: situacaoUsuario,
           prioridade: 3,
-          flex: 1,
-          larguraMin: 100,
+          flex: 2,
+          larguraMin: 140,
         ),
       ],
       linhas: usuarios.whenData((lista) => filtrarUsuarios(lista, filtro)),
       cartao: (u) => CartaoIm360(
         titulo: u.nome,
         subtitulo: u.email,
-        apoio: u.ativo
-            ? (u.semPerfil ? '⚠ sem perfil' : rotuloPerfis(u, perfisPorId))
-            : 'Desativado',
+        apoio: apoioUsuario(u, perfisPorId),
       ),
       estadoVazio: EstadoVazio(
         mensagem: vazioUsuariosFiltro,

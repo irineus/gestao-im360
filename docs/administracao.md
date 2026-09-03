@@ -40,6 +40,36 @@ atribuir. Agora a coluna de perfis diz `⚠ sem perfil`, o filtro "Sem perfil (n
 linhas e a barra de filtros traz o aviso *"n usuários ativos sem perfil: entram e não veem nada
 até receber um perfil"*. Desativado sem perfil não conta — não entra de qualquer jeito.
 
+**Quem ainda não aceitou o convite também aparece (card 4.7,7).** A coluna "Situação" diz `Convite
+pendente` — e a ficha da pessoa traz a ação **"Reenviar convite"**. O reenvio já funcionava desde o
+4.7 (convidar de novo com o mesmo e-mail devolve o mesmo `usuario_id` e dispara e-mail novo), mas
+nada na tela contava isso: em 03/09/2026, ao preparar o marco 4.8, Irineu procurou como reenviar e
+concluiu que não dava. **O defeito era de descoberta, não de comportamento** — e o lugar onde se
+procura por "reenviar" é a linha da pessoa, não um botão chamado "Convidar usuário". O formulário de
+convite também passou a dizer, em uma frase, que usar o mesmo e-mail reenvia.
+
+O estado vem de `fn_convites_pendentes()` (migração `20260903170000`), função `security definer`
+porque `auth.users.email_confirmed_at` — onde ele mora — nenhum papel do app alcança. Três decisões:
+
+- **`email_confirmed_at`, e não "nunca entrou"**: é literalmente o pivô do GoTrue entre reenviar e
+  recusar com `email_exists`. O que a função devolve não é uma aproximação de "ainda não aceitou": é
+  a resposta a *"para quem o botão funciona"*. Medido contra o stack local — convite deixa
+  `email_confirmed_at` nulo e o id aparece; reenviar devolve o **mesmo** id e ele continua na lista;
+  confirmar o e-mail tira o id da lista **e** faz o convite seguinte devolver 422 `email_exists`.
+  Os dois lados do par, exercitados.
+- **Função, não coluna espelhada**: uma coluna em `usuario` exigiria mais um trigger em `auth.users`
+  e poderia **divergir do Auth em silêncio** — a tela ofereceria o botão a quem já aceitou, ou o
+  esconderia de quem precisa. Lido na hora, o estado não tem como divergir.
+- **A marca exige `admin.ler`, o botão exige `admin.gerir_usuarios`.** Se a *marca* dependesse da
+  permissão da ação, quem tem `admin.ler` e não tem `admin.gerir_usuarios` veria a lista inteira sem
+  uma única marca — indistinguível de "todo mundo já aceitou". Amarrada à visibilidade da lista, ela
+  é verdadeira para quem quer que enxergue a linha.
+
+A ação não aparece para quem já definiu senha (o GoTrue recusaria, e botão que só sabe falhar é pior
+que botão nenhum) nem para quem está desativado — `Desativado` vence `Convite pendente` na coluna,
+porque reenviar convite a quem não pode entrar não resolve nada. E pede confirmação dizendo a
+consequência que ninguém adivinha: **o link anterior deixa de valer**.
+
 A ficha edita **nome** e **ativo** e as caixas de perfil. E-mail é só leitura, com o texto de
 `EMAIL_IMUTAVEL` como apoio (é o endereço de acesso; só muda pelo Auth — card 3.5 §1). Desativar
 mostra o aviso que o §6 do documento de acesso previa: *"nega tudo na hora, mas a sessão já aberta

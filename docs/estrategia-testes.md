@@ -516,7 +516,7 @@ resultado vermelho significa alguma coisa. As três fontes previsíveis aqui:
 | Fonte | Como evitar |
 |---|---|
 | **Tempo** | Fixture sempre em datas relativas a `fn_hoje()`. **Nunca** asserir `fn_hoje() = current_date` — passa 21 horas por dia e falha 3, e a falha é o comportamento **correto**. O que se testa sobre fuso é o C6 (nenhum `current_date` no schema) e o horário do `cron` (§8) |
-| **Ordem** | Cada arquivo em transação própria com `rollback`; nada compartilhado além da fixture, que é recriada pelo `db reset` |
+| **Ordem** | Cada arquivo em transação própria com `rollback`; nada compartilhado além da fixture, que é recriada pelo `db reset`. **E dentro do arquivo: `limit` sem `order by` é sorteio** — corrigido em 03/09/2026 (card 5.2) em duas consultas do teste 040, escritas como `... and ba.ativo limit 1`. Elas escreviam uma alocação inativa para um aluno **qualquer**; no dia em que o sorteio caísse no `Aluno de Lotação 13`, a asserção de `tipo_desde` 60 linhas adiante lia **duas** linhas e o arquivo inteiro morria em `more than one row returned by a subquery` — 27 dos 43 testes sem rodar, e a mensagem apontando para longe da causa. Passou verde no CI e reprovou no primeiro stack local novo. **Linha de fixture que um teste vai reler se escolhe por chave natural, nunca por `limit`** |
 | **Aleatoriedade** | `gen_random_uuid()` nas fixtures só em coluna que o teste não asserta; toda referência é por chave natural (`codigo`, `email`), nunca por UUID literal |
 
 ---
@@ -807,7 +807,9 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `032_matriz_historico` (trigger de histórico, imutabilidade, seed que não devolve o removido) | **4.7.5** | 4 |
 | `supabase/functions/convidar-usuario/logica.test.ts` (`node --test`, lógica pura da Edge Function) | **4.7** | 4 |
 | `administracao_test`, `tela_administracao_test`, `link_inicial_test` | **4.7** | 4 |
-| `040_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` | 5.3 | 5 |
+| `040_blocos_alocacao` (as três tabelas, `tipo_desde`, as guardas de coluna e de exclusão, `tg_aluno_status_desaloca`) | **5.1** | 5 |
+| `041_capacidade_vagas` (a fórmula da capacidade, as duas metades do REP na ocupação, e a prova de que o número não depende do que o leitor enxerga) | **5.2** | 5 |
+| `042_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` — era `040` até o card 5.1 ocupar o número, e `041` até o 5.2 ocupar o seguinte | 5.3 | 5 |
 | `050_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` | 6.3 | 6 |
 | `060_estoque_compras` | 6.5 | 6 |
 | `070_modular` | 7.2 | 7 |

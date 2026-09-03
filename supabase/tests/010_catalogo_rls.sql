@@ -112,7 +112,16 @@ create temporary view p_esperada (tabela, cmd) as values
   -- update e delete, como em aluno_status_hist e pc_credencial_acesso. Sem
   -- insert de propósito: um POST direto gravaria "REMOVIDA" de uma permissão
   -- que continua valendo — histórico que mente é pior que histórico ausente.
-  ('perfil_permissao_hist','r');
+  ('perfil_permissao_hist','r'),
+  -- card 5.1 — blocos e alocação. `bloco_horario` segue o padrão de quatro;
+  -- `bloco_aluno` e `bloco_aluno_reposicao` não têm DELETE, e a ausência é a
+  -- decisão: alocação encerrada é `ativo = false` e reposição desmarcada é
+  -- `status = 'CANCELADA'` — apagar a linha tiraria da grade histórica quem
+  -- esteve na turma. O que a ausência de política NÃO alcançava era a cascata de
+  -- `bloco_aluno.bloco_id`, e é o que tg_bloco_exclusao_valida fecha.
+  ('bloco_horario','r'),         ('bloco_horario','a'),         ('bloco_horario','w'), ('bloco_horario','d'),
+  ('bloco_aluno','r'),           ('bloco_aluno','a'),           ('bloco_aluno','w'),
+  ('bloco_aluno_reposicao','r'), ('bloco_aluno_reposicao','a'), ('bloco_aluno_reposicao','w');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text
@@ -180,7 +189,14 @@ create temporary view p_codigo_catalogo (codigo) as values
   -- capacidade do bloco (card 2.4 §3.3).
   ('salas.ler'), ('salas.criar'), ('salas.editar'), ('salas.excluir'),
   ('salas.registrar_manutencao'), ('salas.acessar_credencial'),
-  ('professores.ler'), ('professores.criar'), ('professores.editar');
+  ('professores.ler'), ('professores.criar'), ('professores.editar'),
+  -- card 5.1 — cinco dos seis do domínio `turmas`. O sexto,
+  -- `turmas.lancar_reposicao_retroativa`, fica DE FORA e a ausência é o ponto:
+  -- ele não guarda tabela nenhuma, guarda uma condição dentro de
+  -- tg_reposicao_admissao (card 5.3). Pô-lo aqui reprovaria por "catalogado e
+  -- não usado", que é exatamente o que esta lista existe para dizer.
+  ('turmas.ler'), ('turmas.criar'), ('turmas.editar'), ('turmas.excluir'),
+  ('turmas.alocar');
 
 select is(
   (select coalesce(string_agg(msg, '; ' order by msg), '')

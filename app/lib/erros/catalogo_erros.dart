@@ -1,8 +1,9 @@
 /// Tradução `codigo` -> mensagem em tela.
 ///
 /// Fonte dos textos: docs/design-system.md §7.1 (card 2.7), mais `PC_INEXISTENTE`
-/// (card 2.9), os três do card 3.5, `ALUNO_INEXISTENTE` (card 4.2) e
-/// `PC_COM_HISTORICO` (card 4.3). O contrato do conjunto é
+/// (card 2.9), os três do card 3.5, `ALUNO_INEXISTENTE` (card 4.2),
+/// `PC_COM_HISTORICO` (card 4.3) e `BLOCO_COM_ALOCACAO` (card 5.1). O contrato
+/// do conjunto é
 /// `test/fixtures/codigos_erro.txt`, na raiz do repositório.
 ///
 /// O app trata SEMPRE pelo código, nunca pelo texto do banco (card 2.2 §1.2):
@@ -80,6 +81,15 @@ abstract final class CatalogoErros {
     'PC_COM_HISTORICO':
         'Este computador tem histórico e não pode ser excluído. Marque-o '
         'como desativado.',
+
+    // --- card 5.1 (guarda de exclusão de bloco de horário)
+    // Mesma família do PC_COM_HISTORICO: `bloco_aluno.bloco_id` é
+    // `on delete cascade` e a tabela não tem política de delete para ninguém,
+    // então apagar o bloco levava junto, em silêncio, quem esteve na turma. A
+    // mensagem diz a saída, que é a mesma que a grade do card 5.6 oferece.
+    'BLOCO_COM_ALOCACAO':
+        'Este bloco tem histórico de alunos e não pode ser excluído. '
+        'Desative-o.',
 
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':

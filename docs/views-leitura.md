@@ -621,7 +621,7 @@ Mesmo formato do §14 do card 2.2 e do §8 do card 2.5: o que precisa mudar em d
 |---|---|---|---|---|
 | 1 | Criar `fn_hoje()` e trocar **todo** `current_date` de view, função e rotina por ela | 2.1 §3, 2.2, 2.5 | 3.4 | **bloqueante** para a correção dos números à noite (§3.3) |
 | 2 | `default current_date` → `default public.fn_hoje()` em `aluno.status_desde`, `aluno.data_inicio`, `bloco_aluno.tipo_desde`, `turma_modular_aluno.data_entrada` | 2.1 §7, §8, §9 | 4.2 / 5.1 / 7.1 | alta — data errada gravada, não só exibida |
-| 3 | `fn_capacidade_efetiva` e `fn_ocupacao_bloco` passam a `security definer` + `search_path` fixo + filtro `unidade_id = fn_unidade_atual()` | 2.2 §4.1, §4.2 | 5.2 | **bloqueante** — como invoker, a grade mostra tudo lotado para quem não tem `salas.ler` (§3.4) |
+| 3 | ✅ **Feito em 03/09/2026 (card 5.2).** `fn_capacidade_efetiva` e `fn_ocupacao_bloco` são `security definer` + `search_path` fixo + filtro `unidade_id = fn_unidade_atual()` no corpo, e entraram na lista fechada do C8. `fn_vagas_livres` ficou **invoker**: não lê tabela, só compõe as duas | 2.2 §4.1, §4.2 | 5.2 | **bloqueante** — como invoker, a grade mostra tudo lotado para quem não tem `salas.ler` (§3.4) |
 | 4 | Severidade `INFO` de `ACELERAR_SEM_2O_BLOCO` no catálogo do card 2.2 **não existe** no `check` do DDL (`BAIXA`,`MEDIA`,`ALTA`) — adotar `BAIXA` | 2.2 §10.1 | 5.5 | **bloqueante** — o insert falharia no `check` de `pendencia.severidade` |
 | 5 | Índice `pendencia (unidade_id, severidade) where resolvida_em is null` para a central | 2.1 §10 | 5.5 | baixa — desempenho |
 | 6 | `aluno_status_ix` de `(unidade_id, status)` para `(unidade_id, metodo_id, status)`, que é como o dashboard agrupa | 2.1 §7 | 4.2 | baixa — desempenho |

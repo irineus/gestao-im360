@@ -223,20 +223,21 @@ select is(
 -- camada devida é criada dentro da própria transação, e some no rollback junto
 -- com o resto.
 --
--- A sentinela era `public.material` até o card 4.1, `public.aluno` até o 4.2 e
--- `public.pc` até o 4.3; de lá em diante essas tabelas EXISTEM, o `create table`
--- morreria com "already exists" e a asserção deixaria de dizer o que promete. A
--- sentinela acompanha a fronteira: agora é `public.bloco_aluno`, a tabela da
--- camada `turmas` (card 5.1), e no 5.1 passa a ser `public.movimento_estoque`
--- (camada `trilha_estoque`, card 6.1).
-create table public.bloco_aluno (id uuid primary key);
+-- A sentinela era `public.material` até o card 4.1, `public.aluno` até o 4.2,
+-- `public.pc` até o 4.3 e `public.bloco_aluno` até o 5.1; de lá em diante essas
+-- tabelas EXISTEM, o `create table` morreria com "already exists" e a asserção
+-- deixaria de dizer o que promete. A sentinela acompanha a fronteira: agora é
+-- `public.movimento_estoque`, a tabela da camada `trilha_estoque` (card 6.1),
+-- que é a última declarada — quando ela for aplicada, esta asserção precisa de
+-- uma camada nova para vigiar, e não de uma sentinela nova.
+create table public.movimento_estoque (id uuid primary key);
 
 select is(
   (select string_agg(camada, ',' order by camada) from tests.fixture_camadas_devidas()),
-  'turmas',
+  'trilha_estoque',
   'criada a tabela que a camada povoa, o portao acusa a camada que ficou para tras');
 
-drop table public.bloco_aluno;
+drop table public.movimento_estoque;
 
 select * from finish();
 rollback;

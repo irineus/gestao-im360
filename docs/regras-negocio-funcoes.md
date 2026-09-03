@@ -254,9 +254,34 @@ $$;
 - Um PC em manutenção **com** substituto não reduz a capacidade (regra do plano, §6/PCs).
 - O parâmetro `p_data` é o que permite avaliar admissão futura e reposição agendada.
 
-> ⚠️ **Card 5.2 é o dono da fórmula final.** Este corpo é a leitura literal do plano e serve de
-> ponto de partida; se o card 5.2 decidir outra combinação, muda **só esta função** — todo o resto
-> do sistema chama `fn_capacidade_efetiva` e não sabe como ela decide.
+> ✅ **Fechada em 03/09/2026 pelo card 5.2**, em `supabase/migrations/20260903210000_capacidade_vagas.sql`
+> — o corpo acima era o ponto de partida e **tinha dois furos**, os dois só visíveis ao ler este §4.1
+> junto com o §4.6 (cada metade, sozinha, parece certa):
+>
+> 1. **`status = 'OPERACIONAL'` mata o substituto.** O §4.6 manda `tg_pc_manutencao_status`
+>    (card 5.4) pôr o PC em `MANUTENCAO` enquanto a manutenção estiver aberta, **com substituto ou
+>    sem**. No dia em que aquele trigger existir, o filtro por `OPERACIONAL` derruba também o PC
+>    substituído, o `not exists` vira letra morta e "um `pc_substituto_id` mantém a capacidade"
+>    (plano, §6) deixa de valer — **em silêncio, e num card que não fala de capacidade**.
+> 2. **Substituto da própria sala não cria máquina.** Apontar `pc_substituto_id` para um PC que já
+>    está na sala somaria a mesma máquina duas vezes: dez PCs físicos valendo onze vagas, com a cara
+>    de um número certo.
+>
+> **A fórmula final.** Um PC da sala conta na data quando: (1) não está `DESATIVADO`; (2) não tem
+> manutenção cobrindo a data **sem substituto válido**; e (3) está `OPERACIONAL` **ou** tem
+> manutenção cobrindo a data **com** substituto válido. *Substituto válido* é o que está em **outra
+> sala** — o da própria já estava contado. Capacidade = `coalesce(override, least(esses PCs,
+> capacidade_nominal))`.
+>
+> A cláusula (2) é o que faz a função responder por uma **data** e não por "agora" (o `status` é
+> estado do presente); a (3) é o que impede o mundo **pré-5.4** de mentir na direção oposta — PC
+> marcado `MANUTENCAO` à mão, sem linha em `pc_manutencao`, não conta. As duas junto tornam a fórmula
+> correta antes e depois do card 5.4, que é o requisito de verdade.
+>
+> ⚠️ **Limite conhecido, registrado e não resolvido:** o PC emprestado continua contando na **sala de
+> origem**. `pc.sala_id` diz onde a máquina está cadastrada, não onde ela está hoje, e conservar
+> máquinas entre salas exigiria modelar a mudança de lugar — decisão que não é deste card e que
+> ninguém pediu. Enquanto isso, emprestar um PC infla a capacidade da sala que emprestou.
 
 ### 4.2 Ocupação e vagas
 
@@ -275,6 +300,28 @@ count(bloco_aluno            where bloco_id = X and ativo)
 fn_vagas_livres(p_bloco_id uuid, p_data date default current_date) → integer     -- stable
   -- greatest(fn_capacidade_efetiva - fn_ocupacao_bloco, 0); alimenta o dashboard (card 5.9)
 ```
+
+> ✅ **As três entregues em 03/09/2026 pelo card 5.2**, e não pelo 5.3 como diz o mapa de §13 —
+> divergência registrada. Três documentos posteriores mandaram: a Nota do card 5.2 ("vagas livres =
+> capacidade − alocados ativos"), o §10 (#3) do card 2.3, que nomeia o **5.2** como dono da mudança
+> para `security definer` das **duas** primeiras, e o comentário (d) da fixture do card 5.1, que
+> descreve a reposição `PREVISTA` no bloco vazio como "a asserção que reprova uma `fn_ocupacao_bloco`
+> (card 5.2) que somou só `bloco_aluno`". Capacidade sem ocupação não vira vaga, e nenhuma das três
+> tem como ser exercitada sozinha.
+>
+> Três decisões do corpo, todas com `p_data default public.fn_hoje()` (ajuste 1 do card 2.3):
+>
+> - **Nenhum filtro por `tipo`.** REM, PRE, REP e NOVO ocupam vaga igual. Aluno remoto ocupa vaga
+>   (Nota do card), e `NOVO` também — a vaga está reservada desde a `data_inicio_prevista`, senão a
+>   secretaria a vende duas vezes.
+> - **Zero e nulo dizem coisas diferentes.** `0` é "bloco seu, e vazio"; **nulo** é "não é da sua
+>   unidade / não existe". As duas primeiras filtram `b.unidade_id = fn_unidade_atual()` no corpo — é
+>   o preço do `definer`, que roda com `BYPASSRLS` e não tem RLS para lhe segurar a mão.
+> - ⚠️ **`greatest(null, 0)` devolve `0`**, porque o `greatest` **ignora nulos**. Escrita como o
+>   comentário acima sugere, `fn_vagas_livres` responderia "0 vagas livres" para um bloco de outra
+>   unidade — mentira plausível, e na direção que ninguém confere ("lotado"). O corpo usa `case`
+>   explícito para preservar o nulo. `fn_vagas_livres` **não** é `definer`: não lê tabela nenhuma, só
+>   compõe as duas de cima (mesma decisão que deixou `fn_pc_exclusao_valida` fora da lista do C8).
 
 ### 4.3 Admissão
 
@@ -717,8 +764,8 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | `fn_contexto_rotina`, desvio de rotina em `fn_unidade_atual`/`tem_permissao`, `fn_param_int/txt`, `fn_exige_permissao` | 3.4 |
 | `fn_aluno_transicao_valida`, triggers de status, `fn_aluno_alterar_status`, `fn_aluno_reverter_status` | 4.2 |
 | `tg_pc_manutencao_status`, `tg_pc_revalida_blocos` | 4.3 |
-| `fn_capacidade_efetiva` | 5.2 |
-| `fn_ocupacao_bloco`, `fn_vagas_livres`, `tg_bloco_aluno_admissao`, `fn_bloco_admitir/remover`, reposições | 5.3 |
+| `fn_capacidade_efetiva`, `fn_ocupacao_bloco`, `fn_vagas_livres` — as três juntas, ver §4.2 | 5.2 |
+| `tg_bloco_aluno_admissao`, `fn_bloco_admitir/remover`, reposições | 5.3 |
 | `fn_revalidar_blocos_sala` | 5.4 |
 | `fn_pendencia_abrir/resolver`, `rt_pendencias_diaria`, `rt_diaria` e o job `pg_cron` | 5.5 |
 | `fn_trilha_gerar`, `fn_trilha_proximo_material`, edição da trilha | 6.2 |
@@ -779,8 +826,11 @@ débito na virada, e o aluno convertido nunca poderia voltar a pontual) e o 10 (
    `docs/regra-virada-rep.md`. `fn_rep_avaliar_virada` manteve a assinatura reservada aqui. Segue em
    aberto só a **calibração** dos quatro parâmetros `rep_*`, que depende de histórico de uso
    (revisar no card 11.2, junto com a projeção de demanda).
-2. **Fórmula final da capacidade efetiva (card 5.2).** `fn_capacidade_efetiva` isola a decisão
-   numa função só.
+2. ~~**Fórmula final da capacidade efetiva (card 5.2).**~~ **Fechada em 03/09/2026** — §4.1. O
+   isolamento numa função só pagou o que prometia: os dois furos do ponto de partida (substituto
+   morto pelo `status`, substituto da própria sala contado duas vezes) se corrigiram sem tocar em
+   mais nada do sistema. Segue em aberto o **limite** ali registrado: PC emprestado continua contando
+   na sala de origem, porque `pc.sala_id` diz onde a máquina está cadastrada e não onde ela está.
 3. **Códigos de permissão (card 2.4).** A lista de §12.1 é a entrada; o card fecha o catálogo e a
    matriz.
 4. **Views de leitura (card 2.3).** `v_estoque_atual`, `v_demanda_imediata`, `v_pendencias_abertas`

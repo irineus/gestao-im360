@@ -251,16 +251,28 @@ class _FormularioIm360State extends State<FormularioIm360> {
           padding: const EdgeInsets.all(Dim.e16),
           child: Row(
             children: [
-              for (final acao in widget.acoes) ...[
-                BotaoAcao(
-                  rotulo: acao.rotulo,
-                  nivel: acao.nivel,
-                  exigePermissao: acao.exigePermissao,
-                  aoTocar: _executando ? null : () => _acao(acao),
+              // `Expanded` + `Wrap`, e não uma Row com Spacer: a Row dá a cada
+              // botão a largura natural dele e ESTOURA quando a soma não cabe
+              // — foi o que aconteceu no card 4.7,7, com "Reenviar convite"
+              // ao lado de Cancelar e Salvar num diálogo de 528 px. Assim as
+              // ações de apoio ficam com a largura que sobra e quebram para
+              // uma segunda linha em vez de sumir na borda.
+              Expanded(
+                child: Wrap(
+                  spacing: Dim.e8,
+                  runSpacing: Dim.e8,
+                  children: [
+                    for (final acao in widget.acoes)
+                      BotaoAcao(
+                        rotulo: acao.rotulo,
+                        nivel: acao.nivel,
+                        exigePermissao: acao.exigePermissao,
+                        aoTocar: _executando ? null : () => _acao(acao),
+                      ),
+                  ],
                 ),
-                const SizedBox(width: Dim.e8),
-              ],
-              const Spacer(),
+              ),
+              const SizedBox(width: Dim.e8),
               TextButton(
                 onPressed: _executando
                     ? null

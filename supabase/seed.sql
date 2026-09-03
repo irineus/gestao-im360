@@ -85,8 +85,8 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
    'APLICADA no card 4.3: uma sala com 10 PCs (capacidade real do laboratório) e uma com 6, mais uma sala modular sem PC. A borda 10/11 é o teste de lotação do card 5.3. Os seis PCs da segunda sala NÃO estão todos operacionais de propósito: capacidade nominal (6), total de PCs (6) e PCs operacionais (4) são três números distintos, e é isso que faz fn_capacidade_efetiva (card 5.2) reprovar se somar a coluna errada. Duas manutenções (uma aberta sem substituto, uma fechada) e três professores, um inativo. Nenhuma credencial: senha de fixture no repositório é o que o card 2.9 §9 recusa, e os testes de credencial gravam a sua dentro da própria transação.'),
 
   ('turmas', 60, '5.1',
-   $$to_regclass('public.bloco_aluno') is not null$$, false,
-   'Três blocos, com 0, 9 e 10 alunos — o de 9 aceita o décimo, o de 10 recusa o décimo primeiro, sem depender de ordem de execução. Mais um aluno com débito REP na borda do critério do card 2.5.'),
+   $$to_regclass('public.bloco_aluno') is not null$$, true,
+   'APLICADA no card 5.1: três blocos no Laboratório 1 (0, 9 e 10 alunos), os três SEM capacidade_override, para a capacidade efetiva do card 5.2 ter de sair dos 10 PCs operacionais. Os dois blocos cheios têm alunos disjuntos — reaproveitá-los faria nove alunos ATIVO ficarem com dois blocos, que é a definição de aceleração —, e por isso a camada traz treze alunos de lotação próprios, com codigo_sgf na faixa 9xxx para não mexer nas asserções do card 4.2. Lucas Ferreira fica com débito REP EXATAMENTE na borda do card 2.5, escolhida onde ceil e floor divergem; as reposições dele ficam no bloco vazio, que assim passa a ter ocupação 1 no dia da PREVISTA.'),
 
   ('trilha_estoque', 70, '6.1',
    $$to_regclass('public.movimento_estoque') is not null$$, false,
@@ -726,7 +726,191 @@ select tests.seed_infra_fisica(tests.unidade('ESCOLA_A'));
 select tests.seed_infra_fisica(tests.unidade('ESCOLA_B'));
 
 -- =============================================================================
--- 7. Fecho: nada em `tests` alcançável por quem não é `postgres`
+-- 7. Escola-fixture — camada `turmas` (card 5.1)
+-- =============================================================================
+-- Três blocos com 0, 9 e 10 alunos (card 2.8 §4.2), os três no Laboratório 1,
+-- que tem exatamente 10 PCs OPERACIONAIS — a capacidade efetiva sai dos PCs
+-- (card 5.2) e não de `capacidade_override`, que fica nulo de propósito nos
+-- três: um override aqui esconderia justamente a conta que o 5.2 precisa provar.
+--
+-- Cinco escolhas que valem explicação:
+--
+--   (a) os dois blocos cheios têm alunos DISJUNTOS, e é por isso que a camada
+--       traz treze alunos próprios. Reaproveitar os mesmos alunos nos dois
+--       custaria zero linhas e faria nove alunos ATIVO ficarem com dois blocos
+--       — que pela decisão de 31/08/2026 é a definição de ACELERAÇÃO. A fixture
+--       passaria a afirmar, sem querer, que nove alunos estão acelerando, e a
+--       rotina do card 5.5 leria isso como verdade.
+--
+--   (b) o de 9 aceita o décimo e o de 10 recusa o décimo primeiro SEM DEPENDER
+--       DE ORDEM: são dois blocos distintos na mesma unidade, então o teste de
+--       lotação do card 5.3 não precisa admitir alguém para depois testar o
+--       estouro — teste que monta o próprio cenário é teste que passa porque
+--       montou o cenário que queria.
+--
+--   (c) os treze alunos de lotação têm `codigo_sgf` na faixa 9xxx e NENHUM
+--       nulo, de propósito: as asserções do card 4.2 sobre os três alunos sem
+--       código continuam valendo palavra por palavra, e a única asserção do
+--       teste 030 que precisou mudar foi a contagem total, que passou a dizer a
+--       soma das duas camadas.
+--
+--   (d) as reposições de Lucas Ferreira ficam no bloco VAZIO, não no dele. Duas
+--       coisas de graça: o bloco de 0 alunos passa a ter ocupação 1 no dia da
+--       reposição PREVISTA, que é a asserção que reprova uma `fn_ocupacao_bloco`
+--       (card 5.2) que somou só `bloco_aluno` e esqueceu a metade pontual do
+--       REP; e a lotação dos outros dois blocos não se mexe.
+--
+--   (e) o débito de Lucas fica EXATAMENTE na borda do critério do card 2.5, e a
+--       borda foi escolhida onde `ceil` e `floor` divergem. Três aulas perdidas
+--       em aberto (FALTOU, CANCELADA e PREVISTA — as três contam, §3.2), a mais
+--       antiga em `fn_hoje() - 10`: prazo_final = hoje + 20, semanas_uteis =
+--       ceil(20/7) = 3, limite = rep_capacidade_semanal × 3 = 3, e 3 > 3 é
+--       falso — VIÁVEL. Uma quarta aula perdida vira o veredito, que é a borda
+--       que o card 5.3 vai testar nos dois sentidos. Com `floor` daria 2 e o
+--       mesmo cenário reprovaria: a fixture distingue as duas implementações em
+--       vez de passar nas duas. A quarta linha é REALIZADA e mais ANTIGA que
+--       todas (origem em hoje - 20): aula quitada não conta, então uma
+--       implementação que tome `min(data_origem)` sem filtrar as quitadas acha
+--       prazo vencido e sugere a virada — e a fixture a reprova.
+--
+-- ⚠️ PARA O CARD 5.3, e é bloqueante lá: três destas reposições têm `data` no
+--    PASSADO (FALTOU e CANCELADA não têm como não ter), e o seed roda como
+--    `postgres`, sem `auth.uid()` e fora do contexto de rotina — `tem_permissao`
+--    devolve falso. O `tg_reposicao_admissao` do card 2.2 §4.3 exige
+--    `turmas.lancar_reposicao_retroativa` para data no passado: escrito sem uma
+--    saída para esse contexto, ele derruba o `supabase db reset` inteiro, e o
+--    sintoma aparece longe da causa.
+create or replace function tests.seed_turmas(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_lab     uuid;
+  v_metodo  uuid;
+  v_combo   uuid;
+  v_vazio   uuid;
+  v_quase   uuid;
+  v_cheio   uuid;
+  v_lucas   uuid;
+begin
+  select id into v_lab    from sala   where unidade_id = p_unidade and nome = 'Laboratório 1';
+  select id into v_metodo from metodo where unidade_id = p_unidade and codigo = 'INTERATIVO';
+  select id into v_combo  from combo  where unidade_id = p_unidade and nome = 'Informática Completo';
+
+  -- Treze alunos que existem só para ocupar vaga. Nomeados pelo que são: um
+  -- "Aluno de Lotação" não é um caso de negócio disfarçado, e quem ler a fixture
+  -- daqui a três meses não vai procurar qual decisão o criou.
+  insert into aluno (unidade_id, codigo_sgf, nome, metodo_id, combo_id, status,
+                     status_desde, data_inicio)
+  select p_unidade, format('9%s', lpad(i::text, 3, '0')),
+         format('Aluno de Lotação %s', lpad(i::text, 2, '0')),
+         v_metodo, v_combo, 'ATIVO', fn_hoje() - 30, fn_hoje() - 30
+    from generate_series(1, 13) as i
+   where not exists (select 1 from aluno a
+                      where a.unidade_id = p_unidade
+                        and a.codigo_sgf = format('9%s', lpad(i::text, 3, '0')));
+
+  -- Os três blocos. O de 10 fica SEM professor de propósito: `professor_id` é
+  -- opcional e a grade do card 5.6 o lê por `left join` — um bloco sem
+  -- professor é o que reprova a grade que usa join interno e some com a linha.
+  insert into bloco_horario (unidade_id, dia_semana, hora_inicio, metodo_id,
+                             professor_id, sala_id)
+  select p_unidade, b.dia, b.hora, v_metodo,
+         (select id from professor where unidade_id = p_unidade and nome = b.professor),
+         v_lab
+    from (values
+      (1, time '08:00', 'Marcos Vieira'),
+      (2, time '08:00', 'Renata Alves'),
+      (3, time '08:00', null)
+    ) as b(dia, hora, professor)
+   where not exists (select 1 from bloco_horario x
+                      where x.unidade_id = p_unidade and x.sala_id = v_lab
+                        and x.dia_semana = b.dia and x.hora_inicio = b.hora);
+
+  select id into v_vazio from bloco_horario
+   where unidade_id = p_unidade and sala_id = v_lab and dia_semana = 1;
+  select id into v_quase from bloco_horario
+   where unidade_id = p_unidade and sala_id = v_lab and dia_semana = 2;
+  select id into v_cheio from bloco_horario
+   where unidade_id = p_unidade and sala_id = v_lab and dia_semana = 3;
+
+  -- Bloco CHEIO (10/10): os seis alunos ATIVO de método INTERATIVO da camada
+  -- `alunos` mais quatro de lotação. Os de caso entram aqui, e não no de 9,
+  -- porque é deles que o card 5.3 precisa para exercitar
+  -- `tg_aluno_status_desaloca`: mudar o status de um aluno que TEM alocação.
+  insert into bloco_aluno (unidade_id, bloco_id, aluno_id, tipo, data_inicio_prevista,
+                           tipo_desde)
+  select p_unidade, v_cheio, a.id, x.tipo,
+         case when x.tipo = 'NOVO' then fn_hoje() + 7 end,
+         fn_hoje() - 30
+    from (values
+      ('Ana Paula Ribeiro',    'REM'),
+      ('Bruno Carvalho',       'REM'),
+      ('Carla Menezes',        'REM'),
+      ('Diego Alves',          'PRE'),
+      ('Karina Bastos',        'NOVO'),
+      ('Lucas Ferreira',       'REM'),
+      ('Aluno de Lotação 01',  'REM'),
+      ('Aluno de Lotação 02',  'REM'),
+      ('Aluno de Lotação 03',  'REM'),
+      ('Aluno de Lotação 04',  'REM')
+    ) as x(nome, tipo)
+    join aluno a on a.unidade_id = p_unidade and a.nome = x.nome
+   where not exists (select 1 from bloco_aluno ba
+                      where ba.bloco_id = v_cheio and ba.aluno_id = a.id);
+
+  -- Bloco QUASE CHEIO (9/10): nove de lotação, um deles em REP CONTÍNUO com o
+  -- relógio já fora da carência de volta (rep_janela_volta_dias = 30). É o único
+  -- aluno da fixture com `tipo = 'REP'`, e serve a dois testes opostos: a
+  -- contagem de aceleração do card 5.5, que precisa FILTRAR tipo <> 'REP'
+  -- (ajuste 4 do card 2.5), e o `fn_rep_voltar_pontual` do 5.3, que sem a
+  -- carência vencida não teria como devolver "pode voltar".
+  insert into bloco_aluno (unidade_id, bloco_id, aluno_id, tipo, tipo_desde)
+  select p_unidade, v_quase, a.id, x.tipo, fn_hoje() - x.desde_ha
+    from (values
+      ('Aluno de Lotação 05',  'REM', 30),
+      ('Aluno de Lotação 06',  'REM', 30),
+      ('Aluno de Lotação 07',  'REM', 30),
+      ('Aluno de Lotação 08',  'REM', 30),
+      ('Aluno de Lotação 09',  'PRE', 30),
+      ('Aluno de Lotação 10',  'REM', 30),
+      ('Aluno de Lotação 11',  'REM', 30),
+      ('Aluno de Lotação 12',  'REM', 30),
+      ('Aluno de Lotação 13',  'REP', 40)
+    ) as x(nome, tipo, desde_ha)
+    join aluno a on a.unidade_id = p_unidade and a.nome = x.nome
+   where not exists (select 1 from bloco_aluno ba
+                      where ba.bloco_id = v_quase and ba.aluno_id = a.id);
+
+  -- Lucas Ferreira, débito na borda — ver a nota (e) acima.
+  select id into v_lucas from aluno where unidade_id = p_unidade and nome = 'Lucas Ferreira';
+
+  insert into bloco_aluno_reposicao (unidade_id, bloco_id, aluno_id, data,
+                                     bloco_origem_id, data_origem, status, observacao)
+  select p_unidade, v_vazio, v_lucas, fn_hoje() + r.data_em,
+         v_cheio, fn_hoje() + r.origem_em, r.status, r.observacao
+    from (values
+      (-16, -20, 'REALIZADA', 'aula quitada: NAO entra no debito nem na aula mais antiga'),
+      ( -9, -10, 'FALTOU',    'em aberto, e a mais antiga: e ela que define o prazo'),
+      ( -5,  -6, 'CANCELADA', 'em aberto: desmarcada e nao remarcada (card 2.5 §3.2)'),
+      (  3,  -2, 'PREVISTA',  'em aberto, e a unica que ocupa vaga — no bloco vazio')
+    ) as r(data_em, origem_em, status, observacao)
+   where not exists (select 1 from bloco_aluno_reposicao br
+                      where br.bloco_id = v_vazio and br.aluno_id = v_lucas
+                        and br.data = fn_hoje() + r.data_em);
+end $$;
+
+-- As duas unidades recebem os mesmos blocos, no mesmo dia e horário e com os
+-- mesmos códigos SGF de lotação: `bloco_horario_uk` e `aluno_codigo_sgf_uk` são
+-- únicos por UNIDADE, então repetir entre unidades é exatamente o caso que as
+-- duas uniques precisam aceitar — e recusariam se estivessem escritas sem o
+-- unidade_id.
+select tests.seed_turmas(tests.unidade('ESCOLA_A'));
+select tests.seed_turmas(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 8. Fecho: nada em `tests` alcançável por quem não é `postgres`
 -- =============================================================================
 -- `create function` concede EXECUTE a PUBLIC por padrão. A revogação do USAGE no
 -- schema já bastaria, mas as duas juntas sobrevivem a alguém conceder o schema

@@ -23,11 +23,16 @@ select plan(56);
 -- ===========================================================================
 -- 1. A fixture chegou (camada `alunos` do card 3.4.5)
 -- ===========================================================================
+-- 12 de caso (camada `alunos`, card 4.2) + 13 de lotação (camada `turmas`,
+-- card 5.1, para os blocos de 9 e de 10 terem alunos DISJUNTOS). A asserção
+-- passou de 12 a 25 no card 5.1; as duas seguintes é que continuam guardando os
+-- doze de caso, e por isso os de lotação nasceram com codigo_sgf na faixa 9xxx
+-- em vez de nulo — os "três alunos sem codigo_sgf" seguem sendo três.
 select is(
   (select count(*)::bigint from public.aluno a
      join public.unidade u on u.id = a.unidade_id where u.codigo = 'ESCOLA_A'),
-  12::bigint,
-  'doze alunos na unidade A, um por caso que alguma decisao criou');
+  25::bigint,
+  'doze alunos de caso mais treze de lotacao na unidade A');
 
 select is(
   (select string_agg(distinct a.status, ',' order by a.status) from public.aluno a
