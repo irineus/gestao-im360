@@ -90,6 +90,7 @@ class FormularioIm360 extends StatefulWidget {
     this.acoes = const [],
     this.somenteLeitura = false,
     this.legendaObrigatorio = true,
+    this.aoErro,
   });
 
   final String titulo;
@@ -111,6 +112,12 @@ class FormularioIm360 extends StatefulWidget {
   final bool somenteLeitura;
 
   final bool legendaObrigatorio;
+
+  /// Chamado com o erro já traduzido, antes do banner — é como um formulário
+  /// realça o campo que o `codigo` aponta (design-system §5.4:
+  /// `MOTIVO_OBRIGATORIO` → campo motivo). Uma tradução só, aqui; o gancho do
+  /// Sentry não recebe o mesmo erro duas vezes (card 3.12).
+  final void Function(ErroApp erro)? aoErro;
 
   @override
   State<FormularioIm360> createState() => _FormularioIm360State();
@@ -134,7 +141,12 @@ class _FormularioIm360State extends State<FormularioIm360> {
         context: context,
         builder: (contexto) => AlertDialog(
           title: Text(confirmacao.titulo),
-          content: Text(confirmacao.mensagem, style: Tipografia.corpo),
+          // Largura máxima: sem ela o diálogo ocupa a tela inteira no desktop
+          // (apontamento do card 4.5).
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Text(confirmacao.mensagem, style: Tipografia.corpo),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(contexto).pop(false),
@@ -167,7 +179,10 @@ class _FormularioIm360State extends State<FormularioIm360> {
       final resultado = await acao();
       if (mounted && resultado != null) Navigator.of(context).pop(resultado);
     } catch (erro) {
-      if (mounted) setState(() => _erro = traduzirErro(erro).mensagem);
+      final traduzido = traduzirErro(erro);
+      if (!mounted) return;
+      widget.aoErro?.call(traduzido);
+      setState(() => _erro = traduzido.mensagem);
     } finally {
       if (mounted) setState(() => _executando = false);
     }
@@ -326,6 +341,13 @@ String? validarInteiroNaoNegativo(String? valor) {
   if (valor == null || valor.trim().isEmpty) return 'Campo obrigatório.';
   final numero = int.tryParse(valor.trim());
   if (numero == null || numero < 0) return 'Informe um número inteiro ≥ 0.';
+  return null;
+}
+
+String? validarInteiroPositivo(String? valor) {
+  if (valor == null || valor.trim().isEmpty) return 'Campo obrigatório.';
+  final numero = int.tryParse(valor.trim());
+  if (numero == null || numero < 1) return 'Informe um número inteiro ≥ 1.';
   return null;
 }
 

@@ -129,6 +129,13 @@ prevê. O contrato, já fixado aqui para o 4.7 não reinventá-lo:
 
 Enquanto o 4.7 não existir, o painel resolve — e é por isso que este card não abre a Edge Function.
 
+✅ **Entregue em 03/09/2026 (card 4.7)**: `supabase/functions/convidar-usuario/`, com o contrato
+acima como escrito e mais dois pontos que só apareceram ao exercitar contra o GoTrue local — a
+unidade do metadado é a **do chamador** (`fn_unidade_atual`), e convidar de novo quem ainda não
+aceitou **reenvia** o e-mail e devolve o mesmo usuário, não um erro. O convite que não terminava em
+lugar nenhum (achado do card 3.8) ficou fechado pelo `type=invite` do link, lido antes do
+`Supabase.initialize`. Fonte: `docs/administracao.md` §2.
+
 ---
 
 ## 4. Login e sessão
@@ -241,8 +248,8 @@ Mesmo formato do §14 do card 2.2 e do §16 do 2.8.
 | 2 | SMTP próprio nos dois projetos; nunca em `config.toml` | painel do Supabase | 3.8 / go-live | alta — o serviço interno tem teto baixo e não garante entrega |
 | 3 | Sessão que trata "autenticado sem linha em `usuario`" como erro explícito, não como tela vazia | camada de sessão | **3.7** | alta — é o único jeito de o §1 não virar tela muda |
 | 4 | Os três códigos novos em `test/fixtures/codigos_erro.txt` e em `catalogo_erros.dart` (22 → 25) | repositório | 3.7 | alta — C12 reprova enquanto faltar |
-| 5 | Edge Function do convite, com o contrato do §3.2 (verificar `admin.gerir_usuarios` com o token do chamador) | `supabase/functions/` | **4.7** | média — até lá o painel resolve |
-| 6 | Ligar `[edge_runtime]` em `config.toml` quando o item 5 acontecer | `supabase/config.toml` | 4.7 | baixa |
+| 5 | ~~Edge Function do convite, com o contrato do §3.2 (verificar `admin.gerir_usuarios` com o token do chamador)~~ — ✅ **feita em 03/09/2026 (card 4.7)**, `docs/administracao.md` §2 | `supabase/functions/` | **4.7** | média — até lá o painel resolve |
+| 6 | ~~Ligar `[edge_runtime]` em `config.toml` quando o item 5 acontecer~~ — ✅ **feito no card 4.7**, com `[functions.convidar-usuario] verify_jwt = true` | `supabase/config.toml` | 4.7 | baixa |
 | 7 | Seed do card 3.6 liga o **primeiro usuário de direção** ao perfil `DIRECAO`: o convite cria o espelho, mas ninguém pode nada até existir `usuario_perfil` | migração do seed | **3.6** | **bloqueante** para o 3.7 ter em quem logar — hoje ninguém no dev tem perfil |
 
 ---

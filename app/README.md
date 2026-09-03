@@ -1,8 +1,10 @@
 # App Flutter — Gestão IM360
 
 Esqueleto do card **3.7**: login, camada de sessão, shell responsivo e guardas
-de rota. As telas de negócio chegam nos cards das fases 4 a 9 — hoje cada rota
-abre um placeholder que diz **qual card** a entrega.
+de rota. As telas de negócio chegam nos cards das fases 4 a 9 — entregues até
+aqui: Materiais (4.4), Salas e PCs (4.5), Alunos (4.6, lista e ficha) e
+Administração (4.7, com o histórico do 4.7.5); as demais rotas abrem um
+placeholder que diz **qual card** a entrega.
 
 ## Rodar
 
@@ -63,16 +65,49 @@ flutter test
 ```
 lib/
   config/ambiente.dart        --dart-define e o que falta quando falta
+  config/link_inicial.dart    o `type` do link com que o app abriu (convite,
+                              recuperação) — lido ANTES do Supabase.initialize,
+                              que consome e limpa a URL (card 4.7)
+  administracao/              card 4.7 — usuários, perfis, matriz, parâmetros e
+                              o histórico da matriz (4.7.5)
+    administracao.dart        modelos + lógica pura: domínios, quem está sem
+                              perfil, plano de perfis, validação por tipo
+    administracao_repositorio.dart
+                              interface + PostgREST nas tabelas; o convite vai
+                              pela Edge Function convidar-usuario (functions.invoke)
+    administracao_provider.dart
+                              FutureProviders, filtro de usuários, perfil
+                              selecionado e a versão que toda escrita incrementa
   catalogo/                   card 4.4 — o catálogo curricular como o app o vê
     catalogo.dart             modelos das sete tabelas do 4.1 + filtros e o plano de
                               gravação de uma sequência ordenada (lógica pura, testável)
     catalogo_repositorio.dart interface + implementação PostgREST (tabelas, nunca view)
     catalogo_provider.dart    FutureProviders por consulta, filtros por aba e a versão
                               do catálogo que toda escrita incrementa para recarregar
+  alunos/                     card 4.6 — os alunos como o app os vê
+    alunos.dart               modelos de aluno e de transição de status + lógica pura: o que
+                              o menu "Alterar status" oferece (tabela de fn_aluno_transicao_valida,
+                              só forma — quem decide é o trigger), filtros, rótulos
+    alunos_repositorio.dart   interface + PostgREST nas tabelas; o status só pelas RPCs
+                              fn_aluno_alterar_status / fn_aluno_reverter_status
+    alunos_provider.dart      FutureProviders (lista, aluno por id, histórico), filtro e a
+                              versão que toda escrita incrementa
+  infraestrutura/             card 4.5 — salas, PCs, manutenções e professores
+    infraestrutura.dart       modelos das quatro tabelas do 4.3 + lógica pura: capacidade
+                              efetiva da sala, manutenção em aberto, ação contextual do PC,
+                              datas dd/mm/aaaa e filtros
+    infraestrutura_repositorio.dart
+                              interface + PostgREST nas tabelas; a credencial só pelas RPCs
+                              fn_pc_credencial_ler / fn_pc_credencial_gravar (card 2.9)
+    infraestrutura_provider.dart
+                              FutureProviders, filtros por aba e a versão que toda escrita
+                              incrementa
   erros/
     catalogo_erros.dart       codigo -> mensagem (design-system §7.1)
     erro_app.dart             extrai o codigo do DETAIL das exceções do Supabase; traduz
-                              também os SQLSTATEs de integridade 23503/23505 (card 4.4)
+                              também os SQLSTATEs de integridade 23503/23505 (card 4.4),
+                              os códigos do GoTrue (rate limit, e-mail já cadastrado…) e
+                              a resposta de uma Edge Function (card 4.7)
   rotas/
     rotas.dart                as 13 telas e o conjunto mínimo de cada uma (2.4 §6)
     roteador.dart             go_router: redirect por estado de sessão + guarda por rota;
@@ -89,12 +124,42 @@ lib/
       formularios.dart        material, curso, combo, módulo e o nome dos métodos
       detalhes.dart           painel do curso (sequência + módulos) e do combo (cursos)
       editor_sequencia.dart   lista ordenada com alça própria, remover e adicionar
+    salas/                    card 4.5 — tela 10: Salas e PCs, com Professores na 2ª aba
+      tela_salas.dart         abas Salas e PCs / Professores, cada uma uma TabelaIm360
+      filtros_salas.dart      busca, tipo, "só ativas" / "só ativos" — estado no provider
+      detalhe_sala.dart       painel da sala: PCs com situação e ação contextual
+                              (Manutenção / Encerrar / Reativar)
+      formularios.dart        sala, PC (com a ficha da credencial do card 2.9 §8),
+                              manutenção, encerramento, reativação, professor
+    alunos/                   card 4.6 — tela 3: lista e ficha
+      tela_alunos.dart        a lista (TabelaIm360 com badge de status na coluna)
+      filtros_alunos.dart     busca nome/código SGF, método, status, combo, "ocultar
+                              formados e cancelados" — estado no provider
+      ficha_aluno.dart        a ficha como página (/alunos/:id): cabeçalho, abas Dados e
+                              Histórico; Trilha/Turmas/Certificado dizem qual card as entrega
+      formularios.dart        matrícula/dados, alterar status (só transições válidas),
+                              reverter status terminal
+    administracao/            card 4.7 — tela 12: quatro abas
+      tela_administracao.dart Usuários / Perfis e matriz / Parâmetros / Histórico
+      aba_usuarios.dart       lista com quem está SEM PERFIL destacado, filtros
+      aba_matriz.dart         um perfil por vez, 12 domínios, caixa com descrição;
+                              desmarcar pede confirmação (vale na hora)
+      aba_parametros.dart     chave, valor, descrição, tipo
+      aba_historico.dart      quem concedeu/removeu o quê, quando (card 4.7.5)
+      formularios.dart        convite (Edge Function + perfis no mesmo ato),
+                              usuário, perfil, parâmetro
   theme/                      cópia do apêndice §10 do card 2.7 + preferência clara/escura
+  util/
+    datas.dart                dd/mm/aaaa sem intl (veio de infraestrutura/ no card 4.6)
   widgets/
+    badge_status.dart         BadgeStatus — status do aluno, preenchido tonal (§5.1)
     botoes.dart               BotaoAcao: sem permissão oculta, sem estado desabilita com motivo
+    confirmacao.dart          confirmarEfemero — a snackbar de "salvo" / "excluído"
     estados.dart              carregando / vazio / erro / sem acesso
+    painel_detalhe.dart       PainelDetalhe e TituloSecao — cabeçalho e seções dos painéis
     formulario.dart           FormularioIm360 (design-system §5.4): validação de formato,
-                              banner de erro pelo codigo, primário travado ao executar,
+                              banner de erro pelo codigo (+ aoErro, para o formulário realçar
+                              o campo que o código aponta), primário travado ao executar,
                               ações extras com confirmação; mostrarFormulario decide
                               diálogo × tela cheia pela faixa
     marca.dart                símbolo e assinatura desenhados (ver nota no arquivo)

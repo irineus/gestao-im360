@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/ambiente.dart';
 import 'config/estrategia_url.dart';
+import 'config/link_inicial.dart';
 import 'observabilidade/observabilidade.dart';
 import 'rotas/roteador.dart';
 import 'theme/dimensoes.dart';
@@ -13,6 +14,11 @@ import 'theme/tipografia.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // ANTES do Supabase.initialize: o `type=invite` do link de convite vive no
+  // fragmento da URL, e o supabase_flutter o consome e limpa ao criar a sessão
+  // — depois disso um convidado é indistinguível de um login (card 4.7,
+  // lib/config/link_inicial.dart).
+  LinkInicial.registrar(Uri.base);
   // Antes de qualquer rota ser lida: o fragmento da URL é do Auth, não do
   // roteador (card 3.8).
   usarUrlPorCaminho();

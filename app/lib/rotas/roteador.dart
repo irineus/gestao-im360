@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../config/link_inicial.dart';
 import '../sessao/sessao.dart';
 import '../sessao/sessao_provider.dart';
 import '../telas/acesso_bloqueado.dart';
+import '../telas/administracao/tela_administracao.dart';
+import '../telas/alunos/ficha_aluno.dart';
+import '../telas/alunos/tela_alunos.dart';
 import '../telas/em_construcao.dart';
 import '../telas/login.dart';
 import '../telas/materiais/tela_materiais.dart';
 import '../telas/redefinir_senha.dart';
+import '../telas/salas/tela_salas.dart';
 import '../telas/selecao_unidade.dart';
 import '../telas/sem_acesso.dart';
 import '../widgets/estados.dart';
@@ -21,14 +26,32 @@ const _caminhoAcesso = '/acesso';
 /// As telas já entregues, por id de rota. O que não está aqui abre o
 /// placeholder que diz qual card entrega.
 final _telaDaRota = <String, WidgetBuilder>{
+  'alunos': (_) => const TelaAlunos(),
   'materiais': (_) => const TelaMateriais(),
+  'salas': (_) => const TelaSalas(),
+  'administracao': (_) => const TelaAdministracao(),
+};
+
+/// Rotas filhas de uma tela — hoje só a ficha do aluno (`/alunos/:id`, card
+/// 4.6), guardada pelo conjunto da própria lista. Fica **abaixo** de
+/// `/alunos/:id/trilha`, que é rota própria (3b) com `estoque.ler` a mais.
+List<RouteBase> _subRotas(Rota rota) => switch (rota.id) {
+  'alunos' => [
+    GoRoute(
+      path: ':id',
+      builder: (_, estado) => _TelaGuardada(
+        rota: rota,
+        construtor: (_) => FichaAluno(alunoId: estado.pathParameters['id']!),
+      ),
+    ),
+  ],
+  _ => const [],
 };
 
 /// Cards que entregam cada tela — o placeholder diz o seu, para não virar
 /// destino permanente (docs/wireframes.md §18).
 const _cardDaRota = <String, String>{
   'dashboard': '5.9 / 8.7',
-  'alunos': '4.6',
   'aluno_trilha': '6.6',
   'turmas': '5.6',
   'turmas_modular': '7.3',
@@ -36,8 +59,6 @@ const _cardDaRota = <String, String>{
   'compras': '6.8',
   'projecao': '8.5',
   'certificados': '8.6',
-  'salas': '4.5',
-  'administracao': '4.7',
   'importacao': '9.1',
 };
 
@@ -57,6 +78,22 @@ final roteadorProvider = Provider<GoRouter>((ref) {
       // com sessão: o link do Auth cria uma sessão de recuperação antes de a
       // pessoa chegar aqui.
       if (caminho == rotaRedefinirSenha.caminho) return null;
+
+      // Chegou pelo link de convite (card 4.7): a sessão existe, a senha não.
+      // Antes de qualquer outra tela, definir a senha — senão o acesso
+      // seguinte falha sem que nada tenha dito que faltava um passo (achado
+      // do card 3.8). Sem sessão, o link não valeu (expirado): segue para o
+      // login, e o registro deixa de valer.
+      if (LinkInicial.convitePendente) {
+        switch (estado) {
+          case SessaoCarregando():
+            return null;
+          case SessaoDeslogada():
+            LinkInicial.consumir();
+          default:
+            return '${rotaRedefinirSenha.caminho}?motivo=convite';
+        }
+      }
 
       return switch (estado) {
         SessaoCarregando() => null,
@@ -89,6 +126,7 @@ final roteadorProvider = Provider<GoRouter>((ref) {
             GoRoute(
               path: rota.caminho,
               builder: (_, _) => _TelaGuardada(rota: rota),
+              routes: _subRotas(rota),
             ),
         ],
       ),
@@ -125,9 +163,13 @@ String? _destinoComSessao(String caminho, Sessao sessao) {
 /// mudança vale imediatamente) — aí o `build` da tela é o último ponto em que
 /// dá para não mostrar nada.
 class _TelaGuardada extends ConsumerWidget {
-  const _TelaGuardada({required this.rota});
+  const _TelaGuardada({required this.rota, this.construtor});
 
   final Rota rota;
+
+  /// A tela, quando não é a de `_telaDaRota` — a ficha do aluno, que
+  /// precisa do parâmetro da rota.
+  final WidgetBuilder? construtor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -138,7 +180,7 @@ class _TelaGuardada extends ConsumerWidget {
         paraOndeIr: primeiraRotaPermitida(permissoes)?.caminho,
       );
     }
-    final construtor = _telaDaRota[rota.id];
+    final construtor = this.construtor ?? _telaDaRota[rota.id];
     if (construtor != null) return construtor(context);
     return TelaEmConstrucao(rota: rota, card: _cardDaRota[rota.id] ?? '—');
   }

@@ -1,6 +1,9 @@
 # Migrações de banco via CI/CD (padrão análogo ao app Entrelares)
 # - push em `develop` com mudanças em supabase/migrations/ -> aplica no projeto DEV
 # - push/merge em `main` com mudanças em supabase/migrations/ -> aplica no projeto PROD
+# - desde o card 4.7 o mesmo workflow publica as Edge Functions de
+#   supabase/functions/ no mesmo projeto, logo depois do `db push` — e por isso
+#   dispara também quando só elas (ou o config.toml) mudam.
 #
 # Secrets necessários (Settings -> Secrets and variables -> Actions):
 #   SUPABASE_ACCESS_TOKEN     token pessoal (supabase.com/dashboard/account/tokens)
@@ -18,6 +21,8 @@ on:
     branches: [main, develop]
     paths:
       - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
   workflow_dispatch:
 
 concurrency:
@@ -56,5 +61,14 @@ jobs:
       - name: Aplicar migrações
         run: supabase db push
 
+      - name: Publicar Edge Functions
+        # Depois do `db push`, de propósito: a função do convite verifica
+        # tem_permissao() no banco, e uma função nova publicada antes da
+        # migração de que depende responderia erro até o passo seguinte.
+        # `--use-api` empacota no servidor (sem Docker no runner); `verify_jwt`
+        # vem de supabase/config.toml. Idempotente: republicar o que não mudou
+        # é um no-op.
+        run: supabase functions deploy --use-api --project-ref "$PROJECT_REF"
+
       - name: Resumo
-        run: echo "Migrações aplicadas em $PROJECT_REF (branch ${GITHUB_REF_NAME})." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Migrações e Edge Functions aplicadas em $PROJECT_REF (branch ${GITHUB_REF_NAME})." >> "$GITHUB_STEP_SUMMARY"

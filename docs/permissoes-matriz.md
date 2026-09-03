@@ -115,6 +115,7 @@ e isso é código, não dado. Também evita o modo de falha mais bobo possível:
 | `salas.editar` | 2.4 | Editar sala e PC (inclusive `pc.status`) |
 | `salas.excluir` | 2.4 | Excluir sala/PC sem histórico |
 | `salas.registrar_manutencao` | 2.4 | Abrir e fechar `pc_manutencao` (dispara recálculo de capacidade) |
+| `salas.acessar_credencial` | 2.9 | Ler **e** gravar a credencial do PC (`fn_pc_credencial_ler` / `fn_pc_credencial_gravar`) e o log `pc_credencial_acesso`. O 50º código — decidido no card 2.9, está no seed do 3.6 desde 01/09/2026 e faltava nesta tabela (acrescentado no card 4.5, 02/09/2026) |
 | `professores.ler` | 2.4 | Ler `professor` (nome na grade semanal) |
 | `professores.criar` | 2.4 | Cadastrar professor |
 | `professores.editar` | 2.4 | Editar/inativar professor |
@@ -271,6 +272,7 @@ inicial, não uma regra.
 | `salas.editar` | ✔ | | ✔ | |
 | `salas.excluir` | ✔ | | | |
 | `salas.registrar_manutencao` | ✔ | | ✔ | ✔ |
+| `salas.acessar_credencial` | ✔ | | | ✔ |
 | `professores.ler` | ✔ | ✔ | ✔ | ✔ |
 | `professores.criar` | ✔ | ✔ | ✔ | |
 | `professores.editar` | ✔ | ✔ | ✔ | |
@@ -298,7 +300,9 @@ inicial, não uma regra.
 | `pendencias.ler` | ✔ | ✔ | ✔ | ✔ |
 | `pendencias.resolver` | ✔ | ✔ | ✔ | |
 
-Totais: direção 49, secretaria 37, pedagógico 22, monitor 13.
+Totais: direção 49, secretaria 37, pedagógico 22, monitor 13 — **com `salas.acessar_credencial`
+(card 2.9): direção 50, secretaria 37, pedagógico 22, monitor 14**, que é o que o seed do card 3.6
+grava e a suíte `022_seed_inicial` assere.
 
 ### 5.1 Onde a matriz teve de ir além do plano, e por quê
 
@@ -436,11 +440,15 @@ card 3.6, e mudam com um clique na tela de Administração depois.
 
 1. **Permissão por coluna** (achado #8) — a solução é trigger, não RLS. O desenho fica no card 8.3,
    junto com as funções de certificado.
-2. **Log de alteração da matriz.** As Decisões vigentes (§4) pedem "log de alterações" como
-   mitigação do risco de permissões mal definidas. `perfil_permissao` tem auditoria de
-   `criado_em/por`, mas o `delete` (desmarcar a caixa) não deixa rastro. Uma tabela
-   `perfil_permissao_hist`, ou `ativo` em vez de `delete`, resolve — **card novo na Fase 4**, junto
-   da tela de Administração (4.7).
+2. ~~**Log de alteração da matriz.**~~ ✅ **RESOLVIDO em 03/09/2026 pelo card 4.7.5**:
+   `perfil_permissao_hist`, escrita por trigger `security definer` em `perfil_permissao`, imutável
+   por ausência de política, FKs `restrict`; e `fn_seed_matriz` deixou de devolver o código que
+   alguém tirou de todos os perfis. Ficou a **tabela**, não o `ativo = false`: a segunda saída
+   mudaria a política desta tabela, o join de `tem_permissao` e o guarda do seed para guardar uma
+   transição só. Fonte: `docs/administracao.md` §4. Enunciado original: As Decisões vigentes (§4)
+   pedem "log de alterações" como mitigação do risco de permissões mal definidas.
+   `perfil_permissao` tem auditoria de `criado_em/por`, mas o `delete` (desmarcar a caixa) não
+   deixa rastro.
 3. **Perfil por unidade.** `perfil` tem `unidade_id`, então a segunda unidade da Fase 11 terá
    perfis próprios. Se a direção quiser um perfil global, é decisão da Fase 11, não desta.
 4. **Importação (tela 13)** entra com `admin.ler` mais os domínios do que importa; o conjunto exato

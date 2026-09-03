@@ -70,10 +70,13 @@ ainda não tem **nenhuma** linha na matriz daquela unidade.
 - Código **novo**, acrescentado ao catálogo por uma migração futura, **continua sendo distribuído**
   no primeiro deploy. Era isso que "acrescenta o que faltar" queria dizer, e continua valendo.
 
-⚠️ **Caso residual assumido:** um código desmarcado de **todos** os perfis volta no deploy seguinte.
-Sem histórico não há como distinguir "nunca foi dado" de "foi tirado de todo mundo" — e o histórico
-da matriz é o **card 4.7.5**, já no board. Enquanto ele não existir, tirar um código de todo mundo se
-faz **desativando a permissão** ou refazendo depois do deploy.
+~~⚠️ **Caso residual assumido:** um código desmarcado de **todos** os perfis volta no deploy seguinte.~~
+✅ **Fechado em 03/09/2026 pelo card 4.7.5**: `fn_seed_matriz` ganhou uma cláusula — código com uma
+`REMOVIDA` em `perfil_permissao_hist` foi tirado por alguém e **não volta**; código sem linha **e
+sem histórico** nunca foi dado, é o código novo de uma migração futura, e continua chegando. A
+suíte 022 trocou a asserção do caso residual pela nova. Detalhe em `docs/administracao.md` §4.3.
+Enunciado original: sem histórico não havia como distinguir "nunca foi dado" de "foi tirado de
+todo mundo".
 
 ---
 
