@@ -186,6 +186,12 @@ const rotasAplicacao = <Rota>[
   ),
 ];
 
+/// A ficha do aluno (card 4.6) mora sob `/alunos`, guardada pelo mesmo
+/// conjunto da lista — é a tela 3 do card 2.4 §6 ("lista e ficha"), não uma
+/// rota nova; a aba Trilha é a 3b, acima.
+const caminhoAlunos = '/alunos';
+String caminhoFichaAluno(String id) => '$caminhoAlunos/$id';
+
 /// Todas as rotas guardadas, incluindo a seleção de unidade — é a tabela que o
 /// teste `guardas_rota_test.dart` percorre (card 2.8 §9.1).
 const rotasGuardadas = <Rota>[rotaSelecaoUnidade, ...rotasAplicacao];
