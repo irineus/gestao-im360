@@ -2,8 +2,8 @@
 
 Esqueleto do card **3.7**: login, camada de sessão, shell responsivo e guardas
 de rota. As telas de negócio chegam nos cards das fases 4 a 9 — entregues até
-aqui: Materiais (4.4) e Salas e PCs (4.5); as demais rotas abrem um placeholder
-que diz **qual card** a entrega.
+aqui: Materiais (4.4), Salas e PCs (4.5) e Alunos (4.6, lista e ficha); as demais
+rotas abrem um placeholder que diz **qual card** a entrega.
 
 ## Rodar
 
@@ -70,6 +70,14 @@ lib/
     catalogo_repositorio.dart interface + implementação PostgREST (tabelas, nunca view)
     catalogo_provider.dart    FutureProviders por consulta, filtros por aba e a versão
                               do catálogo que toda escrita incrementa para recarregar
+  alunos/                     card 4.6 — os alunos como o app os vê
+    alunos.dart               modelos de aluno e de transição de status + lógica pura: o que
+                              o menu "Alterar status" oferece (tabela de fn_aluno_transicao_valida,
+                              só forma — quem decide é o trigger), filtros, rótulos
+    alunos_repositorio.dart   interface + PostgREST nas tabelas; o status só pelas RPCs
+                              fn_aluno_alterar_status / fn_aluno_reverter_status
+    alunos_provider.dart      FutureProviders (lista, aluno por id, histórico), filtro e a
+                              versão que toda escrita incrementa
   infraestrutura/             card 4.5 — salas, PCs, manutenções e professores
     infraestrutura.dart       modelos das quatro tabelas do 4.3 + lógica pura: capacidade
                               efetiva da sala, manutenção em aberto, ação contextual do PC,
@@ -107,14 +115,26 @@ lib/
                               (Manutenção / Encerrar / Reativar)
       formularios.dart        sala, PC (com a ficha da credencial do card 2.9 §8),
                               manutenção, encerramento, reativação, professor
+    alunos/                   card 4.6 — tela 3: lista e ficha
+      tela_alunos.dart        a lista (TabelaIm360 com badge de status na coluna)
+      filtros_alunos.dart     busca nome/código SGF, método, status, combo, "ocultar
+                              formados e cancelados" — estado no provider
+      ficha_aluno.dart        a ficha como página (/alunos/:id): cabeçalho, abas Dados e
+                              Histórico; Trilha/Turmas/Certificado dizem qual card as entrega
+      formularios.dart        matrícula/dados, alterar status (só transições válidas),
+                              reverter status terminal
   theme/                      cópia do apêndice §10 do card 2.7 + preferência clara/escura
+  util/
+    datas.dart                dd/mm/aaaa sem intl (veio de infraestrutura/ no card 4.6)
   widgets/
+    badge_status.dart         BadgeStatus — status do aluno, preenchido tonal (§5.1)
     botoes.dart               BotaoAcao: sem permissão oculta, sem estado desabilita com motivo
     confirmacao.dart          confirmarEfemero — a snackbar de "salvo" / "excluído"
     estados.dart              carregando / vazio / erro / sem acesso
     painel_detalhe.dart       PainelDetalhe e TituloSecao — cabeçalho e seções dos painéis
     formulario.dart           FormularioIm360 (design-system §5.4): validação de formato,
-                              banner de erro pelo codigo, primário travado ao executar,
+                              banner de erro pelo codigo (+ aoErro, para o formulário realçar
+                              o campo que o código aponta), primário travado ao executar,
                               ações extras com confirmação; mostrarFormulario decide
                               diálogo × tela cheia pela faixa
     marca.dart                símbolo e assinatura desenhados (ver nota no arquivo)
