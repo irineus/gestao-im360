@@ -807,7 +807,8 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `032_matriz_historico` (trigger de histórico, imutabilidade, seed que não devolve o removido) | **4.7.5** | 4 |
 | `supabase/functions/convidar-usuario/logica.test.ts` (`node --test`, lógica pura da Edge Function) | **4.7** | 4 |
 | `administracao_test`, `tela_administracao_test`, `link_inicial_test` | **4.7** | 4 |
-| `040_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` | 5.3 | 5 |
+| `040_blocos_alocacao` (as três tabelas, `tipo_desde`, as guardas de coluna e de exclusão, `tg_aluno_status_desaloca`) | **5.1** | 5 |
+| `041_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` — era `040` até o card 5.1 ocupar o número | 5.3 | 5 |
 | `050_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` | 6.3 | 6 |
 | `060_estoque_compras` | 6.5 | 6 |
 | `070_modular` | 7.2 | 7 |
