@@ -647,7 +647,18 @@ Rota: `salas.ler + professores.ler`. Perfis: todos (escrita conforme ação).
   de PCs; formulário mínimo (PC pré-selecionado, data fim, substituto opcional).
 - **Credenciais dos PCs: fora do wireframe.** A política é do card 2.9 (pendente); nenhum campo de
   e-mail/senha de PC aparece em tela até lá — não desenhar o campo é o que impede o uso em texto
-  puro enquanto a decisão não sai.
+  puro enquanto a decisão não sai. **Superado em 01/09/2026 (card 2.9) e implementado no card 4.5:**
+  a ficha do PC mostra o carimbo da credencial, e os botões "Ver" / "Gravar credencial" só
+  aparecem para quem tem `salas.acessar_credencial` — ver `docs/politica-credenciais-pcs.md` §8.
+- **O que o card 4.5 entregou desta tela, e o que ficou para a Fase 5 (02/09/2026):** a lista de
+  salas é uma `TabelaIm360` (nominal, PCs operacionais/total, efetiva) e o painel da sala traz os
+  PCs com a ação contextual da linha — Manutenção, Encerrar, Reativar — cada uma num formulário
+  pequeno. A capacidade efetiva é **derivada na tela** (PCs OPERACIONAIS até o teto nominal) e é
+  informativa; a de bloco é `fn_capacidade_efetiva` (card 5.2). "Blocos desta sala" e as
+  consequências da manutenção (pendências, recálculo) são dos cards 5.4 e 5.6, e a tela diz isso
+  na linha de apoio da seção. Amarrar `pc.status` à manutenção em aberto é o card 5.4; até lá,
+  quem tem `salas.editar` escolhe no formulário se o status acompanha, e o monitor registra a
+  manutenção com aviso de que o status não muda.
 
 ---
 

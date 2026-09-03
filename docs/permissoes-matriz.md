@@ -115,6 +115,7 @@ e isso é código, não dado. Também evita o modo de falha mais bobo possível:
 | `salas.editar` | 2.4 | Editar sala e PC (inclusive `pc.status`) |
 | `salas.excluir` | 2.4 | Excluir sala/PC sem histórico |
 | `salas.registrar_manutencao` | 2.4 | Abrir e fechar `pc_manutencao` (dispara recálculo de capacidade) |
+| `salas.acessar_credencial` | 2.9 | Ler **e** gravar a credencial do PC (`fn_pc_credencial_ler` / `fn_pc_credencial_gravar`) e o log `pc_credencial_acesso`. O 50º código — decidido no card 2.9, está no seed do 3.6 desde 01/09/2026 e faltava nesta tabela (acrescentado no card 4.5, 02/09/2026) |
 | `professores.ler` | 2.4 | Ler `professor` (nome na grade semanal) |
 | `professores.criar` | 2.4 | Cadastrar professor |
 | `professores.editar` | 2.4 | Editar/inativar professor |
@@ -271,6 +272,7 @@ inicial, não uma regra.
 | `salas.editar` | ✔ | | ✔ | |
 | `salas.excluir` | ✔ | | | |
 | `salas.registrar_manutencao` | ✔ | | ✔ | ✔ |
+| `salas.acessar_credencial` | ✔ | | | ✔ |
 | `professores.ler` | ✔ | ✔ | ✔ | ✔ |
 | `professores.criar` | ✔ | ✔ | ✔ | |
 | `professores.editar` | ✔ | ✔ | ✔ | |
@@ -298,7 +300,9 @@ inicial, não uma regra.
 | `pendencias.ler` | ✔ | ✔ | ✔ | ✔ |
 | `pendencias.resolver` | ✔ | ✔ | ✔ | |
 
-Totais: direção 49, secretaria 37, pedagógico 22, monitor 13.
+Totais: direção 49, secretaria 37, pedagógico 22, monitor 13 — **com `salas.acessar_credencial`
+(card 2.9): direção 50, secretaria 37, pedagógico 22, monitor 14**, que é o que o seed do card 3.6
+grava e a suíte `022_seed_inicial` assere.
 
 ### 5.1 Onde a matriz teve de ir além do plano, e por quê
 

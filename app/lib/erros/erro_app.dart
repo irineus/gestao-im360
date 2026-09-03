@@ -64,6 +64,15 @@ const mensagensIntegridade = <String, String>{
   '23505': 'Já existe um cadastro com este código ou nome.',
 };
 
+/// Mensagem do caso em que a RLS devolve **zero linhas** numa exclusão. Sem
+/// política de `delete` o Postgres não levanta erro — apaga nada e diz sucesso
+/// (card 3.4 (d)); dizer "excluído" aqui seria mentir com cara de confirmação.
+/// Nasceu no repositório do catálogo (card 4.4) e mora aqui desde que o da
+/// infraestrutura (card 4.5) precisou da mesma frase.
+const mensagemNadaExcluido =
+    'Nada foi excluído: o registro não existe mais ou você não tem permissão '
+    'para excluí-lo.';
+
 /// Gancho de observabilidade (card 3.12). `main` o aponta para o Sentry; nos
 /// testes e num build sem `SENTRY_DSN` ele continua nulo e nada é enviado.
 ///

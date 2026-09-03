@@ -9,6 +9,7 @@ import 'package:gestao_im360/theme/tema.dart';
 import 'package:gestao_im360/widgets/formulario.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'apoio/carregar.dart';
 import 'apoio/catalogo_falso.dart';
 
 /// A obrigação de teste de um card de **Tela** (card 2.8 §13): ocultação por
@@ -357,17 +358,4 @@ void main() {
     expect(find.text('mín. 2'), findsNWidgets(2));
     expect(find.text('01 · Interativo · APOSTILA'), findsOneWidget);
   });
-}
-
-/// Os providers assíncronos resolvem em microtasks; o skeleton anima para
-/// sempre, então o `pumpAndSettle` só é seguro depois que os dados chegaram.
-Future<void> carregar(WidgetTester tester) async {
-  for (var i = 0; i < 4; i++) {
-    await tester.pump(const Duration(milliseconds: 20));
-  }
-  await tester.pumpAndSettle(
-    const Duration(milliseconds: 100),
-    EnginePhase.sendSemanticsUpdate,
-    const Duration(seconds: 10),
-  );
 }

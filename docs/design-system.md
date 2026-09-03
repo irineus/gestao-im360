@@ -402,7 +402,7 @@ Regras: mensagens de **validação de campo** aparecem no campo; as demais em ba
 | Compras → pedidos | "Nenhum pedido. Crie a partir do **Pedido sugerido**." | — |
 | Projeção | Rotina ok e sem linhas: "Sem demanda projetada no horizonte atual." **Rotina falhou:** "A projeção não foi calculada — veja a pendência **ROTINA_FALHOU**." (nunca tabela zerada com cara de 'sem demanda' — card 2.6 §11) | — |
 | Certificados | "Ninguém chegando ao fim do curso agora." | idem filtros |
-| Salas e PCs | "Nenhuma sala cadastrada. **+ Nova sala**." | — |
+| Salas e PCs | "Nenhuma sala cadastrada. **+ Nova sala**." Professores (2ª aba, card 4.5): "Nenhum professor cadastrado. **+ Novo professor**." | idem filtros (card 4.5) |
 | Pendências | "Nenhuma pendência aberta. 🎉" | "Nenhuma pendência com esses filtros — **Limpar filtros**." |
 | Administração → usuários | "Só você por aqui. **+ Convidar usuário**." | — |
 | Dashboard (região sem dado) | região mostra zero real, nunca some — número que desaparece parece erro | — |
