@@ -85,7 +85,7 @@ que só é aplicado por `supabase db reset` — local e no CI.
 aplicaria a fixture e a extensão de teste no banco remoto e apagaria o que estivesse lá. O reset é
 sempre local. Registrar na Decisões vigentes junto com as demais regras de migração.
 
-**`seed.sql` de teste ≠ seed do card 3.6.** O seed do 3.6 (unidade, perfis, 49 permissões, matriz
+**`seed.sql` de teste ≠ seed do card 3.6.** O seed do 3.6 (unidade, perfis, 50 permissões, matriz
 inicial, usuário direção, parâmetros) é **dado de catálogo do sistema** e vai como **migração**,
 porque precisa existir em dev e prod. O `seed.sql` é a **escola-fixture** (§4.2): alunos, materiais,
 blocos e movimentos inventados, que nunca podem chegar a lugar nenhum além da máquina do dev e do
@@ -635,6 +635,19 @@ administração.
 **Pré-condições automatizadas:** suítes `010`–`030` verdes; `flutter analyze` limpo; app publicado
 no Pages de dev; seed do card 3.6 aplicado em dev pelo pipeline (não à mão).
 
+⚠️ **Duas pré-condições que não são automatizáveis e que o enunciado original não previa** (achado da
+sessão do card 4.8, 03/09/2026). As duas são de Irineu, feitas no app de homologação, e sem elas o
+marco não roda:
+
+1. **Três usuários em dev, um por perfil.** Os critérios 2, 3 e 4 pedem "quatro logins" e o dev tem
+   **um** usuário — a direção do bootstrap do card 3.6. Convidar secretaria, pedagógico e monitor
+   pela tela de Administração (card 4.7). A escola-fixture tem os quatro perfis, mas ela **nunca sai
+   da máquina local**: em dev não existe.
+2. **Os cadastros do roteiro vêm ANTES dos quatro logins.** O dev está sem dado de negócio por
+   decisão de 02/09/2026 (nenhuma migração grava dado de negócio; o importador é o card 9.1), então
+   toda tela de lista abre vazia lá — por falta de dado, não por RLS. Invertida a ordem, o critério 4
+   fica ambíguo justamente no modo de falha que ele existe para pegar.
+
 **Roteiro:** cadastrar um combo real (Secretariado Executivo) com cursos e materiais; cadastrar um
 aluno; percorrer ATIVO → STANDBY → ATIVO → CANCELADO; abrir o sistema com um usuário de cada perfil.
 
@@ -642,12 +655,21 @@ aluno; percorrer ATIVO → STANDBY → ATIVO → CANCELADO; abrir o sistema com 
 
 | # | Critério | Como se verifica |
 |---|---|---|
-| 1 | Os 49 códigos do card 2.4 existem em `permissao` e a matriz inicial confere: direção 49, secretaria 37, pedagógico 22, monitor 13 | consulta, não conferência a olho |
+| 1 | Os 50 códigos do card 2.4 existem em `permissao` e a matriz inicial confere: direção 50, secretaria 37, pedagógico 22, monitor 14 | consulta, não conferência a olho |
 | 2 | Para cada perfil, o menu exibe **exatamente** as rotas do mapa do card 2.4 §6 — nem uma a menos, nem uma a mais | quatro logins |
 | 3 | As três permissões de exceção (`alunos.formar_sem_certificado`, `alunos.reverter_status`, `compras.receber_excedente`) só aparecem para a direção | quatro logins |
 | 4 | Nenhuma tela abre **vazia** por falta de permissão — o modo de falha do card 2.4 | quatro logins × telas do perfil |
 | 5 | Transição inválida devolve a mensagem do catálogo do card 2.7, não texto do Postgres | tentativa deliberada |
 | 6 | Toda mudança de status gerou linha em `aluno_status_hist` com quem e quando; toda linha criada tem `criado_por` do usuário do roteiro | consulta ao fim |
+
+⚠️ **Os números do critério 1 foram corrigidos em 03/09/2026 (sessão do card 4.8): eram 49 / direção
+49 / monitor 13.** Estavam certos quando este documento foi escrito e envelheceram no card **2.9**,
+que acrescentou `salas.acessar_credencial` (direção e monitor) — o próprio `docs/permissoes-matriz.md`
+§5 já registra "com `salas.acessar_credencial` (card 2.9): direção 50, secretaria 37, pedagógico 22,
+monitor 14, que é o que o seed do card 3.6 grava e a suíte `022_seed_inicial` assere". Medido no dev
+nesta data: 50 códigos, 12 domínios, `perfil_permissao` com 123 linhas = 50+37+22+14. **É o critério
+que estava errado, não o sistema** — e um critério de aceite errado reprova software correto, que é
+o pior desfecho possível para um marco.
 
 **Reprova se:** aparecer qualquer erro cru do PostgREST/Postgres em tela; qualquer tela vazia por
 RLS; qualquer política exigindo permissão que o seed não cria (é o C11 — não deveria chegar aqui).
