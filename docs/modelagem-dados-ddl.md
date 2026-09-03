@@ -749,7 +749,7 @@ aberta. Formato sugerido: `'<TIPO>:<id_da_referencia>'`.
 | §7 | `aluno`, `aluno_status_hist` (+ trigger de transições) | 4.2 |
 | §8 (físico) | `sala`, `pc`, `pc_manutencao`, `professor` | 4.3 |
 | §8 (turmas) | `bloco_horario`, `bloco_aluno`, `bloco_aluno_reposicao` | 5.1 |
-| §10 (pendência) | `pendencia` + rotina | 5.5 |
+| §10 (pendência) | `pendencia` + rotina | 5.5 ✅ — criada em 03/09/2026 com os **quinze** tipos no `check` (os oito daqui mais os sete do ajuste 2 do §14 do card 2.2), mais `pendencia_severidade_ix` |
 | §7 (trilha), §10 (estoque) | `aluno_material`, `aluno_material_hist`, `movimento_estoque`, `pedido_compra`, `pedido_item` | 6.1 |
 | §9 | `turma_modular`, `turma_modular_modulo`, `turma_modular_aluno` | 7.1 |
 | §10 (certificado) | `certificado_checklist` | 8.3 |

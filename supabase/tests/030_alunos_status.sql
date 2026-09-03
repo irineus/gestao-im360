@@ -266,10 +266,20 @@ drop table public.certificado_checklist;
 -- dependem de tabelas de outras fases. O mais caro de esquecer é
 -- `tg_aluno_status_desaloca`: sem ele o aluno em STANDBY continua ocupando vaga
 -- toda semana, sem erro nenhum e sem nada na tela dizendo isso.
+--
+-- ⚠️ CORREÇÃO DE CONDIÇÃO EM 03/09/2026 (card 5.5): a linha de
+--    `tg_aluno_combo_alterado` dizia `public.pendencia` / card 5.5. `pendencia`
+--    nasceu, e o portão disparou pedindo um trigger que NÃO PODE existir: ele
+--    compara a trilha do aluno com o combo para abrir TRILHA_DIVERGENTE_COMBO, e
+--    trilha é `aluno_material`, do card 6.1/6.2. A condição certa é a MAIS
+--    TARDIA das duas pré-condições — poder escrever a pendência e ter o que
+--    comparar —, e é `aluno_material`. Mantida a intenção do portão, corrigida a
+--    condição; o tipo TRILHA_DIVERGENTE_COMBO já entrou no `check` de
+--    `pendencia.tipo` no card 5.5, que era o que aquele card devia.
 create temporary view portao_trigger (tabela, gatilho, card) as values
   ('public.bloco_aluno',    'tg_aluno_status_desaloca', '5.1'),
   ('public.aluno_material', 'tg_aluno_trilha_inicial',  '6.2'),
-  ('public.pendencia',      'tg_aluno_combo_alterado',  '5.5');
+  ('public.aluno_material', 'tg_aluno_combo_alterado',  '6.2');
 
 create temporary view portao_trigger_devido as
   select coalesce(string_agg(format('%s existe (card %s) e %s nao', p.tabela, p.card, p.gatilho),
@@ -282,13 +292,13 @@ create temporary view portao_trigger_devido as
 select is((select devido from portao_trigger_devido), '',
   'nenhum trigger de aluno esta devido — as tres tabelas que os tornam devidos ainda nao existem');
 
-create table public.pendencia (id uuid primary key);
+create table public.aluno_material (id uuid primary key);
 
 select is((select devido from portao_trigger_devido),
-  'public.pendencia existe (card 5.5) e tg_aluno_combo_alterado nao',
-  'nascida a tabela, o portao nomeia o trigger que ficou para tras e o card dele');
+  'public.aluno_material existe (card 6.2) e tg_aluno_combo_alterado nao; public.aluno_material existe (card 6.2) e tg_aluno_trilha_inicial nao',
+  'nascida a tabela, o portao nomeia os triggers que ficaram para tras e o card deles');
 
-drop table public.pendencia;
+drop table public.aluno_material;
 
 -- ===========================================================================
 -- 7. fn_aluno_alterar_status — caminho feliz com efeito conferido

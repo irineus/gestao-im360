@@ -28,7 +28,7 @@
 -- =============================================================================
 
 begin;
-select plan(26);
+select plan(25);
 
 -- ===========================================================================
 -- 1. A borda da fixture: débito EXATAMENTE no limite
@@ -367,40 +367,49 @@ select is(
   'a alocacao REP fica inativa com o motivo — o MOTIVO_OBRIGATORIO deixa de ser um campo que some');
 
 -- ===========================================================================
--- 6. Portão do card 5.5: fechar a pendência da virada
+-- 6. O portão do card 5.5 DISPAROU — e o que ficou no lugar dele
 -- ===========================================================================
--- O passo 4 do §5.2 do card 2.5 manda fn_rep_virar_continuo fechar a pendência
--- REP:<aluno>:CONTINUO. `pendencia` e fn_pendencia_resolver são do card 5.5, e
--- esquecer de voltar aqui não daria erro nenhum: daria a central de pendências
--- do card 5.8 sugerindo uma virada que já aconteceu, todo dia, até alguém
--- resolver à mão. Mesma forma que o card 4.2 deu ao gate de FORMADO e o 5.1 à
--- terceira tabela de tg_aluno_status_desaloca — inclusive na parte que custou
--- uma sessão para descobrir: `prosrc` inclui os comentários do corpo, e o
--- comentário que descreve o que falta faria o portão aprovar a si mesmo.
+-- Esta seção era um portão. Ele existia porque o passo 4 do §5.2 do card 2.5
+-- manda fn_rep_virar_continuo fechar a pendência REP:<aluno>:CONTINUO, e
+-- `pendencia` só nasceu no card 5.5: esquecer de voltar aqui não daria erro
+-- nenhum — daria a central do card 5.8 sugerindo, todo dia, uma virada que já
+-- aconteceu, até a rotina do dia seguinte desfazer o engano.
+--
+-- Em 03/09/2026 a tabela nasceu, o portão reprovou como prometido, e o que era
+-- promessa virou código. O COMPORTAMENTO — a rotina abre, a virada fecha na
+-- mesma transação — é medido ponta a ponta no teste 090 (§9 e §10), que é o
+-- arquivo da pendência; este continua sendo o arquivo do CRITÉRIO, e o que
+-- sobra aqui é a asserção estrutural que impede a ligação de se desfazer num
+-- refactor: as duas funções da virada citam fn_pendencia_resolver, cada uma com
+-- o SEU sufixo. Trocar os dois sufixos de lugar não daria erro nenhum — fecharia
+-- a sugestão errada, calada, e as duas ficariam abertas para sempre.
+--
+-- `prosrc` inclui os comentários do corpo, e por isso eles saem antes: um
+-- comentário descrevendo o que falta faria o portão aprovar a si mesmo (lição
+-- que custou uma sessão no card 5.3).
 create temporary view corpo_virada as
-  select regexp_replace(p.prosrc, '--[^\n]*', '', 'g') as fonte
+  select p.proname,
+         regexp_replace(p.prosrc, '--[^\n]*', '', 'g') as fonte
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
-   where n.nspname = 'public' and p.proname = 'fn_rep_virar_continuo';
-
-create temporary view portao_pendencia as
-  select to_regclass('public.pendencia') is null
-      or (select fonte ~ 'fn_pendencia_resolver' from corpo_virada) as em_dia;
-
-select ok((select em_dia from portao_pendencia),
-  'portao em dia: enquanto `pendencia` nao existe, nada e devido');
+   where n.nspname = 'public'
+     and p.proname in ('fn_rep_virar_continuo', 'fn_rep_voltar_pontual');
 
 select is(
-  (select count(*)::bigint from corpo_virada where fonte ~ 'pendencia'),
-  0::bigint,
-  'e o portao esta VAZIO de proposito — a citacao so existe no comentario, que foi removido');
+  (select coalesce(string_agg(c.proname, ', ' order by c.proname), '')
+     from corpo_virada c
+    where c.fonte !~ 'fn_pendencia_resolver'),
+  '',
+  'as duas funcoes da virada fecham a pendencia — nenhuma delas deixa a sugestao aberta');
 
-create table public.pendencia (id uuid primary key);
-
-select ok(not (select em_dia from portao_pendencia),
-  'nascida a tabela do card 5.5, o portao REPROVA enquanto fn_rep_virar_continuo nao fechar a pendencia');
-
-drop table public.pendencia;
+select is(
+  (select string_agg(format('%s:%s', c.proname,
+                            case when c.fonte ~ ':CONTINUO' then 'CONTINUO'
+                                 when c.fonte ~ ':VOLTA'    then 'VOLTA'
+                                 else 'NENHUM' end), ' ' order by c.proname)
+     from corpo_virada c),
+  'fn_rep_virar_continuo:CONTINUO fn_rep_voltar_pontual:VOLTA',
+  'e cada uma fecha o SEU sufixo: trocados, fechariam a sugestao errada em silencio');
 
 select * from finish();
 rollback;

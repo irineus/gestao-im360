@@ -103,6 +103,17 @@ abstract final class CatalogoErros {
         'Esta reposição já foi registrada ou cancelada. Atualize a tela para '
         'ver a situação atual.',
 
+    // --- card 5.5 (fechamento humano de pendência)
+    // PENDENCIA_INEXISTENTE vale também para pendência de outra unidade, pela
+    // mesma razão de PC_INEXISTENTE e BLOCO_INEXISTENTE: quem não pode ver não
+    // descobre que existe.
+    'PENDENCIA_INEXISTENTE': 'Esta pendência não foi encontrada.',
+    'PENDENCIA_JA_RESOLVIDA':
+        'Esta pendência já foi resolvida. Atualize a tela para ver a situação '
+        'atual.',
+    'RESOLUCAO_INVALIDA':
+        'Escolha resolver ou ignorar a pendência para continuar.',
+
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':
         'Não deu para saber em que unidade cadastrar esta pessoa. Informe a '
