@@ -65,14 +65,27 @@ select is(
 );
 
 -- ---------------------------------------------------------------------------
--- C6 — nenhum current_date em corpo de função, definição de view ou default de
---      coluna (card 2.3 (c) — o bug das 21h: o Postgres do Supabase roda em UTC)
+-- C6 — nenhum current_date em corpo de função, default de PARÂMETRO, definição
+--      de view ou default de coluna (card 2.3 (c) — o bug das 21h: o Postgres do
+--      Supabase roda em UTC)
+--
+--      A quarta origem entrou no card 5.2, com a primeira função do projeto a ter
+--      parâmetro de data com default (`fn_capacidade_efetiva(p_bloco_id, p_data
+--      date default fn_hoje())`, e o §4.1 do card 2.2 a escrevia com
+--      `current_date`). O default de parâmetro mora em `proargdefaults`, NÃO em
+--      `prosrc`: as três origens originais o deixariam passar em silêncio — e a
+--      função afetada seria justamente a que decide a lotação da grade, cujo
+--      erro apareceria só depois das 21h, deslocado em um dia.
 -- ---------------------------------------------------------------------------
 select is(
   (select coalesce(string_agg(origem, '; ' order by origem), '')
      from (
        select 'funcao ' || proname as origem
          from f_projeto where prosrc ~* '\mcurrent_date\M'
+       union all
+       select 'default de parametro em ' || proname
+         from f_projeto
+        where pg_get_function_arguments(oid) ~* '\mcurrent_date\M'
        union all
        select 'view ' || c.relname
          from pg_class c
@@ -165,8 +178,21 @@ select is(
             -- dado, então filtra unidade no corpo (fn_unidade_atual) e exige
             -- admin.ler, a mesma permissão da política usuario_sel: não sai
             -- daqui nada que o chamador já não pudesse ver na lista.
-            'fn_convites_pendentes'
-            -- card 5.2:  'fn_capacidade_efetiva', 'fn_ocupacao_bloco'
+            'fn_convites_pendentes',
+            -- card 5.2 — as duas que alimentam a grade semanal. `salas.ler`
+            -- guarda `pc` e `turmas.ler` guarda `bloco_aluno`: como invoker, um
+            -- leitor sem a primeira contaria zero PCs e veria a grade inteira
+            -- LOTADA, e um sem a segunda veria ocupação zero num bloco cheio —
+            -- os dois erros silenciosos, porque a RLS nega linha e não devolve
+            -- erro (card 2.3 §3.4 e §10 #3). Número derivado exibido em tela não
+            -- pode depender do que o leitor enxerga. As duas filtram unidade no
+            -- corpo (`b.unidade_id = fn_unidade_atual()`) e devolvem NULO, não
+            -- zero, para bloco de outra unidade.
+            --
+            -- fn_vagas_livres NÃO está aqui, de propósito: ela não lê tabela
+            -- nenhuma, só compõe estas duas — mesma decisão de
+            -- fn_pc_exclusao_valida no card 4.3.
+            'fn_capacidade_efetiva', 'fn_ocupacao_bloco'
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'
