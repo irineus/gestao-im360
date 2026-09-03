@@ -158,7 +158,14 @@ select is(
             -- de propósito, senão um POST direto gravaria uma remoção que não
             -- aconteceu. Não devolve dado ao chamador e grava a unidade da
             -- própria linha que mudou; por isso não carrega filtro no corpo.
-            'fn_perfil_permissao_historico'
+            'fn_perfil_permissao_historico',
+            -- card 4.7,7 — quem ainda não aceitou o convite. Precisa LER
+            -- auth.users (email_confirmed_at), que nenhum papel do app alcança —
+            -- mesma justificativa de fn_usuario_espelho_coerente. Esta DEVOLVE
+            -- dado, então filtra unidade no corpo (fn_unidade_atual) e exige
+            -- admin.ler, a mesma permissão da política usuario_sel: não sai
+            -- daqui nada que o chamador já não pudesse ver na lista.
+            'fn_convites_pendentes'
             -- card 5.2:  'fn_capacidade_efetiva', 'fn_ocupacao_bloco'
           )),
   '',

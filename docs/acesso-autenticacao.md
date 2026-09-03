@@ -13,7 +13,7 @@ Entregue neste card:
 |---|---|
 | `supabase/migrations/20260901180000_auth_espelhamento.sql` | `fn_usuario_espelhar`, `fn_usuario_email_sincronizar`, `fn_usuario_espelho_coerente` e os três triggers |
 | `supabase/config.toml` | configuração do Auth versionada (e a lista de conferência do painel) |
-| `supabase/tests/021_auth_espelhamento.sql` | 18 asserções do espelho |
+| `supabase/tests/021_auth_espelhamento.sql` | 22 asserções: 18 do espelho e 4 de `fn_convites_pendentes` (card 4.7,7) |
 | `supabase/seed.sql` | os oito usuários da fixture passam a **logar de verdade** no stack local |
 
 ---
@@ -135,6 +135,12 @@ unidade do metadado é a **do chamador** (`fn_unidade_atual`), e convidar de nov
 aceitou **reenvia** o e-mail e devolve o mesmo usuário, não um erro. O convite que não terminava em
 lugar nenhum (achado do card 3.8) ficou fechado pelo `type=invite` do link, lido antes do
 `Supabase.initialize`. Fonte: `docs/administracao.md` §2.
+
+✅ **Completado em 03/09/2026 (card 4.7,7)**: o reenvio deixou de ser um efeito colateral que só quem
+leu o código conhecia. `fn_convites_pendentes()` diz quem ainda não aceitou — `auth.users.
+email_confirmed_at is null`, que é o **mesmo pivô** que o GoTrue usa para escolher entre reenviar e
+recusar com `email_exists` —, a lista marca essas linhas com `Convite pendente` e a ficha da pessoa
+ganhou "Reenviar convite". Detalhe e as três decisões em `docs/administracao.md` §1.1.
 
 ---
 

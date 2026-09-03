@@ -214,6 +214,67 @@ void main() {
       );
     });
 
+    testWidgets('a lista diz quem ainda não aceitou o convite — o achado que '
+        'gerou o card 4.7,7', (tester) async {
+      // O defeito era de DESCOBERTA: o reenvio já funcionava e nada na tela
+      // contava. A marca na linha é o que faz procurar na pessoa certa.
+      final repositorio = AdministracaoFalso.fixture();
+      await montar(tester, repositorio: repositorio, permissoes: direcao);
+      expect(find.text('Convite pendente'), findsOneWidget);
+      expect(find.text('Marta Convidada'), findsOneWidget);
+      // E o formulário de convite passa a dizer que o mesmo e-mail reenvia.
+      await tester.tap(find.text('Convidar usuário'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('reenvia o convite'), findsOneWidget);
+    });
+
+    testWidgets('"Reenviar convite" só aparece para quem ainda não aceitou, e '
+        'manda o mesmo e-mail à função', (tester) async {
+      final repositorio = AdministracaoFalso.fixture();
+      await montar(tester, repositorio: repositorio, permissoes: direcao);
+
+      // Quem já definiu senha não recebe a oferta: o GoTrue recusaria com
+      // email_exists e o clique só saberia falhar.
+      await tester.tap(find.text('Débora Lima'));
+      await tester.pumpAndSettle();
+      expect(find.text('Reenviar convite'), findsNothing);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Marta Convidada'));
+      await tester.pumpAndSettle();
+      expect(find.text(avisoConvitePendente), findsOneWidget);
+      await tester.tap(find.text('Reenviar convite'));
+      await tester.pumpAndSettle();
+      // A confirmação diz a consequência que ninguém adivinha: o link antigo
+      // deixa de valer (design-system §5.8).
+      await tester.tap(find.text('Reenviar convite').last);
+      await carregar(tester);
+
+      expect(repositorio.convites, hasLength(1));
+      final (email, nome, destino) = repositorio.convites.single;
+      expect(email, 'convidada@escola-a.test');
+      expect(nome, 'Marta Convidada');
+      expect(destino, endsWith('/redefinir-senha'));
+      expect(
+        repositorio.chamadas,
+        isNot(contains('definirPerfis')),
+        reason: 'reenviar é só o e-mail; perfil sai pelo Salvar',
+      );
+      expect(find.text('Convite reenviado.'), findsOneWidget);
+    });
+
+    testWidgets('sem admin.gerir_usuarios não há "Reenviar convite"', (
+      tester,
+    ) async {
+      final repositorio = AdministracaoFalso.fixture();
+      await montar(tester, repositorio: repositorio);
+      await tester.tap(find.text('Marta Convidada'));
+      await tester.pumpAndSettle();
+      expect(find.text('Convite pendente'), findsOneWidget, reason: 'a lista');
+      expect(find.text('Reenviar convite'), findsNothing);
+    });
+
     testWidgets('a recusa da função chega como banner pelo código — o mesmo '
         'texto da RLS', (tester) async {
       final repositorio = AdministracaoFalso.fixture()
