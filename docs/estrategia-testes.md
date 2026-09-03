@@ -782,6 +782,9 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `023_catalogo_curricular` | **4.1** | 4 |
 | `030_alunos_status` | 4.2 | 4 |
 | `031_infraestrutura_fisica` (salas, PCs, professores e as duas funções de credencial do card 2.9) | **4.3** | 4 |
+| `032_matriz_historico` (trigger de histórico, imutabilidade, seed que não devolve o removido) | **4.7.5** | 4 |
+| `supabase/functions/convidar-usuario/logica.test.ts` (`node --test`, lógica pura da Edge Function) | **4.7** | 4 |
+| `administracao_test`, `tela_administracao_test`, `link_inicial_test` | **4.7** | 4 |
 | `040_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` | 5.3 | 5 |
 | `050_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` | 6.3 | 6 |
 | `060_estoque_compras` | 6.5 | 6 |

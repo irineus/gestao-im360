@@ -14,8 +14,8 @@ rodado em lugar nenhum** — portão que não reprova é exatamente a falha que 
 
 | Workflow | Dispara | Jobs | O que bloqueia |
 |---|---|---|---|
-| **`testes.yml`** | todo *pull request*; push em `develop`/`main`; e `workflow_call` | `banco` (pgTAP + concorrência), `migrações` (portão do card 4.0,5), `app` (formatação, análise, testes) e `vigia` (`node --test`) | o merge do PR |
-| **`db-migrations.yml`** | push em `develop`/`main` tocando `supabase/migrations/**`; `workflow_dispatch` | `testes` (chama o de cima) → `migrate` | o `supabase db push` em dev e em prod |
+| **`testes.yml`** | todo *pull request*; push em `develop`/`main`; e `workflow_call` | `banco` (pgTAP + concorrência), `migrações` (portão do card 4.0,5), `edge functions` (lógica pura, `node --test` — card 4.7), `app` (formatação, análise, testes) e `vigia` (`node --test`) | o merge do PR |
+| **`db-migrations.yml`** | push em `develop`/`main` tocando `supabase/migrations/**`, `supabase/functions/**` ou `supabase/config.toml`; `workflow_dispatch` | `testes` (chama o de cima) → `migrate` (`db push` e, desde o card 4.7, `functions deploy --use-api` logo depois) | o `supabase db push` e a publicação das Edge Functions em dev e em prod |
 | **`deploy-web.yml`** | push em `develop`/`main` tocando `app/**`, `assets/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação no Cloudflare Pages |
 | **`deploy-worker-vigia.yml`** | push em **`main`** tocando `worker-vigia/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação do Worker vigia (card 3.10) |
 | **`backup-semanal.yml`** | `schedule` domingo 09:30 UTC (06:30 em São Paulo); `workflow_dispatch` | `backup` (dump de produção → ensaio de restauração → R2) | nada — não é portão, é rotina (card 3.11) |
@@ -314,7 +314,17 @@ node --test "worker-vigia/test/**/*.test.mjs"
 # migrações (portão do card 4.0,5 — também sem dependência nenhuma)
 node --test "portao-migracoes/test/**/*.test.mjs"
 node portao-migracoes/varredor.mjs supabase/migrations
+
+# edge functions (card 4.7): a lógica pura, com o Node lendo .ts direto
+node --test "supabase/functions/**/*.test.ts"
+# a função de verdade, contra o stack local (edge-runtime + Auth + banco)
+supabase functions serve
 ```
+
+Com outro checkout do MESMO repositório usando o stack (duas sessões em paralelo, card 4.7), a
+saída é a mesma do parágrafo abaixo: uma cópia de `supabase/` com `project_id` e portas próprias
+no `config.toml` sobe um segundo stack sem encostar no primeiro — foi assim que a suíte do card
+4.7 rodou (`266/266`) enquanto o card 4.6 usava o stack de sempre.
 
 Se outro projeto local do Supabase já estiver ocupando as portas 54321-54324, o `supabase start`
 falha com `port is already allocated` e diz qual porta. Não é preciso derrubar o outro projeto:

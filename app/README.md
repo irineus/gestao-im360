@@ -2,8 +2,8 @@
 
 Esqueleto do card **3.7**: login, camada de sessão, shell responsivo e guardas
 de rota. As telas de negócio chegam nos cards das fases 4 a 9 — entregues até
-aqui: Materiais (4.4) e Salas e PCs (4.5); as demais rotas abrem um placeholder
-que diz **qual card** a entrega.
+aqui: Materiais (4.4), Salas e PCs (4.5) e Administração (4.7, com o histórico
+do 4.7.5); as demais rotas abrem um placeholder que diz **qual card** a entrega.
 
 ## Rodar
 
@@ -64,6 +64,19 @@ flutter test
 ```
 lib/
   config/ambiente.dart        --dart-define e o que falta quando falta
+  config/link_inicial.dart    o `type` do link com que o app abriu (convite,
+                              recuperação) — lido ANTES do Supabase.initialize,
+                              que consome e limpa a URL (card 4.7)
+  administracao/              card 4.7 — usuários, perfis, matriz, parâmetros e
+                              o histórico da matriz (4.7.5)
+    administracao.dart        modelos + lógica pura: domínios, quem está sem
+                              perfil, plano de perfis, validação por tipo
+    administracao_repositorio.dart
+                              interface + PostgREST nas tabelas; o convite vai
+                              pela Edge Function convidar-usuario (functions.invoke)
+    administracao_provider.dart
+                              FutureProviders, filtro de usuários, perfil
+                              selecionado e a versão que toda escrita incrementa
   catalogo/                   card 4.4 — o catálogo curricular como o app o vê
     catalogo.dart             modelos das sete tabelas do 4.1 + filtros e o plano de
                               gravação de uma sequência ordenada (lógica pura, testável)
@@ -83,7 +96,9 @@ lib/
   erros/
     catalogo_erros.dart       codigo -> mensagem (design-system §7.1)
     erro_app.dart             extrai o codigo do DETAIL das exceções do Supabase; traduz
-                              também os SQLSTATEs de integridade 23503/23505 (card 4.4)
+                              também os SQLSTATEs de integridade 23503/23505 (card 4.4),
+                              os códigos do GoTrue (rate limit, e-mail já cadastrado…) e
+                              a resposta de uma Edge Function (card 4.7)
   rotas/
     rotas.dart                as 13 telas e o conjunto mínimo de cada uma (2.4 §6)
     roteador.dart             go_router: redirect por estado de sessão + guarda por rota;
@@ -107,6 +122,15 @@ lib/
                               (Manutenção / Encerrar / Reativar)
       formularios.dart        sala, PC (com a ficha da credencial do card 2.9 §8),
                               manutenção, encerramento, reativação, professor
+    administracao/            card 4.7 — tela 12: quatro abas
+      tela_administracao.dart Usuários / Perfis e matriz / Parâmetros / Histórico
+      aba_usuarios.dart       lista com quem está SEM PERFIL destacado, filtros
+      aba_matriz.dart         um perfil por vez, 12 domínios, caixa com descrição;
+                              desmarcar pede confirmação (vale na hora)
+      aba_parametros.dart     chave, valor, descrição, tipo
+      aba_historico.dart      quem concedeu/removeu o quê, quando (card 4.7.5)
+      formularios.dart        convite (Edge Function + perfis no mesmo ato),
+                              usuário, perfil, parâmetro
   theme/                      cópia do apêndice §10 do card 2.7 + preferência clara/escura
   widgets/
     botoes.dart               BotaoAcao: sem permissão oculta, sem estado desabilita com motivo

@@ -129,6 +129,28 @@ jobs:
         run: node portao-migracoes/varredor.mjs supabase/migrations
 
   # ---------------------------------------------------------------------------
+  # Edge Functions: a lógica pura de cada função, sem Deno e sem rede (card 4.7)
+  #
+  # O que dá para decidir sem rede fica em `logica.ts`, ao lado do `index.ts`
+  # que só orquestra — e o Node 24 lê `.ts` com anotações de tipo sem
+  # transpilar, então a suíte roda com `node --test`, como a do vigia e a do
+  # portão. O que exige o Auth de verdade (convite recusado pelo espelho,
+  # rate limit) é exercitado contra o stack local com `supabase functions serve`.
+  # ---------------------------------------------------------------------------
+  funcoes:
+    name: edge functions (lógica)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+
+      - name: Suíte das funções
+        run: node --test "supabase/functions/**/*.test.ts"
+
+  # ---------------------------------------------------------------------------
   # App: os mesmos três comandos do portão local (app/README.md, "Verificar")
   # ---------------------------------------------------------------------------
   app:

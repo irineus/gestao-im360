@@ -132,4 +132,98 @@ void main() {
       expect(fallback.traduzido, isFalse);
     });
   });
+
+  group('códigos do GoTrue (card 4.7, ajuste do card 3.8)', () {
+    // `over_email_send_rate_limit` apareceu cru para o usuário nos testes do
+    // card 3.8: o catálogo do 2.7 só cobre o DETAIL das funções do banco.
+    test('rate limit de e-mail tem texto próprio e conta como traduzido', () {
+      final erro = traduzirErro(
+        AuthApiException(
+          'email rate limit exceeded',
+          statusCode: '429',
+          code: 'over_email_send_rate_limit',
+        ),
+      );
+      expect(erro.codigo, 'over_email_send_rate_limit');
+      expect(erro.mensagem, mensagensAuth['over_email_send_rate_limit']);
+      expect(erro.mensagem, contains('Espere alguns minutos'));
+      expect(erro.traduzido, isTrue);
+    });
+
+    test('código do GoTrue que o app não conhece continua no fallback, com o '
+        'código visível', () {
+      final erro = traduzirErro(
+        AuthApiException('?', statusCode: '400', code: 'algo_novo'),
+      );
+      expect(erro.traduzido, isFalse);
+      expect(erro.mensagem, contains('algo_novo'));
+    });
+
+    test('credencial inválida também conta como traduzida', () {
+      final erro = traduzirErro(
+        AuthApiException('Invalid login', code: 'invalid_credentials'),
+      );
+      expect(erro.traduzido, isTrue);
+    });
+  });
+
+  group('Edge Function (card 4.7)', () {
+    // A função devolve o erro do banco COMO VEIO (acesso-autenticacao §3.2):
+    // o `codigo` no corpo é o mesmo contrato do DETAIL.
+    test('4xx com codigo no corpo cai no catálogo, com as marcações', () {
+      final erro = traduzirErro(
+        const FunctionException(
+          status: 422,
+          details: {'codigo': 'USUARIO_SEM_UNIDADE', 'unidades_ativas': 2},
+        ),
+      );
+      expect(erro.codigo, 'USUARIO_SEM_UNIDADE');
+      expect(erro.mensagem, CatalogoErros.mensagens['USUARIO_SEM_UNIDADE']);
+      expect(erro.traduzido, isTrue);
+    });
+
+    test('SEM_PERMISSAO vindo da função é o mesmo texto da RLS', () {
+      final erro = traduzirErro(
+        const FunctionException(
+          status: 403,
+          details: {
+            'codigo': 'SEM_PERMISSAO',
+            'permissao': 'admin.gerir_usuarios',
+          },
+        ),
+      );
+      expect(erro.mensagem, CatalogoErros.mensagens['SEM_PERMISSAO']);
+    });
+
+    test('code do GoTrue repassado pela função usa a mesma tabela do Auth', () {
+      final erro = traduzirErro(
+        const FunctionException(
+          status: 422,
+          details: {'code': 'email_exists', 'mensagem': 'already registered'},
+        ),
+      );
+      expect(erro.codigo, 'email_exists');
+      expect(erro.mensagem, mensagensAuth['email_exists']);
+      expect(erro.traduzido, isTrue);
+    });
+
+    test(
+      'resposta sem codigo nem code: fallback com o status HTTP à vista',
+      () {
+        final erro = traduzirErro(
+          const FunctionException(status: 500, details: 'Internal error'),
+        );
+        expect(erro.traduzido, isFalse);
+        expect(erro.mensagem, contains('HTTP 500'));
+      },
+    );
+
+    test('a função nem respondeu: erro de rede', () {
+      final erro = traduzirErro(
+        const FunctionsFetchException(details: 'connection refused'),
+      );
+      expect(erro.codigo, isNull);
+      expect(erro.mensagem, contains('conexão'));
+    });
+  });
 }

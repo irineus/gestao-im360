@@ -26,3 +26,8 @@ worker-vigia/.dev.vars
 .DS_Store
 .vscode/
 node_modules/
+
+# Worktrees de sessões paralelas do Claude Code (card 4.7): duas sessões no
+# mesmo repositório trabalham cada uma no seu, e o checkout principal não pode
+# ver o outro como arquivo solto — um `git add -A` o commitaria inteiro.
+.claude/worktrees/

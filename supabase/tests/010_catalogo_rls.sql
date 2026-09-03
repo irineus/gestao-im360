@@ -106,7 +106,13 @@ create temporary view p_esperada (tabela, cmd) as values
   ('pc','r'),               ('pc','a'),               ('pc','w'),               ('pc','d'),
   ('pc_manutencao','r'),    ('pc_manutencao','a'),    ('pc_manutencao','w'),
   ('professor','r'),        ('professor','a'),        ('professor','w'),
-  ('pc_credencial_acesso','r'), ('pc_credencial_acesso','a');
+  ('pc_credencial_acesso','r'), ('pc_credencial_acesso','a'),
+  -- card 4.7.5 — histórico da matriz. Só leitura: quem escreve é o trigger
+  -- (security definer) em perfil_permissao, e a imutabilidade é a ausência de
+  -- update e delete, como em aluno_status_hist e pc_credencial_acesso. Sem
+  -- insert de propósito: um POST direto gravaria "REMOVIDA" de uma permissão
+  -- que continua valendo — histórico que mente é pior que histórico ausente.
+  ('perfil_permissao_hist','r');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text

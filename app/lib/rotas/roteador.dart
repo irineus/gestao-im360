@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../config/link_inicial.dart';
 import '../sessao/sessao.dart';
 import '../sessao/sessao_provider.dart';
 import '../telas/acesso_bloqueado.dart';
+import '../telas/administracao/tela_administracao.dart';
 import '../telas/em_construcao.dart';
 import '../telas/login.dart';
 import '../telas/materiais/tela_materiais.dart';
@@ -24,6 +26,7 @@ const _caminhoAcesso = '/acesso';
 final _telaDaRota = <String, WidgetBuilder>{
   'materiais': (_) => const TelaMateriais(),
   'salas': (_) => const TelaSalas(),
+  'administracao': (_) => const TelaAdministracao(),
 };
 
 /// Cards que entregam cada tela — o placeholder diz o seu, para não virar
@@ -38,7 +41,6 @@ const _cardDaRota = <String, String>{
   'compras': '6.8',
   'projecao': '8.5',
   'certificados': '8.6',
-  'administracao': '4.7',
   'importacao': '9.1',
 };
 
@@ -58,6 +60,22 @@ final roteadorProvider = Provider<GoRouter>((ref) {
       // com sessão: o link do Auth cria uma sessão de recuperação antes de a
       // pessoa chegar aqui.
       if (caminho == rotaRedefinirSenha.caminho) return null;
+
+      // Chegou pelo link de convite (card 4.7): a sessão existe, a senha não.
+      // Antes de qualquer outra tela, definir a senha — senão o acesso
+      // seguinte falha sem que nada tenha dito que faltava um passo (achado
+      // do card 3.8). Sem sessão, o link não valeu (expirado): segue para o
+      // login, e o registro deixa de valer.
+      if (LinkInicial.convitePendente) {
+        switch (estado) {
+          case SessaoCarregando():
+            return null;
+          case SessaoDeslogada():
+            LinkInicial.consumir();
+          default:
+            return '${rotaRedefinirSenha.caminho}?motivo=convite';
+        }
+      }
 
       return switch (estado) {
         SessaoCarregando() => null,

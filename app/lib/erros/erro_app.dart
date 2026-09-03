@@ -64,6 +64,35 @@ const mensagensIntegridade = <String, String>{
   '23505': 'Já existe um cadastro com este código ou nome.',
 };
 
+/// Os códigos do **GoTrue** que chegam à tela (card 4.7, ajuste do card 3.8):
+/// o catálogo do card 2.7 §7.1 só cobre os códigos do `DETAIL` das exceções do
+/// banco, e os do Auth — rate limit, senha fraca, e-mail já cadastrado —
+/// passavam direto como código cru (`over_email_send_rate_limit` apareceu
+/// para o usuário nos testes do 3.8). Ficam **fora** do catálogo pelo mesmo
+/// motivo de [mensagensIntegridade]: aquele é o contrato conferido pelo C12
+/// contra as funções do banco, e um código do GoTrue não é código de função
+/// nenhuma. Contam como traduzidos — nada disto merece evento no Sentry.
+const mensagensAuth = <String, String>{
+  'over_email_send_rate_limit':
+      'Muitos pedidos de e-mail seguidos. Espere alguns minutos e tente de '
+      'novo.',
+  'over_request_rate_limit':
+      'Muitas tentativas seguidas. Espere alguns minutos e tente de novo.',
+  'weak_password':
+      'A senha é fraca demais: use ao menos 8 caracteres, com letras e '
+      'números.',
+  'same_password': 'A nova senha precisa ser diferente da atual.',
+  'email_exists': 'Já existe um usuário com este e-mail.',
+  'user_already_exists': 'Já existe um usuário com este e-mail.',
+  'otp_expired':
+      'O link expirou. Peça um novo convite ou use "Esqueci minha senha".',
+  'email_not_confirmed':
+      'O e-mail ainda não foi confirmado. Use o link recebido por e-mail.',
+  'session_expired': 'A sessão expirou. Entre de novo.',
+  'refresh_token_not_found': 'A sessão expirou. Entre de novo.',
+  'validation_failed': 'Dados inválidos. Confira o e-mail informado.',
+};
+
 /// Mensagem do caso em que a RLS devolve **zero linhas** numa exclusão. Sem
 /// política de `delete` o Postgres não levanta erro — apaga nada e diz sucesso
 /// (card 3.4 (d)); dizer "excluído" aqui seria mentir com cara de confirmação.
@@ -119,26 +148,66 @@ ErroApp _traduzir(Object erro) {
     );
   }
 
+  // Resposta 4xx/5xx de uma Edge Function (card 4.7): o corpo é JSON com o
+  // `codigo` do banco quando ele recusou (devolvido como veio, contrato de
+  // docs/acesso-autenticacao.md §3.2) ou o `code` do GoTrue quando foi o Auth.
+  if (erro is FunctionsFetchException) {
+    return ErroApp(mensagem: _mensagemRede, original: erro);
+  }
+  if (erro is FunctionException) {
+    final mapa = _mapaDoDetalhe(erro.details);
+    final codigo = _codigoDoDetalhe(mapa);
+    if (codigo != null) {
+      return ErroApp(
+        codigo: codigo,
+        mensagem: CatalogoErros.mensagem(
+          codigo,
+          valores: _valoresDoDetalhe(mapa),
+        ),
+        original: erro,
+      );
+    }
+    final codigoAuth = mapa?['code'];
+    final auth = codigoAuth is String ? mensagensAuth[codigoAuth] : null;
+    if (auth != null) {
+      return ErroApp(
+        codigo: codigoAuth as String,
+        mensagem: auth,
+        original: erro,
+        traduzido: true,
+      );
+    }
+    return ErroApp(
+      codigo: 'HTTP ${erro.status}',
+      mensagem: CatalogoErros.mensagem('HTTP ${erro.status}'),
+      original: erro,
+    );
+  }
+
   if (erro is AuthApiException) {
     // Credencial inválida tem mensagem única, sem revelar qual campo errou.
     final invalida =
         erro.code == 'invalid_credentials' ||
         erro.statusCode == '400' &&
             erro.message.toLowerCase().contains('invalid login');
+    final conhecida = mensagensAuth[erro.code];
     return ErroApp(
       codigo: erro.code,
       mensagem: invalida
           ? mensagemCredencialInvalida
-          : CatalogoErros.mensagem(erro.code),
+          : conhecida ?? CatalogoErros.mensagem(erro.code),
       original: erro,
+      traduzido: invalida || conhecida != null ? true : null,
     );
   }
 
   if (erro is AuthException) {
+    final conhecida = mensagensAuth[erro.code];
     return ErroApp(
       codigo: erro.code,
-      mensagem: CatalogoErros.mensagem(erro.code),
+      mensagem: conhecida ?? CatalogoErros.mensagem(erro.code),
       original: erro,
+      traduzido: conhecida != null ? true : null,
     );
   }
 
