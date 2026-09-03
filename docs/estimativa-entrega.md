@@ -81,10 +81,14 @@ se sobrepõe) e a revisão das lojas vai a **duas** rodadas.
 
 ### Como sair de P50 e P80
 
-- **P50** = velocidade central medida, latência parcialmente paralela.
-- **P80** = **metade** da velocidade do P50, latência integral. A metade não é pessimismo decorativo:
-  é o cenário em que as telas custam o dobro do tamanho atribuído — e enquanto as telas de negócio
-  não estiverem medidas, esse é o risco dominante (ver §4).
+- **P50** = velocidade central medida (líquida de escopo novo — ver §6b), latência parcialmente
+  paralela.
+- **P80** = velocidade do P50 **dividida por 1,5**, latência integral. O divisor não é pessimismo
+  decorativo: ele precifica o que ainda **não foi medido**, e por isso encolhe quando algo passa a
+  ser medido. Era **2** enquanto as telas de negócio eram o grande vão; virou **1,5** em 03/09/2026,
+  quando quatro telas de negócio saíram no tamanho atribuído (§6a). O que o 1,5 ainda cobre é a fase
+  09 e a fase 10, sem medição nenhuma. **Rever o divisor a cada rodada, para cima ou para baixo,
+  conforme o que ainda estiver por medir** — divisor que não se mexe vira superstição.
 
 ⚠️ **Se a consulta ao board falhar por cota** ("usage limit for Query Data Source"), os mesmos
 números saem de uma visão agrupada do board na UI do Notion, por `Tipo` e por `Concluído em`.
@@ -92,18 +96,31 @@ Não é motivo para pular a rodada.
 
 ## 4. O que este método NÃO resolve
 
-**A maior incerteza não é a velocidade — é o dimensionamento das telas.** Na primeira rodada
-(02/09/2026), `Tela` responde por **107 dos 225 pontos de esforço restantes até o go-live (48%)**, e
-o único card de `Tela` já medido é o 3.7 (esqueleto do app com login, 8 pontos) — que não é uma tela
-de negócio com CRUD, filtros, validação e permissões. Metade do trabalho restante está apoiada em
-uma medição de outra natureza.
+**A maior incerteza é sempre o que ainda não foi medido, e ela se desloca a cada rodada.** Esta
+seção é reescrita por cada recalibração, com o alvo da vez.
 
-É por isso que o card **4.9** (recalibração ao fim da fase 04) é o mais importante da série: é a
-primeira vez que quatro telas de negócio reais entram na medição. Espera-se que a banda P50–P80
-**encolha bastante** ali. Se não encolher, o problema é dimensionamento e não velocidade, e a
-resposta é quebrar os cards `GG` em cards menores — card grande demais é card que não se sabe medir.
+~~**A maior incerteza não é a velocidade — é o dimensionamento das telas.**~~ — **respondido em
+03/09/2026 pelo card 4.9** (ver §6). Enunciado original preservado, porque é ele que justificava o
+P80 = metade do P50: na primeira rodada (02/09/2026), `Tela` respondia por **107 dos 225 pontos de
+esforço restantes até o go-live (48%)**, e o único card de `Tela` medido era o 3.7 (esqueleto do app
+com login, 8 pontos) — que não é uma tela de negócio com CRUD, filtros, validação e permissões.
+Metade do trabalho restante estava apoiada em uma medição de outra natureza. Era por isso que o card
+**4.9** era o mais importante da série. A banda **encolheu**, como se esperava, e não foi preciso
+quebrar os `GG` em cards menores.
+
+⚠️ **A maior incerteza agora é a tabela de blocos de latência do §3** — os 31 dias corridos até o
+go-live. Ela foi escrita de uma vez, por analogia, e **nunca foi medida contra a realidade**: nenhum
+marco de validação, revisão de terceiro ou treinamento aconteceu ainda. Desde 03/09/2026 a latência
+é maior que o esforço no P50, ou seja, **o número menos confiável do modelo passou a ser o que mais
+pesa na data**. O primeiro teste é o marco 4.8 (bloco declarado de 4 dias): ao fechá-lo, anotar
+quantos dias corridos ele de fato consumiu e comparar com o bloco. O mesmo vale para 6.9, 8.8, 9.3,
+9.4, 9.6 e 9.7 — sem essa anotação, a próxima rodada recalibra a velocidade e deixa intacta a
+metade da conta que hoje pesa mais.
 
 ## 5. Primeira estimativa (02/09/2026)
+
+> **Superada pela rodada de 03/09/2026 (card 4.9).** Fica aqui como registro — a estimativa vigente
+> está na subpágina Notion "Estimativa de entrega" do card 3.13, e o que mudou no método está no §6.
 
 Medido: **135 pontos em 5 dias** (29/08 a 02/09) — 82 de `Documento/decisão`, 27 de `Infra/CI`,
 10 de `Função/regra`, 8 de `Schema/migração`, 8 de `Tela`. Por dia: 5, 11, 31, **75**, 13.
@@ -135,3 +152,43 @@ proíbe a virada na data resultante~~ — **não há janela de calendário escol
 qualquer data.** Isso importa mais do que parece: a data do go-live passa a ser determinada só por
 esforço e latência, sem precisar esperar início de semestre ou fim de bimestre. Não há o que
 perguntar sobre isso nas próximas rodadas.
+
+## 6. Segunda rodada (03/09/2026, card 4.9) — o que mudou no método
+
+Os **números** desta e das próximas rodadas moram na subpágina Notion "Estimativa de entrega" do
+card 3.13, nunca aqui. O que fica registrado neste documento são as mudanças de **método** — método
+que muda sem registro é método que ninguém consegue repetir.
+
+**(a) O P80 deixa de ser metade do P50 e passa a ser P50 ÷ 1,5.** O §3 dizia que a metade não era
+pessimismo decorativo: era o preço de as telas de negócio não estarem medidas. Quatro telas de
+negócio foram medidas (cards 4.4, 4.5, 4.6 e 4.7) e saíram **no tamanho atribuído**, com duas telas
+`GG` entregues no mesmo dia. Retirar do P80 um risco que foi medido e não apareceu é executar o
+método, não redecidi-lo — o próprio §4 previa a banda encolher aqui. O ÷ 1,5 que sobra cobre o que
+segue sem medição nenhuma: a fase 09 (importação e extração, dois `GG` de natureza inédita no
+projeto) e a fase 10 inteira.
+
+**(b) A velocidade publicada passa a ser líquida de escopo novo.** A premissa "escopo do board
+congelado" era falsa, e agora está medida: **25 pontos de cards que não existiam quando o board foi
+criado, em 6 dias — ~4,2 pts/dia-pleno**. Em vez de manter no papel uma premissa que se sabe falsa,
+o desconto entra na velocidade: bruta menos taxa de descoberta. Nas próximas rodadas, recalcular a
+taxa somando os cards de `Ordem` decimal criados desde a rodada anterior.
+
+**(c) Fica declarada a convenção de denominador**, que estava implícita e é o que mais facilmente se
+perde entre sessões: o divisor é o **dia de calendário em que houve entrega**, contado como um
+dia-pleno. Mudar a régua no meio da série destrói a comparabilidade, que é o único ativo do método.
+
+**(d) O passo 2 tem um viés a vigiar, e ele apareceu já na primeira vez que o passo foi executado.**
+Das oito mudanças de tamanho desta rodada (saldo +9 pontos), o único grupo redimensionado **para
+cima por medição direta** foi o dos seis cards de recalibração — justamente os que esta sessão
+executou, e que o card 3.13 tinha criado como `P`. Todos os outros foram julgados por analogia, que
+é sistematicamente mais gentil: telas e schemas "se sustentaram". Pode ser verdade, e as telas de
+fato saíram no tamanho atribuído; mas **um passo 2 cujo saldo dá perto de zero merece desconfiança
+— ou o board está bem dimensionado, ou o passo não foi feito de verdade.** Nas próximas rodadas,
+começar o passo 2 pelos cards da fase que acabou de fechar, que são os únicos com medição direta.
+
+**Fato estrutural registrado nesta rodada, e que muda onde se ganha a data:** com o esforço restante
+caindo de 225 para 177 pontos e a velocidade subindo de 18 para 26, **a latência passou o esforço**
+— no P50 são ~16 dias corridos de esforço contra ~19 de latência. Subir a capacidade semanal de 3,0
+para 7,0 dias-plenos (o ritmo de fato observado de 29/08 a 03/09) antecipa o P50 em apenas 9 dias.
+Daqui em diante a data se ganha encurtando marco de validação, revisão do pedagógico e treinamento
+— não codando mais rápido.
