@@ -91,6 +91,18 @@ abstract final class CatalogoErros {
         'Este bloco tem histórico de alunos e não pode ser excluído. '
         'Desative-o.',
 
+    // --- card 5.3 (admissão, remoção e reposições)
+    // BLOCO_INEXISTENTE vale também para bloco de outra unidade, pela mesma
+    // razão do PC_INEXISTENTE: quem não pode ver não descobre que existe. É o
+    // que o trigger de admissão devolve quando a capacidade vem nula — sem ele,
+    // comparar com nulo deixaria a lotação passar em silêncio.
+    'BLOCO_INEXISTENTE': 'Este bloco de horário não foi encontrado.',
+    'ALOCACAO_INEXISTENTE': 'Este aluno não está nesta turma.',
+    'REPOSICAO_INEXISTENTE': 'Esta reposição não foi encontrada.',
+    'REPOSICAO_NAO_PREVISTA':
+        'Esta reposição já foi registrada ou cancelada. Atualize a tela para '
+        'ver a situação atual.',
+
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':
         'Não deu para saber em que unidade cadastrar esta pessoa. Informe a '

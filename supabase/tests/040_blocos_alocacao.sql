@@ -90,6 +90,24 @@ select is(
 -- ===========================================================================
 -- 2. Os checks e uniques que exprimem regra de negócio
 -- ===========================================================================
+-- ⚠️ AJUSTADO EM 03/09/2026 PELO CARD 5.3, e o motivo é estrutural, não de
+-- conveniência: tg_bloco_aluno_admissao e tg_reposicao_admissao passaram a
+-- falar ANTES das constraints — trigger BEFORE roda antes do `check`, da
+-- `unique` e até do WITH CHECK da RLS. Uma asserção de camada 1 escrita com um
+-- aluno de outro método ou num bloco lotado deixa de medir o `check` e passa a
+-- medir o trigger, e o pior é que ela continua VERMELHA por um motivo plausível
+-- (foi assim que este arquivo reprovou: "wanted 23514, caught PT422"). Duas
+-- consequências, as duas aplicadas aqui:
+--   • esta seção escreve como `postgres`, sem sessão, e sem sessão
+--     fn_unidade_atual() é nula, fn_capacidade_efetiva devolve NULO e a admissão
+--     responde BLOCO_INEXISTENTE. O contexto de ROTINA resolve, é o mesmo que a
+--     seção 1 do teste 041 já usa e o mesmo em que o seed escreve a camada
+--     `turmas` desde este card;
+--   • cada caso de camada 1 precisa ser válido para a camada 2, senão a camada 2
+--     responde primeiro. Daí um aluno INTERATIVO no bloco de INTERATIVO, e a
+--     duplicata ativa indo para o bloco de 9 (que tem vaga) e não para o de 10.
+select tests.como_rotina(tests.unidade('ESCOLA_A'));
+
 -- Ajuste 2 do §8 do card 2.5, BLOQUEANTE: sem `FALTOU`, quem não aparece à
 -- reposição fica indistinguível de quem a desmarcou com antecedência — e é
 -- exatamente essa diferença que o gatilho de reincidência do card 2.5 §3.4 mede.
@@ -124,7 +142,7 @@ select throws_ok(
   $$insert into public.bloco_aluno (unidade_id, bloco_id, aluno_id, tipo)
     select b.unidade_id, b.id,
            (select id from public.aluno
-             where nome = 'Felipe Nunes' and unidade_id = b.unidade_id),
+             where nome = 'Carla Menezes' and unidade_id = b.unidade_id),
            'NOVO'
       from public.bloco_horario b
       join public.unidade u on u.id = b.unidade_id
@@ -164,8 +182,12 @@ select is(
 -- dos 43 testes sem rodar, com a mensagem apontando para 100 linhas adiante da
 -- causa. Foi o que aconteceu ao exercitar a suíte num stack local novo, e não é
 -- instabilidade de ambiente: é a fonte nº 1 do §11 (ordem não pedida é ordem não
--- garantida). O `Aluno de Lotação 01` está no bloco cheio e nenhuma asserção
--- posterior conta linhas dele.
+-- garantida). Nenhuma asserção posterior conta linhas do aluno escolhido.
+--
+-- ⚠️ O aluno passou de `Lotação 01` para `Lotação 05` no card 5.3, e a troca é a
+-- diferença entre medir a unique e medir o trigger: `01` está no bloco de 10/10,
+-- onde a duplicata ATIVA agora bate em BLOCO_LOTADO antes de chegar ao índice.
+-- `05` está no de 9/10, que tem a vaga que deixa o insert alcançar a unique.
 select throws_ok(
   $$insert into public.bloco_aluno (unidade_id, bloco_id, aluno_id, tipo)
     select ba.unidade_id, ba.bloco_id, ba.aluno_id, 'REM'
@@ -174,7 +196,7 @@ select throws_ok(
       join public.bloco_horario b on b.id = ba.bloco_id
       join public.unidade u on u.id = b.unidade_id
      where u.codigo = 'ESCOLA_A' and ba.ativo
-       and a.nome = 'Aluno de Lotação 01'$$,
+       and a.nome = 'Aluno de Lotação 05'$$,
   '23505', null,
   'um aluno nao ocupa duas vagas ATIVAS no mesmo bloco');
 
@@ -186,8 +208,14 @@ select lives_ok(
       join public.bloco_horario b on b.id = ba.bloco_id
       join public.unidade u on u.id = b.unidade_id
      where u.codigo = 'ESCOLA_A' and ba.ativo
-       and a.nome = 'Aluno de Lotação 01'$$,
+       and a.nome = 'Aluno de Lotação 05'$$,
   'mas a alocacao INATIVA ao lado passa — o indice e parcial, e e isso que deixa reativar');
+
+-- O contexto de rotina TEM de morrer aqui: dentro dele tem_permissao() responde
+-- verdadeiro para qualquer código, e as asserções de SEM_PERMISSAO da seção 4
+-- passariam de graça — o teste de permissão mais perigoso é o que roda com
+-- permissão de mais.
+select tests.encerrar_sessao();
 
 -- ===========================================================================
 -- 3. tipo_desde é derivada, não editável (ajuste 1 do card 2.5)
@@ -451,6 +479,12 @@ select is(
 -- O monitor lê a grade e não aloca: `turmas.alocar` é dos outros três (card 2.4
 -- §5). O erro dele é o silêncio da RLS, não uma exceção — por isso a asserção é
 -- sobre a linha que NÃO nasceu.
+--
+-- ⚠️ O aluno mudou de `Felipe Nunes` (INGLES) para `Carla Menezes` (INTERATIVO)
+-- no card 5.3, e a troca guarda um achado: o trigger BEFORE fala ANTES do WITH
+-- CHECK da RLS, então uma linha inválida faz o monitor receber
+-- METODO_INCOMPATIVEL em vez do 42501 — o teste de permissão passaria a medir o
+-- método. Para medir a permissão, a linha tem de ser válida em tudo o mais.
 select tests.autenticar(tests.uid('monitor@escola-a.test'));
 
 select throws_ok(
@@ -459,7 +493,7 @@ select throws_ok(
            (select id from public.bloco_horario
              where dia_semana = 1 and unidade_id = public.fn_unidade_atual()),
            (select id from public.aluno
-             where nome = 'Felipe Nunes' and unidade_id = public.fn_unidade_atual()),
+             where nome = 'Carla Menezes' and unidade_id = public.fn_unidade_atual()),
            'REM'$$,
   '42501', null,
   'o monitor tem turmas.ler e nao tem turmas.alocar');
@@ -527,11 +561,20 @@ select is(
 -- A passada é histórico e é o débito que o critério do card 2.5 mede — cancelar
 -- retroativamente apagaria a razão pela qual ele seria sugerido para REP
 -- contínuo quando voltasse.
+--
+-- Contexto de rotina outra vez (card 5.3): uma das duas datas está no PASSADO, e
+-- tg_reposicao_admissao exige turmas.lancar_reposicao_retroativa para isso —
+-- `postgres` sem sessão não tem permissão nenhuma. Desligado logo abaixo, antes
+-- de qualquer asserção que dependa de quem é quem.
+select tests.como_rotina(tests.unidade('ESCOLA_A'));
+
 insert into public.bloco_aluno_reposicao (unidade_id, bloco_id, aluno_id, data, status)
 select tests.unidade('ESCOLA_A'), b.id, a.id, public.fn_hoje() + d.dias, 'PREVISTA'
   from public.bloco_horario b, public.aluno a, (values (10), (-3)) as d(dias)
  where b.unidade_id = tests.unidade('ESCOLA_A') and b.dia_semana = 1
    and a.unidade_id = tests.unidade('ESCOLA_A') and a.nome = 'Diego Alves';
+
+select tests.encerrar_sessao();
 
 select tests.autenticar(tests.uid('pedagogico@escola-a.test'));
 

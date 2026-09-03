@@ -343,6 +343,30 @@ alocação existente se já houver uma inativa (em vez de criar linha duplicada 
 `p_tipo` ∈ (REM, PRE, REP, NOVO); `data_inicio_prevista` é obrigatória para NOVO
 (`PT422 / DATA_PREVISTA_OBRIGATORIA`).
 
+> ✅ **Entregues em 03/09/2026 pelo card 5.3**, em
+> `supabase/migrations/20260903230000_admissao_lotacao_rep.sql`. Quatro decisões do corpo:
+>
+> - **Nulo é erro, não "sem opinião".** `fn_capacidade_efetiva` e `fn_ocupacao_bloco` devolvem
+>   **nulo** para bloco de outra unidade (card 5.2), e `ocupacao >= null` é **nulo** — um
+>   `if ... then raise` escrito sem contar com isso não dispara, e a lotação passa **em silêncio**
+>   justamente na escrita que não deveria existir. O trigger levanta `PT404 / BLOCO_INEXISTENTE`.
+>   Medido: sem essa guarda, um `insert` como `postgres` (que tem BYPASSRLS) entra sem checagem de
+>   vaga nenhuma.
+> - **A vaga só é disputada quando a linha ENTRA na conta** — `insert` ativo, volta de inativa para
+>   ativa, ou troca de bloco. Conferir em todo `update` faria mudar só o `tipo` de uma alocação já
+>   ativa responder `BLOCO_LOTADO` num bloco que não mudou de tamanho, e a virada REP dentro do
+>   próprio bloco do aluno ficaria impossível.
+> - **`fn_bloco_remover` ganhou onde gravar o motivo.** A coluna `bloco_aluno.motivo_saida` nasce
+>   aqui porque `p_motivo` (§4.3) e o `MOTIVO_OBRIGATORIO` de `fn_rep_voltar_pontual` (card 2.5 §5.2)
+>   exigiam do usuário um dado que se descartava. `tg_aluno_status_desaloca` passou a escrever nela
+>   o status que tirou o aluno da turma, que é o caso mais comum de saída.
+> - **Remover quem não está na turma DÓI** (`PT404 / ALOCACAO_INEXISTENTE`): silêncio ali é a tela
+>   dizendo "removido" sobre uma turma em que o aluno continua.
+>
+> Quatro códigos novos no catálogo de §12 — `BLOCO_INEXISTENTE`, `ALOCACAO_INEXISTENTE`,
+> `REPOSICAO_INEXISTENTE` e `REPOSICAO_NAO_PREVISTA` (contrato de 28 → 32) —, todos pelo precedente
+> de `PC_INEXISTENTE` (card 2.9) e `ALUNO_INEXISTENTE` (card 4.2).
+
 ### 4.4 Reposição (metade pontual do REP)
 
 ```sql
@@ -389,6 +413,18 @@ perform pg_advisory_xact_lock(hashtextextended(p_bloco_id::text, 0));
 serializando só as admissões daquele bloco. O lock é liberado no fim da transação, sem
 `unlock` explícito. Mesmo padrão em `fn_turma_modular_admitir` e, com a chave do material, em
 `fn_registrar_entrega`.
+
+> ✅ **Exercitado de verdade em 03/09/2026 (card 5.3)**, em
+> `supabase/tests_concorrencia/admissao_ultima_vaga.sh`: duas sessões `psql` simultâneas admitindo
+> alunos diferentes no bloco de 9/10 — uma passa, a outra recebe `BLOCO_LOTADO`, e o bloco fecha em
+> 10, nunca 11. **A contraprova foi vista**: removido o `pg_advisory_xact_lock`, as duas admissões
+> passam e o bloco fica com **11 alunos em 10 PCs**, com o script reprovando por contagem (e não por
+> *timeout*, que é o que o §7 do card 2.8 exige). Sem essa contraprova, um teste de concorrência que
+> nunca reprova é indistinguível de um que não testa nada.
+>
+> Nota operacional: o script usa `psql` quando ele existe no PATH e cai para o `psql` de dentro do
+> container do stack local quando não existe — teste que só roda no CI é teste que ninguém roda
+> antes de abrir o PR.
 
 ### 4.6 Manutenção de PC
 
@@ -741,6 +777,10 @@ lista nunca acumula item que já deixou de ser verdade.
 | `PEDIDO_NAO_RECEBIVEL` | 409 | `fn_pedido_receber` |
 | `RECEBIMENTO_EXCEDE_PEDIDO` | 422 | `fn_pedido_receber` |
 | `PARAMETRO_AUSENTE` | 422 | `fn_param_int` / `fn_param_txt` |
+| `BLOCO_INEXISTENTE` | 404 | `tg_bloco_aluno_admissao`, `tg_reposicao_admissao`, `fn_bloco_admitir`, `fn_reposicao_agendar` (card 5.3) |
+| `ALOCACAO_INEXISTENTE` | 404 | `fn_bloco_remover` (card 5.3) |
+| `REPOSICAO_INEXISTENTE` / `REPOSICAO_NAO_PREVISTA` | 404 / 409 | `fn_reposicao_registrar`, `fn_reposicao_cancelar` (card 5.3) |
+| `REP_JA_CONTINUO` / `REP_NAO_CONTINUO` | 409 | `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (cards 2.5 e 5.3) |
 
 `BLOQUEADA_SEM_ESTOQUE` **não** está aqui de propósito: é status de retorno, não erro (§1.3).
 
@@ -765,7 +805,7 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | `fn_aluno_transicao_valida`, triggers de status, `fn_aluno_alterar_status`, `fn_aluno_reverter_status` | 4.2 |
 | `tg_pc_manutencao_status`, `tg_pc_revalida_blocos` | 4.3 |
 | `fn_capacidade_efetiva`, `fn_ocupacao_bloco`, `fn_vagas_livres` — as três juntas, ver §4.2 | 5.2 |
-| `tg_bloco_aluno_admissao`, `fn_bloco_admitir/remover`, reposições | 5.3 |
+| `tg_bloco_aluno_admissao`, `fn_bloco_admitir/remover`, reposições | 5.3 ✅ |
 | `fn_revalidar_blocos_sala` | 5.4 |
 | `fn_pendencia_abrir/resolver`, `rt_pendencias_diaria`, `rt_diaria` e o job `pg_cron` | 5.5 |
 | `fn_trilha_gerar`, `fn_trilha_proximo_material`, edição da trilha | 6.2 |
@@ -774,7 +814,7 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | Funções Modular | 7.2 |
 | `rt_projecao_demanda` | 8.1 |
 | `fn_certificado_*`, `tg_certificado_*` | 8.3 |
-| `tp_rep_situacao`, `fn_rep_situacao`, `fn_rep_avaliar_virada`, `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (critério fechado no card 2.5) | 5.3 |
+| `tp_rep_situacao`, `fn_rep_situacao`, `fn_rep_avaliar_virada`, `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (critério fechado no card 2.5) | 5.3 ✅ |
 | `rt_rep_avaliar` | 5.5 |
 
 Ordem de dependência igual à das migrações: 3.4 → 4.2 → 4.3 → 5.2 → 5.3 → 5.4 → 5.5 → 6.2 → 6.3 →
@@ -796,9 +836,9 @@ simples — que é exatamente por que o card 2.1 escolheu `text` + `check` em ve
 | 4 | `aluno_material_hist`: acrescentar `observacao text` | `add column` | 6.2 |
 | 5 | `bloco_aluno`: acrescentar `tipo_desde date not null default current_date` + trigger `tg_bloco_aluno_tipo_desde` | `add column` + trigger | 5.1 |
 | 6 | `rt_pendencias_diaria`: a contagem de blocos para `ACELERAR_SEM_2O_BLOCO` filtra `tipo <> 'REP'` | corpo da rotina | 5.5 |
-| 7 | `fn_reposicao_registrar` devolve `text` (o veredito da virada) em vez de `void` | assinatura | 5.1 |
-| 8 | Tipo composto novo `tp_rep_situacao` — passam a ser dois, com `tp_entrega_resultado` | `create type` | 5.3 |
-| 9 | Erros novos: `REP_JA_CONTINUO` (409) e `REP_NAO_CONTINUO` (409) | catálogo §12 | 5.3 |
+| 7 | `fn_reposicao_registrar` devolve `text` (o veredito da virada) em vez de `void` | assinatura | 5.1 → **5.3** ✅ (a função não existia no 5.1: nasceu devolvendo `text`) |
+| 8 | Tipo composto novo `tp_rep_situacao` — passam a ser dois, com `tp_entrega_resultado` | `create type` | 5.3 ✅ |
+| 9 | Erros novos: `REP_JA_CONTINUO` (409) e `REP_NAO_CONTINUO` (409) | catálogo §12 | 5.3 ✅ |
 | 10 | Parâmetros novos no seed: `rep_prazo_dias`, `rep_capacidade_semanal`, `rep_faltas_max`, `rep_janela_volta_dias` | seed | 3.6 |
 
 **Sobre o 3:** o DDL dá par "quem/quando" a `pedagogico`, `financeiro` e `certificado`, mas não a
