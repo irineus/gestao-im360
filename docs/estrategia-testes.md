@@ -809,12 +809,12 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `administracao_test`, `tela_administracao_test`, `link_inicial_test` | **4.7** | 4 |
 | `040_blocos_alocacao` (as três tabelas, `tipo_desde`, as guardas de coluna e de exclusão, `tg_aluno_status_desaloca`) | **5.1** | 5 |
 | `041_capacidade_vagas` (a fórmula da capacidade, as duas metades do REP na ocupação, e a prova de que o número não depende do que o leitor enxerga) | **5.2** | 5 |
-| `042_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` — era `040` até o card 5.1 ocupar o número, e `041` até o 5.2 ocupar o seguinte | 5.3 | 5 |
+| `042_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` — era `040` até o card 5.1 ocupar o número, e `041` até o 5.2 ocupar o seguinte | **5.3** ✅ | 5 |
 | `050_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` | 6.3 | 6 |
 | `060_estoque_compras` | 6.5 | 6 |
 | `070_modular` | 7.2 | 7 |
 | `080_projecao` | 8.1 | 8 |
-| `085_rep_virada` | 5.3 (funções REP entram na mesma migração) | 5 |
+| `085_rep_virada` | **5.3** ✅ (funções REP entram na mesma migração) — mede o VEREDITO e não a pendência, que é do 5.5; a seção 6 do arquivo é o portão que reprova no dia em que `pendencia` nascer | 5 |
 | `090_rotinas` | 5.5 (primeira rotina) → cresce em 8.1 | 5+ |
 | `095_views_paridade` | 6.4 (primeiras views) → cresce em 5.6, 5.9, 8.7 | 5+ |
 | `catalogo_erros_test`, `guardas_rota_test`, `permissao_widget_test`, `faixa_test`, `tnum_test` | 3.7 | 3 |

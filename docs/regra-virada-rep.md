@@ -352,7 +352,7 @@ mesmo raciocínio que levou o card 2.1 a criar `aluno.status_desde` em vez de va
 | Objeto | Card |
 |---|---|
 | `bloco_aluno.tipo_desde`, `tg_bloco_aluno_tipo_desde`, `FALTOU`, assinatura de `fn_reposicao_registrar` | 5.1 |
-| `tp_rep_situacao`, `fn_rep_situacao`, `fn_rep_avaliar_virada`, `fn_rep_virar_continuo`, `fn_rep_voltar_pontual`, erros novos | 5.3 |
+| `tp_rep_situacao`, `fn_rep_situacao`, `fn_rep_avaliar_virada`, `fn_rep_virar_continuo`, `fn_rep_voltar_pontual`, erros novos | 5.3 ✅ (03/09/2026) |
 | `REP_VIRADA` no `check`, `rt_rep_avaliar`, filtro de aceleração | 5.5 |
 | Parâmetros `rep_*` no seed | 3.6 |
 | Botões "Converter para REP contínuo" / "Voltar a pontual" na tela de alunos do bloco | 5.7 |

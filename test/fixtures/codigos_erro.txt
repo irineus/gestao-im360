@@ -47,3 +47,8 @@ USUARIO_SEM_EMAIL
 EMAIL_IMUTAVEL
 # 1 do card 5.1 (guarda de exclusão de bloco de horário)
 BLOCO_COM_ALOCACAO
+# 4 do card 5.3 (admissão, remoção e reposições)
+BLOCO_INEXISTENTE
+ALOCACAO_INEXISTENTE
+REPOSICAO_INEXISTENTE
+REPOSICAO_NAO_PREVISTA

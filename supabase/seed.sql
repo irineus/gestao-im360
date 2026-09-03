@@ -780,6 +780,20 @@ select tests.seed_infra_fisica(tests.unidade('ESCOLA_B'));
 --    `turmas.lancar_reposicao_retroativa` para data no passado: escrito sem uma
 --    saída para esse contexto, ele derruba o `supabase db reset` inteiro, e o
 --    sintoma aparece longe da causa.
+--
+--    ✅ RESOLVIDO NO CARD 5.3 (03/09/2026), e a escolha importa: a saída NÃO foi
+--    uma exceção dentro do trigger para "quando não há sessão" — isso seria um
+--    contorno permanente em produção, escrito para acomodar um arquivo de teste.
+--    Foi esta camada passar a rodar no CONTEXTO DE ROTINA (card 2.2 §2.2), que é
+--    o mesmo que `tests.como_rotina` dá aos testes e o mesmo em que
+--    fn_revalidar_blocos_sala (5.4) e rt_pendencias_diaria (5.5) vão escrever.
+--    Duas consequências, as duas boas: `tem_permissao` responde verdadeiro e a
+--    reposição retroativa passa; e `fn_unidade_atual()` deixa de ser nula, de
+--    modo que fn_capacidade_efetiva enxerga o bloco e **a fixture passa a ser
+--    validada pelas regras de verdade** — os dez alunos do bloco cheio entram
+--    porque cabem, e um décimo primeiro na fixture reprovaria o `db reset` em
+--    voz alta, em vez de criar 11 alunos em 10 PCs para os testes do 5.2 e do
+--    5.3 medirem.
 create or replace function tests.seed_turmas(p_unidade uuid)
 returns void
 language plpgsql
@@ -794,6 +808,12 @@ declare
   v_cheio   uuid;
   v_lucas   uuid;
 begin
+  -- Contexto de rotina (ver a nota ⚠️ acima). `is_local => true`: morre no fim
+  -- da transação mesmo se o `insert` falhar no meio, e o `reset` do fim existe
+  -- para o caso de o seed inteiro rodar numa transação só.
+  perform set_config('app.rotina', 'on', true);
+  perform set_config('app.rotina_unidade', p_unidade::text, true);
+
   select id into v_lab    from sala   where unidade_id = p_unidade and nome = 'Laboratório 1';
   select id into v_metodo from metodo where unidade_id = p_unidade and codigo = 'INTERATIVO';
   select id into v_combo  from combo  where unidade_id = p_unidade and nome = 'Informática Completo';
@@ -899,6 +919,9 @@ begin
    where not exists (select 1 from bloco_aluno_reposicao br
                       where br.bloco_id = v_vazio and br.aluno_id = v_lucas
                         and br.data = fn_hoje() + r.data_em);
+
+  perform set_config('app.rotina', '', true);
+  perform set_config('app.rotina_unidade', '', true);
 end $$;
 
 -- As duas unidades recebem os mesmos blocos, no mesmo dia e horário e com os
