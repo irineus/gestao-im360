@@ -19,10 +19,19 @@ class ColunaIm360<T> {
     this.prioridade = 1,
     this.flex = 2,
     this.larguraMin = 120,
+    this.celula,
   }) : assert(prioridade >= 1, 'prioridade começa em 1');
 
   final String titulo;
+
+  /// O texto da célula — e o que a busca, o cartão e a leitura de tela veem.
   final String Function(T item) texto;
+
+  /// Célula em widget (um badge, por exemplo) no lugar do texto. Nasceu no
+  /// card 4.6, para a coluna de status do aluno ser o `BadgeStatus` do
+  /// design-system §5.1 e não a palavra solta; [texto] continua obrigatório,
+  /// porque o cartão do mobile e a acessibilidade leem por ele.
+  final Widget Function(T item)? celula;
 
   /// Alinhada à direita e com numerais tabulares (`tnum`), obrigatórios em
   /// tabela e em valor de estoque (card 1.9 §4).
@@ -40,12 +49,17 @@ class CartaoIm360 {
     this.subtitulo,
     this.apoio,
     this.destaque,
+    this.badge,
   });
 
   final String titulo;
   final String? subtitulo;
   final String? apoio;
   final String? destaque;
+
+  /// Badge à direita do título (design-system §5.2: "título, linha
+  /// secundária, badge") — o status do aluno, no card 4.6.
+  final Widget? badge;
 }
 
 /// Tabela com filtros e os quatro estados num contrato único
@@ -192,11 +206,7 @@ class TabelaIm360<T> extends StatelessWidget {
     final visiveis = colunasVisiveis(colunas, largura - Dim.e32);
     return Column(
       children: [
-        _linha(
-          visiveis,
-          celulas: [for (final c in visiveis) c.titulo],
-          cabecalho: true,
-        ),
+        _linha(visiveis, celulas: [for (final c in visiveis) c.titulo]),
         const Divider(height: 1),
         Expanded(
           child: ListView.separated(
@@ -207,10 +217,7 @@ class TabelaIm360<T> extends StatelessWidget {
               final tocar = aoTocarLinha;
               return InkWell(
                 onTap: tocar == null ? null : () => tocar(item),
-                child: _linha(
-                  visiveis,
-                  celulas: [for (final c in visiveis) c.texto(item)],
-                ),
+                child: _linha(visiveis, item: item),
               );
             },
           ),
@@ -219,10 +226,11 @@ class TabelaIm360<T> extends StatelessWidget {
     );
   }
 
+  /// Uma linha: o cabeçalho ([celulas] com os títulos) ou o [item].
   Widget _linha(
     List<ColunaIm360<T>> visiveis, {
-    required List<String> celulas,
-    bool cabecalho = false,
+    List<String>? celulas,
+    T? item,
   }) => SizedBox(
     height: Dim.alturaLinha,
     child: Padding(
@@ -234,25 +242,43 @@ class TabelaIm360<T> extends StatelessWidget {
               flex: visiveis[i].flex,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: Dim.e8),
-                child: Text(
-                  celulas[i],
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: visiveis[i].numerica
-                      ? TextAlign.end
-                      : TextAlign.start,
-                  style: cabecalho
-                      ? Tipografia.cabecalhoTabela
-                      : visiveis[i].numerica
-                      ? Tipografia.numero(Tipografia.corpoTabela)
-                      : Tipografia.corpoTabela,
-                ),
+                child: _celula(visiveis[i], celulas?[i], item),
               ),
             ),
         ],
       ),
     ),
   );
+
+  Widget _celula(ColunaIm360<T> coluna, String? titulo, T? item) {
+    if (titulo != null || item == null) {
+      return Text(
+        titulo ?? '',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: coluna.numerica ? TextAlign.end : TextAlign.start,
+        style: Tipografia.cabecalhoTabela,
+      );
+    }
+    final construtor = coluna.celula;
+    if (construtor != null) {
+      return Align(
+        alignment: coluna.numerica
+            ? Alignment.centerRight
+            : Alignment.centerLeft,
+        child: construtor(item),
+      );
+    }
+    return Text(
+      coluna.texto(item),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: coluna.numerica ? TextAlign.end : TextAlign.start,
+      style: coluna.numerica
+          ? Tipografia.numero(Tipografia.corpoTabela)
+          : Tipografia.corpoTabela,
+    );
+  }
 
   Widget _cartoes(BuildContext context, List<T> itens) {
     final cores = Theme.of(context).colorScheme;
@@ -284,7 +310,20 @@ class TabelaIm360<T> extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(dados.titulo, style: Tipografia.rotulo),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  dados.titulo,
+                                  style: Tipografia.rotulo,
+                                ),
+                              ),
+                              if (dados.badge != null) ...[
+                                const SizedBox(width: Dim.e8),
+                                dados.badge!,
+                              ],
+                            ],
+                          ),
                           if (dados.subtitulo != null)
                             Text(
                               dados.subtitulo!,

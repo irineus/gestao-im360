@@ -14,6 +14,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
+import '../util/datas.dart';
+
+export '../util/datas.dart';
+
 /// Conjuntos fechados no `check` das colunas (card 4.3) e como aparecem em
 /// tela. A chave é o valor do banco; o app nunca compara pelo rótulo.
 const tiposSala = <String, String>{
@@ -334,43 +338,9 @@ String situacaoPc(Pc pc, PcManutencao? aberta) {
 }
 
 // ---------------------------------------------------------------------------
-// Datas — sem `intl`: o app não tem localização configurada, e dd/mm/aaaa é
-// o único formato que a escola usa.
+// Datas — moram em util/datas.dart desde o card 4.6 (a ficha do aluno usa as
+// mesmas funções); continuam exportadas daqui para quem já as importava.
 // ---------------------------------------------------------------------------
-
-String _dois(int n) => n.toString().padLeft(2, '0');
-
-DateTime soData(DateTime d) => DateTime(d.year, d.month, d.day);
-
-String formatarData(DateTime d) =>
-    '${_dois(d.day)}/${_dois(d.month)}/${d.year}';
-
-String formatarDataCurta(DateTime d) => '${_dois(d.day)}/${_dois(d.month)}';
-
-/// `yyyy-mm-dd`, o formato da coluna `date` no PostgREST.
-String dataIso(DateTime d) => '${d.year}-${_dois(d.month)}-${_dois(d.day)}';
-
-final _formatoData = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$');
-
-/// Lê `dd/mm/aaaa`; nulo quando o texto não é uma data real (31/02 inclusive).
-DateTime? lerData(String texto) {
-  final casa = _formatoData.firstMatch(texto.trim());
-  if (casa == null) return null;
-  final dia = int.parse(casa[1]!);
-  final mes = int.parse(casa[2]!);
-  final ano = int.parse(casa[3]!);
-  final data = DateTime(ano, mes, dia);
-  if (data.day != dia || data.month != mes || data.year != ano) return null;
-  return data;
-}
-
-/// Validação local só de formato (design-system §5.4): a ordem entre início e
-/// fim quem confere é `pc_manutencao_periodo_ck`, no banco.
-String? validarData(String? valor, {bool obrigatorio = true}) {
-  final texto = valor?.trim() ?? '';
-  if (texto.isEmpty) return obrigatorio ? 'Campo obrigatório.' : null;
-  return lerData(texto) == null ? 'Informe uma data como dd/mm/aaaa.' : null;
-}
 
 // ---------------------------------------------------------------------------
 // Filtros — estado da tela, desligável e visível (design-system §5.3)
