@@ -154,13 +154,27 @@ select is(
 -- A unique de alocação ativa é PARCIAL: proíbe a segunda vaga ATIVA e permite a
 -- linha inativa ao lado, que é o que deixa fn_bloco_admitir (card 5.3)
 -- REATIVAR em vez de duplicar.
+--
+-- ⚠️ O aluno é NOMEADO, e não `limit 1` (correção do card 5.2, 03/09/2026). As
+-- duas consultas eram `... and ba.ativo limit 1`, sem `order by`: o Postgres pode
+-- devolver qualquer uma das dezenove alocações ativas, e a segunda escreve uma
+-- linha INATIVA para o aluno sorteado. No dia em que o sorteio caísse no `Aluno de
+-- Lotação 13`, a asserção de `tipo_desde` da seção 3 passaria a ler DUAS linhas e
+-- o arquivo inteiro morreria em "more than one row returned by a subquery" — 27
+-- dos 43 testes sem rodar, com a mensagem apontando para 100 linhas adiante da
+-- causa. Foi o que aconteceu ao exercitar a suíte num stack local novo, e não é
+-- instabilidade de ambiente: é a fonte nº 1 do §11 (ordem não pedida é ordem não
+-- garantida). O `Aluno de Lotação 01` está no bloco cheio e nenhuma asserção
+-- posterior conta linhas dele.
 select throws_ok(
   $$insert into public.bloco_aluno (unidade_id, bloco_id, aluno_id, tipo)
     select ba.unidade_id, ba.bloco_id, ba.aluno_id, 'REM'
       from public.bloco_aluno ba
+      join public.aluno a on a.id = ba.aluno_id
       join public.bloco_horario b on b.id = ba.bloco_id
       join public.unidade u on u.id = b.unidade_id
-     where u.codigo = 'ESCOLA_A' and ba.ativo limit 1$$,
+     where u.codigo = 'ESCOLA_A' and ba.ativo
+       and a.nome = 'Aluno de Lotação 01'$$,
   '23505', null,
   'um aluno nao ocupa duas vagas ATIVAS no mesmo bloco');
 
@@ -168,9 +182,11 @@ select lives_ok(
   $$insert into public.bloco_aluno (unidade_id, bloco_id, aluno_id, tipo, ativo)
     select ba.unidade_id, ba.bloco_id, ba.aluno_id, 'REM', false
       from public.bloco_aluno ba
+      join public.aluno a on a.id = ba.aluno_id
       join public.bloco_horario b on b.id = ba.bloco_id
       join public.unidade u on u.id = b.unidade_id
-     where u.codigo = 'ESCOLA_A' and ba.ativo limit 1$$,
+     where u.codigo = 'ESCOLA_A' and ba.ativo
+       and a.nome = 'Aluno de Lotação 01'$$,
   'mas a alocacao INATIVA ao lado passa — o indice e parcial, e e isso que deixa reativar');
 
 -- ===========================================================================
