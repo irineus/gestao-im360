@@ -99,7 +99,10 @@ void main() {
       // o botão seria oferecer um clique que só sabe falhar (card 4.7,7).
       const aceitou = UsuarioAdmin(id: 'u', nome: 'n', email: 'e');
       expect(podeReenviarConvite(aceitou), isFalse);
-      expect(podeReenviarConvite(aceitou.copiar(convitePendente: true)), isTrue);
+      expect(
+        podeReenviarConvite(aceitou.copiar(convitePendente: true)),
+        isTrue,
+      );
       expect(
         podeReenviarConvite(
           aceitou.copiar(convitePendente: true, ativo: false),
@@ -134,7 +137,10 @@ void main() {
         reason: 'sem perfil e convite pendente são coisas diferentes',
       );
       expect(
-        apoioUsuario(base.copiar(ativo: false, convitePendente: true), perfisPorId),
+        apoioUsuario(
+          base.copiar(ativo: false, convitePendente: true),
+          perfisPorId,
+        ),
         'Desativado',
       );
     });
