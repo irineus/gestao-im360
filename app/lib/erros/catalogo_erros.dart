@@ -2,7 +2,8 @@
 ///
 /// Fonte dos textos: docs/design-system.md §7.1 (card 2.7), mais `PC_INEXISTENTE`
 /// (card 2.9), os três do card 3.5, `ALUNO_INEXISTENTE` (card 4.2),
-/// `PC_COM_HISTORICO` (card 4.3) e `BLOCO_COM_ALOCACAO` (card 5.1). O contrato
+/// `PC_COM_HISTORICO` (card 4.3), `BLOCO_COM_ALOCACAO` (card 5.1) e os três do
+/// card 6.1 (trilha e estoque). O contrato
 /// do conjunto é
 /// `test/fixtures/codigos_erro.txt`, na raiz do repositório.
 ///
@@ -113,6 +114,25 @@ abstract final class CatalogoErros {
         'atual.',
     'RESOLUCAO_INVALIDA':
         'Escolha resolver ou ignorar a pendência para continuar.',
+
+    // --- card 6.1 (trilha e estoque)
+    // COMPOSICAO_METODO_DIVERGENTE é código NOVO, e não METODO_INCOMPATIVEL:
+    // aquele compara o método do ALUNO com o da TURMA, e a mensagem dele seria
+    // falsa em toda palavra aqui. A tela do card 4.4 já filtra os candidatos
+    // pelo método do pai, então esta mensagem só aparece quando alguém chegar à
+    // tabela por outro caminho — e é justamente aí que ela precisa ser clara.
+    'COMPOSICAO_METODO_DIVERGENTE':
+        'Este item é de outro método. A composição do catálogo não pode '
+        'misturar métodos.',
+    'PEDIDO_NAO_RASCUNHO':
+        'Só dá para remover item de pedido em rascunho. Cancele o pedido ou '
+        'ajuste as quantidades.',
+    // Mesma família do PC_COM_HISTORICO e do BLOCO_COM_ALOCACAO, mas aqui a
+    // recusa é total: movimento de estoque não se altera nem se apaga, e a
+    // correção é sempre um movimento novo.
+    'MOVIMENTO_IMUTAVEL':
+        'Movimento de estoque não pode ser alterado nem apagado. Para corrigir, '
+        'lance um estorno.',
 
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':

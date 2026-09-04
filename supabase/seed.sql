@@ -89,8 +89,18 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
    'APLICADA no card 5.1: três blocos no Laboratório 1 (0, 9 e 10 alunos), os três SEM capacidade_override, para a capacidade efetiva do card 5.2 ter de sair dos 10 PCs operacionais. Os dois blocos cheios têm alunos disjuntos — reaproveitá-los faria nove alunos ATIVO ficarem com dois blocos, que é a definição de aceleração —, e por isso a camada traz treze alunos de lotação próprios, com codigo_sgf na faixa 9xxx para não mexer nas asserções do card 4.2. Lucas Ferreira fica com débito REP EXATAMENTE na borda do card 2.5, escolhida onde ceil e floor divergem; as reposições dele ficam no bloco vazio, que assim passa a ter ocupação 1 no dia da PREVISTA.'),
 
   ('trilha_estoque', 70, '6.1',
-   $$to_regclass('public.movimento_estoque') is not null$$, false,
-   'Trilha dos doze alunos e os movimentos que produzem os saldos 0/0/1/n/n/n. Saldo 1 é o teste de concorrência (card 2.8 §7); saldo 0 é o REORDENADA e o BLOQUEADA_SEM_ESTOQUE.');
+   $$to_regclass('public.movimento_estoque') is not null$$, true,
+   'APLICADA no card 6.1: trilha dos doze alunos (menos Karina, que não tem combo) derivada do combo, três pedidos de compra — um por estado que muda alguma conta — e os movimentos que produzem os saldos 0/0/1/n/n/n do card 2.8 §4.2. Saldo 1 é o material que é o PRÓXIMO de dois alunos, que é o teste de concorrência do card 6.3; os dois saldos zero são diferentes de propósito (um com item pendente adiante = REORDENADA, um sem = BLOQUEADA_SEM_ESTOQUE). João Pedro fica em FIM, fechando a última marca do quadro §4.2 que ainda não tinha casa. Os quatro tipos de movimento aparecem, incluindo o único ESTORNO da fixture.'),
+
+  -- Declarada aqui e não no card 7.1 porque o portão do teste 001 precisa de uma
+  -- camada AINDA NÃO aplicada para vigiar: com `trilha_estoque` aplicada, ele
+  -- ficaria sem sentinela e a prova por construção viraria decoração — que é
+  -- exatamente a crítica do card 2.8. A nota do 001 já escrevia isso: «quando ela
+  -- for aplicada, esta asserção precisa de uma camada NOVA para vigiar, e não de
+  -- uma sentinela nova».
+  ('modular', 80, '7.1',
+   $$to_regclass('public.turma_modular_aluno') is not null$$, false,
+   'Turma Modular de Eletricista com o cronograma dos três módulos e Eduarda Lima dentro. A fixture já tem o método, o curso, os três módulos (card 4.1) e a aluna (4.2) — falta a turma, que é o que torna fn_aluno_status_desaloca capaz de citar turma_modular_aluno (portão do teste 040 §10).');
 
 -- Devolve as camadas cuja condição já vale e que ainda não foram escritas.
 -- Vazio = a fixture está em dia com o schema.
@@ -959,7 +969,269 @@ select tests.seed_turmas(tests.unidade('ESCOLA_A'));
 select tests.seed_turmas(tests.unidade('ESCOLA_B'));
 
 -- =============================================================================
--- 8. Fecho: nada em `tests` alcançável por quem não é `postgres`
+-- 8. Escola-fixture — camada `trilha_estoque` (card 6.1)
+-- =============================================================================
+-- Fecha o quadro do card 2.8 §4.2: os seis materiais ganham os saldos
+-- **0, 0, 1, n, n, n** e os doze alunos ganham trilha — inclusive o "1 em FIM",
+-- que era a última marca do quadro ainda sem casa (as outras duas foram para as
+-- camadas `alunos` e `turmas`).
+--
+-- Cinco escolhas que valem explicação:
+--
+--   (a) OS SALDOS SÃO DERIVADOS, não escritos. Cada saldo é a soma dos
+--       movimentos que o produziram — entradas de pedido, entradas manuais,
+--       saídas de entrega, um ajuste e um estorno. Escrever "saldo = 1" numa
+--       coluna seria testar uma coluna que o projeto decidiu não ter; o que se
+--       quer provar é que `sum(quantidade)` dá o número certo.
+--
+--   (b) O SALDO 1 É DE `INTERATIVO 03`, E ELE É O PRÓXIMO DE DOIS ALUNOS (Ana
+--       Paula e Bruno, os dois com 01 e 02 entregues). É exatamente o cenário do
+--       teste de concorrência do card 6.3: duas sessões disputando o último
+--       exemplar, uma ENTREGUE e a outra REORDENADA — e ele não existe se o
+--       último exemplar for o próximo de uma pessoa só.
+--
+--   (c) OS DOIS SALDOS ZERO SÃO DIFERENTES DE PROPÓSITO. `INTERATIVO 02` é o
+--       próximo de Diego e de Lucas, que TÊM outro item pendente adiante (o 03):
+--       é o caso `REORDENADA`. `INGLES 02` é o próximo de Felipe e é o ÚNICO
+--       item pendente dele: é o caso `BLOQUEADA_SEM_ESTOQUE`. Dois zeros iguais
+--       exercitariam um ramo só, e o outro passaria sem nunca ter rodado.
+--
+--   (d) OS QUATRO TIPOS DE MOVIMENTO APARECEM. ENTRADA e SAIDA sozinhas
+--       deixariam `movimento_sinal_ck` e `movimento_estorno_ck` sem contraprova,
+--       e `movimento_estorno_uk` sem nenhuma linha para vigiar. O AJUSTE negativo
+--       (extravio de `INGLES 02`) é o que faz um saldo cair sem entrega nenhuma;
+--       o ESTORNO devolve ao estoque a entrega de Eduarda, que por isso volta a
+--       ter o livro dela PENDENTE — o par saída-estorno é o estado que o card 6.3
+--       precisa encontrar já pronto.
+--
+--   (e) UM PEDIDO POR ESTADO QUE MUDA ALGUMA CONTA: RECEBIDO (com a ENTRADA
+--       vinculada ao item, que é o vínculo compra ↔ estoque que a planilha não
+--       tinha), ENVIADO (a parcela "já pedida" que o pedido sugerido do card 2.3
+--       §6 (d) abate) e RASCUNHO (que NÃO abate, e é também o único item que a
+--       guarda de exclusão da seção 10.2 da migração deixa remover). Sem os três,
+--       a view do card 6.4 passaria somando o RASCUNHO ou deixando de somar o
+--       ENVIADO, que é o mesmo erro nas duas direções.
+--
+-- ⚠️ Os quatro degraus da cascata da projeção (card 8.1) precisam de intervalos
+--    entre entregas, e é por isso que as datas de entrega aqui são escalonadas e
+--    relativas a fn_hoje(). O que a camada NÃO faz é afirmar qual degrau cada
+--    aluno cai: isso depende de parâmetros e de v_ritmo_aluno, que são do card
+--    8.1 — e é lá que esta camada cresce, se precisar.
+
+create or replace function tests.seed_trilha_estoque(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  r         record;
+  v_item    uuid;
+  v_mov     uuid;
+  v_saida   uuid;
+begin
+  -- -------------------------------------------------------------------------
+  -- 8.1 Pedidos de compra — um por estado que muda alguma conta
+  -- -------------------------------------------------------------------------
+  insert into pedido_compra (unidade_id, numero, status, data_envio, fornecedor)
+  select p_unidade, s.numero, s.status,
+         case when s.envio_ha is null then null else fn_hoje() - s.envio_ha end,
+         s.fornecedor
+    from (values
+      ('2026-001', 'RECEBIDO', 120, 'Editora Interativa'),
+      ('2026-002', 'ENVIADO',   10, 'Editora Interativa'),
+      ('2026-003', 'RASCUNHO', null, null)
+    ) as s(numero, status, envio_ha, fornecedor)
+   where not exists (select 1 from pedido_compra p
+                      where p.unidade_id = p_unidade and p.numero = s.numero);
+
+  insert into pedido_item (unidade_id, pedido_id, material_id, qtd_pedida, qtd_recebida)
+  select p_unidade, pc.id, m.id, s.pedida, s.recebida
+    from (values
+      ('2026-001', 'INTERATIVO', '01', 26, 26),
+      ('2026-002', 'INTERATIVO', '02', 10,  0),
+      ('2026-002', 'INGLES',     '02',  5,  0),
+      ('2026-003', 'INTERATIVO', '03',  5,  0)
+    ) as s(numero, metodo, material, pedida, recebida)
+    join pedido_compra pc on pc.unidade_id = p_unidade and pc.numero = s.numero
+    join metodo   me on me.unidade_id = p_unidade and me.codigo = s.metodo
+    join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id
+                    and m.codigo = s.material
+   where not exists (select 1 from pedido_item pi
+                      where pi.pedido_id = pc.id and pi.material_id = m.id);
+
+  -- -------------------------------------------------------------------------
+  -- 8.2 Entradas de estoque
+  -- -------------------------------------------------------------------------
+  -- A primeira vem de um pedido e carrega `pedido_item_id`; as outras são
+  -- entrada manual, que é um caso real (card 6.7) e o único jeito de o estoque
+  -- inicial existir antes de haver pedido nenhum.
+  select pi.id into v_item
+    from pedido_item pi
+    join pedido_compra pc on pc.id = pi.pedido_id
+    join material m on m.id = pi.material_id
+   where pc.unidade_id = p_unidade and pc.numero = '2026-001';
+
+  insert into movimento_estoque (unidade_id, material_id, tipo, quantidade,
+                                 ocorrido_em, pedido_item_id, observacao)
+  select p_unidade, m.id, 'ENTRADA', s.qtd, now() - (s.dias || ' days')::interval,
+         case when s.do_pedido then v_item else null end,
+         s.observacao
+    from (values
+      ('INTERATIVO', '01', 26, 120, true,  'chegada do pedido 2026-001'),
+      ('INTERATIVO', '02',  3, 118, false, 'entrada manual: sobra de remessa antiga'),
+      ('INTERATIVO', '03',  2, 118, false, 'entrada manual: o ultimo exemplar mora aqui'),
+      ('INGLES',     '01', 11, 115, false, 'entrada manual'),
+      ('INGLES',     '02',  5, 115, false, 'entrada manual'),
+      ('MODULAR',    '01', 10, 115, false, 'entrada manual')
+    ) as s(metodo, material, qtd, dias, do_pedido, observacao)
+    join metodo   me on me.unidade_id = p_unidade and me.codigo = s.metodo
+    join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id
+                    and m.codigo = s.material
+   where not exists (select 1 from movimento_estoque mv
+                      where mv.unidade_id = p_unidade and mv.material_id = m.id
+                        and mv.tipo = 'ENTRADA');
+
+  -- Extravio de `INGLES 02`: é o AJUSTE negativo, e é ele que leva o saldo a
+  -- zero SEM nenhuma entrega — o caso que uma fixture só com saídas não teria.
+  insert into movimento_estoque (unidade_id, material_id, tipo, quantidade,
+                                 ocorrido_em, observacao)
+  select p_unidade, m.id, 'AJUSTE', -5, now() - interval '100 days',
+         'conferencia de prateleira: cinco exemplares extraviados'
+    from metodo   me
+    join material m on m.unidade_id = p_unidade and m.metodo_id = me.id and m.codigo = '02'
+   where me.unidade_id = p_unidade and me.codigo = 'INGLES'
+     and not exists (select 1 from movimento_estoque mv
+                      where mv.unidade_id = p_unidade and mv.material_id = m.id
+                        and mv.tipo = 'AJUSTE');
+
+  -- -------------------------------------------------------------------------
+  -- 8.3 A trilha inteira, derivada do combo
+  -- -------------------------------------------------------------------------
+  -- A `ordem` sai de combo_curso.ordem × curso_material.ordem, que é a mesma
+  -- cadeia que a função do card 6.2 vai percorrer — e é por isso que ela é
+  -- calculada e não digitada: uma trilha escrita à mão aqui deixaria o 6.2 sem
+  -- nada contra o que comparar o resultado dele.
+  --
+  -- ⚠️ O `row_number()` sobre as DUAS ordens é a parte que não pode simplificar:
+  --    `curso_material.ordem` é a posição dentro do CURSO, então o combo de
+  --    Informática (dois cursos) tem duas apostilas com `cm.ordem = 1`, e usá-la
+  --    direto derrubaria a inserção em `aluno_material_ordem_uk` — ou, pior num
+  --    combo de um curso só, passaria e deixaria a fixture com a ordem errada
+  --    sem nada acusando.
+  --
+  -- Karina Bastos NÃO ganha trilha, e é a decisão: ela é a aluna sem combo da
+  -- camada `alunos`, e aluno ATIVO sem trilha é exatamente o que a pendência do
+  -- card 6.2 existe para acusar.
+  --
+  -- Os treze `Aluno de Lotação` da camada `turmas` GANHAM trilha, e isso não é
+  -- efeito colateral aceito de má vontade: eles são ATIVO e têm combo, então um
+  -- deles sem trilha seria uma pendência FALSA na fixture — a mesma que a
+  -- pendência do card 6.2 vai abrir. O preço é conhecido e está escrito: a
+  -- demanda imediata de `INTERATIVO 01` (card 6.4) conta treze alunos a mais do
+  -- que a leitura ingênua "doze alunos na fixture" sugere.
+  insert into aluno_material (unidade_id, aluno_id, material_id, ordem, origem)
+  select p_unidade, a.id, cm.material_id,
+         row_number() over (partition by a.id order by cc.ordem, cm.ordem),
+         'COMBO'
+    from aluno a
+    join combo_curso cc on cc.combo_id = a.combo_id and cc.unidade_id = p_unidade
+    join curso_material cm on cm.curso_id = cc.curso_id and cm.unidade_id = p_unidade
+   where a.unidade_id = p_unidade
+     and not exists (select 1 from aluno_material am
+                      where am.aluno_id = a.id and am.material_id = cm.material_id);
+
+  -- -------------------------------------------------------------------------
+  -- 8.4 As entregas: uma SAIDA por item entregue, e o vínculo na trilha
+  -- -------------------------------------------------------------------------
+  -- As datas são escalonadas porque a projeção do card 8.1 mede INTERVALO entre
+  -- entregas: uma fixture com todas as entregas no mesmo dia daria ritmo zero
+  -- para todo mundo e o degrau RITMO_ALUNO passaria sem nunca ser exercitado.
+  for r in
+    select a.id as aluno_id, m.id as material_id, s.dias
+      from (values
+        ('Ana Paula Ribeiro',  'INTERATIVO', '01', 150),
+        ('Ana Paula Ribeiro',  'INTERATIVO', '02',  90),
+        ('Bruno Carvalho',     'INTERATIVO', '01',  80),
+        ('Bruno Carvalho',     'INTERATIVO', '02',  20),
+        ('Diego Alves',        'INTERATIVO', '01', 100),
+        ('Henrique Dias',      'INTERATIVO', '01', 280),
+        ('João Pedro Martins', 'INTERATIVO', '01', 380),
+        ('João Pedro Martins', 'INTERATIVO', '02', 300),
+        ('João Pedro Martins', 'INTERATIVO', '03', 200),
+        ('Lucas Ferreira',     'INTERATIVO', '01',  40),
+        ('Felipe Nunes',       'INGLES',     '01', 100)
+      ) as s(aluno, metodo, material, dias)
+      join aluno    a  on a.unidade_id  = p_unidade and a.nome = s.aluno
+      join metodo   me on me.unidade_id = p_unidade and me.codigo = s.metodo
+      join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id
+                      and m.codigo = s.material
+     where exists (select 1 from aluno_material am
+                    where am.aluno_id = a.id and am.material_id = m.id
+                      and not am.entregue)
+  loop
+    insert into movimento_estoque (unidade_id, material_id, tipo, quantidade,
+                                   ocorrido_em, aluno_id, observacao)
+    values (p_unidade, r.material_id, 'SAIDA', -1,
+            now() - (r.dias || ' days')::interval, r.aluno_id,
+            'entrega ao aluno')
+    returning id into v_mov;
+
+    -- O UPDATE toca só as três colunas da ENTREGA, que são exatamente as que
+    -- tg_aluno_material_colunas_permitidas deixa fora da lista guardada — a
+    -- fixture percorre o mesmo caminho que fn_registrar_entrega (card 6.3)
+    -- percorrerá, e não um atalho que o sistema real não tem.
+    update aluno_material
+       set entregue = true,
+           data_entrega = fn_hoje() - r.dias,
+           movimento_estoque_id = v_mov
+     where aluno_id = r.aluno_id and material_id = r.material_id;
+  end loop;
+
+  -- -------------------------------------------------------------------------
+  -- 8.5 O par saída + estorno de Eduarda (Modular)
+  -- -------------------------------------------------------------------------
+  -- A entrega aconteceu e foi desfeita: o livro voltou ao estoque, a trilha
+  -- voltou a PENDENTE e as DUAS linhas de movimento continuam lá. É o contrato
+  -- do estorno (card 2.2 §6.3) já materializado — e a única linha da fixture com
+  -- `estorno_de_id`, que é o que dá a `movimento_estorno_uk` algo para vigiar.
+  select mv.id into v_saida
+    from movimento_estoque mv
+    join material m on m.id = mv.material_id
+    join metodo me on me.id = m.metodo_id and me.codigo = 'MODULAR'
+   where mv.unidade_id = p_unidade and mv.tipo = 'SAIDA' and m.codigo = '01';
+
+  if v_saida is null then
+    insert into movimento_estoque (unidade_id, material_id, tipo, quantidade,
+                                   ocorrido_em, aluno_id, observacao)
+    select p_unidade, m.id, 'SAIDA', -1, now() - interval '50 days', a.id,
+           'entrega ao aluno (desfeita 5 dias depois)'
+      from metodo me
+      join material m on m.unidade_id = p_unidade and m.metodo_id = me.id and m.codigo = '01'
+      join aluno a on a.unidade_id = p_unidade and a.nome = 'Eduarda Lima'
+     where me.unidade_id = p_unidade and me.codigo = 'MODULAR'
+    returning id into v_saida;
+
+    insert into movimento_estoque (unidade_id, material_id, tipo, quantidade,
+                                   ocorrido_em, aluno_id, estorno_de_id, observacao)
+    select p_unidade, mv.material_id, 'ESTORNO', 1,
+           now() - interval '45 days', mv.aluno_id, mv.id,
+           'estorno: livro entregue por engano'
+      from movimento_estoque mv where mv.id = v_saida;
+  end if;
+end $$;
+
+comment on function tests.seed_trilha_estoque(uuid) is
+  'Camada `trilha_estoque` da escola-fixture (card 6.1): trilha dos doze alunos e os movimentos que produzem os saldos 0/0/1/n/n/n do card 2.8 §4.2.';
+
+-- As duas unidades recebem a mesma trilha e o mesmo estoque: números iguais dos
+-- dois lados é o que torna a asserção de isolamento comparável — e
+-- `pedido_compra_numero_uk` é única por UNIDADE, então repetir `2026-001` entre
+-- elas é exatamente o caso que a unique precisa aceitar.
+select tests.seed_trilha_estoque(tests.unidade('ESCOLA_A'));
+select tests.seed_trilha_estoque(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 9. Fecho: nada em `tests` alcançável por quem não é `postgres`
 -- =============================================================================
 -- `create function` concede EXECUTE a PUBLIC por padrão. A revogação do USAGE no
 -- schema já bastaria, mas as duas juntas sobrevivem a alguém conceder o schema

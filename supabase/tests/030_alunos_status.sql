@@ -276,29 +276,69 @@ drop table public.certificado_checklist;
 --    comparar —, e é `aluno_material`. Mantida a intenção do portão, corrigida a
 --    condição; o tipo TRILHA_DIVERGENTE_COMBO já entrou no `check` de
 --    `pendencia.tipo` no card 5.5, que era o que aquele card devia.
-create temporary view portao_trigger (tabela, gatilho, card) as values
-  ('public.bloco_aluno',    'tg_aluno_status_desaloca', '5.1'),
-  ('public.aluno_material', 'tg_aluno_trilha_inicial',  '6.2'),
-  ('public.aluno_material', 'tg_aluno_combo_alterado',  '6.2');
+--
+-- ⚠️ SEGUNDA CORREÇÃO DE CONDIÇÃO, EM 04/09/2026 (card 6.1), e pelo mesmo
+--    princípio da primeira: **a condição certa é a mais tardia das
+--    pré-condições**. O card 6.1 cria `aluno_material`, e com a condição escrita
+--    como "a tabela existe" o portão passaria a cobrar, JÁ NELE, dois triggers
+--    que ele não pode escrever — os dois expandem a cadeia combo → curso →
+--    material, que é a função do card **6.2**, o card que o próprio portão nomeia
+--    na coluna `card`. O portão tinha uma contradição interna: a condição
+--    disparava um card antes do rótulo.
+--
+--    A pré-condição que faltava é o GERADOR da trilha, e ela é detectada sem
+--    depender do nome que o card 6.2 vier a dar à função: existe, em `public`,
+--    alguma função que INSERE em `aluno_material`. Isso mantém o portão
+--    não-vazio no lugar certo — escrever a geração da trilha e esquecer o
+--    trigger que a dispara na matrícula é exatamente a família de defeito do
+--    card 4.7,7 (função entregue, testada e sem chamador), e é ela que o portão
+--    passa a pegar.
+--
+--    Os comentários saem de `prosrc` antes da busca: é a lição do card 4.2, onde
+--    o portão do gate de FORMADO teria aprovado a si mesmo por causa do
+--    comentário que descrevia o que faltava.
+create temporary view portao_trigger (gatilho, card, devida, precondicao) as
+  select 'tg_aluno_status_desaloca', '5.1',
+         to_regclass('public.bloco_aluno') is not null,
+         'public.bloco_aluno existe'
+  union all
+  select g.gatilho, '6.2',
+         exists (select 1
+                   from pg_proc p
+                   join pg_namespace n on n.oid = p.pronamespace
+                  where n.nspname = 'public'
+                    and regexp_replace(p.prosrc, '--[^\n]*', '', 'g')
+                        ~* 'insert\s+into\s+(public\.)?aluno_material\M'),
+         'a geracao da trilha existe'
+    from (values ('tg_aluno_trilha_inicial'), ('tg_aluno_combo_alterado')) as g(gatilho);
 
 create temporary view portao_trigger_devido as
-  select coalesce(string_agg(format('%s existe (card %s) e %s nao', p.tabela, p.card, p.gatilho),
+  select coalesce(string_agg(format('%s (card %s) e %s nao', p.precondicao, p.card, p.gatilho),
                              '; ' order by p.gatilho), '') as devido
     from portao_trigger p
-   where to_regclass(p.tabela) is not null
+   where p.devida
      and not exists (select 1 from pg_trigger t
                       where t.tgname = p.gatilho and not t.tgisinternal);
 
 select is((select devido from portao_trigger_devido), '',
-  'nenhum trigger de aluno esta devido — as tres tabelas que os tornam devidos ainda nao existem');
+  'nenhum trigger de aluno esta devido — tg_aluno_status_desaloca existe e a geracao da trilha ainda nao');
 
-create table public.aluno_material (id uuid primary key);
+-- Prova por construção: a função que torna os dois devidos, criada dentro desta
+-- transação. A sentinela deixou de ser uma TABELA (que o card 6.1 criou de
+-- verdade, e cujo `create table` morreria com "already exists") e passou a ser a
+-- função que o card 6.2 vai escrever.
+create function public.fn_portao_sentinela_trilha() returns void
+language plpgsql set search_path = public, pg_temp as $sentinela$
+begin
+  insert into public.aluno_material (unidade_id, aluno_id, material_id, ordem)
+  values (null, null, null, 1);
+end $sentinela$;
 
 select is((select devido from portao_trigger_devido),
-  'public.aluno_material existe (card 6.2) e tg_aluno_combo_alterado nao; public.aluno_material existe (card 6.2) e tg_aluno_trilha_inicial nao',
-  'nascida a tabela, o portao nomeia os triggers que ficaram para tras e o card deles');
+  'a geracao da trilha existe (card 6.2) e tg_aluno_combo_alterado nao; a geracao da trilha existe (card 6.2) e tg_aluno_trilha_inicial nao',
+  'nascida a geracao da trilha, o portao nomeia os triggers que ficaram para tras e o card deles');
 
-drop table public.aluno_material;
+drop function public.fn_portao_sentinela_trilha();
 
 -- ===========================================================================
 -- 7. fn_aluno_alterar_status — caminho feliz com efeito conferido
