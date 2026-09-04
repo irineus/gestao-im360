@@ -115,8 +115,37 @@ depois não teria como saber se afrouxou. Ainda **não** roda no CI — item 4 d
 .\automacao\cadeia.ps1 -MaxCards 30      # até a fila acabar ou precisar de você
 ```
 
-Histórico em `automacao/logs/cadeia.jsonl` (uma linha por card) e a saída bruta de cada sessão em
-`automacao/logs/card-<carimbo>.log`. Nenhum dos dois é versionado.
+Histórico em `automacao/logs/cadeia.jsonl` (uma linha por card), a narração de cada sessão em
+`automacao/logs/card-<carimbo>.log` e o stream cru em `card-<carimbo>.jsonl`. Nada disso é versionado.
+
+## 7.1 Dá para acompanhar ao vivo
+
+Sim, e não dava. `claude -p` com saída em texto **bufferiza a resposta inteira** e só imprime no fim:
+num card `GG` são dezenas de minutos de silêncio depois de uma linha dizendo onde fica o log. O driver
+usa `--output-format stream-json` e passa os eventos por `automacao/formatar-stream.mjs`, que traduz
+em narração curta conforme acontece:
+
+```
+  · sessão iniciada
+  → Bash: supabase test db
+  → Edit: supabase/migrations/20260904...sql
+  · Vou criar a view em cima da função, como o §7 manda…
+  ✗ ferramenta falhou: …
+  ── sessão encerrada: 34 turnos · 812.4s · US$ 6.1204
+```
+
+Só o que interessa a quem acompanha: ferramenta com o alvo, texto do assistente, e **erro de
+ferramenta** — o resultado que deu certo fica implícito no passo seguinte e dobraria o volume. O
+JSONL cru fica ao lado para quando o resumo não bastar.
+
+A linha final de `result` traz **turnos, duração e custo**, que é a medida que faltava para o item 2
+do §9: cada corrida passa a dizer quanto custou.
+
+⚠️ **Duas armadilhas de encoding do PowerShell 5.1 já pagas**, e as duas davam sintoma parecido com
+defeito de conteúdo: `$OutputEncoding` (o que se ESCREVE ao canalizar para um processo nativo) tem
+**ASCII** como padrão e transformava "fumaça" em "fuma?a"; e `[System.Text.Encoding]::UTF8` traz
+**BOM**, que entrava na primeira linha entregue ao filtro, quebrava só o `JSON.parse` dela e a
+repassava crua no meio da narração. Daí o `New-Object System.Text.UTF8Encoding $false`.
 
 ## 8. O que a cadeia não faz
 
