@@ -823,8 +823,8 @@ Divergências e apontamentos para outros cards:
 |---|---|---|
 | 1 | Cadastro de cursos/combos/módulos e professores desenhado nas telas 6 e 10 (junto do uso), e não na tela 12 como o plano §7 sugere — Administração fica com usuários, matriz e parâmetros. As permissões do card 2.4 já suportam isso (guardas por `materiais.*`/`professores.*`, independentes de `admin.*`) | 4.4 / 4.5 / 4.7 |
 | 2 | `v_certificado_fila` (card 8.6) precisa devolver **as duas situações** — `em_ultimo_livro` e `em_fim` — com rótulo distinto (§12.1); o plano fala só em "fila do último livro" | 8.6 |
-| 3 | `v_bloco_alunos` (card 5.7) precisa expor a origem da reposição pontual (bloco/data da falta) para o rótulo "reposição de Qua 27/08" (§7.2) | 5.7 |
-| 4 | A ficha do aluno exibe a situação REP (`fn_rep_situacao`) na aba Turmas quando há débito (§6.4) — consumidor de tela previsto no card 2.5 §5 | 5.7 / 6.6 |
+| 3 | ✅ **Fechado em 03/09/2026 (card 5.7).** `v_bloco_alunos` precisava expor a origem da reposição pontual (bloco/data da falta) para o rótulo "reposição de Qua 27/08" (§7.2) — quem a expõe é **`fn_bloco_alunos`**, com `bloco_origem_dia`/`bloco_origem_hora`/`data_origem` e `left join` no bloco de origem, porque `bloco_origem_id` é nulo de propósito (card 2.5 §3.1) e aí a linha diz "reposição avulsa" em vez de inventar | 5.7 |
+| 4 | ✅ **Fechado em 03/09/2026 (card 5.7).** A ficha exibe a situação REP (`fn_rep_situacao`) na aba Turmas, **com os números e não só o veredito** — e só quando há o que dizer: débito, aluno já contínuo, ou veredito diferente de MANTER. Painel permanente dizendo "0 aulas a repor" em toda ficha treina a pessoa a não olhar para ele | 5.7 / 6.6 |
 | 5 | Tela de Administração reserva aba "Histórico" da matriz para o card 4.7.5 (§15) | 4.7.5 |
 | 6 | O aviso pós-troca de combo ("trilha não regenera; abre pendência") vai no formulário de Dados (§6.4) — texto final no card 2.7 | 4.6 |
 

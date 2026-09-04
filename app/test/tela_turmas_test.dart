@@ -213,15 +213,24 @@ void main() {
 
     await montar(
       tester,
-      repositorio: TurmasFalso(celulas: [], inativos: const []),
+      repositorio: TurmasFalso(celulas: [], blocos: const []),
       permissoes: secretaria,
     );
     expect(find.textContaining('Inativos'), findsNothing);
   });
 
-  testWidgets('tocar a célula abre o bloco para edição', (tester) async {
+  testWidgets('tocar a célula abre os alunos do bloco, e o cadastro fica no '
+      '"Editar bloco" de dentro', (tester) async {
     await montar(tester, permissoes: secretaria);
     await tester.tap(find.text('9/10'));
+    await carregar(tester);
+
+    // O painel do card 5.7, e não o formulário do bloco: quem clica numa turma
+    // quer ver quem está nela (wireframe §7.2).
+    expect(find.textContaining('Ter 08:00'), findsWidgets);
+    expect(find.text('Bloco de horário'), findsNothing);
+
+    await tester.tap(find.text('Editar bloco'));
     await carregar(tester);
     expect(find.text('Bloco de horário'), findsOneWidget);
     // A capacidade derivada da sala fica ao lado do override, para a decisão

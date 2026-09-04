@@ -4,19 +4,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/alunos/alunos_provider.dart';
 import 'package:gestao_im360/catalogo/catalogo.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
+import 'package:gestao_im360/infraestrutura/infraestrutura_provider.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
+import 'package:gestao_im360/telas/alunos/aba_turmas.dart';
 import 'package:gestao_im360/telas/alunos/ficha_aluno.dart';
 import 'package:gestao_im360/telas/alunos/formularios.dart';
 import 'package:gestao_im360/telas/alunos/tela_alunos.dart';
 import 'package:gestao_im360/theme/tema.dart';
-import 'package:gestao_im360/util/datas.dart';
+import 'package:gestao_im360/turmas/turmas.dart';
+import 'package:gestao_im360/turmas/turmas_provider.dart';
 import 'package:gestao_im360/widgets/badge_status.dart';
+import 'package:gestao_im360/widgets/badge_tipo.dart';
+import 'package:gestao_im360/widgets/estados.dart';
 import 'package:gestao_im360/widgets/formulario.dart';
 import 'package:go_router/go_router.dart';
 
 import 'apoio/alunos_falso.dart';
 import 'apoio/carregar.dart';
 import 'apoio/catalogo_falso.dart';
+import 'apoio/infraestrutura_falso.dart';
+import 'apoio/turmas_falso.dart';
 
 /// A obrigação de teste de um card de **Tela** (card 2.8 §13): ocultação por
 /// permissão e estado vazio com o texto do card 2.7 — a guarda de rota já está
@@ -41,10 +48,16 @@ void main() {
     'alunos.formar_sem_certificado',
   };
 
+  // Card 5.7: a coluna Turmas e a aba Turmas exigem `turmas.ler`, que NÃO está
+  // no conjunto mínimo da rota (card 2.4 §6) — a lista abre sem ele, e é essa
+  // diferença que a coluna respeita.
+  const comTurmas = {...leitura, 'turmas.ler'};
+
   Future<void> montar(
     WidgetTester tester, {
     required AlunosFalso repositorio,
     CatalogoFalso? catalogo,
+    TurmasFalso? turmas,
     Set<String> permissoes = leitura,
     Size tamanho = const Size(1400, 900),
     String rotaInicial = '/alunos',
@@ -76,6 +89,12 @@ void main() {
           alunosRepositorioProvider.overrideWithValue(repositorio),
           catalogoRepositorioProvider.overrideWithValue(
             catalogo ?? CatalogoFalso.fixture(),
+          ),
+          turmasRepositorioProvider.overrideWithValue(
+            turmas ?? TurmasFalso.fixture(),
+          ),
+          infraestruturaRepositorioProvider.overrideWithValue(
+            InfraestruturaFalso.fixture(),
           ),
           permissoesProvider.overrideWithValue(permissoes),
           unidadeAtualProvider.overrideWithValue('unidade-teste'),
@@ -439,6 +458,219 @@ void main() {
       await tester.tap(find.text('Histórico'));
       await carregar(tester);
       expect(find.text(vazioHistorico), findsOneWidget);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Card 5.7 — a coluna Turmas, o ⚠ de sem turma, e a aba Turmas da ficha
+  // -------------------------------------------------------------------------
+
+  group('coluna Turmas', () {
+    testWidgets('mostra os blocos do aluno e o ⚠ de quem está em curso sem '
+        'turma', (tester) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        permissoes: comTurmas,
+      );
+      expect(find.text('Turmas'), findsOneWidget, reason: 'o cabeçalho');
+      expect(
+        find.text('Qua 08:00'),
+        findsNWidgets(3),
+        reason: 'Ana Paula, Diego e Karina estão no bloco de quarta',
+      );
+      // Bruno, Carla, Gabriela, Henrique, Lucas e Eduarda não estão em bloco
+      // ativo; só os EM CURSO (ATIVO/ACELERAR) recebem o ⚠.
+      expect(find.text('sem turma'), findsWidgets);
+    });
+
+    testWidgets(
+      'alocação em bloco DESATIVADO conta como sem turma — o ajuste que o '
+      'card 5.6 deixou para cá',
+      (tester) async {
+        await montar(
+          tester,
+          repositorio: AlunosFalso.fixture(),
+          permissoes: comTurmas,
+        );
+        // Eduarda está alocada no bloco de sexta, que está desativado: para o
+        // sistema ela está sem turma, e é isso que a rotina diária passou a
+        // enxergar desde este card.
+        expect(find.text('Sex 14:00'), findsNothing);
+        final linha = find.ancestor(
+          of: find.text('Eduarda Lima'),
+          matching: find.byType(Row),
+        );
+        expect(
+          find.descendant(of: linha.first, matching: find.text('sem turma')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets('status terminal não recebe ⚠: quem cancelou não precisa de '
+        'turma', (tester) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        permissoes: {...comTurmas, 'alunos.criar'},
+      );
+      // Sem o filtro padrão, os terminais aparecem — e sem ⚠.
+      await tester.tap(find.byType(FilterChip));
+      await tester.pumpAndSettle();
+      final linha = find.ancestor(
+        of: find.text('Isabela Rocha'),
+        matching: find.byType(Row),
+      );
+      expect(
+        find.descendant(of: linha.first, matching: find.text('sem turma')),
+        findsNothing,
+      );
+    });
+
+    testWidgets(
+      'sem turmas.ler a coluna NÃO EXISTE — coluna cheia de alerta falso é '
+      'pior que coluna ausente',
+      (tester) async {
+        await montar(tester, repositorio: AlunosFalso.fixture());
+        expect(find.text('Turmas'), findsNothing);
+        expect(find.text('sem turma'), findsNothing);
+        expect(find.text('Qua 08:00'), findsNothing);
+      },
+    );
+  });
+
+  group('aba Turmas da ficha', () {
+    testWidgets('lista o bloco com o badge de tipo, e as reposições com a aula '
+        'de origem', (tester) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        permissoes: comTurmas,
+        rotaInicial: '/alunos/al-3001',
+      );
+      await tester.tap(find.text('Turmas'));
+      await carregar(tester);
+
+      expect(find.text('Qua 08:00'), findsOneWidget);
+      expect(find.byType(BadgeTipo), findsOneWidget);
+      expect(find.text('REM'), findsOneWidget);
+      // Ana Paula não tem reposição: a seção existe e diz isso.
+      expect(find.text(vazioReposicoes), findsOneWidget);
+    });
+
+    testWidgets('as reposições do aluno trazem status, bloco e aula perdida', (
+      tester,
+    ) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        permissoes: comTurmas,
+        rotaInicial: '/alunos/al-lucas',
+      );
+      await tester.tap(find.text('Turmas'));
+      await carregar(tester);
+
+      expect(
+        find.textContaining('07/09/2026 · Seg 08:00 · Prevista'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('20/08/2026 · Seg 08:00 · Faltou'),
+        findsOneWidget,
+        reason: 'a reposição quitada ou perdida continua na lista',
+      );
+      expect(
+        find.textContaining('aula de Qua 08:00 · perdida em 27/08/2026'),
+        findsWidgets,
+      );
+    });
+
+    testWidgets('bloco desativado é mostrado, marcado, e com o aviso de que '
+        'para o sistema o aluno está sem turma', (tester) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        permissoes: comTurmas,
+        rotaInicial: '/alunos/al-3005',
+      );
+      await tester.tap(find.text('Turmas'));
+      await carregar(tester);
+
+      // A ficha MOSTRA a alocação órfã — é a única tela de onde alguém a
+      // desfaz; esconder deixaria o ⚠ da lista sem explicação e sem saída.
+      expect(find.text('Sex 14:00'), findsOneWidget);
+      expect(find.text('bloco desativado'), findsOneWidget);
+      expect(find.text(avisoTurmaDesativada), findsOneWidget);
+    });
+
+    testWidgets('aluno em curso sem turma nenhuma avisa em vez de só mostrar '
+        'vazio', (tester) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        permissoes: comTurmas,
+        rotaInicial: '/alunos/al-3006',
+      );
+      await tester.tap(find.text('Turmas'));
+      await carregar(tester);
+      expect(find.text(vazioTurmasAluno), findsOneWidget);
+      expect(find.text(avisoSemTurma), findsOneWidget);
+    });
+
+    testWidgets('a situação REP só aparece quando há o que dizer', (
+      tester,
+    ) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        permissoes: comTurmas,
+        rotaInicial: '/alunos/al-3001',
+      );
+      await tester.tap(find.text('Turmas'));
+      await carregar(tester);
+      expect(find.text('Situação de reposição'), findsNothing);
+
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        turmas: TurmasFalso(
+          turmas: [turmaFalsa(alunoId: 'al-3001', blocoId: 'b-1', tipo: 'REP')],
+          situacao: SituacaoRep(
+            debito: 3,
+            aulaMaisAntiga: DateTime(2026, 9, 12),
+            prazoFinal: DateTime(2026, 10, 12),
+            semanasUteis: 2,
+            capacidade: 1,
+            faltasRecentes: 1,
+            veredito: 'SUGERIR_CONTINUO',
+          ),
+        ),
+        permissoes: comTurmas,
+        rotaInicial: '/alunos/al-3001',
+      );
+      await tester.tap(find.text('Turmas'));
+      await carregar(tester);
+
+      // Os NÚMEROS, e não só o veredito: é o que torna a sugestão acionável
+      // (card 5.3, tp_rep_situacao).
+      expect(find.textContaining('3 aula(s) a repor'), findsOneWidget);
+      expect(find.textContaining('prazo até 12/10/2026'), findsOneWidget);
+      expect(find.textContaining('cabem 2 até lá'), findsOneWidget);
+      expect(find.text(vereditosRep['SUGERIR_CONTINUO']!), findsOneWidget);
+    });
+
+    testWidgets('sem turmas.ler a aba diz o que falta, e não mostra lista '
+        'vazia', (tester) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        rotaInicial: '/alunos/al-3001',
+      );
+      await tester.tap(find.text('Turmas'));
+      await carregar(tester);
+      expect(find.byType(EstadoSemAcesso), findsOneWidget);
+      expect(find.text(vazioTurmasAluno), findsNothing);
     });
   });
 }

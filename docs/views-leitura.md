@@ -662,6 +662,7 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | `fn_hoje()` | 3.4 | 3 |
 | `v_pendencias_abertas` | **5.5** ✅ — a primeira view do projeto, e com ela nasceu o C5 (toda view `security_invoker`, zero matview) | 5 |
 | `v_bloco_vagas_semana`, `fn_grade_semana` | 5.6 (grade) / 5.9 (dashboard) | 5 |
+| `v_bloco_alunos`, `fn_bloco_alunos` | **5.7** ✅ — ver §12.1 | 5 |
 | `v_estoque_atual`, `v_demanda_imediata_aluno`, `v_demanda_imediata`, `v_pedido_sugerido` | 6.4 | 6 |
 | `v_turma_modular_lotacao` | 7.4 | 7 |
 | `demanda_projetada`, `v_demanda_projetada` | 8.1 | 8 |
@@ -674,6 +675,33 @@ Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_lista`
 `v_aluno_trilha` (6.6), `v_bloco_alunos` (5.7), `v_material_movimento` (6.7),
 `v_certificado_fila` (8.6). São views de listagem, sem número derivado — o cuidado de §3 vale, o
 resto é do card da tela.
+
+✅ **`v_bloco_alunos` nasceu em 03/09/2026 (card 5.7), e virou DUAS coisas — divergência registrada.**
+O nome estava reservado para "a lista de alunos do bloco", que é o wireframe §7.2; mas essa lista é
+de uma **data** (alocação vale toda semana, reposição vale só no dia — §7 e card 2.1 §8), e view não
+recebe parâmetro. A divisão que saiu, com a mesma lógica do card 5.6 invertida:
+
+- **`v_bloco_alunos`** ficou com a metade **permanente** — uma linha por alocação ativa, com o bloco
+  e o aluno resolvidos e `bloco_ativo` como **coluna**. É view porque não depende de data nenhuma, e
+  ela tem três consumidores: a aba Turmas da ficha (6.4), a coluna Turmas da lista de alunos (6.1) e
+  `rt_pendencias_diaria`, que passou a ler dela o que conta como "estar em turma";
+- **`fn_bloco_alunos(bloco, data)`** é a lista da tela — as linhas da view daquele bloco **mais** as
+  reposições PREVISTAS do dia —, escrita **em cima da view** pela razão do card 5.6: uma segunda
+  implementação de "quem está alocado aqui" divergiria em silêncio.
+
+Sem `join` em `metodo`/`sala`/`professor`, ao contrário de `v_bloco_vagas_semana`: a view devolve os
+ids e quem resolve o nome é o catálogo que a tela já carregou (card 4.6 (f)). Cada `join` interno a
+mais é mais um modo de a view vir **vazia por permissão** que a tela não pede — e vazia aqui não é
+"o bloco está vazio", é "não deu para ver". Os dois `join` que sobram (`bloco_horario` e `aluno`) são
+estruturais, e é por eles que `fn_bloco_alunos` exige `turmas.ler` **e** `alunos.ler`
+explicitamente, em vez de devolver uma turma de dez como vazia.
+
+⚠️ **`v_aluno_lista` continua sem existir, e agora com motivo medido** (card 5.7): a lista de alunos
+lê `aluno` e junta as turmas de `v_bloco_alunos` **na tela**, com método e combo vindos do catálogo
+já carregado. Uma view que juntasse os três não tiraria consulta nenhuma da tela — o catálogo e as
+turmas já estão carregados por outros motivos — e acrescentaria um objeto de banco com um `join`
+interno a mais em `aluno`. Se um dia a lista precisar filtrar **por turma** no servidor, aí ela passa
+a valer a pena.
 
 ---
 

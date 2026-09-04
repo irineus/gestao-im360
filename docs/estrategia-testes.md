@@ -810,6 +810,7 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `040_blocos_alocacao` (as três tabelas, `tipo_desde`, as guardas de coluna e de exclusão, `tg_aluno_status_desaloca`) | **5.1** | 5 |
 | `041_capacidade_vagas` (a fórmula da capacidade, as duas metades do REP na ocupação, e a prova de que o número não depende do que o leitor enxerga) | **5.2** | 5 |
 | `042_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` — era `040` até o card 5.1 ocupar o número, e `041` até o 5.2 ocupar o seguinte | **5.3** ✅ | 5 |
+| `043_bloco_alunos` (`v_bloco_alunos` e `fn_bloco_alunos`: a lista soma o que o cabeçalho diz, a reposição aparece na data dela com o bloco de origem, bloco desativado passa a abrir `ALUNO_SEM_TURMA`, e falta de permissão vira erro em vez de lista vazia) | **5.7** ✅ | 5 |
 | `050_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` | 6.3 | 6 |
 | `060_estoque_compras` | 6.5 | 6 |
 | `070_modular` | 7.2 | 7 |
@@ -819,7 +820,7 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `091_manutencao_capacidade` (o status derivado de `pc_manutencao`, a pendência por EVENTO, `rt_pcs_normaliza` e `rt_capacidades`) | **5.4** ✅ — mora ao lado do `090`, que é o arquivo das rotinas: aqui está o que só o caminho por evento prova | 5 |
 | `095_views_paridade` (a grade semanal: `fn_grade_semana` e `v_bloco_vagas_semana`) | **5.6** ✅ → cresce em 6.4, 5.9 e 8.7. ⚠️ **Divergência registrada:** esta linha atribuía o nascimento do arquivo ao **6.4** ("primeiras views"), e o 6.4 é da fase 06 — quem chegou primeiro foi o 5.6, e o arquivo nasceu lá. A obrigação de teste de card de View (§13) não mudou; mudou só quem a cumpre primeiro | 5+ |
 | `catalogo_erros_test`, `guardas_rota_test`, `permissao_widget_test`, `faixa_test`, `tnum_test` | 3.7 | 3 |
-| Golden dos badges | 4.6 (status) e 5.7 (tipo) | 4–5 |
+| `badge_status_test` / `badge_tipo_test` | 4.6 (status) e **5.7** ✅ (tipo). ⚠️ **Divergência registrada:** o §9.2 pede *golden* de badge; os dois arquivos asserem o **par de cores e a forma** lidos do tema, e o `badge_tipo_test` acrescenta a asserção que um golden não daria — preenchido × contorno lado a lado, que é a decisão do card 1.9 §6. Golden de 8 badges × 2 temas seriam 16 PNGs que reprovam por *antialiasing* de versão do engine, e o que se quer provar é a regra, não o pixel | 4–5 |
 | `dialogo_resultado_test` | 6.6 | 6 |
 | `testes.yml` + gate no `db-migrations` | 3.9 | 3 |
 | Reexecutabilidade da importação | 9.1 / 9.4 | 9 |

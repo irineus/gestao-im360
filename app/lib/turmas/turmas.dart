@@ -1,7 +1,8 @@
-/// As turmas como o app as vê (card 5.6): o modelo do bloco de horário
-/// (`bloco_horario`, card 5.1), a célula da grade que `fn_grade_semana` devolve
-/// e a lógica **pura** da tela — a semana, a montagem da grade, os alertas de
-/// cada bloco e os filtros.
+/// As turmas como o app as vê (cards 5.6 e 5.7): o modelo do bloco de horário
+/// (`bloco_horario`, card 5.1), a célula da grade que `fn_grade_semana` devolve,
+/// os alunos do bloco (`fn_bloco_alunos`) e as turmas de um aluno
+/// (`v_bloco_alunos`), mais a lógica **pura** das duas telas — a semana, a
+/// montagem da grade, os alertas de cada bloco, os filtros e os rótulos.
 ///
 /// Pura de propósito: é o que se testa sem rede e sem cliente Supabase
 /// (card 2.8 §9.3). Regra de negócio continua no banco; aqui só há forma.
@@ -354,3 +355,352 @@ GradeSemana montarGrade(DateTime segunda, List<CelulaGrade> celulas) {
     celulas: mapa,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Card 5.7 — os alunos do bloco e as turmas do aluno
+// ---------------------------------------------------------------------------
+
+/// Os quatro tipos do `check` de `bloco_aluno.tipo` (card 5.1) e o que cada um
+/// significa em tela. A chave é o valor do banco; o app nunca compara pelo
+/// rótulo — mesma convenção de [statusAluno] no card 4.6.
+const tiposNaTurma = <String, String>{
+  'REM': 'Remoto',
+  'PRE': 'Presencial',
+  'REP': 'Reposição contínua',
+  'NOVO': 'Novo',
+};
+
+String rotuloTipo(String tipo) => tiposNaTurma[tipo] ?? tipo;
+
+/// `Seg 08:00` — como um bloco se nomeia em toda tela que não é a grade
+/// (coluna Turmas da lista de alunos, aba Turmas da ficha, rótulo da reposição).
+String rotuloBloco(int diaSemana, String horaInicio) =>
+    '${nomeDiaCurto(diaSemana)} ${horaHhMm(horaInicio)}';
+
+/// O que uma linha da lista de alunos do bloco é: alocação (vale toda semana)
+/// ou reposição pontual (vale só no dia). É a coluna `origem` de
+/// `fn_bloco_alunos`, e a separação existe porque as duas metades do REP
+/// híbrido (decisão de 31/08/2026) se removem por funções diferentes.
+enum OrigemNoBloco { alocacao, reposicao }
+
+OrigemNoBloco _origem(String valor) =>
+    valor == 'REPOSICAO' ? OrigemNoBloco.reposicao : OrigemNoBloco.alocacao;
+
+/// Uma linha de `fn_bloco_alunos` — o aluno **naquele bloco naquela data**.
+@immutable
+class AlunoDoBloco {
+  const AlunoDoBloco({
+    required this.origem,
+    required this.registroId,
+    required this.alunoId,
+    required this.alunoNome,
+    this.codigoSgf,
+    required this.alunoStatus,
+    required this.tipo,
+    this.tipoDesde,
+    this.dataInicioPrevista,
+    this.blocoAtivo = true,
+    this.data,
+    this.blocoOrigemId,
+    this.blocoOrigemDia,
+    this.blocoOrigemHora,
+    this.dataOrigem,
+    this.observacao,
+  });
+
+  factory AlunoDoBloco.deLinha(Map<String, dynamic> linha) => AlunoDoBloco(
+    origem: _origem('${linha['origem']}'),
+    registroId: '${linha['registro_id']}',
+    alunoId: '${linha['aluno_id']}',
+    alunoNome: '${linha['aluno_nome']}',
+    codigoSgf: linha['codigo_sgf'] as String?,
+    alunoStatus: '${linha['aluno_status']}',
+    tipo: '${linha['tipo']}',
+    tipoDesde: _data(linha['tipo_desde']),
+    dataInicioPrevista: _data(linha['data_inicio_prevista']),
+    blocoAtivo: linha['bloco_ativo'] as bool? ?? true,
+    data: _data(linha['data']),
+    blocoOrigemId: linha['bloco_origem_id'] == null
+        ? null
+        : '${linha['bloco_origem_id']}',
+    blocoOrigemDia: (linha['bloco_origem_dia'] as num?)?.toInt(),
+    blocoOrigemHora: linha['bloco_origem_hora'] as String?,
+    dataOrigem: _data(linha['data_origem']),
+    observacao: linha['observacao'] as String?,
+  );
+
+  final OrigemNoBloco origem;
+
+  /// `bloco_aluno.id` na alocação, `bloco_aluno_reposicao.id` na reposição —
+  /// as duas metades se desfazem por funções diferentes, então a tela precisa
+  /// saber de qual tabela a linha veio.
+  final String registroId;
+
+  final String alunoId;
+  final String alunoNome;
+  final String? codigoSgf;
+  final String alunoStatus;
+
+  /// REM/PRE/REP/NOVO na alocação; sempre `REP` na reposição pontual.
+  final String tipo;
+  final DateTime? tipoDesde;
+  final DateTime? dataInicioPrevista;
+
+  /// Falso quando o bloco foi desativado e a alocação ficou de pé (card 5.6).
+  final bool blocoAtivo;
+
+  /// A data da reposição; nula na alocação, que não é de um dia.
+  final DateTime? data;
+
+  final String? blocoOrigemId;
+  final int? blocoOrigemDia;
+  final String? blocoOrigemHora;
+  final DateTime? dataOrigem;
+  final String? observacao;
+
+  bool get ehReposicao => origem == OrigemNoBloco.reposicao;
+
+  /// `reposição de Qua 27/08` — o rótulo do wireframe §7.2. O bloco de origem é
+  /// nulo de propósito (card 2.5 §3.1: a escola nem sempre sabe qual encontro
+  /// foi perdido), e aí a linha diz o que sabe em vez de inventar.
+  String? get rotuloReposicao {
+    if (!ehReposicao) return null;
+    final dia = blocoOrigemDia;
+    final hora = blocoOrigemHora;
+    final quando = dataOrigem;
+    if (dia == null || hora == null) {
+      return quando == null
+          ? 'reposição avulsa'
+          : 'reposição de ${formatarDataCurta(quando)}';
+    }
+    final origemBloco = rotuloBloco(dia, hora);
+    return quando == null
+        ? 'reposição de $origemBloco'
+        : 'reposição de $origemBloco ${formatarDataCurta(quando)}';
+  }
+}
+
+/// Quantos são fixos e quantos são reposição do dia — o
+/// `8/10 (7 fixos + 1 reposição hoje)` do cabeçalho do wireframe §7.2.
+///
+/// A soma tem de bater com `ocupacao` da célula da grade, e é o banco que
+/// garante isso (`fn_bloco_alunos` e `fn_ocupacao_bloco` contam o mesmo
+/// conjunto, asserido no teste 043). Aqui só se conta o que veio.
+String resumoLotacao(List<AlunoDoBloco> lista, {required int capacidade}) {
+  final reposicoes = lista.where((a) => a.ehReposicao).length;
+  final fixos = lista.length - reposicoes;
+  final detalhe = reposicoes == 0
+      ? '$fixos ${fixos == 1 ? 'aluno' : 'alunos'}'
+      : '$fixos ${fixos == 1 ? 'fixo' : 'fixos'} + $reposicoes '
+            '${reposicoes == 1 ? 'reposição' : 'reposições'} no dia';
+  return 'Ocupação ${lista.length}/$capacidade ($detalhe)';
+}
+
+/// Uma linha de `v_bloco_alunos` vista **do lado do aluno**: a alocação dele
+/// num bloco. É o que a aba Turmas da ficha lista e o que a coluna Turmas da
+/// lista de alunos resume.
+@immutable
+class TurmaDoAluno {
+  const TurmaDoAluno({
+    required this.alocacaoId,
+    required this.blocoId,
+    required this.alunoId,
+    required this.diaSemana,
+    required this.horaInicio,
+    required this.metodoId,
+    required this.salaId,
+    required this.blocoAtivo,
+    required this.tipo,
+    this.tipoDesde,
+    this.dataInicioPrevista,
+  });
+
+  factory TurmaDoAluno.deLinha(Map<String, dynamic> linha) => TurmaDoAluno(
+    alocacaoId: '${linha['alocacao_id']}',
+    blocoId: '${linha['bloco_id']}',
+    alunoId: '${linha['aluno_id']}',
+    diaSemana: (linha['dia_semana'] as num).toInt(),
+    horaInicio: horaHhMm('${linha['hora_inicio']}'),
+    metodoId: '${linha['metodo_id']}',
+    salaId: '${linha['sala_id']}',
+    blocoAtivo: linha['bloco_ativo'] as bool? ?? true,
+    tipo: '${linha['tipo']}',
+    tipoDesde: _data(linha['tipo_desde']),
+    dataInicioPrevista: _data(linha['data_inicio_prevista']),
+  );
+
+  final String alocacaoId;
+  final String blocoId;
+  final String alunoId;
+  final int diaSemana;
+  final String horaInicio;
+  final String metodoId;
+  final String salaId;
+
+  /// Falso = o bloco foi desativado e a alocação ficou órfã. A ficha mostra
+  /// assim mesmo, marcada: é a única tela de onde alguém a desfaz.
+  final bool blocoAtivo;
+
+  final String tipo;
+  final DateTime? tipoDesde;
+  final DateTime? dataInicioPrevista;
+
+  String get rotulo => rotuloBloco(diaSemana, horaInicio);
+}
+
+/// Os ids dos alunos que estão em pelo menos uma turma **que existe**.
+///
+/// É a mesma definição de `rt_pendencias_diaria` desde o card 5.7 — alocação em
+/// bloco desativado não conta —, e é por isso que o ⚠ da lista e a pendência
+/// `ALUNO_SEM_TURMA` dizem a mesma coisa. Duas contas diferentes divergiriam no
+/// dia em que alguém mexesse numa só (card 5.4 (4)).
+Set<String> alunosEmTurma(Iterable<TurmaDoAluno> turmas) => {
+  for (final t in turmas)
+    if (t.blocoAtivo) t.alunoId,
+};
+
+/// Turmas por aluno, na ordem em que a tela as mostra (dia, depois hora).
+Map<String, List<TurmaDoAluno>> agruparPorAluno(List<TurmaDoAluno> turmas) {
+  final mapa = <String, List<TurmaDoAluno>>{};
+  for (final t in turmas) {
+    (mapa[t.alunoId] ??= []).add(t);
+  }
+  for (final lista in mapa.values) {
+    lista.sort((a, b) {
+      final dia = a.diaSemana.compareTo(b.diaSemana);
+      return dia != 0 ? dia : a.horaInicio.compareTo(b.horaInicio);
+    });
+  }
+  return mapa;
+}
+
+/// `Seg 08:00 · Qua 08:00` — a coluna Turmas do wireframe §6.1. Vazio vira `—`,
+/// e quem decide se isso merece ⚠ é [alunosEmTurma], não este rótulo.
+String rotuloTurmasDoAluno(List<TurmaDoAluno> turmas) {
+  final ativas = [
+    for (final t in turmas)
+      if (t.blocoAtivo) t.rotulo,
+  ];
+  return ativas.isEmpty ? '—' : ativas.join(' · ');
+}
+
+/// Uma linha de `bloco_aluno_reposicao` do aluno — a metade pontual do REP
+/// híbrido, como a aba Turmas da ficha a lista.
+@immutable
+class ReposicaoAluno {
+  const ReposicaoAluno({
+    required this.id,
+    required this.blocoId,
+    required this.alunoId,
+    required this.data,
+    required this.status,
+    this.blocoOrigemId,
+    this.dataOrigem,
+    this.observacao,
+  });
+
+  factory ReposicaoAluno.deLinha(Map<String, dynamic> linha) => ReposicaoAluno(
+    id: '${linha['id']}',
+    blocoId: '${linha['bloco_id']}',
+    alunoId: '${linha['aluno_id']}',
+    data: DateTime.parse('${linha['data']}'),
+    status: '${linha['status']}',
+    blocoOrigemId: linha['bloco_origem_id'] == null
+        ? null
+        : '${linha['bloco_origem_id']}',
+    dataOrigem: _data(linha['data_origem']),
+    observacao: linha['observacao'] as String?,
+  );
+
+  final String id;
+  final String blocoId;
+  final String alunoId;
+  final DateTime data;
+
+  /// PREVISTA / REALIZADA / FALTOU / CANCELADA (card 5.1). Só PREVISTA ocupa
+  /// vaga, e só ela se cancela ou se registra.
+  final String status;
+
+  final String? blocoOrigemId;
+  final DateTime? dataOrigem;
+  final String? observacao;
+
+  bool get prevista => status == 'PREVISTA';
+}
+
+const statusReposicao = <String, String>{
+  'PREVISTA': 'Prevista',
+  'REALIZADA': 'Realizada',
+  'FALTOU': 'Faltou',
+  'CANCELADA': 'Cancelada',
+};
+
+String rotuloStatusReposicao(String status) =>
+    statusReposicao[status] ?? status;
+
+/// O retorno de `fn_rep_situacao` (`tp_rep_situacao`, card 5.3): os números do
+/// critério do card 2.5 §3 mais o veredito. A ficha os mostra porque
+/// "sugerido virar contínuo" sozinho não é acionável — "3 aulas em aberto, a
+/// mais antiga de 12/09, prazo até 12/10, cabem 2" é.
+@immutable
+class SituacaoRep {
+  const SituacaoRep({
+    required this.debito,
+    this.aulaMaisAntiga,
+    this.prazoFinal,
+    required this.semanasUteis,
+    required this.capacidade,
+    required this.faltasRecentes,
+    this.repDesde,
+    required this.veredito,
+  });
+
+  factory SituacaoRep.deLinha(Map<String, dynamic> linha) => SituacaoRep(
+    debito: (linha['debito'] as num?)?.toInt() ?? 0,
+    aulaMaisAntiga: _data(linha['aula_mais_antiga']),
+    prazoFinal: _data(linha['prazo_final']),
+    semanasUteis: (linha['semanas_uteis'] as num?)?.toInt() ?? 0,
+    capacidade: (linha['capacidade'] as num?)?.toInt() ?? 0,
+    faltasRecentes: (linha['faltas_recentes'] as num?)?.toInt() ?? 0,
+    repDesde: _data(linha['rep_desde']),
+    veredito: '${linha['veredito']}',
+  );
+
+  final int debito;
+  final DateTime? aulaMaisAntiga;
+  final DateTime? prazoFinal;
+  final int semanasUteis;
+  final int capacidade;
+  final int faltasRecentes;
+
+  /// Não nulo = o aluno já é REP contínuo, e esta é a data em que virou.
+  final DateTime? repDesde;
+
+  /// MANTER | SUGERIR_CONTINUO | SUGERIR_VOLTA.
+  final String veredito;
+
+  bool get continuo => repDesde != null;
+
+  /// A ficha só mostra o painel quando há o que dizer: débito em aberto, aluno
+  /// já contínuo, ou um veredito diferente de "está tudo em ordem".
+  bool get relevante => debito > 0 || continuo || veredito != 'MANTER';
+}
+
+/// O que cada veredito significa para quem acabou de marcar uma falta — é o
+/// texto que o §7.2 manda mostrar na hora, e não no dia seguinte, quando a
+/// rotina do card 5.5 abrir a pendência.
+const vereditosRep = <String, String>{
+  'SUGERIR_CONTINUO':
+      'As aulas a repor não cabem mais no prazo. O sistema sugere passar este '
+      'aluno para reposição contínua — a decisão é de uma pessoa, e a '
+      'sugestão está na central de pendências.',
+  'SUGERIR_VOLTA':
+      'Este aluno está em dia e fora da carência. O sistema sugere devolvê-lo a '
+      'reposição pontual, liberando a vaga fixa — a sugestão está na central '
+      'de pendências.',
+};
+
+String? avisoVeredito(String veredito) => vereditosRep[veredito];
+
+DateTime? _data(Object? valor) =>
+    valor == null ? null : DateTime.parse('$valor');
