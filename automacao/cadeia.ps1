@@ -152,9 +152,11 @@ function PreVoo {
     # As sessões não conseguiram subir o stack local uma única vez (`supabase
     # test db`: ZERO tentativas em 6 cards) e caíram para "o CI é o portão".
     # O CI de fato roda a suíte, então correção continuou medida; o que se perdeu
-    # foi a CONTRAPROVA por sabotagem, que é a disciplina deste projeto e não
-    # existe sem stack na máquina. Os cards relataram a degradação — mas quem lê
-    # o relatório já gastou a sessão.
+    # foi a CONTRAPROVA por sabotagem NO BANCO, que não existe sem stack na
+    # máquina. ⚠️ A do Flutter continuou acontecendo — o log do card 5.9 mostra
+    # "sabotagem das duas asserções centrais, antes de aceitá-las" —, e dizer que
+    # a disciplina inteira caiu seria exagerar o estrago. Os cards relataram a
+    # degradação; mas quem lê o relatório já gastou a sessão.
     #
     # A checagem é ESTÁTICA de propósito: lê o allow e responde se uma sessão
     # CONSEGUIRIA. Custa milissegundos e nenhuma chamada de API.
@@ -171,7 +173,7 @@ function PreVoo {
 
     if (-not $cobreSupabase) {
         $comoInvoca = if ($temSupabaseGlobal) { 'supabase' } else { 'npx supabase (nao ha supabase global nesta maquina)' }
-        $script:avisos += "As sessoes NAO vao rodar a suite pgTAP local: o allow nao cobre '$comoInvoca'. O portao vira so o CI, e a contraprova por sabotagem deixa de ser possivel."
+        $script:avisos += "As sessoes NAO vao rodar a suite pgTAP local: o allow nao cobre '$comoInvoca'. O portao do BANCO vira so o CI, e a contraprova por sabotagem no banco deixa de ser possivel — a dos testes Flutter continua valendo, e as sessoes a fizeram."
     }
     if (-not $cobreDocker) {
         $script:avisos += "O allow so permite 'docker ps'. Sem 'docker info'/'docker --version' a sessao conclui que Docker nao existe e nem tenta o stack local."
