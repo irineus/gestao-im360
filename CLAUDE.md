@@ -7,8 +7,10 @@ Sistema web/mobile que substitui a planilha "Gestão Interativo" na gestão de a
 ## Início de sessão (obrigatório, nesta ordem)
 
 1. Ler `docs/README-continuidade.md`.
-2. Ler a página Notion **"Gestão Interativo — Decisões vigentes"** (id `3cd2f3f4-b9b2-8106-95cd-fc8d937bd953`) via MCP do Notion. Em conflito com qualquer documento deste repositório, **a página do Notion vence** — ela é escrita no momento de cada decisão.
+2. Ler a página Notion **"Gestão Interativo — Decisões vigentes"** (id `3cd2f3f4-b9b2-8106-95cd-fc8d937bd953`) via MCP do Notion — as **seções 1 a 6**, que são as vigentes. Em conflito com qualquer documento deste repositório, **a página do Notion vence** — ela é escrita no momento de cada decisão.
 3. Só então executar a tarefa. Para "próxima tarefa" / "concluí" / "status do board", usar a skill `proxima-tarefa` (`.claude/skills/proxima-tarefa/SKILL.md`).
+
+**O que NÃO é leitura de partida** (decidido em 04/09/2026, card 6.1,5, e é o que mantém esses dois passos baratos): o **log cronológico** mora em `docs/historico-marcos.md` e na subpágina **📜 Histórico de decisões** da página do Notion. Os dois se consultam **quando a tarefa pedir** — rastrear um card, um documento ou um defeito antigo —, e não no início da sessão. Antes desta separação os dois documentos de partida somavam cerca de 430 mil caracteres, e a maior parte era log: as sessões batiam no limite de leitura e fatiavam arquivo só para obedecer a esta regra. Nenhuma linha foi resumida ou apagada; o histórico mudou de lugar.
 
 Se o MCP do Notion não estiver disponível na sessão, avisar Irineu antes de prosseguir — o board e as decisões vivem lá.
 
@@ -90,8 +92,8 @@ não interativa (uma sessão por card, em sequência) está em `docs/cadeia-exec
 - Campo `Notas`: buscar o valor atual antes de atualizar e reenviar o texto completo — nunca sobrescrever a linha "Origem:".
 - Páginas de resultado de tarefa: sempre **subpáginas do card** (`parent: {page_id: <card-id>}`), nunca soltas na raiz.
 - Inserir card no meio da sequência: `Ordem` decimal (ex.: 3.5), sem renumerar os demais.
-- Ao encerrar tarefa que gere decisão: atualizar a Decisões vigentes com `update_content` na seção correspondente (nunca `replace_content`) + registrar no Histórico com data e card de origem.
+- Ao encerrar tarefa que gere decisão: atualizar a Decisões vigentes com `update_content` na seção correspondente (nunca `replace_content`) + registrar na subpágina **📜 Histórico de decisões** (`3d12f3f4-b9b2-815e-9643-edc69db65f5c`), com `insert_content` e `position: start`, com data e card de origem. A linha nova vai **na subpágina**, nunca de volta na página-mãe (card 6.1,5, 04/09/2026).
 
-## Estado atual (31/08/2026)
+## Estado atual (04/09/2026)
 
-Concepção concluída; plano v1.1 aprovado com as 9 respostas do dono do produto; decisões técnicas fechadas. **Fase 0 (Fundação) em andamento.** Target de go-live: outubro/2026 (adoção provavelmente em fases). Detalhes e pendências: Decisões vigentes no Notion.
+Concepção concluída; plano v1.1 aprovado com as 9 respostas do dono do produto; decisões técnicas fechadas. **Fases 0 a 05 concluídas; Fase 06 (Trilha e Estoque) em andamento.** Target de go-live: outubro/2026 (adoção provavelmente em fases). O estado corrente de verdade é o board do Notion — esta linha envelhece, ele não. Detalhes e pendências: Decisões vigentes no Notion.
