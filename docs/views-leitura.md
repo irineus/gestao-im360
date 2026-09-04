@@ -741,8 +741,26 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 ### 12.1 Views de tela, que pertencem aos seus próprios cards
 
 Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6) ✅,
-`v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7), `v_certificado_fila` (8.6). São views de
+`v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7) ✅, `v_certificado_fila` (8.6). São views de
 listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+
+⚠️ **`v_material_movimento` nasceu em 04/09/2026** (`20260904235500_view_material_movimento.sql`,
+card 6.7), e a decisão dela é **o contrário** da de `v_aluno_trilha`: **todo `join` de rótulo é
+externo**. Aluno, pedido, movimento estornado e autor entram por `left join`, e a view leva o **id ao
+lado do nome** (`aluno_id`/`aluno_nome`, `pedido_item_id`/`pedido_numero`, `criado_por`/
+`criado_por_nome`). O critério é o mesmo do 6.6 — perguntar o que cada forma de errar custa —, e aqui
+ele aponta para o outro lado por duas razões: **(a)** o painel é a *conferência* do saldo, e a soma
+das linhas exibidas tem de fechar com `v_estoque_atual`; uma linha que sumisse por um rótulo ilegível
+quebraria a conta na tela **sem erro nenhum**, e a pessoa concluiria que o sistema perdeu movimento;
+**(b)** os quatro rótulos moram atrás de permissões que a rota da tela 6 **não exige** (§6 do card
+2.4: só `materiais.ler` + `estoque.ler`) — com `join` interno em `pedido_compra`, o **monitor**, que
+não tem `compras.ler`, deixaria de ver *toda ENTRADA vinda de pedido*. Não há `join` em `material`:
+o painel é de um material já escolhido na lista de cima, e trazê-lo de volta acrescentaria a única
+redução silenciosa que faltava. O que isto obriga na tela está escrito e testado: id preenchido com
+nome nulo é *"existe e você não pode ver"*, nunca um traço — um traço faria uma SAIDA de entrega
+parecer um ajuste sem dono (a armadilha da pendência 9.13). O teste `061` assere a paridade de linhas
+perfil a perfil e a igualdade **soma do painel = saldo**, e as duas foram **vistas vermelhas** com o
+`join` do pedido convertido em interno.
 
 ⚠️ **`v_aluno_trilha` nasceu em 04/09/2026** (`20260904233000_view_aluno_trilha.sql`, card 6.6), e
 duas coisas dela valem para as duas que faltam. **(a) Ela não recopia número nenhum:** `proximo`

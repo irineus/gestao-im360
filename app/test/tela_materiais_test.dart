@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/catalogo/catalogo.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
+import 'package:gestao_im360/estoque/estoque_provider.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/telas/materiais/tela_materiais.dart';
 import 'package:gestao_im360/theme/tema.dart';
@@ -12,12 +13,18 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'apoio/carregar.dart';
 import 'apoio/catalogo_falso.dart';
+import 'apoio/estoque_falso.dart';
 
 /// A obrigação de teste de um card de **Tela** (card 2.8 §13): ocultação por
 /// permissão e estado vazio com o texto do card 2.7 — a guarda de rota já está
 /// tabelada em `guardas_rota_test.dart`. Mais o que esta tela tem de próprio:
 /// filtros, o formulário gravando no repositório injetado e a sequência do
 /// curso sendo salva como lista de ids.
+///
+/// ⚠️ Desde o card 6.7 a aba Materiais lê `v_estoque_atual` e o toque na linha
+/// **abre o painel de movimentações**, não o formulário — o cadastro fica no
+/// botão "Editar material" do painel (wireframe §9). Os testes que editam
+/// material passam por esses dois passos.
 void main() {
   const leitura = {'materiais.ler', 'estoque.ler'};
   const edicao = {
@@ -41,6 +48,11 @@ void main() {
         retry: semRetryAutomatico,
         overrides: [
           catalogoRepositorioProvider.overrideWithValue(repositorio),
+          // O MESMO catálogo: `v_estoque_atual` é uma view sobre `material`, e
+          // material salvo pelo formulário precisa aparecer na lista.
+          estoqueRepositorioProvider.overrideWithValue(
+            EstoqueFalso.fixture(repositorio),
+          ),
           permissoesProvider.overrideWithValue(permissoes),
           unidadeAtualProvider.overrideWithValue('unidade-teste'),
         ],
@@ -51,6 +63,14 @@ void main() {
       ),
     );
     await carregar(tester);
+  }
+
+  /// Toca a linha do material (abre o painel) e depois "Editar material".
+  Future<void> abrirCadastro(WidgetTester tester, String nome) async {
+    await tester.tap(find.text(nome));
+    await carregar(tester);
+    await tester.tap(find.text('Editar material'));
+    await tester.pumpAndSettle();
   }
 
   testWidgets('a lista resolve o método pelo id e mostra as colunas', (
@@ -64,6 +84,13 @@ void main() {
     expect(find.text('Interativo'), findsAtLeastNWidgets(3));
     expect(find.text('Situação'), findsOneWidget);
     expect(find.text('Mínimo'), findsOneWidget);
+    // As colunas do card 6.7 (wireframe §9): saldo e data do último movimento.
+    expect(find.text('Saldo'), findsOneWidget);
+    expect(find.text('Último'), findsOneWidget);
+    expect(find.text('24'), findsOneWidget, reason: 'saldo de INTERATIVO 01');
+    expect(find.text('16/06/2026'), findsOneWidget, reason: 'último dele');
+    // Material sem movimento nenhum não some da lista, e a data vira traço.
+    expect(find.text('English Book 1'), findsOneWidget);
   });
 
   testWidgets('sem materiais.criar o botão "Novo material" não é renderizado', (
@@ -119,7 +146,7 @@ void main() {
     expect(find.text('Informática Essencial 1'), findsOneWidget);
     expect(find.text('Aposentada'), findsOneWidget);
     expect(find.text('Inativo'), findsOneWidget);
-    final chip = tester.widget<FilterChip>(find.byType(FilterChip));
+    final chip = tester.widget<FilterChip>(find.byType(FilterChip).first);
     expect(chip.selected, isFalse);
   });
 
@@ -176,8 +203,7 @@ void main() {
         code: '23505',
       );
     await montar(tester, repositorio: repositorio, permissoes: edicao);
-    await tester.tap(find.text('Informática Essencial 1'));
-    await tester.pumpAndSettle();
+    await abrirCadastro(tester, 'Informática Essencial 1');
     await tester.tap(find.byKey(chaveBotaoSalvar));
     await tester.pumpAndSettle();
     expect(
@@ -186,11 +212,17 @@ void main() {
     );
   });
 
-  testWidgets('sem materiais.editar a linha abre somente para leitura', (
-    tester,
-  ) async {
+  testWidgets('sem materiais.editar o cadastro continua alcançável, e somente '
+      'para leitura', (tester) async {
+    // ⚠️ Desde o card 6.7 a linha abre o PAINEL, e o cadastro fica num botão
+    // dele. Esse botão é a exceção da regra do §5.7 — não tem guarda de
+    // permissão, porque ver o cadastro nunca exigiu `materiais.editar` e
+    // guardá-lo tiraria de quem tem `materiais.ler` uma leitura que já tinha.
     await montar(tester, repositorio: CatalogoFalso.fixture());
     await tester.tap(find.text('Informática Essencial 1'));
+    await carregar(tester);
+    expect(find.text('Editar material'), findsNothing);
+    await tester.tap(find.text('Ver cadastro'));
     await tester.pumpAndSettle();
     expect(find.text('Material'), findsWidgets);
     expect(find.text('Fechar'), findsOneWidget);
@@ -203,8 +235,7 @@ void main() {
   ) async {
     final repositorio = CatalogoFalso.fixture();
     await montar(tester, repositorio: repositorio, permissoes: edicao);
-    await tester.tap(find.text('English Book 2'));
-    await tester.pumpAndSettle();
+    await abrirCadastro(tester, 'English Book 2');
     await tester.tap(find.text('Excluir'));
     await tester.pumpAndSettle();
     expect(find.text('Excluir material?'), findsOneWidget);
@@ -357,7 +388,12 @@ void main() {
     );
     expect(find.text('Filtrar (1)'), findsOneWidget);
     expect(find.text('Código'), findsNothing);
-    expect(find.text('mín. 2'), findsNWidgets(2));
+    // O destaque do cartão passou a levar o saldo (card 6.7): no celular a
+    // pergunta do monitor é "tem apostila?", e o mínimo sozinho não responde.
+    expect(find.text('saldo 24 · mín. 2'), findsOneWidget);
     expect(find.text('01 · Interativo · APOSTILA'), findsOneWidget);
+    // Cor não é portadora única (§8.2): o cartão em alerta traz a palavra.
+    expect(find.text('abaixo do mínimo'), findsWidgets);
+    expect(find.text('saldo negativo'), findsOneWidget);
   });
 }
