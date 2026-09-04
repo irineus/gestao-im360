@@ -81,8 +81,20 @@ O hook fica mais restritivo que a regra antiga em dois pontos: fatia a linha nos
 encadeamento antes de olhar (a negação por prefixo deixava passar
 `git status && supabase db reset --linked`) e cobre `push` e `dump`, não só `reset`.
 
+**Comando não é o texto que ele carrega.** Descoberto na estreia: a primeira tentativa de abrir o PR
+do próprio card 5.5,5 foi bloqueada pelo guarda, porque o corpo do PR *descrevia* o comando perigoso
+e viajava dentro de um heredoc do `gh pr create`. Por isso o corpo de `<<EOF … EOF` é apagado antes
+de fatiar e o casamento é ancorado no **início** do segmento. E por isso `VAR=valor` é removido da
+frente — sem esse terceiro passo a âncora seria contornável, e o conserto de um falso-positivo teria
+aberto um falso-negativo. Numa cadeia sem ninguém olhando, um guarda que bloqueia demais para tudo
+sem causa real; um que bloqueia de menos deixa passar o que destrói banco.
+
 Hook com erro interno **sai com 0**. Portão quebrado que reprova tudo trava o projeto; as proteções do
 `allow`/`deny` continuam de pé por baixo.
+
+**Bateria:** `node --test .claude/hooks/guarda-destrutivos.test.mjs` — 7 testes, 18 comandos, os dois
+grupos (o que tem de passar e o que tem de bloquear). Guarda sem teste apodrece: quem mexer na regex
+depois não teria como saber se afrouxou. Ainda **não** roda no CI — item 4 do §9.
 
 ## 7. Uso
 
@@ -111,3 +123,6 @@ Histórico em `automacao/logs/cadeia.jsonl` (uma linha por card) e a saída brut
    medida; anotar junto da recalibração (cards `X.10`).
 3. **Sessão longa demais.** Um card `GG` com laço de CI pode passar de uma hora. Não há hoje corte por
    tempo no driver; se virar problema, o alvo é um teto por sessão, não o teto de cards.
+4. **A bateria do guarda não roda no CI.** Ela existe e é verde, mas ninguém a executa fora da
+   máquina de quem mexeu — e o `testes.yml` é o lugar dela. Enquanto isso não for feito, uma regex
+   afrouxada passa despercebida no PR, que é exatamente o que a bateria existe para impedir.
