@@ -2,8 +2,8 @@
 ///
 /// Fonte dos textos: docs/design-system.md §7.1 (card 2.7), mais `PC_INEXISTENTE`
 /// (card 2.9), os três do card 3.5, `ALUNO_INEXISTENTE` (card 4.2),
-/// `PC_COM_HISTORICO` (card 4.3), `BLOCO_COM_ALOCACAO` (card 5.1) e os três do
-/// card 6.1 (trilha e estoque). O contrato
+/// `PC_COM_HISTORICO` (card 4.3), `BLOCO_COM_ALOCACAO` (card 5.1), os três do
+/// card 6.1 (trilha e estoque) e `MATERIAL_JA_NA_TRILHA` (card 6.2). O contrato
 /// do conjunto é
 /// `test/fixtures/codigos_erro.txt`, na raiz do repositório.
 ///
@@ -133,6 +133,13 @@ abstract final class CatalogoErros {
     'MOVIMENTO_IMUTAVEL':
         'Movimento de estoque não pode ser alterado nem apagado. Para corrigir, '
         'lance um estorno.',
+
+    // --- card 6.2 (edição da trilha)
+    // Sem este código a segunda inclusão da mesma apostila chegaria à tela como
+    // um erro cru da unique — o que o card 2.2 §1.2 proíbe.
+    'MATERIAL_JA_NA_TRILHA':
+        'Esta apostila já está na trilha do aluno. Para mudá-la de lugar, use a '
+        'reordenação.',
 
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':

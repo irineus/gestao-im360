@@ -813,7 +813,8 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `042_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` — era `040` até o card 5.1 ocupar o número, e `041` até o 5.2 ocupar o seguinte | **5.3** ✅ | 5 |
 | `043_bloco_alunos` (`v_bloco_alunos` e `fn_bloco_alunos`: a lista soma o que o cabeçalho diz, a reposição aparece na data dela com o bloco de origem, bloco desativado passa a abrir `ALUNO_SEM_TURMA`, e falta de permissão vira erro em vez de lista vazia) | **5.7** ✅ | 5 |
 | `050_trilha_estoque` (as cinco tabelas, a imutabilidade do movimento nas duas camadas, o insert POR TIPO, a guarda de coluna de `aluno_material` e as duas guardas de exclusão) | **6.1** ✅ | 6 |
-| `051_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` — era `050` até o card 6.1 ocupar o número, exatamente como o `040` do 5.3 virou `042`. ⚠️ **Divergência registrada** | 6.3 | 6 |
+| `051_trilha_geracao` (fn_trilha_gerar e as três de edição, as três consultas derivadas, e os dois triggers em `aluno` que a matrícula e a troca de combo disparam) | **6.2** ✅ | 6 |
+| `052_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` — era `050` até o card 6.1 ocupar o número, e `051` até o 6.2 ocupar o seguinte; é o mesmo deslocamento que levou o `040` do card 5.3 a `042`. ⚠️ **Divergência registrada** | 6.3 | 6 |
 | `060_estoque_compras` | 6.5 | 6 |
 | `070_modular` | 7.2 | 7 |
 | `080_projecao` | 8.1 | 8 |

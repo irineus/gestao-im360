@@ -527,6 +527,25 @@ fn_trilha_gerar(p_aluno_id uuid, p_combo_id uuid default null,
 5. Material repetido entre cursos do combo entra **uma vez**, na primeira posição em que aparece.
 6. `origem = 'COMBO'` em todos.
 
+✅ **Implementada em 04/09/2026 (card 6.2)**, com quatro coisas que a especificação deixava em
+aberto e que o código teve de fechar:
+
+- **Permissão: `alunos.editar_trilha` ∨ `alunos.criar`**, e não uma das duas sozinha. É a mesma
+  condição da política de `insert` de `aluno_material` (card 6.1 §8.1) e pelo mesmo motivo escrito
+  lá: a trilha nasce na matrícula, dentro da transação de quem cadastrou o aluno, e a regeneração
+  pelo botão do card 6.6 é edição de trilha. Exigir só a primeira faria a matrícula falhar para um
+  perfil que pode matricular.
+- **A geração grava `aluno_material_hist`** (`GERACAO_COMBO`, uma linha por item), que é o que dá
+  base de comparação a toda reordenação futura — e é o que obrigou a corrigir o `insert` de
+  `aluno_material_hist` (achado 13 do §7 de `permissoes-matriz.md`). Na substituição, a trilha antiga
+  sai com uma linha `REMOCAO` por item.
+- **A função fecha a pendência `TRILHA_DIVERGENTE_COMBO`** do aluno (`fn_pendencia_resolver`), porque
+  regenerar é exatamente a ação que a pendência pede. Pendência que ninguém fecha é a central do card
+  5.8 perdendo credibilidade.
+- **Aluno inexistente é `PT404 / ALUNO_INEXISTENTE`**, pelo precedente do card 4.2: a leitura é
+  `invoker`, então aluno de outra unidade e aluno inexistente respondem a mesma coisa — quem não pode
+  ver não descobre que existe.
+
 ### 5.2 Consulta
 
 ```sql
@@ -537,6 +556,18 @@ fn_trilha_em_fim(p_aluno_id uuid)         → boolean   -- stable; nenhum item p
 
 "Livro atual" e "próximo" **não são colunas** — são derivados da trilha a cada consulta. Coluna
 denormalizada aqui seria uma segunda fonte da verdade, que sai de sincronia no primeiro estorno.
+
+✅ **Implementadas em 04/09/2026 (card 6.2)**, `stable` e `security invoker`. Duas consequências
+escritas na migração porque são reais:
+
+- **`fn_trilha_em_fim` devolve `true` para aluno SEM trilha nenhuma**, e é de propósito: é a mesma
+  leitura da coluna `em_fim` de `v_dashboard_alunos_metodo` (card 2.3 §8.1, `pend.qtd = 0`). Manter
+  as duas iguais é o que impede o dashboard e a ficha de discordarem sobre o mesmo aluno.
+- **Sob RLS, "não tenho `alunos.ler`" e "a trilha acabou" respondem a mesma coisa** (nulo / `true`) —
+  a redução silenciosa do card 2.3 §3.4. Aceito de propósito: `security definer` faria a função
+  responder sobre alunos que o chamador não pode ver. Quem protege a tela é a guarda de rota do card
+  2.4 §6; quem protege a escrita é `fn_exige_permissao` nas funções de §5.3, que é onde o dano
+  existiria.
 
 ### 5.3 Edição manual
 
@@ -550,9 +581,31 @@ Todas exigem `alunos.editar_trilha`, marcam `origem = 'MANUAL'`, recusam mexer e
 entregue (`PT409 / ITEM_JA_ENTREGUE`) e gravam `aluno_material_hist` (`ordem_anterior`,
 `ordem_nova`, `usuario_id`). O `motivo` é o enum fechado do DDL — `MANUAL` na edição pela tela,
 `REMOCAO` na retirada, `GERACAO_COMBO` na geração inicial e `SEM_ESTOQUE` no reordenamento
-automático de §6.2. **Não há coluna de texto livre nessa tabela** (§14). O
+automático de §6.2. ~~**Não há coluna de texto livre nessa tabela** (§14).~~ O
 `unique (aluno_id, ordem) deferrable initially deferred` do DDL permite reordenar num único
 `UPDATE`, sem passar por valores temporários.
+
+✅ **Implementadas em 04/09/2026 (card 6.2)**, com três decisões de contrato que a assinatura acima
+não fixava e que a tela do card 6.6 precisa conhecer:
+
+- **`p_motivo` de `fn_trilha_remover` NÃO é o `motivo` da tabela.** O `motivo` da tabela é o `check`
+  fechado e vale `REMOCAO` ali, sempre; o parâmetro é o **texto livre** que vai para
+  `aluno_material_hist.observacao` — a coluna do ajuste 4 do §14, criada por este card. É a leitura
+  que resolve a colisão de nome entre a assinatura daqui e a coluna de lá, e é por isso que o ajuste
+  4 estava atribuído a este card. O motivo é **obrigatório** (`PT422 / MOTIVO_OBRIGATORIO`), pelo
+  precedente de `fn_estornar_entrega` e `fn_rep_voltar_pontual`.
+- **`p_nova_ordem` de `fn_trilha_reordenar` é a POSIÇÃO na trilha (1 = primeiro), não o valor bruto
+  da coluna `ordem`.** A tela arrasta um item para "a terceira linha", não para "a ordem 30"; a
+  numeração de 10 em 10 é artefato interno da geração, e contrato que vaza artefato interno obriga a
+  tela a conhecê-lo. Posição fora das bordas é **grampeada** (arrastar para além do fim significa
+  "põe no fim"), e não erro. A escrita é um único `UPDATE` renumerando de 10 em 10.
+- **`fn_trilha_inserir` usa o ESPAÇO da numeração e renumera quando ele acaba.** Quatro inclusões
+  seguidas na mesma fresta esgotam o intervalo (10 → 5 → 2 → 1); sem o ramo de renumeração a quinta
+  cairia em cima da ordem existente. ⚠️ Achado da contraprova: por a `unique` ser **`DEFERRABLE
+  INITIALLY DEFERRED`**, a colisão **não** levanta exceção no statement — ela só apareceria no
+  `commit`. Um `lives_ok` sozinho passa verde com o ramo sabotado; quem acusa é a asserção que **lê a
+  trilha de volta**. Erro novo: **`MATERIAL_JA_NA_TRILHA`** (409), sem o qual a segunda inclusão da
+  mesma apostila chega à tela como um `23505` cru.
 
 ---
 
@@ -614,6 +667,21 @@ fn_registrar_entrega(p_aluno_id uuid, p_material_id uuid default null,
 
 Os passos 7 a 9 são **um ato só**, na mesma transação: é a "ação única" do plano. Ou os três
 acontecem, ou nenhum.
+
+> ⚠️ **DECISÃO QUE O CARD 6.3 TEM DE TOMAR, encontrada em 04/09/2026 ao implementar o card 6.2.**
+> O passo 6 manda o caminho `REORDENADA` chamar `fn_trilha_reordenar`, e ela exige
+> `alunos.editar_trilha` (§5.3). Mas `fn_registrar_entrega` roda na transação do **monitor**, que
+> **não tem** essa permissão (card 2.4 §5) — e o `tg_aluno_material_colunas_permitidas` do card 6.1
+> §9 recusa qualquer escrita em `ordem` sem ela. Os três documentos estão certos separadamente e
+> incompatíveis juntos: escrito assim, a entrega do monitor com estoque zero morre em
+> `PT403 / SEM_PERMISSAO` numa tela que não fala de trilha.
+>
+> O card 6.2 **não** afrouxou nem a permissão daqui nem a guarda do 6.1 para acomodar um card que
+> ainda não começou — afrouxar ali esconderia a decisão dentro de uma função de outro assunto. As
+> saídas visíveis são duas: `fn_registrar_entrega` como `security definer` (entrando na lista fechada
+> do C8, com filtro de unidade no corpo, como `fn_pendencia_abrir`), ou uma exceção **explícita e
+> nomeada** na guarda para a reordenação por falta de estoque. A escolha é do card 6.3, e o teste
+> `051_trilha_geracao` §9 já deixa a incompatibilidade medida em voz alta.
 
 ### 6.3 Estorno
 
@@ -835,6 +903,7 @@ lista nunca acumula item que já deixou de ser verdade.
 | `TRILHA_JA_EXISTE` / `TRILHA_COM_ENTREGA` | 409 | `fn_trilha_gerar` |
 | `ALUNO_SEM_COMBO` | 422 | `fn_trilha_gerar` |
 | `ITEM_JA_ENTREGUE` | 409 | edição de trilha |
+| `MATERIAL_JA_NA_TRILHA` | 409 | `fn_trilha_inserir` (card 6.2) — sem ele, a segunda inclusão da mesma apostila chega à tela como um `23505` cru da `aluno_material_uk` |
 | `TRILHA_EM_FIM` | 409 | `fn_registrar_entrega` |
 | `MATERIAL_FORA_DA_TRILHA` | 422 | `fn_registrar_entrega` |
 | `MOVIMENTO_JA_ESTORNADO` / `MOVIMENTO_NAO_ESTORNAVEL` | 409 | `fn_estornar_entrega` |
@@ -872,7 +941,7 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | `tg_bloco_aluno_admissao`, `fn_bloco_admitir/remover`, reposições | 5.3 ✅ |
 | `fn_revalidar_blocos_sala` | 5.4 |
 | `fn_pendencia_abrir/resolver/resolver_id`, `fn_pendencias_fechar_ausentes`, `rt_pendencias_diaria`, `rt_diaria` e o job `pg_cron` | 5.5 ✅ |
-| `fn_trilha_gerar`, `fn_trilha_proximo_material`, edição da trilha | 6.2 |
+| `fn_trilha_gerar`, `fn_trilha_proximo_material`, edição da trilha, `tg_aluno_trilha_inicial`, `tg_aluno_combo_alterado` | 6.2 ✅ |
 | `tp_entrega_resultado`, `fn_registrar_entrega`, `fn_estornar_entrega`, `fn_saldo_material` | 6.3 |
 | `fn_pedido_receber`, `fn_ajustar_estoque`, `tg_movimento_valida_sinal`, `tg_movimento_resolve_pendencia` | 6.5 |
 | Funções Modular | 7.2 |
@@ -897,7 +966,7 @@ simples — que é exatamente por que o card 2.1 escolheu `text` + `check` em ve
 | 1 | `bloco_aluno_reposicao.status`: acrescentar **`FALTOU`** ao `check` | `drop constraint` / `add constraint` | 5.1 |
 | 2 | `pendencia.tipo`: acrescentar `ESTOQUE_ZERO`, `ESTOQUE_ABAIXO_MINIMO`, `SUGERIR_FORMADO`, `TRILHA_DIVERGENTE_COMBO`, `CERTIFICADO_INCONSISTENTE`, `REP_VIRADA`, `ROTINA_FALHOU` ao `check` | idem | 5.5 ✅ (**sem `alter`**: a tabela nasceu no próprio card, então os quinze tipos entraram direto no `check` — divergência registrada) |
 | 3 | `certificado_checklist`: acrescentar `formatura_por` / `formatura_em` | `add column` | 8.3 |
-| 4 | `aluno_material_hist`: acrescentar `observacao text` | `add column` | 6.2 |
+| 4 | `aluno_material_hist`: acrescentar `observacao text` | `add column` | 6.2 ✅ (04/09/2026, e o card 6.1 a deixou de fora de propósito: acrescentá-la lá daria uma coluna sem escritor) |
 | 5 | `bloco_aluno`: acrescentar `tipo_desde date not null default current_date` + trigger `tg_bloco_aluno_tipo_desde` | `add column` + trigger | 5.1 |
 | 6 | `rt_pendencias_diaria`: a contagem de blocos para `ACELERAR_SEM_2O_BLOCO` filtra `tipo <> 'REP'` | corpo da rotina | 5.5 ✅ (com **contraprova** no teste 090: os mesmos dois blocos, os dois de aula, fecham a pendência) |
 | 7 | `fn_reposicao_registrar` devolve `text` (o veredito da virada) em vez de `void` | assinatura | 5.1 → **5.3** ✅ (a função não existia no 5.1: nasceu devolvendo `text`) |
