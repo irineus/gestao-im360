@@ -14,7 +14,7 @@ rodado em lugar nenhum** — portão que não reprova é exatamente a falha que 
 
 | Workflow | Dispara | Jobs | O que bloqueia |
 |---|---|---|---|
-| **`testes.yml`** | todo *pull request*; push em `develop`/`main`; e `workflow_call` | `banco` (pgTAP + concorrência), `migrações` (portão do card 4.0,5), `edge functions` (lógica pura, `node --test` — card 4.7), `app` (formatação, análise, testes) e `vigia` (`node --test`) | o merge do PR |
+| **`testes.yml`** | todo *pull request*; push em `develop`/`main`; e `workflow_call` | `banco` (pgTAP + concorrência), `migrações` (portão do card 4.0,5 **e a suíte do guarda de destrutivos**), `edge functions` (lógica pura, `node --test` — card 4.7), `app` (formatação, análise, testes) e `vigia` (`node --test`) | o merge do PR |
 | **`db-migrations.yml`** | push em `develop`/`main` tocando `supabase/migrations/**`, `supabase/functions/**` ou `supabase/config.toml`; `workflow_dispatch` | `testes` (chama o de cima) → `migrate` (`db push` e, desde o card 4.7, `functions deploy --use-api` logo depois) | o `supabase db push` e a publicação das Edge Functions em dev e em prod |
 | **`deploy-web.yml`** | push em `develop`/`main` tocando `app/**`, `assets/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação no Cloudflare Pages |
 | **`deploy-worker-vigia.yml`** | push em **`main`** tocando `worker-vigia/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação do Worker vigia (card 3.10) |
@@ -314,6 +314,9 @@ node --test "worker-vigia/test/**/*.test.mjs"
 # migrações (portão do card 4.0,5 — também sem dependência nenhuma)
 node --test "portao-migracoes/test/**/*.test.mjs"
 node portao-migracoes/varredor.mjs supabase/migrations
+
+# guarda de destrutivos (o portão que vive fora do CI, card 5.5,5)
+node .claude/hooks/guarda-destrutivos.teste.mjs
 
 # edge functions (card 4.7): a lógica pura, com o Node lendo .ts direto
 node --test "supabase/functions/**/*.test.ts"

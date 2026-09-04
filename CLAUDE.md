@@ -39,24 +39,49 @@ Não confundir com o board do **Desmalha** (outro projeto de Irineu, data source
 - Credenciais de PCs nunca em texto puro.
 - Flutter: `go_router`, Riverpod, `supabase_flutter`; desktop-first para secretaria, mobile-friendly para monitor.
 
-## Fluxo de entrega (acordo de 01/09/2026 — vale para todas as sessões)
+## Fluxo de entrega (acordo de 01/09/2026, revisto em 03/09/2026 — vale para todas as sessões)
 
-**Nenhum merge acontece sem Irineu clicar.** O acordo é fechado e não se renegocia a cada sessão:
+**O que mudou em 03/09/2026 (card 5.5,5):** o merge em `develop` **deixou de exigir clique** e passou
+a ser automático com o CI verde. O portão que a regra de 01/09 protegia era o CI, e o CI hoje é o que
+decide — a suíte pgTAP, a de concorrência, o `flutter test`, o `analyze`, o `format` e o portão de
+migrações. O clique humano continua **exatamente onde o risco está**: a promoção `develop` → `main`,
+que aplica migração no banco de **produção**, é manual e de Irineu, sempre, e nenhuma sessão a
+executa — nem por engano: desde 03/09/2026 quem garante isso é um hook, e não a boa vontade da
+sessão (`.claude/hooks/guarda-destrutivos.mjs`).
+
+**Vermelho no CI se corrige, não se mergeia.** A sessão tenta a correção por conta própria e só para
+quando (a) a falha se repete **pela mesma razão** depois da tentativa de correção, (b) chega à terceira
+tentativa, ou (c) o conserto exige uma ação que só Irineu pode fazer (secret, conta em serviço externo,
+decisão de produto). Nesses casos a sessão para e diz **por quê**, sem mergear.
+
+Regra em uma linha: **`develop` é do CI; `main` é de Irineu.**
+
+O resto do acordo de 01/09/2026 continua fechado e não se renegocia a cada sessão:
 
 1. **Branch de tarefa sempre a partir de `origin/develop`**, qualquer que seja a branch designada da
    sessão — inclusive quando for `main`:
    `git fetch origin develop && git checkout -B tarefa/<fase>-<ordem>-<slug> origin/develop`.
    Nunca commitar direto em `main` nem em `develop`. Branch criada a partir de `main` nasce sem o que
    já está em `develop` e ainda não foi promovido.
-2. Concluído o entregável do card: commit, push da branch e **pergunta com `AskUserQuestion`** — abrir
-   o PR contra `develop` e, com o CI verde, mergear? A pergunta é clicável e vem **antes** do resumo
-   final; pedido em texto solto se perde no relatório.
-3. Depois do merge em `develop` e do CI verde, **segunda pergunta com `AskUserQuestion`** — promover
-   `develop` → `main`? Merge em `main` **aplica migração no banco de produção**: sem clique, não há
-   promoção, e se a promoção levar migração isso é dito dentro da pergunta, com o nome do arquivo.
+2. Concluído o entregável do card: commit, push da branch, PR contra `develop`, **esperar o CI** e
+   mergear **assim que ele fechar verde** — sem perguntar. Vermelho entra no laço de correção descrito
+   acima.
+3. **Promoção `develop` → `main`: a sessão AVISA, não pergunta.** ⚠️ Corrigido em 04/09/2026: até
+   aqui esta linha mandava perguntar com `AskUserQuestion` em sessão interativa — e a pergunta não
+   tinha o que decidir, porque **nenhuma sessão consegue promover**. O hook
+   `.claude/hooks/guarda-destrutivos.mjs`, instalado em 03/09/2026 pelo próprio card 5.5,5, recusa
+   `git push` mirando `main`, `gh pr create --base main` e o merge de um PR cuja base seja `main`.
+   Perguntar "promover agora?" para depois esbarrar no guarda gasta duas rodadas e ensina a não
+   confiar na pergunta seguinte.
 
-Vermelho no CI não se mergeia. Dispensa do OK só vale se Irineu der na própria sessão. Detalhe
-operacional na skill `proxima-tarefa`, seção "Ciclo do Git ao concluir".
+   O que a sessão faz, interativa ou não: **encerrar o resumo dizendo que há promoção pendente**, com
+   (a) quantas migrações ela leva e **com que nomes de arquivo**, (b) o que cada uma aplica em
+   produção — em especial rotina agendada, `pg_cron` ou qualquer coisa que passe a rodar sozinha —, e
+   (c) o link de comparação, `https://github.com/irineus/gestao-im360/compare/main...develop`. Quem
+   abre o PR e clica no merge é Irineu, sempre.
+
+Detalhe operacional na skill `proxima-tarefa`, seção "Ciclo do Git ao concluir". A cadeia de execução
+não interativa (uma sessão por card, em sequência) está em `docs/cadeia-execucao.md`.
 
 ## Workflow do board Notion
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/infraestrutura/infraestrutura.dart';
 import 'package:gestao_im360/infraestrutura/infraestrutura_provider.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
@@ -50,6 +51,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
+        retry: semRetryAutomatico,
         overrides: [
           infraestruturaRepositorioProvider.overrideWithValue(repositorio),
           permissoesProvider.overrideWithValue(permissoes),
@@ -184,15 +186,22 @@ void main() {
       expect(find.text('Novo PC'), findsWidgets);
     });
 
-    testWidgets('o monitor registra a manutenção sem mudar o status — e a '
-        'tela diz isso', (tester) async {
+    // ⚠️ Os três testes abaixo mudaram no card 5.4, e a mudança é a mesma nos
+    // três: `pc.status` deixou de ser escolha da tela e passou a ser DERIVADO de
+    // `pc_manutencao` por trigger. Saíram os dois interruptores e os dois avisos
+    // que diziam ao monitor que o status não mudaria — quem escreve o status
+    // agora é o banco, para os dois perfis, e a tela informa em vez de oferecer
+    // uma decisão que não é mais dela.
+    testWidgets('o monitor registra a manutenção e o status segue sozinho', (
+      tester,
+    ) async {
       final repositorio = InfraestruturaFalso.fixture();
       await montar(tester, repositorio: repositorio, permissoes: monitor);
       await abrirSala(tester, 'Laboratório 2');
       await tester.tap(find.text('Manutenção').first);
       await tester.pumpAndSettle();
       expect(find.text('Registrar manutenção — LAB2-01'), findsOneWidget);
-      expect(find.textContaining('não muda o status'), findsOneWidget);
+      expect(find.textContaining('automaticamente'), findsOneWidget);
       expect(find.text('Colocar o PC em manutenção'), findsNothing);
 
       await tester.enterText(
@@ -203,6 +212,8 @@ void main() {
       await carregar(tester);
 
       expect(repositorio.chamadas, contains('salvarManutencao'));
+      // A tela NÃO escreve o status: se voltasse a escrever, o app estaria
+      // disputando com o trigger uma coluna que não é mais dele.
       expect(repositorio.chamadas, isNot(contains('salvarPc')));
       final nova = repositorio.manutencoes_.where(
         (m) => m.pcId == 'pc-lab2-01',
@@ -210,34 +221,33 @@ void main() {
       expect(nova.single.tipo, 'CORRETIVA');
       expect(nova.single.descricao, 'teclado quebrado');
       expect(nova.single.dataFim, isNull);
+      // E o PC aparece em manutenção mesmo assim — quem o pôs lá foi o banco.
+      final pc = repositorio.pcs_.singleWhere((p) => p.id == 'pc-lab2-01');
+      expect(pc.status, 'MANUTENCAO');
       expect(find.text('Manutenção registrada.'), findsOneWidget);
       // O painel recarregou: a linha passou a "Encerrar".
       expect(find.text('Encerrar'), findsNWidgets(2));
     });
 
-    testWidgets('quem edita salas coloca o PC em manutenção no mesmo ato', (
-      tester,
-    ) async {
+    testWidgets('quem edita salas vê o MESMO formulário: o status não é '
+        'escolha de ninguém', (tester) async {
       final repositorio = InfraestruturaFalso.fixture();
       await montar(tester, repositorio: repositorio, permissoes: secretaria);
       await abrirSala(tester, 'Laboratório 2');
       await tester.tap(find.text('Manutenção').first);
       await tester.pumpAndSettle();
-      expect(find.text('Colocar o PC em manutenção'), findsOneWidget);
-      expect(find.textContaining('não muda o status'), findsNothing);
+      expect(find.text('Colocar o PC em manutenção'), findsNothing);
+      expect(find.textContaining('automaticamente'), findsOneWidget);
 
       await tester.tap(find.byKey(chaveBotaoSalvar));
       await carregar(tester);
-      expect(
-        repositorio.chamadas,
-        containsAllInOrder(['salvarManutencao', 'salvarPc']),
-      );
+      expect(repositorio.chamadas, isNot(contains('salvarPc')));
       final pc = repositorio.pcs_.singleWhere((p) => p.id == 'pc-lab2-01');
       expect(pc.status, 'MANUTENCAO');
       expect(find.textContaining('Em manutenção'), findsNWidgets(2));
     });
 
-    testWidgets('encerrar grava o fim e devolve o PC a operacional', (
+    testWidgets('encerrar grava só o fim — quem devolve o PC é o trigger', (
       tester,
     ) async {
       final repositorio = InfraestruturaFalso.fixture();
@@ -246,14 +256,17 @@ void main() {
       await tester.tap(find.text('Encerrar'));
       await tester.pumpAndSettle();
       expect(find.text('Encerrar manutenção — LAB2-05'), findsOneWidget);
-      expect(find.text('Voltar o PC a operacional'), findsOneWidget);
+      expect(find.text('Voltar o PC a operacional'), findsNothing);
 
       await tester.tap(find.byKey(chaveBotaoSalvar));
       await carregar(tester);
       final manutencao = repositorio.manutencoes_.singleWhere(
         (m) => m.id == 'm-aberta',
       );
+      // `data_fim` é o dia em que o PC VOLTA a operar, e o banco lê o intervalo
+      // como `[inicio, fim)` desde o card 5.4: encerrar hoje devolve o PC HOJE.
       expect(manutencao.dataFim, soData(DateTime.now()));
+      expect(repositorio.chamadas, isNot(contains('salvarPc')));
       final pc = repositorio.pcs_.singleWhere((p) => p.id == 'pc-lab2-05');
       expect(pc.status, 'OPERACIONAL');
       expect(find.text('Manutenção encerrada.'), findsOneWidget);

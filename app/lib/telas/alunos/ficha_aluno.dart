@@ -16,11 +16,12 @@ import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
+import 'aba_turmas.dart';
 import 'formularios.dart';
 
 /// A ficha do aluno (docs/wireframes.md §6.2) — cabeçalho com status e as
-/// ações do dia a dia, e as abas. Neste card existem **Dados** e
-/// **Histórico**; Trilha (6.6), Turmas (5.7) e Certificado (8.6) ficam no
+/// ações do dia a dia, e as abas. Existem **Dados** e **Histórico** desde o
+/// card 4.6 e **Turmas** desde o 5.7; Trilha (6.6) e Certificado (8.6) ficam no
 /// lugar, dizendo qual card as entrega, para a ordem das abas não mudar
 /// debaixo de quem já aprendeu a tela.
 ///
@@ -28,9 +29,15 @@ import 'formularios.dart';
 /// o destino de deep-link e o ponto de partida da jornada nº 1 do monitor
 /// (ficha → Trilha → Registrar entrega, card 2.6 §3.2).
 class FichaAluno extends ConsumerWidget {
-  const FichaAluno({super.key, required this.alunoId});
+  const FichaAluno({super.key, required this.alunoId, this.aba});
 
   final String alunoId;
+
+  /// A aba que abre, vinda de `?aba=` — é como a central de pendências manda
+  /// "Alocar" para Turmas e "Ver checklist" para Certificado, em vez de largar
+  /// os oito tipos que apontam para a ficha na primeira aba (wireframe §14.3).
+  /// Nula ou desconhecida abre em Dados.
+  final String? aba;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,7 +59,7 @@ class FichaAluno extends ConsumerWidget {
               rotuloAcao: 'Voltar para Alunos',
               aoAgir: () => context.go(caminhoAlunos),
             )
-          : _Ficha(aluno: a),
+          : _Ficha(aluno: a, aba: aba),
     );
   }
 }
@@ -62,9 +69,10 @@ class FichaAluno extends ConsumerWidget {
 const fichaInexistente = 'Este aluno não existe ou você não tem acesso a ele.';
 
 class _Ficha extends ConsumerWidget {
-  const _Ficha({required this.aluno});
+  const _Ficha({required this.aluno, this.aba});
 
   final Aluno aluno;
+  final String? aba;
 
   Future<void> _alterarStatus(BuildContext context) async {
     final resultado = await mostrarFormulario<String>(
@@ -109,7 +117,8 @@ class _Ficha extends ConsumerWidget {
     ].join(' · ');
 
     return DefaultTabController(
-      length: 5,
+      length: abasFicha.length,
+      initialIndex: indiceAbaFicha(aba),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -204,7 +213,7 @@ class _Ficha extends ConsumerWidget {
                   nomeCombo: nomeCombo,
                 ),
                 const _AbaFutura(nome: 'Trilha', card: '6.6'),
-                const _AbaFutura(nome: 'Turmas', card: '5.7'),
+                AbaTurmas(aluno: aluno),
                 AbaHistorico(aluno: aluno),
                 const _AbaFutura(nome: 'Certificado', card: '8.6'),
               ],

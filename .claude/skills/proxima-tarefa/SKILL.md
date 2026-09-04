@@ -81,42 +81,80 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 5. **Status = Concluído** e **`Concluído em` = a data de hoje**. As duas coisas, sempre — a data alimenta a estimativa de entrega (`docs/estimativa-entrega.md`), e card concluído sem data é um buraco na série. Se o card ainda não tiver `Tamanho` e `Tipo`, preencher também.
 6. **Fechar o ciclo do Git — faz parte da tarefa, não é extra.** São duas perguntas clicáveis a Irineu, na ordem: PR + merge em `develop`, depois promoção para `main`.
 
-## Ciclo do Git ao concluir — acordo de 01/09/2026
+## Ciclo do Git ao concluir — acordo de 01/09/2026, revisto em 03/09/2026
 
-**Nenhum merge acontece sem Irineu clicar, e nenhuma tarefa termina sem as duas perguntas serem
-feitas.** O acordo existe porque as duas falhas que já aconteceram foram de esquecimento, não de
-julgamento: PR não aberto (card de Ordem 5) e merge feito antes do OK. Pergunta em texto solto no
-resumo final não resolve — ela se perde no meio do relatório. As duas são **`AskUserQuestion`**.
+**`develop` é do CI; `main` é de Irineu.** O merge em `develop` é **automático com o CI verde** e não
+se pergunta (mudou em 03/09/2026, card 5.5,5 — o portão que a regra antiga protegia era o CI, e é o
+CI que decide). A promoção `develop` → `main` **nunca** é automática: aplica migração em produção.
 
 1. Commit em português, mensagem descrevendo a tarefa do board (ex.: `Card 2.1: modelagem de dados detalhada (DDL Postgres)`).
 2. Push da branch de tarefa: `git push -u origin tarefa/<fase>-<ordem>-<slug>`.
-3. **Pergunta 1 — PR e merge em `develop`.** Assim que o entregável do card estiver pronto e
-   empurrado (antes do resumo final, não depois), perguntar com **`AskUserQuestion`**:
-   - *Abrir o PR contra `develop` e mergear com o CI verde* — **recomendada**, é o caminho normal;
-   - *Só abrir o PR, sem mergear* — quando Irineu quiser revisar antes;
-   - *Nem abrir o PR agora.*
+3. **PR contra `develop`, sem perguntar.** Corpo: o que foi entregue, link do card e o que ficou em
+   aberto. Em sessões do Claude Code na web o `gh` **não** existe — usar as ferramentas MCP do GitHub
+   (`create_pull_request`, `merge_pull_request`).
+4. **Esperar o CI e mergear no verde.** `gh pr checks <n> --watch`. Sem check nenhum (PR só de
+   documento), mergear direto.
+5. **Vermelho entra no laço de correção, não para a tarefa.** Ler o log do job que reprovou,
+   corrigir, empurrar e esperar de novo. **Parar e não mergear** só quando:
+   - a falha se repetir **pela mesma razão** (mesmo job e mesma asserção/erro) depois de uma
+     tentativa de correção — insistir sem hipótese nova é gastar rodada de CI;
+   - chegar à **terceira** tentativa;
+   - o conserto exigir ação que só Irineu pode fazer (secret, conta em serviço externo, decisão de
+     produto, disparo manual de workflow).
 
-   Corpo do PR: o que foi entregue, link do card e o que ficou em aberto. Em sessões do Claude Code
-   na web o `gh` **não** existe — usar as ferramentas MCP do GitHub (`create_pull_request`,
-   `merge_pull_request`).
-4. **CI antes do merge.** Hoje o único workflow é o `db-migrations`, e ele só dispara quando o push
-   toca `supabase/migrations/**` — a maioria dos PRs de documento não tem check nenhum, e aí a
-   autorização da pergunta 1 já basta. Havendo check: esperar ficar verde; **vermelho não se
-   mergeia** — corrigir, empurrar de novo e só então mergear.
-5. **Pergunta 2 — promoção para produção.** Depois do merge em `develop` (e do CI verde, se houver),
-   perguntar com **`AskUserQuestion`**:
-   - *Promover `develop` → `main` agora* — abre o PR de promoção e mergeia;
-   - *Ainda não — acumular mais tarefas em `develop`.*
+   Em qualquer um dos três: dizer **qual** dos três foi e **por quê**, com o log.
+6. **Promoção para produção — a sessão AVISA, e não pergunta.** ⚠️ Corrigido em 04/09/2026: até
+   aqui esta seção mandava usar `AskUserQuestion` em sessão interativa, e a pergunta **não tinha o
+   que decidir**. O hook `.claude/hooks/guarda-destrutivos.mjs` (instalado em 03/09/2026 pelo card
+   5.5,5) recusa `git push` mirando `main`, `gh pr create --base main` e o merge de um PR cuja base
+   seja `main` — em **qualquer** sessão, interativa ou não. Perguntar e depois esbarrar no guarda
+   custou duas rodadas na sessão do card 5.11, e a segunda pergunta foi só para corrigir o número de
+   migrações da primeira.
 
-   ⚠️ Merge em `main` **aplica migração no banco de produção**. Esta pergunta é sempre feita e nunca
-   é respondida pelo Claude: sem clique, não há promoção. Se a promoção levar migração, dizer isso
-   **dentro da pergunta**, com o nome do arquivo — é a última chance de alguém reparar.
-6. **Nunca mergear sem o clique.** A única dispensa é Irineu dizer na própria sessão "pode mergear
-   direto" / "não precisa pedir" — e vale só naquela sessão, não nas seguintes.
+   O que fazer, sempre igual: **terminar o resumo com o aviso de promoção pendente**, contendo
+   - **quantas migrações** a promoção leva e **os nomes dos arquivos** — `git diff --name-only
+     origin/main..origin/develop -- supabase/migrations/` responde, e é o número que vale, não o do
+     card que se acabou de fechar;
+   - **o que cada uma aplica em produção**, com destaque para o que passa a **rodar sozinho** (rotina
+     `pg_cron`, trigger que agenda, Worker) — é o único tipo de mudança que continua agindo depois de
+     ninguém estar olhando;
+   - o link `https://github.com/irineus/gestao-im360/compare/main...develop`.
+
+   Quem abre o PR e clica no merge é Irineu. Não oferecer para "abrir só o PR": isso também é barrado,
+   e oferecer o que não se pode fazer é o defeito que esta correção existe para tirar.
 7. Branch empurrada sem PR some. Se houver PR de tarefa anterior ainda não mergeado, dizer no
    resumo final.
-8. Se a sessão acabar sem resposta às perguntas, o resumo final tem de dizer **em que ponto do ciclo
-   a tarefa parou** (branch empurrada? PR aberto? mergeado?) — a sessão seguinte começa daí.
+8. Se a sessão acabar no meio do ciclo, o resumo tem de dizer **em que ponto parou** (branch
+   empurrada? PR aberto? mergeado?) — a sessão seguinte começa daí.
+
+## Modo não interativo (cadeia de execução — card 5.5,5)
+
+Quando a sessão foi aberta pelo driver `automacao/cadeia.ps1` (`claude -p`), **não há quem responda
+pergunta**. Nesse modo:
+
+- **Nunca usar `AskUserQuestion`.** Onde o fluxo interativo perguntaria, decidir pelo caminho
+  documentado (merge em `develop` no verde) ou parar com veredito.
+- **Escolher a tarefa sozinho**, sem a pergunta da seção "Escolher a tarefa": é o primeiro card não
+  concluído na ordenação, **pulando** os que estão `Em andamento` com a linha
+  `AGUARDANDO RETORNO DOS USUÁRIOS` nas Notas (marco esperando resposta de gente não bloqueia a fila).
+- **Card de `Tipo` = `Externo`** e qualquer card cuja nota diga que depende de ação de Irineu: **não
+  executar** — encerrar com `CADEIA_FIM`.
+- **Card de `Tipo` = `Marco/validação`:** executar tudo o que não depende de gente (pré-condições
+  medidas, critérios pré-verificados) e **deixar as mensagens de WhatsApp prontas** para Irineu
+  encaminhar, no molde do §9.1 da subpágina do card 4.8 — uma mensagem por perfil, passo por linha,
+  "você não tem como estragar nada" antes dos passos, o que é normal dito antes de virar defeito
+  reportado. Depois: **manter o card `Em andamento`**, com a linha
+  `AGUARDANDO RETORNO DOS USUÁRIOS desde <data>` no topo das Notas, e seguir para o próximo card.
+- **Terminar a resposta com uma única linha de veredito**, a última de tudo, exatamente num destes
+  três formatos (o driver lê por prefixo `>>> `):
+
+  ```
+  >>> CARD_OK <fase>.<ordem> pr=<numero> merge=develop
+  >>> CARD_PARADO <fase>.<ordem> :: <motivo em uma linha>
+  >>> CADEIA_FIM :: <motivo em uma linha>
+  ```
+
+  `CARD_OK` só com o merge em `develop` **feito**. PR aberto e não mergeado é `CARD_PARADO`.
 
 ### Limpeza de branch depois do merge
 

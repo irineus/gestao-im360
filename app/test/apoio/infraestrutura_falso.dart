@@ -186,8 +186,9 @@ class InfraestruturaFalso implements InfraestruturaRepositorio {
   @override
   Future<PcManutencao> salvarManutencao(PcManutencao manutencao) =>
       _gravar('salvarManutencao', () {
+        final PcManutencao gravada;
         if (manutencao.id == null) {
-          final nova = PcManutencao(
+          gravada = PcManutencao(
             id: _novoId('m'),
             pcId: manutencao.pcId,
             tipo: manutencao.tipo,
@@ -196,13 +197,32 @@ class InfraestruturaFalso implements InfraestruturaRepositorio {
             descricao: manutencao.descricao,
             pcSubstitutoId: manutencao.pcSubstitutoId,
           );
-          manutencoes_.add(nova);
-          return nova;
+          manutencoes_.add(gravada);
+        } else {
+          manutencoes_[manutencoes_.indexWhere((m) => m.id == manutencao.id)] =
+              manutencao;
+          gravada = manutencao;
         }
-        manutencoes_[manutencoes_.indexWhere((m) => m.id == manutencao.id)] =
-            manutencao;
-        return manutencao;
+        _sincronizarStatusPc(gravada.pcId);
+        return gravada;
       });
+
+  /// O `tg_pc_manutencao_status` do card 5.4, reproduzido aqui porque a tela
+  /// PASSOU A DEPENDER DELE: desde aquele card `pc.status` é derivado de
+  /// `pc_manutencao`, e o app não escreve mais o status ao registrar ou encerrar
+  /// uma manutenção. Um falso que não o reproduzisse deixaria os testes de
+  /// widget medirem um mundo que não existe — o PC continuaria "Operacional"
+  /// depois de a manutenção ser registrada, e a asserção que hoje reprova
+  /// passaria a permitir a volta do interruptor.
+  void _sincronizarStatusPc(String pcId) {
+    final indice = pcs_.indexWhere((p) => p.id == pcId);
+    if (indice < 0) return;
+    final pc = pcs_[indice];
+    if (pc.status == 'DESATIVADO') return;
+    final hoje = DateTime.now();
+    final parado = manutencoes_.any((m) => m.pcId == pcId && m.abertaEm(hoje));
+    pcs_[indice] = pc.copiar(status: parado ? 'MANUTENCAO' : 'OPERACIONAL');
+  }
 
   @override
   Future<List<Professor>> professores() =>

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/politica_retry.dart';
+import 'package:gestao_im360/pendencias/pendencias_provider.dart';
 import 'package:gestao_im360/rotas/rotas.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/theme/dimensoes.dart';
 import 'package:gestao_im360/widgets/shell_im360.dart';
 
 import 'apoio/app_de_teste.dart';
+import 'apoio/pendencias_falso.dart';
 
 /// Card 2.8 §9.1: `faixaDe(largura)` devolve menu/trilho/barra inferior nos
 /// limites 600 e 1024. A troca de linhas por cartões da `TabelaIm360` está em
@@ -52,7 +55,13 @@ void main() {
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
         ProviderScope(
+          retry: semRetryAutomatico,
           overrides: [
+            // O shell passou a observar o contador de pendências (card 5.8):
+            // sem o repositório injetado ele iria ao `Supabase.instance`.
+            pendenciasRepositorioProvider.overrideWithValue(
+              PendenciasFalso(pendencias: const []),
+            ),
             permissoesProvider.overrideWithValue(permissoesDirecao),
             resumoUsuarioProvider.overrideWithValue(
               const ResumoUsuario(

@@ -1,0 +1,209 @@
+# Cadeia de execução — uma sessão por card, sem acompanhamento
+
+> **Card de origem:** 5.5,5 (03/09/2026). **Decisão que a habilita:** merge em `develop` automático
+> com o CI verde; promoção `develop` → `main` sempre manual. Ver `CLAUDE.md`, "Fluxo de entrega".
+
+## 1. O que é
+
+Um driver (`automacao/cadeia.ps1`) abre **uma sessão headless por card**, em sequência, lê o veredito
+que cada uma imprime e decide se continua. O objetivo não é executar mais rápido — é **executar sem
+Irineu de plantão**.
+
+Contexto novo a cada card não é efeito colateral, é requisito: um card `GG` já consome sessão inteira,
+e emendar quatro num contexto só degrada a partir do terceiro.
+
+## 2. A regra que mudou, e por quê
+
+Até 03/09/2026 toda tarefa terminava em duas `AskUserQuestion` — PR/merge em `develop`, depois
+promoção para `main`. Sessão headless não tem a quem perguntar, então a cadeia **exigia** revisitar a
+primeira pergunta.
+
+O que a regra de 01/09 protegia era **o CI**: "vermelho não se mergeia". Isso continua valendo, e
+agora é o CI que executa a regra em vez de um humano repetindo-a. O clique ficou onde o risco está de
+verdade: **`main` aplica migração em produção**, e nenhuma sessão a promove.
+
+> **`develop` é do CI; `main` é de Irineu.**
+
+## 3. Onde a cadeia para
+
+| Motivo | Como aparece |
+|---|---|
+| Card de `Tipo` = `Externo`, ou nota dizendo que depende de Irineu | `CADEIA_FIM` |
+| CI vermelho **pela mesma razão** depois de uma correção | `CARD_PARADO` |
+| Terceira tentativa de correção | `CARD_PARADO` |
+| Conserto exige secret, conta externa ou decisão de produto | `CARD_PARADO` |
+| Sessão terminou sem a linha de veredito | o driver para e aponta o log |
+| Sessão disse `CARD_OK` mas `origin/develop` não andou | o driver para (§5) |
+
+**Marco de validação NÃO para a cadeia** (decisão de Irineu, 03/09/2026). A sessão entrega as
+pré-condições medidas e as **mensagens de WhatsApp prontas** para os usuários da escola, mantém o card
+`Em andamento` com `AGUARDANDO RETORNO DOS USUÁRIOS desde <data>` e segue. Cards nesse estado são
+pulados pelas sessões seguintes. O modelo das mensagens é o §9.1 da subpágina do card 4.8 — é o
+melhor exemplar que o projeto tem: um passo por linha, "você não tem como estragar nada" **antes** dos
+passos, e o que é normal dito antes de a pessoa reportar como defeito.
+
+Com isso a fila automatizável vai de **5.4 até 9.2** — cerca de 30 cards — e para na revisão das
+exceções da migração (9.3), que é sua.
+
+## 4. Pré-requisitos
+
+- **CLI do Claude Code instalada** (`claude` no PATH). O app desktop não serve: a cadeia precisa de
+  processo por card.
+- `gh` autenticado, `git`, `node`, e **Docker rodando** — sem ele o `supabase start` não sobe e a
+  sessão gasta uma rodada descobrindo isso.
+- Working tree limpo e `HEAD` fora de `main`.
+- **Diretório confiado pela CLI e login feito.** Sem a confiança, a CLI **ignora o `permissions.allow`
+  inteiro** do `.claude/settings.json`; sem login, `claude -p` imprime `Not logged in` e **sai com
+  código 0**. As duas se resolvem rodando `claude` interativamente aqui uma vez.
+- **MCP do Notion pré-autorizado.** `--permission-mode acceptEdits` cobre edição de arquivo e **não**
+  ferramenta de MCP: o driver passa `--allowedTools mcp__claude_ai_Notion`. A concessão mora no
+  driver, e não no `permissions.allow`, para valer **só** na cadeia — sessão interativa continua
+  perguntando.
+
+`.\automacao\cadeia.ps1 -Verificar` mede tudo isso e não executa nada. A última checagem é uma
+**sonda de verdade**: abre uma sessão mínima e manda chamar o Notion, porque é a primeira coisa que
+todo card faz. Ela assere por **marcador de falha** e não por token de sucesso — duas versões que
+exigiam a palavra exata reprovaram com o sistema bom (a sessão devolveu uma tabela numa, e "OK" na
+outra), e checagem que reprova à toa ensina a ignorar vermelho.
+
+## 5. Por que o driver não acredita na sessão
+
+`CARD_OK` é **relato**. Antes de seguir para o próximo card, o driver compara o SHA de
+`origin/develop` antes e depois: se não andou, a cadeia para.
+
+O modo de falha que isso pega é o pior possível numa execução sem ninguém olhando — a sessão acredita
+que mergeou, o board diz `Concluído`, e `develop` está parado. O card seguinte nasceria de uma base
+sem o anterior, e o erro só apareceria três cards adiante, como conflito ilegível.
+
+## 6. O guarda de comandos
+
+`.claude/hooks/guarda-destrutivos.mjs` (`PreToolUse` em `Bash`) recusa:
+
+- `supabase db reset|push|dump` com **alvo remoto** (`--linked`, `--db-url`, `--project-ref`);
+- `git push` mirando `main`;
+- `gh pr create --base main`.
+
+**Ele substitui uma negação que era ampla demais.** O `.claude/settings.json` negava `supabase db
+reset` por prefixo — mas o `db reset` **local** é justamente o passo que o `testes.yml` roda para
+provar que a sequência de migrações sobe limpa num banco vazio. Negar os dois juntos custava um clique
+por sessão interativa; numa sessão headless **mata a execução no primeiro card**.
+
+O hook fica mais restritivo que a regra antiga em dois pontos: fatia a linha nos operadores de
+encadeamento antes de olhar (a negação por prefixo deixava passar
+`git status && supabase db reset --linked`) e cobre `push` e `dump`, não só `reset`.
+
+**Comando não é o texto que ele carrega.** Descoberto na estreia: a primeira tentativa de abrir o PR
+do próprio card 5.5,5 foi bloqueada pelo guarda, porque o corpo do PR *descrevia* o comando perigoso
+e viajava dentro de um heredoc do `gh pr create`. Por isso o corpo de `<<EOF … EOF` é apagado antes
+de fatiar e o casamento é ancorado no **início** do segmento. E por isso `VAR=valor` é removido da
+frente — sem esse terceiro passo a âncora seria contornável, e o conserto de um falso-positivo teria
+aberto um falso-negativo. Numa cadeia sem ninguém olhando, um guarda que bloqueia demais para tudo
+sem causa real; um que bloqueia de menos deixa passar o que destrói banco.
+
+Hook com erro interno **sai com 0**. Portão quebrado que reprova tudo trava o projeto; as proteções do
+`allow`/`deny` continuam de pé por baixo.
+
+**Bateria:** `node --test .claude/hooks/guarda-destrutivos.test.mjs` — 7 testes, 18 comandos, os dois
+grupos (o que tem de passar e o que tem de bloquear). Guarda sem teste apodrece: quem mexer na regex
+depois não teria como saber se afrouxou. Ainda **não** roda no CI — item 4 do §9.
+
+## 7. Uso
+
+```powershell
+.\automacao\cadeia.ps1 -Verificar        # diagnóstico, não executa
+.\automacao\cadeia.ps1 -MaxCards 1       # um card (modo piloto)
+.\automacao\cadeia.ps1 -MaxCards 30      # até a fila acabar ou precisar de você
+```
+
+Histórico em `automacao/logs/cadeia.jsonl` (uma linha por card), a narração de cada sessão em
+`automacao/logs/card-<carimbo>.log` e o stream cru em `card-<carimbo>.jsonl`. Nada disso é versionado.
+
+## 7.1 Dá para acompanhar ao vivo
+
+Sim, e não dava. `claude -p` com saída em texto **bufferiza a resposta inteira** e só imprime no fim:
+num card `GG` são dezenas de minutos de silêncio depois de uma linha dizendo onde fica o log. O driver
+usa `--output-format stream-json` e passa os eventos por `automacao/formatar-stream.mjs`, que traduz
+em narração curta conforme acontece:
+
+```
+  · sessão iniciada
+  → Bash: supabase test db
+  → Edit: supabase/migrations/20260904...sql
+  · Vou criar a view em cima da função, como o §7 manda…
+  ✗ ferramenta falhou: …
+  ── sessão encerrada: 34 turnos · 812.4s · US$ 6.1204
+```
+
+Só o que interessa a quem acompanha: ferramenta com o alvo, texto do assistente, e **erro de
+ferramenta** — o resultado que deu certo fica implícito no passo seguinte e dobraria o volume. O
+JSONL cru fica ao lado para quando o resumo não bastar.
+
+A linha final de `result` traz **turnos, duração e custo**, que é a medida que faltava para o item 2
+do §9: cada corrida passa a dizer quanto custou.
+
+⚠️ **Duas armadilhas de encoding do PowerShell 5.1 já pagas**, e as duas davam sintoma parecido com
+defeito de conteúdo: `$OutputEncoding` (o que se ESCREVE ao canalizar para um processo nativo) tem
+**ASCII** como padrão e transformava "fumaça" em "fuma?a"; e `[System.Text.Encoding]::UTF8` traz
+**BOM**, que entrava na primeira linha entregue ao filtro, quebrava só o `JSON.parse` dela e a
+repassava crua no meio da narração. Daí o `New-Object System.Text.UTF8Encoding $false`.
+
+## 7.2 Orçamento da janela de 5 horas
+
+O limite não é de dinheiro, é de **utilização da janela**, e a CLI informa as duas pontas em todo
+evento: `utilization` (0 a 1) e `resetsAt`. Antes de **cada** card — inclusive o primeiro — o driver
+anuncia a conta:
+
+```
+  orçamento: janela em 41%, sobra 59%, reset em 238 min; card estimado em 11% / 31 min (4 cards medidos)
+  ✓ cabe: projeção 52% contra teto de 92%
+```
+
+A estimativa sai do **histórico próprio** (`cadeia.jsonl` guarda `janelaGasta` e `minutos` por card);
+enquanto não houver duas medidas, usa o padrão da corrida de 04/09/2026 (~11% e ~31 min).
+
+Não cabendo, o driver **espera em passos de 10 minutos** e recalcula. A conta é feita **antes** de
+abrir o card, nunca no meio: sessão que morre pela metade deixa branch criada, arquivos escritos e
+talvez PR aberto, e retomar isso automaticamente é adivinhação — parar antes de começar é
+determinístico.
+
+⚠️ **O caminho "a CLI recusou" não foi exercitado.** As três leituras observadas trouxeram o mesmo
+`resetsAt`, o que indica janela **fixa**; nesse caso o laço de 10 minutos apenas dorme até o reset. Se
+a janela for deslizante em algum plano, o mesmo laço aproveita a folga que for surgindo. As duas
+leituras são compatíveis com o código, mas nenhuma corrida chegou a bater no limite.
+
+## 7.3 Revisão de fase
+
+```powershell
+.\automacao\cadeia.ps1 -RevisarFase
+```
+
+Uma sessão que **não implementa nada**: lê as especificações vinculantes, compara com o que a fase
+entregou e deixa um **card de correções** no board, no molde do card 5.11. Encerra com `CADEIA_FIM`.
+
+Existe por um motivo medido: as quatro telas da fase 05 foram construídas por sessões que **não
+abriram o `design-system.md`** (nenhuma das quatro), e a de pendências não abriu especificação alguma.
+O CI ficou verde nas seis e sete grupos de defeitos passaram — `flutter test` não desenha glifo,
+`analyze` não lê português, e nenhum dos dois compara o entregue com o que foi pedido.
+
+O prompt manda **não procurar** o que já é portão automático (glifo fora de Inter/Roboto, jargão em
+texto de tela, portão de migrações, suítes): repetir a máquina custa turno e não acha nada.
+
+## 8. O que a cadeia não faz
+
+- **Não promove para produção.** Continua sendo você, com o clique e o disparo manual do workflow.
+- **Não decide escopo.** Nota de card que diverge continua virando divergência registrada, não
+  invenção.
+- **Não substitui os marcos.** Ela prepara a validação; quem valida é gente.
+
+## 9. Em aberto
+
+1. **A fila longa afasta `develop` de `main`.** Trinta cards em `develop` significam um lote grande de
+   migrações na promoção seguinte. Promover ao fim de cada fase mantém o lote do tamanho de uma fase —
+   é recomendação, não regra, e a decisão é de Irineu a cada promoção.
+2. **Custo por card não foi medido.** A primeira corrida com `-MaxCards 1` é o que dá a primeira
+   medida; anotar junto da recalibração (cards `X.10`).
+3. **Sessão longa demais.** Um card `GG` com laço de CI pode passar de uma hora. Não há hoje corte por
+   tempo no driver; se virar problema, o alvo é um teto por sessão, não o teto de cards.
+4. **A bateria do guarda não roda no CI.** Ela existe e é verde, mas ninguém a executa fora da
+   máquina de quem mexeu — e o `testes.yml` é o lugar dela. Enquanto isso não for feito, uma regex
+   afrouxada passa despercebida no PR, que é exatamente o que a bateria existe para impedir.

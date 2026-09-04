@@ -31,3 +31,6 @@ node_modules/
 # mesmo repositório trabalham cada uma no seu, e o checkout principal não pode
 # ver o outro como arquivo solto — um `git add -A` o commitaria inteiro.
 .claude/worktrees/
+
+# Saída da cadeia de execução (card 5.5,5) — log de corrida, não é entregável
+automacao/logs/

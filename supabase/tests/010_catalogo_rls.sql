@@ -121,7 +121,30 @@ create temporary view p_esperada (tabela, cmd) as values
   -- `bloco_aluno.bloco_id`, e é o que tg_bloco_exclusao_valida fecha.
   ('bloco_horario','r'),         ('bloco_horario','a'),         ('bloco_horario','w'), ('bloco_horario','d'),
   ('bloco_aluno','r'),           ('bloco_aluno','a'),           ('bloco_aluno','w'),
-  ('bloco_aluno_reposicao','r'), ('bloco_aluno_reposicao','a'), ('bloco_aluno_reposicao','w');
+  ('bloco_aluno_reposicao','r'), ('bloco_aluno_reposicao','a'), ('bloco_aluno_reposicao','w'),
+  -- card 5.5 — pendências. Duas particularidades, as duas decisão do card 2.4 §4:
+  -- o `insert` é a ÚNICA política do projeto que não exige permissão de domínio
+  -- nenhuma (pendência é anotação do sistema, aberta por quase toda função de
+  -- aplicação, e enumerar os autores num `or` daria uma lista que cresce a cada
+  -- card e cujo esquecimento vira erro opaco de RLS numa tela que não fala de
+  -- pendência); e não há DELETE, porque pendência encerrada é `resolvida_em`
+  -- preenchida — apagar a linha tiraria da história justamente o que se quer
+  -- olhar depois, quantas vezes este bloco já estourou a capacidade.
+  ('pendencia','r'),        ('pendencia','a'),        ('pendencia','w'),
+  -- card 6.1 — trilha e estoque. Quatro ausências, quatro decisões:
+  -- `aluno_material_hist` sem update nem delete (histórico imutável, como
+  -- aluno_status_hist); `movimento_estoque` sem update NEM delete, que É a
+  -- imutabilidade do movimento — e o `insert` dele é o único do projeto
+  -- condicionado ao valor de uma COLUNA (`tipo`), porque um `estoque.criar`
+  -- genérico deixaria o monitor `POST`ar uma ENTRADA de 500 unidades sem passar
+  -- por fn_pedido_receber; e `pedido_compra` sem delete, porque pedido enviado
+  -- vira CANCELADO — o histórico de compra é o que explica um saldo três meses
+  -- depois. `pedido_item` é o único dos cinco com o padrão de quatro.
+  ('aluno_material','r'),      ('aluno_material','a'),      ('aluno_material','w'), ('aluno_material','d'),
+  ('aluno_material_hist','r'), ('aluno_material_hist','a'),
+  ('movimento_estoque','r'),   ('movimento_estoque','a'),
+  ('pedido_compra','r'),       ('pedido_compra','a'),       ('pedido_compra','w'),
+  ('pedido_item','r'),         ('pedido_item','a'),         ('pedido_item','w'),    ('pedido_item','d');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text
@@ -173,14 +196,20 @@ create temporary view p_codigo_catalogo (codigo) as values
   -- (curso_material, combo_curso) grava com `materiais.editar` e não com
   -- `materiais.criar`: montar a sequência de um curso é editar o curso.
   ('materiais.ler'), ('materiais.criar'), ('materiais.editar'), ('materiais.excluir'),
-  -- card 4.2 — o domínio `alunos` MENOS os dois códigos que nenhuma política
-  -- cita, e essa ausência é o ponto: `alunos.editar_trilha` só aparece quando
-  -- `aluno_material` nascer (card 6.1), e `alunos.formar_sem_certificado` nunca
-  -- aparece em política nenhuma — ele é o gate de fn_aluno_pode_formar, dentro
-  -- de um trigger. Pôr qualquer um dos dois aqui reprovaria por "catalogado e
-  -- não usado", que é exatamente o que esta lista existe para dizer.
+  -- card 4.2 — o domínio `alunos` MENOS o código que nenhuma política cita, e
+  -- essa ausência é o ponto: `alunos.formar_sem_certificado` nunca aparece em
+  -- política nenhuma — ele é o gate de fn_aluno_pode_formar, dentro de um
+  -- trigger. Pô-lo aqui reprovaria por "catalogado e não usado", que é
+  -- exatamente o que esta lista existe para dizer.
+  --
+  -- ⚠️ `alunos.editar_trilha` ENTROU em 04/09/2026, com o card 6.1: até ele a
+  --    ausência era a decisão ("só aparece quando aluno_material nascer"), e
+  --    agora as quatro políticas de aluno_material e as duas de
+  --    aluno_material_hist o citam. Mover a linha é a metade da simetria que se
+  --    esquece — sem isso o par reprovaria por "citado e fora do catálogo".
   ('alunos.ler'), ('alunos.criar'), ('alunos.editar'),
   ('alunos.alterar_status'), ('alunos.reverter_status'),
+  ('alunos.editar_trilha'),
   -- card 4.3 — os cinco do domínio `salas`, os três de `professores` e o 50º
   -- código, `salas.acessar_credencial` (card 2.9), que aqui aparece pela
   -- primeira vez em política: as duas de `pc_credencial_acesso`.
@@ -196,7 +225,24 @@ create temporary view p_codigo_catalogo (codigo) as values
   -- tg_reposicao_admissao (card 5.3). Pô-lo aqui reprovaria por "catalogado e
   -- não usado", que é exatamente o que esta lista existe para dizer.
   ('turmas.ler'), ('turmas.criar'), ('turmas.editar'), ('turmas.excluir'),
-  ('turmas.alocar');
+  ('turmas.alocar'),
+  -- card 5.5 — os dois do domínio `pendencias`. `pendencias.ler` guarda a
+  -- leitura e `pendencias.resolver` guarda o UPDATE; o insert de `pendencia` não
+  -- cita permissão nenhuma (card 2.4 §4), e é por isso que este par é o
+  -- conjunto completo do domínio.
+  ('pendencias.ler'), ('pendencias.resolver'),
+  -- card 6.1 — os quatro do domínio `estoque` e CINCO dos seis de `compras`. O
+  -- sexto, `compras.receber_excedente`, fica DE FORA e a ausência é o ponto,
+  -- como a de `turmas.lancar_reposicao_retroativa`: ele não guarda tabela
+  -- nenhuma, guarda uma condição dentro de fn_pedido_receber (card 6.5).
+  --
+  -- `compras.receber` aparece em TRÊS tabelas e uma delas surpreende: o insert de
+  -- ENTRADA em movimento_estoque. É deliberado — quem faz estoque entrar é quem
+  -- recebe compra, e um `estoque.criar` genérico seria a porta aberta que o
+  -- achado 9 do card 2.4 §7 descreve.
+  ('estoque.ler'), ('estoque.lancar_saida'), ('estoque.estornar'), ('estoque.ajustar'),
+  ('compras.ler'), ('compras.criar'), ('compras.editar'), ('compras.excluir'),
+  ('compras.receber');
 
 select is(
   (select coalesce(string_agg(msg, '; ' order by msg), '')

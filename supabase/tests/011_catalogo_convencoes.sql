@@ -4,7 +4,7 @@
 -- =============================================================================
 
 begin;
-select plan(9);
+select plan(12);
 
 create temporary view t_negocio as
   select c.oid, c.relname
@@ -192,7 +192,56 @@ select is(
             -- fn_vagas_livres NÃO está aqui, de propósito: ela não lê tabela
             -- nenhuma, só compõe estas duas — mesma decisão de
             -- fn_pc_exclusao_valida no card 4.3.
-            'fn_capacidade_efetiva', 'fn_ocupacao_bloco'
+            'fn_capacidade_efetiva', 'fn_ocupacao_bloco',
+            -- card 5.5 — as duas que escrevem em `pendencia`. Elas são chamadas
+            -- como EFEITO COLATERAL, na transação de outro ator (hoje
+            -- fn_rep_virar_continuo, com `turmas.alocar`; amanhã
+            -- fn_registrar_entrega, com o monitor, e fn_revalidar_blocos_sala).
+            -- Como `invoker` elas encontram a RLS de quem chamou, e a RLS NEGA
+            -- LINHA em vez de devolver erro: fn_pendencia_resolver devolveria
+            -- "0 fechadas" e fn_pendencia_abrir nenhuma linha, sem nada
+            -- denunciar — e o sintoma seria a central sugerindo todo dia uma
+            -- virada REP que já aconteceu, indistinguível de "a rotina não
+            -- rodou". Com a matriz INICIAL nada disso aparece (`turmas.alocar` e
+            -- `pendencias.resolver` estão nos mesmos três perfis), e é o card
+            -- 4.2 que deixou escrito que isso não é argumento. As duas filtram
+            -- unidade no corpo e tratam unidade nula como ERRO.
+            --
+            -- fn_pendencia_resolver_id, o fechamento HUMANO, NÃO está aqui de
+            -- propósito: é `invoker` e exige `pendencias.resolver`, que é onde o
+            -- controle importa. fn_pendencias_fechar_ausentes também não: ela é
+            -- `invoker` e só as rt_* a chamam.
+            'fn_pendencia_abrir', 'fn_pendencia_resolver',
+            -- card 5.4 — as três da manutenção de PC. As duas de trigger são
+            -- definer por PRIVILÉGIO e por RLS: elas chamam funções sem grant
+            -- para authenticated (o `invoker` morreria com "permission denied
+            -- for function"), e são elas que atravessam a política de `update`
+            -- de `pc`, que exige `salas.editar` — quem registra manutenção é o
+            -- MONITOR, que não a tem, e como invoker o update afetaria ZERO
+            -- linhas sem erro nenhum, deixando o PC OPERACIONAL na ficha
+            -- enquanto estivesse quebrado. `fn_revalidar_blocos_sala` lê `pc` e
+            -- `bloco_horario` (`salas.ler`, `turmas.ler`) e escreve pendência:
+            -- como invoker percorreria zero blocos e a pendência não abriria.
+            -- Todas filtram unidade no corpo e tratam unidade nula como ERRO.
+            --
+            -- fn_pc_status_sincronizar NÃO está aqui, e a ausência custou uma
+            -- contraprova VERDE para ser descoberta: ela nasceu definer com a
+            -- justificativa da RLS, e a sabotagem que devia prová-la passou —
+            -- quem já atravessa a RLS é o trigger que a chama. Virou invoker,
+            -- pelo precedente de fn_pendencias_fechar_ausentes (card 5.5): só
+            -- quem roda como o dono a chama.
+            'fn_revalidar_blocos_sala',
+            'fn_pc_manutencao_status', 'fn_pc_revalida_blocos',
+            -- card 5.5 — as três rotinas. `pg_cron` roda como `postgres` sem
+            -- auth.uid(), e o contexto de rotina do card 2.2 §2.2 só existe
+            -- porque elas são definer e não têm `grant` para authenticated
+            -- (C9): um cliente não tem como entrar nesse contexto.
+            'rt_diaria', 'rt_pendencias_diaria', 'rt_rep_avaliar',
+            -- card 5.4 — as duas rotinas novas, pelo mesmo motivo das três de
+            -- cima: `pg_cron` roda como `postgres` sem auth.uid(), e o contexto
+            -- de rotina só se sustenta porque elas são definer e não têm grant
+            -- para authenticated (C9).
+            'rt_pcs_normaliza', 'rt_capacidades'
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'
@@ -295,6 +344,92 @@ select is(
   '',
   'C15: authenticated e anon nao alcancam o schema vault nem a view de decifra'
 );
+
+-- ---------------------------------------------------------------------------
+-- C5 — toda view tem `security_invoker = on`, e não existe materialized view
+--      (card 2.3 §2.1 e §2.2). Nasce no card 5.5, com a primeira view do
+--      projeto (v_pendencias_abertas), e cresce a cada view nova.
+--
+--      View sem `security_invoker` roda com a identidade do DONO: é a porta dos
+--      fundos que `force row level security` fechou na porta da frente. E
+--      `materialized view` não respeita RLS de jeito nenhum — é um instantâneo
+--      com a visibilidade de quem deu o `refresh`, e devolveria todas as
+--      unidades para qualquer leitor. As duas falhas são silenciosas: a view
+--      responde, e responde LINHAS A MAIS.
+-- ---------------------------------------------------------------------------
+select is(
+  (select coalesce(string_agg(c.relname, ', ' order by c.relname), '')
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public'
+      and c.relkind = 'v'
+      and not coalesce(c.reloptions, '{}') @> array['security_invoker=on']),
+  '',
+  'C5: toda view do schema public tem security_invoker = on'
+);
+
+select is(
+  (select coalesce(string_agg(c.relname, ', ' order by c.relname), '')
+     from pg_class c
+     join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'm'),
+  '',
+  'C5: nenhuma materialized view no schema public — matview nao respeita RLS'
+);
+
+-- ---------------------------------------------------------------------------
+-- C10 — todo tipo passado a fn_pendencia_abrir está no `check` de
+--       `pendencia.tipo`, e toda severidade citada está no `check` de
+--       `severidade` (card 2.8 §5.1). Nasce no card 5.5, com a tabela.
+--
+--       O erro que ele pega é o mais barato de cometer e o mais caro de
+--       descobrir: um tipo com uma letra fora derruba a chamada no `check` — e,
+--       dentro do `exception when others` de rt_diaria, isso vira ROTINA_FALHOU
+--       todo dia, com a causa a três funções de distância.
+--
+--       Depende da convenção do §5.2 do card 2.8: constante de contrato aparece
+--       sempre como LITERAL na chamada. A primeira metade da asserção é a
+--       espelho que impede a convenção de se perder — no dia em que alguém
+--       escrever `fn_pendencia_abrir(v_tipo, …)` este teste cegaria em silêncio,
+--       então ele reprova antes de cegar.
+--
+--       `prosrc` inclui os comentários do corpo, e este arquivo está cheio de
+--       comentários que citam tipos de pendência: daí o regexp_replace, a mesma
+--       lição que custou uma sessão no card 5.3.
+-- ---------------------------------------------------------------------------
+create temporary view p_check as
+  select conname, pg_get_constraintdef(oid) as def
+    from pg_constraint
+   where conrelid = 'public.pendencia'::regclass and contype = 'c';
+
+create temporary view p_tipo_citado as
+  select f.proname,
+         btrim((regexp_matches(regexp_replace(f.prosrc, '--[^\n]*', '', 'g'),
+                               'fn_pendencia_abrir\s*\(\s*([^,]*),', 'g'))[1]) as tipo
+    from f_projeto f;
+
+select is(
+  (select coalesce(string_agg(distinct format('%s -> %s', t.proname, t.tipo), '; '), '')
+     from p_tipo_citado t
+    where t.tipo !~ '^''[A-Z0-9_]+''$'
+       or not exists (select 1 from p_check k
+                       where k.def like '%tipo%' and position(t.tipo in k.def) > 0)),
+  '',
+  'C10: todo tipo passado a fn_pendencia_abrir e literal e esta no check de pendencia.tipo'
+);
+
+-- A outra metade do C10 — "toda severidade usada está no `check`" — NÃO está
+-- aqui, e a decisão vale ser escrita: a severidade é o QUARTO argumento
+-- posicional, e o segundo e o terceiro são expressões com vírgulas dentro
+-- (`format(…)`, concatenação). Uma expressão regular que os atravesse acerta
+-- hoje e passa a mentir no primeiro `format` novo — e o modo de falha é o pior
+-- possível, um teste estático que cega em silêncio (§5.2 do card 2.8).
+--
+-- O que substitui: uma asserção de RUNTIME no teste 090, depois de a rotina ter
+-- rodado — «nenhuma severidade fora do check do DDL». Ela mede o que foi
+-- ESCRITO em vez do que foi digitado, e é a mesma razão pela qual este projeto
+-- prefere contraprova a leitura. O caso que o card 2.3 nomeia (INFO, que o
+-- catálogo do 2.2 usava e o DDL não aceita) reprova nas duas.
 
 select * from finish();
 rollback;

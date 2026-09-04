@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../catalogo/catalogo.dart';
 import '../../catalogo/catalogo_provider.dart';
 import '../../sessao/sessao_provider.dart';
+import '../../widgets/abertura_por_url.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
@@ -22,7 +23,13 @@ import 'formularios.dart';
 /// Cursos, módulos e combos moram aqui, junto do uso, e não na Administração
 /// (card 2.6, apontamento 1).
 class TelaMateriais extends StatelessWidget {
-  const TelaMateriais({super.key});
+  const TelaMateriais({super.key, this.materialId});
+
+  /// `?material=<id>` — o atalho da central de pendências (os três tipos de
+  /// estoque levam para cá, wireframe §14.3). A tela abre o material pedido;
+  /// sem o id, "Ver material" abria o catálogo inteiro e a pessoa procurava de
+  /// novo o que a pendência já sabia.
+  final String? materialId;
 
   @override
   Widget build(BuildContext context) => DefaultTabController(
@@ -39,7 +46,7 @@ class TelaMateriais extends StatelessWidget {
         Expanded(
           child: TabBarView(
             children: [
-              const AbaMateriais(),
+              AbaMateriais(materialId: materialId),
               const AbaCursos(),
               const AbaCombos(),
             ],
@@ -63,8 +70,23 @@ const vazioCursosFiltro = 'Nenhum curso com esses filtros.';
 const vazioCombos = 'Nenhum combo cadastrado.';
 const vazioCombosFiltro = 'Nenhum combo com esses filtros.';
 
-class AbaMateriais extends ConsumerWidget {
-  const AbaMateriais({super.key});
+class AbaMateriais extends ConsumerStatefulWidget {
+  const AbaMateriais({super.key, this.materialId});
+
+  /// O material pedido na URL.
+  final String? materialId;
+
+  @override
+  ConsumerState<AbaMateriais> createState() => _AbaMateriaisState();
+}
+
+class _AbaMateriaisState extends ConsumerState<AbaMateriais>
+    with AberturaPorUrl<AbaMateriais> {
+  @override
+  void didUpdateWidget(AbaMateriais anterior) {
+    super.didUpdateWidget(anterior);
+    if (anterior.materialId != widget.materialId) reabrirNaProxima();
+  }
 
   Future<void> _abrir(BuildContext context, MaterialDidatico? material) async {
     final resultado = await mostrarFormulario<String>(
@@ -80,10 +102,19 @@ class AbaMateriais extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final metodos = ref.watch(metodosProvider).value ?? const <Metodo>[];
     final metodosPorId = {for (final m in metodos) m.id: m};
     final materiais = ref.watch(materiaisProvider);
+
+    final pedido = widget.materialId;
+    if (pedido != null && materiais.hasValue) {
+      MaterialDidatico? alvo;
+      for (final m in materiais.requireValue) {
+        if (m.id == pedido) alvo = m;
+      }
+      abrirUmaVez(alvo, (material) => _abrir(context, material));
+    }
     final filtro = ref.watch(filtroMateriaisProvider);
     final permissoes = ref.watch(permissoesProvider);
     final haCadastro = materiais.value?.isNotEmpty ?? false;

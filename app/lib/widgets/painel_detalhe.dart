@@ -73,6 +73,36 @@ class PainelDetalhe extends StatelessWidget {
   }
 }
 
+/// Rótulo em cima, valor embaixo — o par que um painel de detalhe repete
+/// ("Descrição", "Referência", "Aberta desde").
+///
+/// Nasceu na central de pendências (card 5.8) e veio para cá na revisão da
+/// fase 05: é genérico, e o painel da pendência já o importava de uma tela.
+class LinhaDetalhe extends StatelessWidget {
+  const LinhaDetalhe({super.key, required this.rotulo, required this.valor});
+
+  final String rotulo;
+  final String valor;
+
+  @override
+  Widget build(BuildContext context) {
+    final cores = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Dim.e8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            rotulo,
+            style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+          ),
+          Text(valor, style: Tipografia.corpo),
+        ],
+      ),
+    );
+  }
+}
+
 /// Título de uma seção do painel, com a linha de apoio que diz o que a seção
 /// significa (a ordem é a da trilha; a capacidade conta os PCs operacionais).
 class TituloSecao extends StatelessWidget {

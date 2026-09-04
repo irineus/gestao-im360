@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/sessao/sessao.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/sessao/sessao_repositorio.dart';
@@ -50,6 +51,7 @@ const _sessaoDirecao = Sessao(
 
 ProviderContainer _container(SessaoRepositorio repositorio) {
   final container = ProviderContainer(
+    retry: semRetryAutomatico,
     overrides: [sessaoRepositorioProvider.overrideWithValue(repositorio)],
   );
   addTearDown(container.dispose);

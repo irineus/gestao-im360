@@ -2,27 +2,25 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
-      "Bash(git status:*)",
-      "Bash(git log:*)",
-      "Bash(git diff:*)",
-      "Bash(git show:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git fetch:*)",
-      "Bash(git pull:*)",
-      "Bash(git switch:*)",
-      "Bash(git checkout:*)",
-      "Bash(git branch:*)",
-      "Bash(git cherry:*)",
-      "Bash(git push:*)",
-      "Bash(supabase:*)",
-      "Bash(flutter:*)",
-      "Bash(dart:*)"
+      "Bash(git status:*)", "Bash(git log:*)", "Bash(git diff:*)", "Bash(git show:*)",
+      "Bash(git add:*)", "Bash(git commit:*)", "Bash(git fetch:*)", "Bash(git pull:*)",
+      "Bash(git switch:*)", "Bash(git checkout:*)", "Bash(git branch:*)",
+      "Bash(git cherry:*)", "Bash(git push:*)",
+      "Bash(gh pr:*)", "Bash(gh run:*)", "Bash(gh api:*)",
+      "Bash(supabase:*)", "Bash(flutter:*)", "Bash(dart:*)",
+      "Bash(node:*)", "Bash(docker ps:*)",
+	  "Bash(cd:*)", "Bash(npx:*)", "Bash(docker:*)", "Bash(sed:*)",
+      "Bash(bash supabase/tests_concorrencia/:*)"
     ],
     "deny": [
       "Bash(supabase db push:*)",
-      "Bash(supabase db reset:*)",
       "Bash(psql:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Bash",
+        "hooks": [ { "type": "command", "command": "node .claude/hooks/guarda-destrutivos.mjs" } ] }
     ]
   }
 }

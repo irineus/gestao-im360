@@ -55,6 +55,12 @@ abstract final class Cores {
   static const erroEscuro = Color(0xFFF87A6E);
   static const infoEscuro = Color(0xFF7FB4F0);
 
+  /// Fundo tonal de erro no tema escuro — o mesmo do badge CANCELADO escuro,
+  /// cujo contraste com [erroEscuro] já está verificado (§2.3). Existe para o
+  /// `errorContainer` do esquema escuro não cair no `error`, que igualaria
+  /// fundo e texto.
+  static const erroFundoEscuro = Color(0xFF3D212B);
+
   // FORMADO (violeta própria — card 1.9 §6)
   static const formado = Color(0xFF4C3FA8);
   static const formadoEscuro = Color(0xFFB3A6F2);

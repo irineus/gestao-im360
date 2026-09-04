@@ -212,7 +212,8 @@ A saída é declarar cada camada com a **condição que a torna devida**, em `te
 | `alunos` | 4.2 | existir `public.aluno` |
 | `infra_fisica` | 4.3 | existir `public.pc` |
 | `turmas` | 5.1 | existir `public.bloco_aluno` |
-| `trilha_estoque` | 6.1 | existir `public.movimento_estoque` |
+| `trilha_estoque` | 6.1 | ✅ aplicada (trilha dos alunos derivada do combo, três pedidos — um por estado que muda alguma conta — e os movimentos que produzem os saldos 0/0/1/n/n/n; João Pedro fica em FIM) |
+| `modular` | 7.1 | existir `public.turma_modular_aluno` |
 
 `001_infra_teste.sql` reprova a suíte quando uma camada devida continua sem ser escrita — ou seja, o
 card 4.1 **não fecha verde** sem trazer a camada de catálogo junto. E o próprio portão tem asserção
@@ -269,12 +270,12 @@ schema. Nenhum card de migração fecha com ela vermelha.**
 | C2 | Toda tabela de negócio tem `unidade_id` e as quatro colunas de auditoria (`criado_em/por`, `atualizado_em/por`) | `CLAUDE.md`; 2.1 |
 | C3 | Toda tabela tem trigger de auditoria (`fn_auditoria`) | 2.1 |
 | C4 | Nenhuma tabela de negócio sem política, **exceto** a lista fechada de ausências intencionais: `movimento_estoque` (sem `update`/`delete`), `permissao` (sem escrita) | 2.1 (b), 2.4 (c) e (e) — ausência intencional documentada vira asserção, senão vira esquecimento |
-| C5 | Toda view tem `security_invoker=on` em `reloptions`; **zero** `relkind='m'` no schema | 2.3 (a) e (b) |
+| C5 ✅ **5.5** | Toda view tem `security_invoker=on` em `reloptions`; **zero** `relkind='m'` no schema | 2.3 (a) e (b) |
 | C6 | Nenhum `current_date` em corpo de função, definição de view ou `default` de coluna | 2.3 (c) — o bug das 21h |
 | C7 | Toda função tem `search_path` fixo em `proconfig` | 2.2 §1.1 |
 | C8 | Toda função `security definer` está numa **lista fechada** versionada no teste | 2.2 §2.2, 2.3, 2.4 (#9.5) — `definer` novo tem de passar por revisão consciente |
 | C9 | Nenhuma função tem `execute` para `public` ou `anon`; nenhuma `rt_*` tem `execute` para `authenticated` | 2.2 §1.1, §11 |
-| C10 | Todo tipo passado a `fn_pendencia_abrir` no código está no `check` de `pendencia.tipo`, e toda severidade usada está no `check` de `severidade` | 2.2 §14, 2.3 (#4), Ordem 5 (#3) — a família inteira do formato 1 |
+| C10 ✅ **5.5** (metade) | Todo tipo passado a `fn_pendencia_abrir` no código está no `check` de `pendencia.tipo`. A metade da **severidade** ficou de fora do teste estático de propósito: ela é o 4º argumento posicional e o 2º e o 3º são expressões com vírgulas dentro (`format(…)`), então a expressão regular acertaria hoje e passaria a mentir no primeiro `format` novo — teste estático que cega em silêncio. No lugar, uma asserção de **runtime** no `090_rotinas`, depois de a rotina ter escrito: nenhuma severidade fora do `check`. Exercitada: com `INFO` (o caso que o card 2.3 nomeia) a suíte reprova | 2.2 §14, 2.3 (#4), Ordem 5 (#3) — a família inteira do formato 1 |
 | C11 | Todo código em `tem_permissao('…')`/`fn_exige_permissao('…')` (em funções e em `polqual`/`polwithcheck`) existe em `permissao`; e todo `permissao` tem ao menos um consumidor | 2.4 (a) — nos dois sentidos |
 | C12 | Todo `codigo` de erro levantado no código está no fixture de contrato (§10); nenhum a mais, nenhum a menos | 2.2 §1.2, 2.7 (h) |
 | C13 | `pg_advisory_xact_lock` aparece no corpo de `fn_bloco_admitir` e `fn_registrar_entrega` | 2.2 (c) — não prova que funciona (§7), prova que não sumiu num refactor |
@@ -796,7 +797,7 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 
 | Suíte / arquivo | Card que cria | Fase |
 |---|---|---|
-| `seed.sql` (pgTAP, schema `tests`, helpers, escola-fixture) | 3.3 (bootstrap) → **3.4.5** (helpers e camada `acesso`) → cresce em 3.6, 4.1, 4.2, 4.3, 5.1 e 6.1 | 3+ |
+| `seed.sql` (pgTAP, schema `tests`, helpers, escola-fixture) | 3.3 (bootstrap) → **3.4.5** (helpers e camada `acesso`) → cresceu em 3.6, 4.1, 4.2, 4.3, 5.1 e **6.1** ✅ → cresce em 7.1 (camada `modular`, declarada pelo 6.1 para o portão do `001` continuar com uma sentinela) | 3+ |
 | `001_infra_teste` (helpers, fixture e o portão das camadas) | **3.4.5** | 3 |
 | `010_catalogo_rls`, `011_catalogo_convencoes` | 3.3 (nasce) → cresce em toda migração | 3+ |
 | `012_catalogo_contratos` (C10, C11, C12, C13) | 3.6 (precisa do seed de permissões) | 3 |
@@ -809,16 +810,19 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `administracao_test`, `tela_administracao_test`, `link_inicial_test` | **4.7** | 4 |
 | `040_blocos_alocacao` (as três tabelas, `tipo_desde`, as guardas de coluna e de exclusão, `tg_aluno_status_desaloca`) | **5.1** | 5 |
 | `041_capacidade_vagas` (a fórmula da capacidade, as duas metades do REP na ocupação, e a prova de que o número não depende do que o leitor enxerga) | **5.2** | 5 |
-| `042_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` — era `040` até o card 5.1 ocupar o número, e `041` até o 5.2 ocupar o seguinte | 5.3 | 5 |
-| `050_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` | 6.3 | 6 |
+| `042_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` — era `040` até o card 5.1 ocupar o número, e `041` até o 5.2 ocupar o seguinte | **5.3** ✅ | 5 |
+| `043_bloco_alunos` (`v_bloco_alunos` e `fn_bloco_alunos`: a lista soma o que o cabeçalho diz, a reposição aparece na data dela com o bloco de origem, bloco desativado passa a abrir `ALUNO_SEM_TURMA`, e falta de permissão vira erro em vez de lista vazia) | **5.7** ✅ | 5 |
+| `050_trilha_estoque` (as cinco tabelas, a imutabilidade do movimento nas duas camadas, o insert POR TIPO, a guarda de coluna de `aluno_material` e as duas guardas de exclusão) | **6.1** ✅ | 6 |
+| `051_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` — era `050` até o card 6.1 ocupar o número, exatamente como o `040` do 5.3 virou `042`. ⚠️ **Divergência registrada** | 6.3 | 6 |
 | `060_estoque_compras` | 6.5 | 6 |
 | `070_modular` | 7.2 | 7 |
 | `080_projecao` | 8.1 | 8 |
-| `085_rep_virada` | 5.3 (funções REP entram na mesma migração) | 5 |
-| `090_rotinas` | 5.5 (primeira rotina) → cresce em 8.1 | 5+ |
-| `095_views_paridade` | 6.4 (primeiras views) → cresce em 5.6, 5.9, 8.7 | 5+ |
+| `085_rep_virada` | **5.3** ✅ (funções REP entram na mesma migração) — mede o VEREDITO; a seção 6 era o portão da pendência, **disparou em 03/09/2026 (card 5.5)** e virou a asserção estrutural de que as duas funções da virada fecham a pendência, cada uma com o seu sufixo. O comportamento ponta a ponta ficou no `090_rotinas`, que é o arquivo da pendência | 5 |
+| `090_rotinas` (a tabela `pendencia`, as três funções do §10, rt_pendencias_diaria/rt_rep_avaliar/rt_diaria, o job `pg_cron` e a view `v_pendencias_abertas`) | **5.5** ✅ (primeira rotina) → cresce em 8.1 | 5+ |
+| `091_manutencao_capacidade` (o status derivado de `pc_manutencao`, a pendência por EVENTO, `rt_pcs_normaliza` e `rt_capacidades`) | **5.4** ✅ — mora ao lado do `090`, que é o arquivo das rotinas: aqui está o que só o caminho por evento prova | 5 |
+| `095_views_paridade` (a grade semanal: `fn_grade_semana` e `v_bloco_vagas_semana`) | **5.6** ✅ → cresce em 6.4, 5.9 e 8.7. ⚠️ **Divergência registrada:** esta linha atribuía o nascimento do arquivo ao **6.4** ("primeiras views"), e o 6.4 é da fase 06 — quem chegou primeiro foi o 5.6, e o arquivo nasceu lá. A obrigação de teste de card de View (§13) não mudou; mudou só quem a cumpre primeiro | 5+ |
 | `catalogo_erros_test`, `guardas_rota_test`, `permissao_widget_test`, `faixa_test`, `tnum_test` | 3.7 | 3 |
-| Golden dos badges | 4.6 (status) e 5.7 (tipo) | 4–5 |
+| `badge_status_test` / `badge_tipo_test` | 4.6 (status) e **5.7** ✅ (tipo). ⚠️ **Divergência registrada:** o §9.2 pede *golden* de badge; os dois arquivos asserem o **par de cores e a forma** lidos do tema, e o `badge_tipo_test` acrescenta a asserção que um golden não daria — preenchido × contorno lado a lado, que é a decisão do card 1.9 §6. Golden de 8 badges × 2 temas seriam 16 PNGs que reprovam por *antialiasing* de versão do engine, e o que se quer provar é a regra, não o pixel | 4–5 |
 | `dialogo_resultado_test` | 6.6 | 6 |
 | `testes.yml` + gate no `db-migrations` | 3.9 | 3 |
 | Reexecutabilidade da importação | 9.1 / 9.4 | 9 |

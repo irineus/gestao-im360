@@ -486,6 +486,13 @@ e não some da lotação.
 
 ## 8. Dashboard — cards 5.9 (v1) e 8.7 (completo)
 
+⚠️ **As três views desta seção são do card 8.7, e o 5.9 não tocou em nenhuma (04/09/2026).** A v1 do
+dashboard é **vaga**: totais por método e grade dia × horário, tudo lido de `v_bloco_vagas_semana`
+(§7) e somado na tela a partir de parcelas que já vieram prontas. Ela saiu **sem migração** — o §12
+já dizia "o 5.9 já cria as de vaga", e a leitura certa daquela linha é que as de vaga nasceram no
+5.6. Alunos por método, conclusões por semestre e tipos por bloco continuam integralmente no 8.7, e
+a tela do 5.9 **diz isso em rodapé** em vez de deixar o espaço vazio parecendo defeito.
+
 ### 8.1 `v_dashboard_alunos_metodo`
 
 ```sql
@@ -622,11 +629,11 @@ Mesmo formato do §14 do card 2.2 e do §8 do card 2.5: o que precisa mudar em d
 | 1 | Criar `fn_hoje()` e trocar **todo** `current_date` de view, função e rotina por ela | 2.1 §3, 2.2, 2.5 | 3.4 | **bloqueante** para a correção dos números à noite (§3.3) |
 | 2 | `default current_date` → `default public.fn_hoje()` em `aluno.status_desde`, `aluno.data_inicio`, `bloco_aluno.tipo_desde`, `turma_modular_aluno.data_entrada` | 2.1 §7, §8, §9 | 4.2 / 5.1 / 7.1 | alta — data errada gravada, não só exibida |
 | 3 | ✅ **Feito em 03/09/2026 (card 5.2).** `fn_capacidade_efetiva` e `fn_ocupacao_bloco` são `security definer` + `search_path` fixo + filtro `unidade_id = fn_unidade_atual()` no corpo, e entraram na lista fechada do C8. `fn_vagas_livres` ficou **invoker**: não lê tabela, só compõe as duas | 2.2 §4.1, §4.2 | 5.2 | **bloqueante** — como invoker, a grade mostra tudo lotado para quem não tem `salas.ler` (§3.4) |
-| 4 | Severidade `INFO` de `ACELERAR_SEM_2O_BLOCO` no catálogo do card 2.2 **não existe** no `check` do DDL (`BAIXA`,`MEDIA`,`ALTA`) — adotar `BAIXA` | 2.2 §10.1 | 5.5 | **bloqueante** — o insert falharia no `check` de `pendencia.severidade` |
-| 5 | Índice `pendencia (unidade_id, severidade) where resolvida_em is null` para a central | 2.1 §10 | 5.5 | baixa — desempenho |
+| 4 ✅ | **Feito em 03/09/2026 (card 5.5).** Severidade `INFO` de `ACELERAR_SEM_2O_BLOCO` no catálogo do card 2.2 **não existe** no `check` do DDL (`BAIXA`,`MEDIA`,`ALTA`) — adotado `BAIXA`. Exercitado: escrito `INFO`, `rt_pendencias_diaria` morre no `check` já na primeira execução | 2.2 §10.1 | 5.5 | **bloqueante** — o insert falharia no `check` de `pendencia.severidade` |
+| 5 ✅ | **Feito em 03/09/2026 (card 5.5):** `pendencia_severidade_ix` | 2.1 §10 | 5.5 | baixa — desempenho |
 | 6 | `aluno_status_ix` de `(unidade_id, status)` para `(unidade_id, metodo_id, status)`, que é como o dashboard agrupa | 2.1 §7 | 4.2 | baixa — desempenho |
 | 7 | `permissao.dominio` no DDL exemplifica singular (`aluno`, `turma`); o card 2.2 fixou plural (`alunos.`, `turmas.`). Adotar **plural** e corrigir o comentário do DDL | 2.1 §4 | 2.4 | baixa — consistência |
-| 8 | Nome da pendência: o board escreve `ACELERAR_SEM_SEGUNDO_BLOCO` numa nota; DDL e card 2.2 usam `ACELERAR_SEM_2O_BLOCO`. Vale o DDL | — | 5.5 | baixa — consistência |
+| 8 ✅ | **Feito em 03/09/2026 (card 5.5):** vale o DDL, `ACELERAR_SEM_2O_BLOCO` | — | 5.5 | baixa — consistência |
 
 ---
 
@@ -641,12 +648,33 @@ o número certo se o leitor tiver **todo** o conjunto (§3.4), e é esse conjunt
 | `v_demanda_imediata_aluno` / `v_demanda_imediata` | `alunos.ler`, `materiais.ler` |
 | `v_demanda_projetada` | `materiais.ler`, `estoque.ler` |
 | `v_pedido_sugerido` | `materiais.ler`, `estoque.ler`, `alunos.ler`, `compras.ler` |
-| `v_bloco_vagas_semana` | `turmas.ler`, `salas.ler` |
-| `v_turma_modular_lotacao` | `turmas.ler`, `salas.ler` |
-| `v_dashboard_alunos_metodo` | `alunos.ler` |
-| `v_dashboard_conclusoes_semestre` | `alunos.ler` |
-| `v_dashboard_tipos_bloco` | `turmas.ler` |
+| `v_bloco_vagas_semana` | `turmas.ler`, `salas.ler`, **`materiais.ler`** |
+| `v_turma_modular_lotacao` | `turmas.ler`, `salas.ler`, **`materiais.ler`** |
+| `v_dashboard_alunos_metodo` | `alunos.ler`, **`materiais.ler`** |
+| `v_dashboard_conclusoes_semestre` | `alunos.ler`, **`materiais.ler`** |
+| `v_dashboard_tipos_bloco` | `turmas.ler`, **`materiais.ler`** |
 | `v_pendencias_abertas` | `pendencias.ler` (as referências degradam para nulo sem as demais) |
+
+⚠️ **Correção de 04/09/2026 (card 5.9), fechando o bloqueante nº 1 de `docs/permissoes-matriz.md` §7
+para a primeira das cinco views.** As cinco linhas em negrito acima omitiam `materiais.ler`, e as
+cinco fazem `join` **interno** em `metodo`/`curso`/`modulo`: sem a permissão a view não vem errada,
+vem **vazia** — grade sem uma turma, dashboard sem uma vaga, e nada em tela dizendo que a causa é
+permissão. `professores.ler` entrou por outro motivo, o achado nº 2 do mesmo §7: ali o `left join`
+não esvazia, **mente** (a grade vem cheia e sem professor nenhum). As rotas do app já exigiam os dois
+desde os cards 5.6 e 3.7 (`docs/permissoes-matriz.md` §6 e `app/lib/rotas/rotas.dart`) — o que estava
+errado era só esta tabela, que é o contrato declarado. ✅ Para `v_bloco_vagas_semana` isto deixou de
+ser parágrafo em 04/09/2026: `supabase/tests/095_views_paridade.sql` ganhou o perfil `SEM_MATERI`, que
+vê a grade **vazia** e a recebe **inteira** de volta assim que `materiais.ler` é concedida. As outras
+quatro continuam com os cards 7.4 e 8.7.
+
+⚠️ **`professores.ler` SAIU da linha de `v_bloco_vagas_semana` em 04/09/2026** (card 5.11, decisão de
+Irineu). A permissão foi declarada aqui pelo achado nº 2 do §7 — o `left join` em professor mente em
+vez de esvaziar —, mas **o dashboard não mostra professor**: a rota dele (`permissoes-matriz.md` §6)
+nunca exigiu a permissão, e `professor_id`/`professor_nome` eram lidos à toa. Das duas saídas
+possíveis — mostrar o professor no `Semantics` e passar a exigir a permissão na rota, ou parar de
+lê-lo —, Irineu escolheu a segunda: exigir tiraria o dashboard de quem não tem `professores.ler`, e
+o professor já aparece na tela de **Turmas**, cuja rota o exige (e onde `fn_grade_semana`, não esta
+view, é a fonte). A leitura foi removida de `dashboard_repositorio.dart` no mesmo dia.
 
 Nove códigos novos, todos no padrão `<dominio>.ler`: `alunos.ler`, `materiais.ler`, `estoque.ler`,
 `compras.ler`, `turmas.ler`, `salas.ler`, `certificados.ler`, `pendencias.ler`, `admin.ler`.
@@ -660,8 +688,9 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | Objeto | Card | Fase |
 |---|---|---|
 | `fn_hoje()` | 3.4 | 3 |
-| `v_pendencias_abertas` | 5.5 | 5 |
-| `v_bloco_vagas_semana`, `fn_grade_semana` | 5.6 (grade) / 5.9 (dashboard) | 5 |
+| `v_pendencias_abertas` | **5.5** ✅ — a primeira view do projeto, e com ela nasceu o C5 (toda view `security_invoker`, zero matview) | 5 |
+| `v_bloco_vagas_semana`, `fn_grade_semana` | **5.6** ✅ (grade) — o **5.9** (dashboard) ✅ é consumidor da view e **não criou objeto nenhum de banco** | 5 |
+| `v_bloco_alunos`, `fn_bloco_alunos` | **5.7** ✅ — ver §12.1 | 5 |
 | `v_estoque_atual`, `v_demanda_imediata_aluno`, `v_demanda_imediata`, `v_pedido_sugerido` | 6.4 | 6 |
 | `v_turma_modular_lotacao` | 7.4 | 7 |
 | `demanda_projetada`, `v_demanda_projetada` | 8.1 | 8 |
@@ -670,10 +699,41 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 
 ### 12.1 Views de tela, que pertencem aos seus próprios cards
 
-Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_lista` (4.6),
-`v_aluno_trilha` (6.6), `v_bloco_alunos` (5.7), `v_material_movimento` (6.7),
-`v_certificado_fila` (8.6). São views de listagem, sem número derivado — o cuidado de §3 vale, o
-resto é do card da tela.
+Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6),
+`v_bloco_alunos` (5.7), `v_material_movimento` (6.7), `v_certificado_fila` (8.6). São views de
+listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+
+~~`v_aluno_lista` (4.6)~~ — **não existe, e não vai existir.** A lista de alunos lê a tabela `aluno`
+e junta método, combo e turmas em memória: a view juntaria os três num objeto de banco a mais sem
+tirar nenhuma consulta da tela (decisão do card 4.6). *(O `wireframes.md` §6.1 ainda a citava como
+fonte da tela; corrigido em 04/09/2026, na revisão da fase 05.)*
+
+✅ **`v_bloco_alunos` nasceu em 03/09/2026 (card 5.7), e virou DUAS coisas — divergência registrada.**
+O nome estava reservado para "a lista de alunos do bloco", que é o wireframe §7.2; mas essa lista é
+de uma **data** (alocação vale toda semana, reposição vale só no dia — §7 e card 2.1 §8), e view não
+recebe parâmetro. A divisão que saiu, com a mesma lógica do card 5.6 invertida:
+
+- **`v_bloco_alunos`** ficou com a metade **permanente** — uma linha por alocação ativa, com o bloco
+  e o aluno resolvidos e `bloco_ativo` como **coluna**. É view porque não depende de data nenhuma, e
+  ela tem três consumidores: a aba Turmas da ficha (6.4), a coluna Turmas da lista de alunos (6.1) e
+  `rt_pendencias_diaria`, que passou a ler dela o que conta como "estar em turma";
+- **`fn_bloco_alunos(bloco, data)`** é a lista da tela — as linhas da view daquele bloco **mais** as
+  reposições PREVISTAS do dia —, escrita **em cima da view** pela razão do card 5.6: uma segunda
+  implementação de "quem está alocado aqui" divergiria em silêncio.
+
+Sem `join` em `metodo`/`sala`/`professor`, ao contrário de `v_bloco_vagas_semana`: a view devolve os
+ids e quem resolve o nome é o catálogo que a tela já carregou (card 4.6 (f)). Cada `join` interno a
+mais é mais um modo de a view vir **vazia por permissão** que a tela não pede — e vazia aqui não é
+"o bloco está vazio", é "não deu para ver". Os dois `join` que sobram (`bloco_horario` e `aluno`) são
+estruturais, e é por eles que `fn_bloco_alunos` exige `turmas.ler` **e** `alunos.ler`
+explicitamente, em vez de devolver uma turma de dez como vazia.
+
+⚠️ **`v_aluno_lista` continua sem existir, e agora com motivo medido** (card 5.7): a lista de alunos
+lê `aluno` e junta as turmas de `v_bloco_alunos` **na tela**, com método e combo vindos do catálogo
+já carregado. Uma view que juntasse os três não tiraria consulta nenhuma da tela — o catálogo e as
+turmas já estão carregados por outros motivos — e acrescentaria um objeto de banco com um `join`
+interno a mais em `aluno`. Se um dia a lista precisar filtrar **por turma** no servidor, aí ela passa
+a valer a pena.
 
 ---
 

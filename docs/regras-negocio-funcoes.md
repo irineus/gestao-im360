@@ -278,6 +278,17 @@ $$;
 > marcado `MANUTENCAO` à mão, sem linha em `pc_manutencao`, não conta. As duas junto tornam a fórmula
 > correta antes e depois do card 5.4, que é o requisito de verdade.
 >
+> ⚠️ **CORREÇÃO DE FATO (03/09/2026, card 5.4) — o intervalo é `[data_inicio, data_fim)`.** O corpo
+> entregue pelo card 5.2 usava `p_data between data_inicio and coalesce(data_fim, 'infinity')`,
+> intervalo fechado, e este §4.6 dizia "ao fechar (`data_fim` preenchida e **passada**)". O app lê o
+> contrário desde o card 4.5 (c): *`data_fim` é previsão; manutenção aberta = sem fim ou fim à frente
+> de hoje, e "Encerrar" grava o fim de **hoje**"*. Duas leituras da mesma coluna, que nunca se
+> encontravam — até o status passar a ser derivado. Sob a leitura fechada, encerrar a manutenção hoje
+> deixaria o PC em MANUTENCAO até amanhã: a turma da noite perderia uma vaga por uma máquina que já
+> voltou, e a linha da tela mostraria "Em manutenção" sem manutenção aberta ao lado. **Resolvido a
+> favor do app**, que é quem produz o único "encerrar" do sistema: `data_fim` é o dia em que o PC
+> **volta a operar**. As duas bordas viraram asserção no teste `041`.
+>
 > ⚠️ **Limite conhecido, registrado e não resolvido:** o PC emprestado continua contando na **sala de
 > origem**. `pc.sala_id` diz onde a máquina está cadastrada, não onde ela está hoje, e conservar
 > máquinas entre salas exigiria modelar a mudança de lugar — decisão que não é deste card e que
@@ -343,6 +354,30 @@ alocação existente se já houver uma inativa (em vez de criar linha duplicada 
 `p_tipo` ∈ (REM, PRE, REP, NOVO); `data_inicio_prevista` é obrigatória para NOVO
 (`PT422 / DATA_PREVISTA_OBRIGATORIA`).
 
+> ✅ **Entregues em 03/09/2026 pelo card 5.3**, em
+> `supabase/migrations/20260903230000_admissao_lotacao_rep.sql`. Quatro decisões do corpo:
+>
+> - **Nulo é erro, não "sem opinião".** `fn_capacidade_efetiva` e `fn_ocupacao_bloco` devolvem
+>   **nulo** para bloco de outra unidade (card 5.2), e `ocupacao >= null` é **nulo** — um
+>   `if ... then raise` escrito sem contar com isso não dispara, e a lotação passa **em silêncio**
+>   justamente na escrita que não deveria existir. O trigger levanta `PT404 / BLOCO_INEXISTENTE`.
+>   Medido: sem essa guarda, um `insert` como `postgres` (que tem BYPASSRLS) entra sem checagem de
+>   vaga nenhuma.
+> - **A vaga só é disputada quando a linha ENTRA na conta** — `insert` ativo, volta de inativa para
+>   ativa, ou troca de bloco. Conferir em todo `update` faria mudar só o `tipo` de uma alocação já
+>   ativa responder `BLOCO_LOTADO` num bloco que não mudou de tamanho, e a virada REP dentro do
+>   próprio bloco do aluno ficaria impossível.
+> - **`fn_bloco_remover` ganhou onde gravar o motivo.** A coluna `bloco_aluno.motivo_saida` nasce
+>   aqui porque `p_motivo` (§4.3) e o `MOTIVO_OBRIGATORIO` de `fn_rep_voltar_pontual` (card 2.5 §5.2)
+>   exigiam do usuário um dado que se descartava. `tg_aluno_status_desaloca` passou a escrever nela
+>   o status que tirou o aluno da turma, que é o caso mais comum de saída.
+> - **Remover quem não está na turma DÓI** (`PT404 / ALOCACAO_INEXISTENTE`): silêncio ali é a tela
+>   dizendo "removido" sobre uma turma em que o aluno continua.
+>
+> Quatro códigos novos no catálogo de §12 — `BLOCO_INEXISTENTE`, `ALOCACAO_INEXISTENTE`,
+> `REPOSICAO_INEXISTENTE` e `REPOSICAO_NAO_PREVISTA` (contrato de 28 → 32) —, todos pelo precedente
+> de `PC_INEXISTENTE` (card 2.9) e `ALUNO_INEXISTENTE` (card 4.2).
+
 ### 4.4 Reposição (metade pontual do REP)
 
 ```sql
@@ -390,6 +425,18 @@ serializando só as admissões daquele bloco. O lock é liberado no fim da trans
 `unlock` explícito. Mesmo padrão em `fn_turma_modular_admitir` e, com a chave do material, em
 `fn_registrar_entrega`.
 
+> ✅ **Exercitado de verdade em 03/09/2026 (card 5.3)**, em
+> `supabase/tests_concorrencia/admissao_ultima_vaga.sh`: duas sessões `psql` simultâneas admitindo
+> alunos diferentes no bloco de 9/10 — uma passa, a outra recebe `BLOCO_LOTADO`, e o bloco fecha em
+> 10, nunca 11. **A contraprova foi vista**: removido o `pg_advisory_xact_lock`, as duas admissões
+> passam e o bloco fica com **11 alunos em 10 PCs**, com o script reprovando por contagem (e não por
+> *timeout*, que é o que o §7 do card 2.8 exige). Sem essa contraprova, um teste de concorrência que
+> nunca reprova é indistinguível de um que não testa nada.
+>
+> Nota operacional: o script usa `psql` quando ele existe no PATH e cai para o `psql` de dentro do
+> container do stack local quando não existe — teste que só roda no CI é teste que ninguém roda
+> antes de abrir o PR.
+
 ### 4.6 Manutenção de PC
 
 | Objeto | Momento | Faz |
@@ -407,6 +454,58 @@ Para cada `bloco_horario` ativo da sala: se `fn_ocupacao_bloco > fn_capacidade_e
 **Nunca remove aluno.** É a regra explícita do plano: a turma cheia não encolhe; ela vira
 pendência, e novas admissões ficam bloqueadas pelo `tg_bloco_aluno_admissao` até normalizar —
 o que já acontece naturalmente, já que a capacidade caiu abaixo da ocupação.
+
+> ✅ **Fechado em 03/09/2026 pelo card 5.4**, em
+> `supabase/migrations/20260904010000_manutencao_pc_capacidade.sql`, com os dois triggers, a função
+> e mais três coisas que o quadro acima não previa.
+>
+> **1. `pc.status` passou a ser DERIVADO, e a regra mora numa função só.**
+> `fn_pc_status_sincronizar(pc)` decide o status a partir de **todas** as manutenções do PC — não da
+> linha que disparou o trigger. Um PC pode ter duas em aberto (a corretiva de ontem e a preventiva de
+> hoje), e encerrar uma delas não devolve a máquina: um trigger que decidisse pelo `new` a devolveria,
+> com a capacidade da sala subindo por engano e a vaga sendo vendida. A mesma função serve ao trigger
+> (evento) e a `rt_pcs_normaliza` (passagem do tempo), porque **duas cópias divergiriam para o lado
+> silencioso** — o trigger acertando e a rotina desfazendo de madrugada.
+>
+> **2. `rt_pcs_normaliza` existe porque o tempo passar NÃO É EVENTO**, e faz as duas direções. O §11
+> a descreve como "fecha manutenções com data_fim vencida; devolve PCs a OPERACIONAL"; **divergência
+> registrada nas duas metades**. Não há manutenção a "fechar": com `data_fim` no passado ela já está
+> fechada pelas próprias datas, e escrever em `pc_manutencao` inventaria histórico que ninguém
+> registrou. E "devolver a OPERACIONAL" é só metade da regra — uma manutenção **agendada** que começa
+> hoje não dispara nada, e sem a outra direção o PC ficaria OPERACIONAL enquanto estivesse parado,
+> que é o erro na direção que vende vaga inexistente.
+>
+> **3. `PC_SEM_SUBSTITUTO` usa o MESMO "sem substituto" da fórmula da capacidade** (§4.1, decisão (b)
+> do card 5.2): substituto da **própria sala** não repõe máquina nenhuma, logo não fecha a pendência.
+> Uma condição escrita como "tem substituto?" em vez de "tem substituto que reponha?" fecharia
+> dizendo "resolvido" exatamente enquanto a capacidade seguisse caída.
+>
+> **4. `BLOCO_ACIMA_CAPACIDADE` voltou ao dono que o §10.1 sempre lhe deu.** O card 5.5 a tinha posto
+> em `rt_pendencias_diaria` (divergência registrada lá, porque a função ainda não existia); mantê-la
+> nos dois lugares seria manter **duas implementações da mesma comparação**, com o mesmo `format` e a
+> mesma severidade, livres para divergir na primeira vez que alguém mexesse numa só — a terceira
+> implementação que o card 2.3 §4.1 proíbe. O caminho diário passa a ser `rt_capacidades`, que
+> `rt_diaria` executa **antes** de `rt_pendencias_diaria`; o caminho por evento é
+> `tg_pc_revalida_blocos`; e os dois usam a **mesma** `chave_dedup`, de modo que convergem na dedup.
+>
+> **A admissão bloqueada não precisou de código novo, e isso foi CONFERIDO antes de escrever.**
+> `tg_bloco_aluno_admissao` compara `ocupacao >= capacidade` desde o card 5.3, e bloco acima da
+> capacidade satisfaz `>=` com folga. Uma segunda guarda a partir da **pendência** teria modo de falha
+> próprio: pendência é estado gravado, e um bloco já normalizado continuaria bloqueado até alguém
+> fechá-la. Virou asserção (seção 4 do teste `091`), não frase de relatório.
+>
+> **Divergência benigna com o quadro:** `tg_pc_revalida_blocos` revalida **as duas** salas quando um
+> PC muda de `sala_id` — a de destino ganha máquina e a de origem perde, e o singular do quadro não
+> tinha como dizer de qual das duas falava.
+>
+> ⚠️ **Duas contraprovas saíram VERDES e corrigiram o que estava escrito**, as duas registradas na
+> migração: (a) `fn_pc_status_sincronizar` nasceu `security definer` com a justificativa da RLS, e a
+> sabotagem que devia prová-la passou — quem atravessa a RLS é o trigger `definer` que a chama, e ela
+> virou `invoker` pelo precedente de `fn_pendencias_fechar_ausentes`; (b) a **ordem** entre os dois
+> triggers de `pc_manutencao` parecia decisiva e **não é**, porque o `update` de `pc.status` dispara
+> `tg_pc_revalida_blocos` em `pc` e revalida a sala de novo — a independência vem da redundância entre
+> os dois gatilhos, e quem remover o trigger de `pc` por achá-lo redundante traz a dependência de
+> volta, calada.
 
 ---
 
@@ -664,7 +763,7 @@ corrida com a interface.
 | `ALUNO_SEM_TURMA` | `ALUNO_SEM_TURMA:<aluno_id>` | ALTA | `rt_pendencias_diaria` | alocação em bloco/turma, ou saída de ATIVO/ACELERAR |
 | `STANDBY_PROLONGADO` | `STANDBY:<aluno_id>` | MEDIA | `rt_pendencias_diaria` (`status_desde` + `standby_alerta_dias`) | mudança de status |
 | `PREVISAO_VENCIDA` | `PREVISAO:<aluno_id>` | MEDIA | `rt_pendencias_diaria` | nova `prev_conclusao_curso` ou formatura |
-| `ACELERAR_SEM_2O_BLOCO` | `ACELERAR:<aluno_id>` | INFO | `rt_pendencias_diaria` | 2º bloco ativo, ou volta a ATIVO |
+| `ACELERAR_SEM_2O_BLOCO` | `ACELERAR:<aluno_id>` | **BAIXA** (INFO não existe no `check` do DDL — card 2.3 §10 #4, corrigido no 5.5) | `rt_pendencias_diaria` | 2º bloco ativo, ou volta a ATIVO |
 | `BLOCO_ACIMA_CAPACIDADE` | `CAPACIDADE:<bloco_id>` | ALTA | `fn_revalidar_blocos_sala` | a própria função, quando normaliza |
 | `COMPRA_SEM_ESTOQUE` | `COMPRA_SEM_ESTOQUE:<aluno_id>` | ALTA | `fn_registrar_entrega` (trilha sem estoque nenhum) | `tg_movimento_resolve_pendencia` |
 | `ALUNO_ULTIMO_LIVRO` | `ULTIMO_LIVRO:<aluno_id>` | BAIXA | `fn_registrar_entrega` | formatura, ou estorno que tira do FIM |
@@ -703,8 +802,9 @@ select cron.schedule('gi_rotina_diaria', '10 6 * * *', $$ select rt_diaria(); $$
 
 ```sql
 rt_diaria() → void          -- security definer; itera unidades ativas (§2.2) e chama, em ordem:
-  rt_pcs_normaliza()        -- fecha manutenções com data_fim vencida; devolve PCs a OPERACIONAL
-  rt_capacidades()          -- fn_revalidar_blocos_sala em todas as salas
+  rt_pcs_normaliza()        -- ✅ 5.4 — põe pc.status em dia com pc_manutencao, NAS DUAS DIREÇÕES
+  rt_capacidades()          -- ✅ 5.4 — fn_revalidar_blocos_sala em todas as salas, mais a varredura
+                            --    das pendências de bloco que deixou de ser ativo
   rt_pendencias_diaria()    -- abre/fecha as pendências de tempo do catálogo §10.1
   rt_rep_avaliar()          -- fn_rep_avaliar_virada por aluno com reposição aberta ou alocação REP;
                             -- abre E fecha as pendências REP_VIRADA (card 2.5)
@@ -741,6 +841,10 @@ lista nunca acumula item que já deixou de ser verdade.
 | `PEDIDO_NAO_RECEBIVEL` | 409 | `fn_pedido_receber` |
 | `RECEBIMENTO_EXCEDE_PEDIDO` | 422 | `fn_pedido_receber` |
 | `PARAMETRO_AUSENTE` | 422 | `fn_param_int` / `fn_param_txt` |
+| `BLOCO_INEXISTENTE` | 404 | `tg_bloco_aluno_admissao`, `tg_reposicao_admissao`, `fn_bloco_admitir`, `fn_reposicao_agendar` (card 5.3) |
+| `ALOCACAO_INEXISTENTE` | 404 | `fn_bloco_remover` (card 5.3) |
+| `REPOSICAO_INEXISTENTE` / `REPOSICAO_NAO_PREVISTA` | 404 / 409 | `fn_reposicao_registrar`, `fn_reposicao_cancelar` (card 5.3) |
+| `REP_JA_CONTINUO` / `REP_NAO_CONTINUO` | 409 | `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (cards 2.5 e 5.3) |
 
 `BLOQUEADA_SEM_ESTOQUE` **não** está aqui de propósito: é status de retorno, não erro (§1.3).
 
@@ -765,17 +869,17 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | `fn_aluno_transicao_valida`, triggers de status, `fn_aluno_alterar_status`, `fn_aluno_reverter_status` | 4.2 |
 | `tg_pc_manutencao_status`, `tg_pc_revalida_blocos` | 4.3 |
 | `fn_capacidade_efetiva`, `fn_ocupacao_bloco`, `fn_vagas_livres` — as três juntas, ver §4.2 | 5.2 |
-| `tg_bloco_aluno_admissao`, `fn_bloco_admitir/remover`, reposições | 5.3 |
+| `tg_bloco_aluno_admissao`, `fn_bloco_admitir/remover`, reposições | 5.3 ✅ |
 | `fn_revalidar_blocos_sala` | 5.4 |
-| `fn_pendencia_abrir/resolver`, `rt_pendencias_diaria`, `rt_diaria` e o job `pg_cron` | 5.5 |
+| `fn_pendencia_abrir/resolver/resolver_id`, `fn_pendencias_fechar_ausentes`, `rt_pendencias_diaria`, `rt_diaria` e o job `pg_cron` | 5.5 ✅ |
 | `fn_trilha_gerar`, `fn_trilha_proximo_material`, edição da trilha | 6.2 |
 | `tp_entrega_resultado`, `fn_registrar_entrega`, `fn_estornar_entrega`, `fn_saldo_material` | 6.3 |
 | `fn_pedido_receber`, `fn_ajustar_estoque`, `tg_movimento_valida_sinal`, `tg_movimento_resolve_pendencia` | 6.5 |
 | Funções Modular | 7.2 |
 | `rt_projecao_demanda` | 8.1 |
 | `fn_certificado_*`, `tg_certificado_*` | 8.3 |
-| `tp_rep_situacao`, `fn_rep_situacao`, `fn_rep_avaliar_virada`, `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (critério fechado no card 2.5) | 5.3 |
-| `rt_rep_avaliar` | 5.5 |
+| `tp_rep_situacao`, `fn_rep_situacao`, `fn_rep_avaliar_virada`, `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (critério fechado no card 2.5) | 5.3 ✅ |
+| `rt_rep_avaliar` | 5.5 ✅ |
 
 Ordem de dependência igual à das migrações: 3.4 → 4.2 → 4.3 → 5.2 → 5.3 → 5.4 → 5.5 → 6.2 → 6.3 →
 6.5 → 7.2 → 8.1 → 8.3.
@@ -791,14 +895,14 @@ simples — que é exatamente por que o card 2.1 escolheu `text` + `check` em ve
 | # | Ajuste | Onde | Card |
 |---|---|---|---|
 | 1 | `bloco_aluno_reposicao.status`: acrescentar **`FALTOU`** ao `check` | `drop constraint` / `add constraint` | 5.1 |
-| 2 | `pendencia.tipo`: acrescentar `ESTOQUE_ZERO`, `ESTOQUE_ABAIXO_MINIMO`, `SUGERIR_FORMADO`, `TRILHA_DIVERGENTE_COMBO`, `CERTIFICADO_INCONSISTENTE`, `REP_VIRADA`, `ROTINA_FALHOU` ao `check` | idem | 5.5 |
+| 2 | `pendencia.tipo`: acrescentar `ESTOQUE_ZERO`, `ESTOQUE_ABAIXO_MINIMO`, `SUGERIR_FORMADO`, `TRILHA_DIVERGENTE_COMBO`, `CERTIFICADO_INCONSISTENTE`, `REP_VIRADA`, `ROTINA_FALHOU` ao `check` | idem | 5.5 ✅ (**sem `alter`**: a tabela nasceu no próprio card, então os quinze tipos entraram direto no `check` — divergência registrada) |
 | 3 | `certificado_checklist`: acrescentar `formatura_por` / `formatura_em` | `add column` | 8.3 |
 | 4 | `aluno_material_hist`: acrescentar `observacao text` | `add column` | 6.2 |
 | 5 | `bloco_aluno`: acrescentar `tipo_desde date not null default current_date` + trigger `tg_bloco_aluno_tipo_desde` | `add column` + trigger | 5.1 |
-| 6 | `rt_pendencias_diaria`: a contagem de blocos para `ACELERAR_SEM_2O_BLOCO` filtra `tipo <> 'REP'` | corpo da rotina | 5.5 |
-| 7 | `fn_reposicao_registrar` devolve `text` (o veredito da virada) em vez de `void` | assinatura | 5.1 |
-| 8 | Tipo composto novo `tp_rep_situacao` — passam a ser dois, com `tp_entrega_resultado` | `create type` | 5.3 |
-| 9 | Erros novos: `REP_JA_CONTINUO` (409) e `REP_NAO_CONTINUO` (409) | catálogo §12 | 5.3 |
+| 6 | `rt_pendencias_diaria`: a contagem de blocos para `ACELERAR_SEM_2O_BLOCO` filtra `tipo <> 'REP'` | corpo da rotina | 5.5 ✅ (com **contraprova** no teste 090: os mesmos dois blocos, os dois de aula, fecham a pendência) |
+| 7 | `fn_reposicao_registrar` devolve `text` (o veredito da virada) em vez de `void` | assinatura | 5.1 → **5.3** ✅ (a função não existia no 5.1: nasceu devolvendo `text`) |
+| 8 | Tipo composto novo `tp_rep_situacao` — passam a ser dois, com `tp_entrega_resultado` | `create type` | 5.3 ✅ |
+| 9 | Erros novos: `REP_JA_CONTINUO` (409) e `REP_NAO_CONTINUO` (409) | catálogo §12 | 5.3 ✅ |
 | 10 | Parâmetros novos no seed: `rep_prazo_dias`, `rep_capacidade_semanal`, `rep_faltas_max`, `rep_janela_volta_dias` | seed | 3.6 |
 
 **Sobre o 3:** o DDL dá par "quem/quando" a `pedagogico`, `financeiro` e `certificado`, mas não a

@@ -47,3 +47,19 @@ USUARIO_SEM_EMAIL
 EMAIL_IMUTAVEL
 # 1 do card 5.1 (guarda de exclusão de bloco de horário)
 BLOCO_COM_ALOCACAO
+# 4 do card 5.3 (admissão, remoção e reposições)
+BLOCO_INEXISTENTE
+ALOCACAO_INEXISTENTE
+REPOSICAO_INEXISTENTE
+REPOSICAO_NAO_PREVISTA
+# 3 do card 5.5 (fechamento humano de pendencia)
+PENDENCIA_INEXISTENTE
+PENDENCIA_JA_RESOLVIDA
+RESOLUCAO_INVALIDA
+# 3 do card 6.1 (trilha e estoque)
+# COMPOSICAO_METODO_DIVERGENTE fecha a pendencia 9.11 e e codigo NOVO de
+# proposito: METODO_INCOMPATIVEL ja existe e diz "o metodo do aluno nao e o
+# metodo desta turma", que aqui seria falso em toda palavra.
+COMPOSICAO_METODO_DIVERGENTE
+PEDIDO_NAO_RASCUNHO
+MOVIMENTO_IMUTAVEL

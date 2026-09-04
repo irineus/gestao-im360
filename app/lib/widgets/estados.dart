@@ -111,6 +111,8 @@ class EstadoErro extends StatelessWidget {
   );
 }
 
+const semAcessoTela = 'Você não tem acesso a esta tela.';
+
 /// Tela inteira, sem nada da tela por trás (deep-link, permissão revogada em
 /// sessão aberta). Mostra o conjunto que falta — é diagnóstico, não vazamento:
 /// o usuário já pode descobrir isso chamando `tem_permissao` código a código.
@@ -118,11 +120,18 @@ class EstadoSemAcesso extends StatelessWidget {
   const EstadoSemAcesso({
     super.key,
     this.faltando = const {},
+    this.texto = semAcessoTela,
     this.rotuloAcao,
     this.aoAgir,
   });
 
   final Set<String> faltando;
+
+  /// O padrão fala de **tela**. Dentro de uma aba isso é falso — a tela abriu,
+  /// e o que não abre é aquele pedaço —, então quem o usa numa aba passa o
+  /// texto daquele pedaço (achado da revisão da fase 05).
+  final String texto;
+
   final String? rotuloAcao;
   final VoidCallback? aoAgir;
 
@@ -130,7 +139,7 @@ class EstadoSemAcesso extends StatelessWidget {
   Widget build(BuildContext context) => _Centro(
     icone: Icons.lock_outline,
     corIcone: Theme.of(context).colorScheme.onSurfaceVariant,
-    texto: 'Você não tem acesso a esta tela.',
+    texto: texto,
     apoio: faltando.isEmpty
         ? null
         : 'Falta: ${(faltando.toList()..sort()).join(', ')}',
