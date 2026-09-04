@@ -35,6 +35,19 @@ verdade: **`main` aplica migração em produção**, e nenhuma sessão a promove
 | Sessão terminou sem a linha de veredito | o driver para e aponta o log |
 | Sessão disse `CARD_OK` mas `origin/develop` não andou | o driver para (§5) |
 
+**`DECISÃO` na nota do card não para a cadeia — desde que traga recomendação.** A sessão adota a
+opção recomendada, registra o que adotou e **como reverter** (Notas, PR e resumo), e segue. Para
+somente em `DECISÃO BLOQUEANTE` ou quando não houver recomendação a adotar.
+
+O critério é **quanto custa desfazer**, e não a existência da recomendação: é bloqueante o que muda
+schema ou dado em produção, mexe em permissão ou segurança, cria compromisso externo, ou custa mais
+para desfazer do que para fazer. Na dúvida, bloqueante — o erro de parar custa uma espera, o de
+seguir custa uma migração em produção.
+
+A regra saiu de um custo medido: em 04/09/2026 a fila parou horas no card 6.2,5, cuja `DECISÃO` já
+trazia as opções **com recomendação**, e Irineu escolheu exatamente as duas recomendadas. Confirmar o
+que já estava escrito não trouxe informação nova — trouxe espera.
+
 **Marco de validação NÃO para a cadeia** (decisão de Irineu, 03/09/2026). A sessão entrega as
 pré-condições medidas e as **mensagens de WhatsApp prontas** para os usuários da escola, mantém o card
 `Em andamento` com `AGUARDANDO RETORNO DOS USUÁRIOS desde <data>` e segue. Cards nesse estado são

@@ -21,8 +21,13 @@ pergunta**. Execute **um** card do board, do começo ao fim, e termine com a lin
    `CAST(substr("Fase",1,2) AS INTEGER), "Ordem"`, **pulando** os `Em andamento` cuja Nota tenha
    `AGUARDANDO RETORNO DOS USUÁRIOS`.
 3. Se o card for de `Tipo` = **`Externo`**, ou se a Nota disser que ele depende de ação de Irineu que
-   você não pode fazer (secret, conta em serviço externo, disparo manual de workflow, decisão de
-   produto): **não execute**. Termine com `CADEIA_FIM`.
+   você não pode fazer (secret, conta em serviço externo, disparo manual de workflow): **não
+   execute**. Termine com `CADEIA_FIM`.
+3.1. **Nota marcada como `DECISÃO`: adote a recomendação e siga.** Só pare quando a marcação for
+   `DECISÃO BLOQUEANTE` ou quando não houver recomendação a adotar. O critério é **quanto custa
+   desfazer**, não a existência da recomendação — a tabela e os casos bloqueantes estão na skill
+   `proxima-tarefa`, seção "Modo não interativo". Adotou: registre nas Notas, no PR e no resumo, com
+   **como reverter**.
 4. Se for **`Marco/validação`**: faça tudo o que não depende de gente (pré-condições medidas,
    critérios pré-verificados contra o banco e o código) e **deixe as mensagens de WhatsApp prontas**,
    uma por perfil, no molde do §9.1 da subpágina do card 4.8. Depois **mantenha o card `Em andamento`**

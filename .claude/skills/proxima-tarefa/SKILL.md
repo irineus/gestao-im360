@@ -139,6 +139,32 @@ pergunta**. Nesse modo:
 - **Escolher a tarefa sozinho**, sem a pergunta da seção "Escolher a tarefa": é o primeiro card não
   concluído na ordenação, **pulando** os que estão `Em andamento` com a linha
   `AGUARDANDO RETORNO DOS USUÁRIOS` nas Notas (marco esperando resposta de gente não bloqueia a fila).
+- **Nota do card marcada como `DECISÃO`: decidir pela recomendação, não parar** — desde que ela
+  exista e a decisão seja reversível. A regra saiu de um custo medido: em 04/09/2026 a cadeia parou
+  horas num card cuja `DECISÃO` já trazia a opção recomendada, e Irineu escolheu exatamente as duas
+  recomendadas. Parar para confirmar o que já estava escrito é tempo gasto sem informação nova.
+
+  O critério **não** é "tem recomendação", é **quanto custa desfazer**:
+
+  | Marcação na Nota | O que a sessão faz |
+  |---|---|
+  | `DECISÃO (recomendado: …)` | **adota a recomendação** e segue |
+  | `DECISÃO BLOQUEANTE` | **para** com `CARD_PARADO`, sempre |
+  | `DECISÃO` sem recomendação | **para** com `CARD_PARADO` — não há o que adotar |
+
+  ⚠️ **É `DECISÃO BLOQUEANTE`, mesmo com recomendação**, o que muda schema ou dado em produção, mexe
+  em permissão ou segurança, cria compromisso externo (conta, loja, contrato, e-mail a terceiro), ou
+  custa mais para desfazer do que para fazer. Na dúvida entre as duas, é bloqueante: o erro de parar
+  custa uma espera; o de seguir custa uma migração em produção.
+
+  **Adotar recomendação obriga a registrar**, nos três lugares, para a reversão sair barata: nas
+  Notas do card (o que foi adotado e que foi a sessão que adotou), no corpo do PR, e no resumo final.
+  Dizer também **como reverter**.
+
+  **Exceção estreita:** se a sessão tiver evidência MEDIDA de que a recomendação quebra algo — não
+  opinião, medida —, ela para com `CARD_PARADO` e mostra a medida. Discordar por preferência não
+  vale; para isso existe a divergência registrada.
+
 - **Card de `Tipo` = `Externo`** e qualquer card cuja nota diga que depende de ação de Irineu: **não
   executar** — encerrar com `CADEIA_FIM`.
 - **Card de `Tipo` = `Marco/validação`:** executar tudo o que não depende de gente (pré-condições

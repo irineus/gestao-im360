@@ -60,7 +60,16 @@ predominante do que foi revisado, `Tamanho` estimado pelo volume, `Status` = `A 
   visuais e acessibilidade, divergências de spec, qualidade, testes que faltam);
 - cada item com **arquivo:linha**, o que está errado, **por que** (seção da spec ou linha da
   migração) e a correção esperada;
-- **DECISÃO** onde a resposta for de Irineu;
+- **DECISÃO** onde a resposta for de Irineu — e aqui a forma decide se a cadeia para ou anda:
+  - escreva **`DECISÃO (recomendado: <opção>)`** com o motivo da recomendação em uma linha. A sessão
+    que executar o card **adota a recomendação e segue**, registrando o que adotou e como reverter;
+  - escreva **`DECISÃO BLOQUEANTE`** quando a escolha mudar schema ou dado em **produção**, mexer em
+    permissão ou segurança, criar compromisso externo, ou custar mais para desfazer do que para
+    fazer. Aí a cadeia para, e é para isso que a marcação existe;
+  - ⚠️ **`DECISÃO` sem recomendação para a cadeia inteira** por tempo indeterminado. Se você tem
+    opinião, escreva-a: em 04/09/2026 a fila parou horas num card cuja decisão já vinha com as
+    opções, e Irineu escolheu exatamente as recomendadas. Sem opinião, prefira `BLOQUEANTE` — deixa
+    claro que a parada é deliberada, e não esquecimento de quem redigiu;
 - uma lista de **critério de aceite** no fim.
 
 Nas Notas do card, o resumo curto e a origem.
