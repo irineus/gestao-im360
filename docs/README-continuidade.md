@@ -4,6 +4,8 @@ Leia este documento e o `CLAUDE.md` da raiz ao iniciar qualquer sessão. Depois,
 
 Este guia é curto de propósito (card 6.1,5, 04/09/2026): o **log cronológico** de tudo o que já foi feito mora em `historico-marcos.md`, e o Histórico da página Decisões vigentes mora numa **subpágina** dela. Os dois se consultam **quando a tarefa pedir**, não na partida — nenhum dos dois é leitura obrigatória de início de sessão.
 
+A página Decisões vigentes é curta pelo mesmo motivo (card 6.2,5, 04/09/2026): a **§2** guarda o *enunciado* de cada regra — o que vale hoje e onde ela mora no código — mais a **armadilha concreta** que aquela regra já custou, com teto de **6 linhas por regra**; o raciocínio, as medições e as contraprovas desceram para **nove subpáginas de detalhe por domínio** (modelagem/views/projeção, acesso e RLS, alunos, currículo, trilha e estoque, alocação/REP, capacidade e PCs, pendências e testes, app e design system). Abre-se a subpágina do domínio **quando a tarefa mexer nele** — "estou mexendo em estoque, o que já decidiram sobre isso?" —, nunca na partida. A página foi de 259 KB para ~180 KB e voltou a caber numa leitura só; nenhuma linha foi resumida ou apagada.
+
 ## Contexto em uma frase
 
 O sistema **Gestão IM360** (Flutter + Supabase + Cloudflare) substituirá a planilha `Gestão Interativo.xlsx` na gestão de alunos, turmas, vagas e material didático de uma escola com três métodos de ensino (Interativo, Inglês e Modular). Concepção e plano aprovados; as Fases 0 a 05 estão concluídas e a **Fase 06 (Trilha e Estoque)** está em andamento, com target de go-live em outubro/2026. O estado corrente de verdade é o board do Notion — use a skill `proxima-tarefa`.
@@ -61,6 +63,7 @@ O que **é** card está no board do Notion — use a skill `proxima-tarefa`. O q
 2. ⚠️ **De Irineu:** desabilitar "Automatically expose new tables" nos dois projetos Supabase (Settings → API). O schema já existe; a mitigação atual é RLS em toda tabela.
 3. O `default public.fn_hoje()` no lugar de `current_date` continua pendente nas colunas do **card 7.1** (card 2.3, §10). Os cards 4.2 e 5.1 já o aplicaram.
 4. `.claude/settings.json` **nega** `psql`, `supabase db push` e `supabase db reset`. A via correta na máquina é `supabase start` + `supabase test db`, que não toca banco remoto nenhum.
+5. ⚠️ **De Irineu (ou de uma sessão interativa):** aplicar em `.claude/skills/proxima-tarefa/SKILL.md` o apontamento para as nove subpáginas de detalhe da §2 (card 6.2,5). A sessão da cadeia não conseguiu editar — escrever dentro de `.claude/` é recusado pela permissão, e a recusa é deliberada. O texto exato a inserir está na subpágina de resultado do card 6.2,5 e no corpo do PR. O `CLAUDE.md`, que é quem manda na leitura de partida, **já está atualizado**; a skill hoje diz apenas "ler as seções 1 a 6", o que continua correto, só não menciona onde mora o detalhe.
 
 O log do que já foi feito — inclusive a Fase 0 inteira — está em `historico-marcos.md`.
 
