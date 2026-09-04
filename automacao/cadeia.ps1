@@ -411,7 +411,8 @@ function EstadoJanela {
         $uso = $j.unifiedWindows.five_hour.utilization
         if ($null -eq $uso) { $uso = 0 }
         $reset = if ($j.resetsAt) { [DateTimeOffset]::FromUnixTimeSeconds([long]$j.resetsAt).LocalDateTime } else { $null }
-        return @{ uso = [double]$uso; reset = $reset; status = $j.status }
+        $lidoEm = if ($j.lidoEm) { [datetime]$j.lidoEm } else { $null }
+        return @{ uso = [double]$uso; reset = $reset; status = $j.status; lidoEm = $lidoEm }
     } catch { return $null }
 }
 
@@ -438,32 +439,50 @@ function CabeNaJanela($indice) {
         return $true
     }
 
-    Escrever ("  ⏸ não cabe: projeção {0:P0} passaria do teto de {1:P0}." -f $projetado, $TetoJanela) 'Yellow'
+    # ⚠️ A leitura pode estar VELHA: ela vem do fim da última sessão, e a janela
+    # é da conta inteira — qualquer outro uso do Claude a move sem o driver ver.
+    # Dizer isso aqui evita que o número seja lido como medida do instante.
+    $idade = if ($e.lidoEm) { [int]((Get-Date) - $e.lidoEm).TotalMinutes } else { $null }
+    $nota = if ($null -ne $idade -and $idade -gt 5) { " (leitura de $idade min atrás; a janela é da conta e pode ter subido)" } else { '' }
+    Escrever ("  ⏸ não cabe: projeção {0:P0} passaria do teto de {1:P0}.{2}" -f $projetado, $TetoJanela, $nota) 'Yellow'
     return $false
 }
 
-# Espera em passos de 10 min até o card caber (ou até o reset chegar).
+# Espera o reset da janela, em passos, mostrando quanto falta.
+#
+# ⚠️ NÃO REAVALIA A UTILIZAÇÃO, e a versão anterior fingia que sim. O
+# `limite.json` só é escrito pelo EXECUTOR, no fim de uma sessão; durante a
+# espera não há sessão nenhuma, então reler o arquivo devolve o mesmo número
+# para sempre. Medido em 04/09/2026: o driver imprimiu "janela em 91%" sete
+# vezes seguidas enquanto o painel de Irineu já marcava 96%.
+#
+# E mesmo com leitura fresca a reavaliação não teria o que decidir: a janela é
+# FIXA — o `resetsAt` é idêntico em todas as leituras —, então antes do reset a
+# utilização só pode SUBIR. Um laço que só pode piorar não é reavaliação, é
+# contagem regressiva com outro nome. Aqui ela tem o nome certo.
+#
+# O passo de 10 min existe para a espera dar sinal de vida e poder ser
+# interrompida, não porque algo mude a cada 10 min.
 function EsperarJanela($indice) {
+    $e = EstadoJanela
+    if ($null -eq $e -or -not $e.reset) { return }   # sem leitura, não há o que esperar
+
     while ($true) {
-        $e = EstadoJanela
-        if ($null -eq $e) { return }   # sem leitura, não há o que esperar
+        $faltam = ($e.reset - (Get-Date)).TotalMinutes
+        if ($faltam -le 0) { break }
 
-        $ateReset = if ($e.reset) { ($e.reset - (Get-Date)).TotalMinutes } else { 0 }
-        if ($ateReset -le 0) {
-            # A janela virou. A utilização real vem no primeiro evento da
-            # sessão seguinte; aqui só se registra que a espera acabou.
-            Escrever '  ▶ janela reiniciada — retomando.' 'Green'
-            try { Remove-Item $ArqLimite -Force } catch { }
-            return
-        }
-
-        $passo = [Math]::Min(10, [Math]::Ceiling($ateReset))
-        Escrever ("  ⏳ aguardando {0} min (faltam {1:N0} min para o reset) — reavaliação às {2:HH:mm}" -f `
-                  $passo, $ateReset, (Get-Date).AddMinutes($passo)) 'Yellow'
+        $passo = [Math]::Min(10, [Math]::Ceiling($faltam))
+        Escrever ("  ⏳ janela cheia ({0:P0}); esperando o reset das {1:HH:mm} — faltam {2:N0} min" -f `
+                  $e.uso, $e.reset, $faltam) 'Yellow'
         Start-Sleep -Seconds ([int]($passo * 60))
-
-        if (CabeNaJanela $indice) { return }
     }
+
+    # A janela virou. A utilização REAL do novo ciclo vem no primeiro evento da
+    # sessão seguinte — pode não ser zero, porque a janela é da conta inteira e
+    # outra sessão pode já estar consumindo. Apagar a leitura velha é o que
+    # impede o driver de decidir o próximo card com o número do ciclo anterior.
+    Escrever '  ▶ janela reiniciada — retomando.' 'Green'
+    try { Remove-Item $ArqLimite -Force -ErrorAction SilentlyContinue } catch { }
 }
 
 # ---------------------------------------------------------------------------
