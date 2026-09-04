@@ -817,7 +817,7 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `085_rep_virada` | **5.3** ✅ (funções REP entram na mesma migração) — mede o VEREDITO; a seção 6 era o portão da pendência, **disparou em 03/09/2026 (card 5.5)** e virou a asserção estrutural de que as duas funções da virada fecham a pendência, cada uma com o seu sufixo. O comportamento ponta a ponta ficou no `090_rotinas`, que é o arquivo da pendência | 5 |
 | `090_rotinas` (a tabela `pendencia`, as três funções do §10, rt_pendencias_diaria/rt_rep_avaliar/rt_diaria, o job `pg_cron` e a view `v_pendencias_abertas`) | **5.5** ✅ (primeira rotina) → cresce em 8.1 | 5+ |
 | `091_manutencao_capacidade` (o status derivado de `pc_manutencao`, a pendência por EVENTO, `rt_pcs_normaliza` e `rt_capacidades`) | **5.4** ✅ — mora ao lado do `090`, que é o arquivo das rotinas: aqui está o que só o caminho por evento prova | 5 |
-| `095_views_paridade` | 6.4 (primeiras views) → cresce em 5.6, 5.9, 8.7 | 5+ |
+| `095_views_paridade` (a grade semanal: `fn_grade_semana` e `v_bloco_vagas_semana`) | **5.6** ✅ → cresce em 6.4, 5.9 e 8.7. ⚠️ **Divergência registrada:** esta linha atribuía o nascimento do arquivo ao **6.4** ("primeiras views"), e o 6.4 é da fase 06 — quem chegou primeiro foi o 5.6, e o arquivo nasceu lá. A obrigação de teste de card de View (§13) não mudou; mudou só quem a cumpre primeiro | 5+ |
 | `catalogo_erros_test`, `guardas_rota_test`, `permissao_widget_test`, `faixa_test`, `tnum_test` | 3.7 | 3 |
 | Golden dos badges | 4.6 (status) e 5.7 (tipo) | 4–5 |
 | `dialogo_resultado_test` | 6.6 | 6 |

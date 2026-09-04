@@ -15,6 +15,7 @@ import '../telas/materiais/tela_materiais.dart';
 import '../telas/redefinir_senha.dart';
 import '../telas/salas/tela_salas.dart';
 import '../telas/selecao_unidade.dart';
+import '../telas/turmas/tela_turmas.dart';
 import '../telas/sem_acesso.dart';
 import '../widgets/estados.dart';
 import '../widgets/shell_im360.dart';
@@ -29,6 +30,7 @@ final _telaDaRota = <String, WidgetBuilder>{
   'alunos': (_) => const TelaAlunos(),
   'materiais': (_) => const TelaMateriais(),
   'salas': (_) => const TelaSalas(),
+  'turmas': (_) => const TelaTurmas(),
   'administracao': (_) => const TelaAdministracao(),
 };
 
@@ -53,7 +55,6 @@ List<RouteBase> _subRotas(Rota rota) => switch (rota.id) {
 const _cardDaRota = <String, String>{
   'dashboard': '5.9 / 8.7',
   'aluno_trilha': '6.6',
-  'turmas': '5.6',
   'turmas_modular': '7.3',
   'pendencias': '5.8',
   'compras': '6.8',
