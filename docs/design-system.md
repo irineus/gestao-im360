@@ -829,6 +829,12 @@ dizer com mais precisão:
 | 14 | **"Linha em alerta: fundo tonal … mais ícone na PRIMEIRA célula"** (§5.2) | O fundo tonal é o do §5.2 (`tertiaryContainer` para atenção, `errorContainer` para erro, e agora existe como `TomLinha` no `TabelaIm360`). O **ícone fica na célula do Saldo**, e não na primeira: é onde o wireframe §9 o desenha (`0 ⚠`, `-2 ✖`) e onde ele significa alguma coisa — ao lado do código, o mesmo ícone não diria *de que* o alerta é, numa tela que terá outros alertas. O contrato do §8.2 continua inteiro: forma própria por situação (⚠ atenção, ✖ erro) e a **palavra** no `Semantics` da célula ("Saldo -2, saldo negativo") e no `apoio` do cartão do mobile |
 | 15 | **"Sem permissão → o botão não é renderizado"** (§5.7) aplicado ao "Editar material" do painel de estoque | **Exceção estreita e escrita:** o botão não escreve nada — abre o cadastro, que quem tem `materiais.ler` sempre pôde ver (card 4.4, tocando a linha). Desde o card 6.7 a linha abre o painel, então guardá-lo por `materiais.editar` **tiraria uma leitura que já existia**. O rótulo muda com a permissão ("Editar material" / "Ver cadastro"), e o "Salvar" continua guardado pelo próprio formulário. A regra vale para botão de **ação**; navegação para uma tela que já tem guarda própria não é ação |
 
+### Correção vinda do card 6.8 (04/09/2026) — os quatro estados dentro de um painel
+
+| # | Achado | Como ficou |
+|---|---|---|
+| 16 | **O §5.6 descreve os quatro estados como se eles sempre ocupassem a tela**, e `_Centro` os desenhava com um `Column(mainAxisSize.min)` dentro de um `Center` — sem rolagem | **`EstadoVazio`, `EstadoErro` e `EstadoSemAcesso` passaram a rolar quando não cabem.** Desde o card 6.7 os estados moram também em **painéis**, que ocupam 2/5 da altura ao lado da lista: ali o conjunto ícone (40 px) + frase + "Código: …" + botão não cabe, e o Flutter desenha as listras de overflow **por cima do "Tentar de novo"** — o estado de erro perde a saída exatamente onde a pessoa precisa dela. Medido no `tela_compras_test`, com o painel de itens falhando: `A RenderFlex overflowed by 40 pixels`. A correção é um `SingleChildScrollView` dentro do `Center`: continua centrado, e o scroll só entra quando falta altura. Vale para toda tela e todo painel, presentes e futuros — o defeito não era da tela 7, era do componente |
+
 ---
 
 *Card 2.7 — Fase 2. Fecha a cadeia de design da Fase 2: identidade (1.9) → estrutura (2.6) →

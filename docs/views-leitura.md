@@ -741,8 +741,34 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 ### 12.1 Views de tela, que pertencem aos seus próprios cards
 
 Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6) ✅,
-`v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7) ✅, `v_certificado_fila` (8.6). São views de
-listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+`v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7) ✅, `v_pedido_compra` e `v_pedido_item`
+(6.8) ✅, `v_certificado_fila` (8.6). São views de listagem, sem número derivado — o cuidado de §3
+vale, o resto é do card da tela.
+
+⚠️ **`v_pedido_compra` e `v_pedido_item` nasceram em 04/09/2026** (`20260905010000_views_pedidos_compra.sql`,
+card 6.8), e as duas trazem o que faltava para a tela 7 não recalcular nada. Três decisões:
+
+- **`v_pedido_compra` tem os agregados numa SUBCONSULTA agrupada, e não num `left join` com
+  `count(*)`.** É o §3.2 num caso real, não hipotético: **pedido sem item existe** — é o rascunho
+  recém-criado, e `PEDIDO_SEM_ITEM` de `fn_pedido_enviar` só faz sentido porque ele existe. Sobre o
+  `left join` direto ele contaria **1** item que não há, e `sum()` do conjunto vazio viria `null`
+  (§3.1). O teste `062` mede os dois com a **contraprova ao lado**, escrita na forma ingênua.
+- **`data_referencia` é `coalesce(data_envio, criado_em at time zone 'America/Sao_Paulo')`**, e não
+  `criado_em::date` (§3.3): o banco roda em UTC, e um rascunho criado às 22h apareceria datado do
+  dia seguinte na lista.
+- **O `join` em `material` de `v_pedido_item` é INTERNO**, como o de `v_aluno_trilha` (6.6) e ao
+  contrário do de `v_material_movimento` (6.7). A diferença é qual permissão está em jogo: a rota da
+  tela 7 **exige** `materiais.ler` (permissoes-matriz §6, linha 7), então quem chega sem ela já viu
+  a tela "sem acesso". Das duas reduções do §3.4, a menos pior aqui é a lista **vazia**: um pedido
+  cheio de itens sem nome seria uma lista de apostilas anônimas para conferir contra a caixa que
+  chegou, e conferir apostila pelo id é como se recebe a errada. O `062` prova as duas reações
+  opostas com um perfil que tem `compras.ler` e não tem `materiais.ler`, e a asserção da lista vazia
+  foi **vista vermelha** com o `join` convertido em externo.
+
+O `qtd_pendente` de `v_pedido_item` repete o `greatest(…, 0)` **por item** de `v_pedido_sugerido`
+(§6, card 6.5) e pela mesma razão: item recebido com excedente tem `qtd_pedida − qtd_recebida`
+negativo, e "faltam −2" não é frase de painel de conferência. Contraprova no `062`, lendo a
+subtração crua ao lado.
 
 ⚠️ **`v_material_movimento` nasceu em 04/09/2026** (`20260904235500_view_material_movimento.sql`,
 card 6.7), e a decisão dela é **o contrário** da de `v_aluno_trilha`: **todo `join` de rótulo é

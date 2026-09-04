@@ -125,9 +125,13 @@ abstract final class CatalogoErros {
     'COMPOSICAO_METODO_DIVERGENTE':
         'Este item é de outro método. A composição do catálogo não pode '
         'misturar métodos.',
+    // ⚠️ A frase falava só em REMOVER até 04/09/2026 (card 6.8). O mesmo código
+    // passou a cobrir criar item e mudar a quantidade fora do rascunho —
+    // `tg_pedido_item_edicao` —, e o texto antigo mandaria a pessoa procurar um
+    // botão de remover que ela não estava usando.
     'PEDIDO_NAO_RASCUNHO':
-        'Só dá para remover item de pedido em rascunho. Cancele o pedido ou '
-        'ajuste as quantidades.',
+        'Só dá para mexer nos itens de um pedido em rascunho. Cancele o pedido '
+        'ou receba o que chegou.',
     // Mesma família do PC_COM_HISTORICO e do BLOCO_COM_ALOCACAO, mas aqui a
     // recusa é total: movimento de estoque não se altera nem se apaga, e a
     // correção é sempre um movimento novo.
