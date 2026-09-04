@@ -102,6 +102,25 @@ function PreVoo {
 
     if (-not (Test-Path $ArqPrompt)) { $problemas += "Falta $ArqPrompt (o texto que cada sessão recebe)." }
 
+    # ⚠️ Enquanto o diretório não for CONFIADO, o CLI IGNORA as entradas de
+    # `permissions.allow` do `.claude/settings.json` inteiras — e sessão headless
+    # não tem a quem pedir aprovação. O card falharia por permissão parecendo
+    # defeito de código. Medido em 03/09/2026, na primeira corrida com a CLI
+    # recém-instalada: "Ignoring 22 permissions.allow entries".
+    $arqCli = Join-Path $HOME '.claude.json'
+    if (Test-Path $arqCli) {
+        try {
+            $cfg = Get-Content $arqCli -Raw -Encoding UTF8 | ConvertFrom-Json
+            $chave = ($RaizRepo -replace '\\', '/')
+            $proj = $cfg.projects.PSObject.Properties[$chave]
+            if (-not $proj -or -not $proj.Value.hasTrustDialogAccepted) {
+                $problemas += "Diretorio nao confiado pela CLI: o allow do .claude/settings.json seria IGNORADO e a sessao headless travaria pedindo permissao. Rode 'claude' interativamente aqui uma vez e aceite o dialogo de confianca."
+            }
+        } catch {
+            $problemas += "Nao foi possivel ler $arqCli para conferir a confianca do diretorio: $($_.Exception.Message)"
+        }
+    }
+
     return $problemas
 }
 
@@ -116,6 +135,16 @@ function ExecutarCard($indice) {
 
     Escrever "  sessão $indice — saída em $arqSaida"
     if ($Simular) { return @{ veredito = 'SIMULADO'; linha = '(simulação)'; saida = $arqSaida } }
+
+    # ⚠️ `$ErrorActionPreference = 'Stop'` (o padrão deste script) transforma
+    # QUALQUER linha que o `claude` escreva em stderr num erro TERMINANTE, e o
+    # driver morre antes de gravar uma linha do log. Medido em 03/09/2026: o CLI
+    # avisou sobre a confiança do diretório, o `2>&1` transformou o aviso em
+    # NativeCommandError e a corrida acabou ali, com o log vazio. Um CLI escreve
+    # aviso em stderr o tempo todo — parar por causa disso seria trocar toda a
+    # cadeia por um diagnóstico que nem é do card.
+    $eapAnterior = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
 
     Push-Location $RaizRepo
     try {
@@ -135,7 +164,10 @@ function ExecutarCard($indice) {
             Add-Content -Path $arqSaida -Value $linha -Encoding UTF8
         }
         $codigo = $LASTEXITCODE
-    } finally { Pop-Location }
+    } finally {
+        Pop-Location
+        $ErrorActionPreference = $eapAnterior
+    }
 
     if ($codigo -ne 0) {
         return @{ veredito = 'ERRO_PROCESSO'; linha = "claude saiu com código $codigo"; saida = $arqSaida }
