@@ -28,6 +28,9 @@ as ferramentas nativas `Read`, `Grep` e `Glob`, que não passam por shell nenhum
 3. **Um card só.** Terminado o card, pare — quem decide se vem outro é o driver.
 4. **Não invente escopo.** Nota de card que diverge do que faz sentido: faça o coerente, registre a
    divergência nas Notas e na subpágina. É a regra que já vale para toda sessão.
+5. **Nunca** apague card do board, toque em outro database do workspace (Desmalha
+   `d50a2925-fb74-4f67-b0db-af03ef41d1b4`, Entrelares) ou aplique SQL à mão em produção. IDs de
+   página em UUID hifenizado nas atualizações.
 
 ## O que fazer
 
@@ -59,6 +62,25 @@ as ferramentas nativas `Read`, `Grep` e `Glob`, que não passam por shell nenhum
    uma por perfil, no molde do §9.1 da subpágina do card 4.8. Depois **mantenha o card `Em andamento`**
    com a linha `AGUARDANDO RETORNO DOS USUÁRIOS desde <data>` no topo das Notas — e feche com
    `CARD_OK` normalmente, porque a parte automatizável foi entregue e a fila não deve parar.
+4.1. **Marque o card como `Em andamento` ANTES de começar** — `notion-update-page`,
+   `update_properties`, `Status = "Em andamento"`. É a primeira escrita da sessão, antes da branch.
+
+   ⚠️ **Medido em 04/09/2026: a sessão do card 6.5 fez ZERO chamadas de `notion-update-page`** e
+   trabalhou horas com o card ainda em `A fazer`. A causa era esta lista, que mandava *fechar* o card
+   no fim e nunca *abrir* no começo — a skill dizia, o prompt não, e as sessões seguem o prompt. Umas
+   marcavam, outras não.
+
+   Não é cosmético: a regra de escolha é "o primeiro card não concluído". Card que fica `A fazer`
+   enquanto está sendo feito é card que outra sessão escolhe de novo, colidindo com a branch que já
+   existe. Hoje a cadeia é sequencial e isso não morde; é uma armadilha esperando duas execuções ao
+   mesmo tempo. E, enquanto isso, o board mente para quem olha.
+
+4.2. **Crie a branch a partir de `origin/develop`, sempre:**
+   `git fetch origin develop && git checkout -B tarefa/<fase>-<ordem>-<slug> origin/develop`.
+   Nunca a partir de `main`, e nunca commitar direto em `develop`. Branch criada de `main` nasce
+   **sem o que já está mergeado e ainda não promovido** — em 31/08/2026 uma sessão fez isso e
+   concluiu, errado, que os entregáveis de dois cards nunca tinham sido commitados.
+
 5. Execute o card respeitando o `CLAUDE.md`: migrações só via CI/CD, regra de negócio no banco, RLS
    em toda tabela, nomes em português snake_case, credenciais nunca em texto puro. **E as
    especificações vinculantes do tipo do card, abaixo — elas não são leitura opcional.**
@@ -93,10 +115,30 @@ faltou foi a instrução de que estes documentos mandam.
    --fatal-infos`, `dart format`, portão de migrações. Se o card criar regra nova, o teste que a mede
    precisa ter sido visto **vermelho** com a regra sabotada — é o padrão do projeto e é o que separa
    teste que mede de teste que acompanha.
-7. Feche o card: subpágina de resultado, Notas com `CONCLUÍDO <data>:`, Decisões vigentes se houve
-   decisão, `Status` e `Concluído em`.
+7. **Feche o card no board.** São cinco escritas, e cada uma tem uma armadilha que já mordeu:
+   - **subpágina de resultado** com `parent: {page_id: <card-id>}` — nunca solta na raiz;
+   - **Notas**: ⚠️ `update_properties` **SOBRESCREVE** o campo. Buscar o valor atual **primeiro** e
+     reenviar o texto completo, preservando a linha `Origem:`. Prefixar com `CONCLUÍDO <data>:`;
+   - **Decisões vigentes**, se houve decisão: o **enunciado** vai para a página-mãe (teto de **6
+     linhas** por regra), o **raciocínio** para a subpágina do **domínio**, e o **log** para a
+     📜 Histórico. Os três destinos e a tabela de domínios estão na skill. ⚠️ Jogar tudo na
+     página-mãe desfaz dois cards e ~US$ 60 de enxugamento;
+   - **`Status` = Concluído E `Concluído em` = hoje** — as duas, sempre: a data alimenta a estimativa
+     de entrega, e card concluído sem data é buraco na série. Faltando `Tamanho` ou `Tipo`, preencher;
+   - **`docs/README-continuidade.md`**, quando a tarefa criar documento novo ou mudar o estado do
+     projeto.
+
+   Card **novo** que você criar nasce com `Fase`, `Ordem` (decimal para inserir no meio, sem
+   renumerar os outros), `Tamanho` e `Tipo` — sem tamanho ele some da conta de prazo.
+
 8. Feche o Git: commit, push, PR contra `develop`, esperar o CI (`gh pr checks <n> --watch`) e
    **mergear no verde, sem perguntar**.
+
+9. **Avise da promoção pendente** no fim do resumo — a sessão **avisa, não pergunta** (o hook recusa
+   a promoção de qualquer jeito, então perguntar gasta rodada). Dizer: quantas migrações `develop`
+   está à frente de `main` e **com que nomes de arquivo**, o que cada uma aplica em produção — em
+   especial rotina agendada, `pg_cron` ou qualquer coisa que passe a rodar sozinha —, e o link
+   `https://github.com/irineus/gestao-im360/compare/main...develop`.
 
 ## Quando o CI reprovar
 
