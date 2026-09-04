@@ -45,7 +45,9 @@ Não confundir com o board do **Desmalha** (outro projeto de Irineu, data source
 a ser automático com o CI verde. O portão que a regra de 01/09 protegia era o CI, e o CI hoje é o que
 decide — a suíte pgTAP, a de concorrência, o `flutter test`, o `analyze`, o `format` e o portão de
 migrações. O clique humano continua **exatamente onde o risco está**: a promoção `develop` → `main`,
-que aplica migração no banco de **produção**, é manual e de Irineu, sempre, e nenhuma sessão a executa.
+que aplica migração no banco de **produção**, é manual e de Irineu, sempre, e nenhuma sessão a
+executa — nem por engano: desde 03/09/2026 quem garante isso é um hook, e não a boa vontade da
+sessão (`.claude/hooks/guarda-destrutivos.mjs`).
 
 **Vermelho no CI se corrige, não se mergeia.** A sessão tenta a correção por conta própria e só para
 quando (a) a falha se repete **pela mesma razão** depois da tentativa de correção, (b) chega à terceira
@@ -64,10 +66,19 @@ O resto do acordo de 01/09/2026 continua fechado e não se renegocia a cada sess
 2. Concluído o entregável do card: commit, push da branch, PR contra `develop`, **esperar o CI** e
    mergear **assim que ele fechar verde** — sem perguntar. Vermelho entra no laço de correção descrito
    acima.
-3. **Promoção `develop` → `main`: nunca automática.** Em sessão interativa, perguntar com
-   `AskUserQuestion` depois do merge em `develop`, dizendo **dentro da pergunta** se a promoção leva
-   migração e com que nome de arquivo — é a última chance de alguém reparar. Em sessão não interativa,
-   não perguntar (não há quem responda): apenas registrar no resumo que há promoção pendente.
+3. **Promoção `develop` → `main`: a sessão AVISA, não pergunta.** ⚠️ Corrigido em 04/09/2026: até
+   aqui esta linha mandava perguntar com `AskUserQuestion` em sessão interativa — e a pergunta não
+   tinha o que decidir, porque **nenhuma sessão consegue promover**. O hook
+   `.claude/hooks/guarda-destrutivos.mjs`, instalado em 03/09/2026 pelo próprio card 5.5,5, recusa
+   `git push` mirando `main`, `gh pr create --base main` e o merge de um PR cuja base seja `main`.
+   Perguntar "promover agora?" para depois esbarrar no guarda gasta duas rodadas e ensina a não
+   confiar na pergunta seguinte.
+
+   O que a sessão faz, interativa ou não: **encerrar o resumo dizendo que há promoção pendente**, com
+   (a) quantas migrações ela leva e **com que nomes de arquivo**, (b) o que cada uma aplica em
+   produção — em especial rotina agendada, `pg_cron` ou qualquer coisa que passe a rodar sozinha —, e
+   (c) o link de comparação, `https://github.com/irineus/gestao-im360/compare/main...develop`. Quem
+   abre o PR e clica no merge é Irineu, sempre.
 
 Detalhe operacional na skill `proxima-tarefa`, seção "Ciclo do Git ao concluir". A cadeia de execução
 não interativa (uma sessão por card, em sequência) está em `docs/cadeia-execucao.md`.

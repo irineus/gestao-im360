@@ -103,15 +103,25 @@ CI que decide). A promoção `develop` → `main` **nunca** é automática: apli
      produto, disparo manual de workflow).
 
    Em qualquer um dos três: dizer **qual** dos três foi e **por quê**, com o log.
-6. **Promoção para produção — só em sessão interativa, e sempre perguntando.** Depois do merge em
-   `develop`, `AskUserQuestion`:
-   - *Promover `develop` → `main` agora*;
-   - *Ainda não — acumular mais tarefas em `develop`.*
+6. **Promoção para produção — a sessão AVISA, e não pergunta.** ⚠️ Corrigido em 04/09/2026: até
+   aqui esta seção mandava usar `AskUserQuestion` em sessão interativa, e a pergunta **não tinha o
+   que decidir**. O hook `.claude/hooks/guarda-destrutivos.mjs` (instalado em 03/09/2026 pelo card
+   5.5,5) recusa `git push` mirando `main`, `gh pr create --base main` e o merge de um PR cuja base
+   seja `main` — em **qualquer** sessão, interativa ou não. Perguntar e depois esbarrar no guarda
+   custou duas rodadas na sessão do card 5.11, e a segunda pergunta foi só para corrigir o número de
+   migrações da primeira.
 
-   ⚠️ Merge em `main` **aplica migração no banco de produção**. Nunca é respondida pelo Claude: sem
-   clique, não há promoção. Se a promoção levar migração, dizer isso **dentro da pergunta**, com o
-   nome do arquivo. Em sessão não interativa, **não perguntar** — registrar no resumo que ficou
-   promoção pendente e seguir.
+   O que fazer, sempre igual: **terminar o resumo com o aviso de promoção pendente**, contendo
+   - **quantas migrações** a promoção leva e **os nomes dos arquivos** — `git diff --name-only
+     origin/main..origin/develop -- supabase/migrations/` responde, e é o número que vale, não o do
+     card que se acabou de fechar;
+   - **o que cada uma aplica em produção**, com destaque para o que passa a **rodar sozinho** (rotina
+     `pg_cron`, trigger que agenda, Worker) — é o único tipo de mudança que continua agindo depois de
+     ninguém estar olhando;
+   - o link `https://github.com/irineus/gestao-im360/compare/main...develop`.
+
+   Quem abre o PR e clica no merge é Irineu. Não oferecer para "abrir só o PR": isso também é barrado,
+   e oferecer o que não se pode fazer é o defeito que esta correção existe para tirar.
 7. Branch empurrada sem PR some. Se houver PR de tarefa anterior ainda não mergeado, dizer no
    resumo final.
 8. Se a sessão acabar no meio do ciclo, o resumo tem de dizer **em que ponto parou** (branch
