@@ -76,17 +76,29 @@ $ErrorActionPreference = 'Stop'
 # "fuma?a" (medido em 03/09/2026, na estreia da narração ao vivo). Um relatório
 # de card em português inteiro passa por aqui.
 #
-# ⚠️ E tem de ser `UTF8Encoding $false`: `[System.Text.Encoding]::UTF8` traz
-# **BOM**, o BOM entrava na PRIMEIRA linha entregue ao filtro, o `JSON.parse`
-# falhava só nela e ela era repassada crua — um `rate_limit_event` inteiro em
-# JSON no meio da narração, e só o primeiro. Medido em 03/09/2026.
-$OutputEncoding = New-Object System.Text.UTF8Encoding $false
+# `$OutputEncoding` (o que o PowerShell ESCREVE ao canalizar para um processo
+# nativo) não aparece mais aqui: com o `executar-sessao.mjs` abrindo o `claude`
+# por conta própria, o PowerShell deixou de escrever na entrada de qualquer
+# nativo. As duas armadilhas que ele trouxe — o padrão ASCII e o BOM do
+# `[System.Text.Encoding]::UTF8` — estão registradas em `docs/cadeia-execucao.md`
+# §7.1, porque somem do código mas não da memória de quem mexer nisto depois.
 
 $RaizRepo   = Split-Path -Parent $PSScriptRoot
 $DirLogs    = Join-Path $PSScriptRoot 'logs'
 $ArqHistoria= Join-Path $DirLogs 'cadeia.jsonl'
 $ArqPrompt  = if ($Prompt) { $Prompt } else { Join-Path $PSScriptRoot 'prompt-card.md' }
-$FiltroStream = Join-Path $PSScriptRoot 'formatar-stream.mjs'
+$ExecutorSessao = Join-Path $PSScriptRoot 'executar-sessao.mjs'
+
+# O `claude` do PATH é um atalho `.ps1`/`.cmd` do npm. O executor prefere o
+# `.exe` de verdade: assim o `spawn` corre sem shell, e um prompt de milhares de
+# caracteres não precisa ser citado — que é onde esse tipo de invocação quebra.
+function ResolverExecutavelClaude {
+    $atalho = (Get-Command claude -ErrorAction SilentlyContinue)
+    if (-not $atalho) { return $null }
+    $exe = Join-Path (Split-Path $atalho.Source) 'node_modules/@anthropic-ai/claude-code/bin/claude.exe'
+    if (Test-Path $exe) { return $exe }
+    return $atalho.Source
+}
 
 function Escrever($texto, $cor = 'Gray') { Write-Host $texto -ForegroundColor $cor }
 function Titulo($texto) { Write-Host ''; Write-Host "── $texto" -ForegroundColor Cyan }
@@ -130,7 +142,8 @@ function PreVoo {
     } finally { Pop-Location }
 
     if (-not (Test-Path $ArqPrompt)) { $problemas += "Falta $ArqPrompt (o texto que cada sessão recebe)." }
-    if (-not (Test-Path $FiltroStream)) { $problemas += "Falta $FiltroStream (o tradutor do stream-json)." }
+    if (-not (Test-Path $ExecutorSessao)) { $problemas += "Falta $ExecutorSessao (quem abre e narra a sessão)." }
+    if (-not (ResolverExecutavelClaude)) { $problemas += "Nao consegui resolver o executavel do claude a partir do PATH." }
 
     # ⚠️ Enquanto o diretório não for CONFIADO, o CLI IGNORA as entradas de
     # `permissions.allow` do `.claude/settings.json` inteiras — e sessão headless
@@ -210,7 +223,10 @@ function PreVoo {
 # Uma sessão = um card
 # ---------------------------------------------------------------------------
 function ExecutarCard($indice) {
-    $prompt = Get-Content -Path $ArqPrompt -Raw -Encoding UTF8
+    # O prompt não é lido aqui: quem o lê é o executor, que também abre o
+    # processo. Passá-lo por argumento do PowerShell reintroduziria o problema
+    # de citação que o `.exe` resolvido justamente evita.
+    $exeClaude = ResolverExecutavelClaude
     $carimbo = Get-Date -Format 'yyyyMMdd-HHmmss'
     if (-not (Test-Path $DirLogs)) { New-Item -ItemType Directory -Path $DirLogs -Force | Out-Null }
     $arqSaida = Join-Path $DirLogs "card-$carimbo.log"
@@ -241,24 +257,22 @@ function ExecutarCard($indice) {
         # na primeira tentativa de rodar a cadeia. O ForEach abaixo faz as duas
         # coisas que o Tee faria — mostrar e gravar — e grava em UTF-8 de
         # verdade, que é o que o Get-Content da leitura do veredito espera.
-        # ⚠️ `--output-format stream-json` não é preciosismo: em texto, `claude -p`
-        # BUFFERIZA a resposta inteira e só imprime no fim. Num card `GG` isso é
-        # meia hora de silêncio depois de uma linha dizendo onde fica o log —
-        # medido por Irineu na primeira corrida, que só mostrou algo quando deu
-        # erro. `formatar-stream.mjs` traduz os eventos em narração ao vivo e
-        # guarda o JSONL cru ao lado, para quando o resumo não bastar.
-        & claude -p $prompt --permission-mode acceptEdits `
-                 --allowedTools @FerramentasPermitidas `
-                 --output-format stream-json --verbose 2>&1 |
-            & node $FiltroStream $arqBruto |
-            ForEach-Object {
-                $linha = [string]$_
-                Write-Host $linha
-                Add-Content -Path $arqSaida -Value $linha -Encoding UTF8
-            }
-        # Numa pipeline, `$LASTEXITCODE` é do ÚLTIMO comando — o filtro. Ele sai
-        # com 3 quando não vê o evento `result`, que é como "o claude não chegou
-        # ao fim" continua chegando aqui em vez de virar um silêncio.
+        # ⚠️ QUEM ABRE O `claude` É O NODE, e isso não é rodeio — é a correção do
+        # defeito que a primeira corrida de verdade expôs.
+        #
+        # A versão anterior fazia `claude … | node filtro.mjs` numa pipeline do
+        # PowerShell. Quando o PowerShell canaliza um nativo para outro nativo,
+        # ele escreve na entrada do segundo em BLOCOS e só descarrega quando o
+        # primeiro termina: numa sessão de 3 segundos tudo sai junto e a narração
+        # parece funcionar; numa de 40 minutos não sai NADA até o fim. Ou seja, o
+        # conserto do buffer do `claude` só tinha mudado o buffer de lugar.
+        #
+        # Com o node abrindo o processo, o pipe é do sistema operacional e o
+        # PowerShell só CONSOME a saída — o lado que ele sempre transmitiu linha
+        # a linha. O executor devolve o código do `claude`, ou 3 quando a sessão
+        # termina sem evento `result`.
+        & node $ExecutorSessao $exeClaude $ArqPrompt $arqSaida $arqBruto @FerramentasPermitidas |
+            ForEach-Object { Write-Host ([string]$_) }
         $codigo = $LASTEXITCODE
     } finally {
         Pop-Location
