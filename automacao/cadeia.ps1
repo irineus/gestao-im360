@@ -115,6 +115,8 @@ function Registrar($registro) {
 # Cada uma destas checagens existe porque a falha correspondente é SILENCIOSA
 # ou ilegível quando acontece no meio da cadeia, às três da manhã.
 # ---------------------------------------------------------------------------
+$script:avisos = @()
+
 function PreVoo {
     $problemas = @()
 
@@ -143,6 +145,37 @@ function PreVoo {
 
     if (-not (Test-Path $ArqPrompt)) { $problemas += "Falta $ArqPrompt (o texto que cada sessão recebe)." }
     if (-not (Test-Path $ExecutorSessao)) { $problemas += "Falta $ExecutorSessao (quem abre e narra a sessão)." }
+
+    # ⚠️ AVISO, não problema: a cadeia roda sem isto, mas roda PIOR, e do jeito
+    # silencioso — foi o que aconteceu na primeira corrida de 6 cards.
+    #
+    # As sessões não conseguiram subir o stack local uma única vez (`supabase
+    # test db`: ZERO tentativas em 6 cards) e caíram para "o CI é o portão".
+    # O CI de fato roda a suíte, então correção continuou medida; o que se perdeu
+    # foi a CONTRAPROVA por sabotagem, que é a disciplina deste projeto e não
+    # existe sem stack na máquina. Os cards relataram a degradação — mas quem lê
+    # o relatório já gastou a sessão.
+    #
+    # A checagem é ESTÁTICA de propósito: lê o allow e responde se uma sessão
+    # CONSEGUIRIA. Custa milissegundos e nenhuma chamada de API.
+    $regras = @()
+    try {
+        $regras = (Get-Content (Join-Path $RaizRepo '.claude/settings.json') -Raw -Encoding UTF8 |
+                   ConvertFrom-Json).permissions.allow
+    } catch { }
+
+    $temSupabaseGlobal = [bool](Get-Command supabase -ErrorAction SilentlyContinue)
+    $cobreSupabase = if ($temSupabaseGlobal) { [bool]($regras -match '^Bash\(supabase') }
+                     else { [bool]($regras -match '^Bash\(npx') }
+    $cobreDocker = [bool]($regras | Where-Object { $_ -match '^Bash\(docker' -and $_ -notmatch '^Bash\(docker ps' })
+
+    if (-not $cobreSupabase) {
+        $comoInvoca = if ($temSupabaseGlobal) { 'supabase' } else { 'npx supabase (nao ha supabase global nesta maquina)' }
+        $script:avisos += "As sessoes NAO vao rodar a suite pgTAP local: o allow nao cobre '$comoInvoca'. O portao vira so o CI, e a contraprova por sabotagem deixa de ser possivel."
+    }
+    if (-not $cobreDocker) {
+        $script:avisos += "O allow so permite 'docker ps'. Sem 'docker info'/'docker --version' a sessao conclui que Docker nao existe e nem tenta o stack local."
+    }
     if (-not (ResolverExecutavelClaude)) { $problemas += "Nao consegui resolver o executavel do claude a partir do PATH." }
 
     # ⚠️ Enquanto o diretório não for CONFIADO, o CLI IGNORA as entradas de
@@ -331,6 +364,10 @@ if ($problemas.Count -gt 0) {
     exit 1
 }
 Escrever '  ✓ ferramentas, Docker, gh, repositório limpo' 'Green'
+
+# Aviso não impede a corrida — mas sai ANTES dela, e não escondido no relatório
+# de um card que já custou meia hora.
+foreach ($a in $script:avisos) { Escrever "  ⚠ $a" 'Yellow' }
 
 if ($Verificar) { Escrever ''; Escrever 'Só verificação — nada executado.' 'Yellow'; exit 0 }
 
