@@ -170,18 +170,24 @@ class PcManutencao {
   final String tipo;
   final DateTime dataInicio;
 
-  /// Fim da manutenção. Nulo = sem previsão; no futuro = previsão; no passado
-  /// = encerrada. É a leitura que o card 5.4 dá a `data_fim` ("muda o PC para
-  /// MANUTENCAO até data_fim").
+  /// Fim da manutenção — **o dia em que o PC volta a operar**, não o último dia
+  /// parado. Nulo = sem previsão. É a leitura do card 4.5 (c), e desde o card
+  /// 5.4 é também a do banco: `fn_capacidade_efetiva` e
+  /// `fn_pc_status_sincronizar` cobrem `[data_inicio, data_fim)`. Antes disso o
+  /// banco lia o intervalo fechado, e encerrar a manutenção hoje deixaria o PC
+  /// em MANUTENCAO até amanhã.
   final DateTime? dataFim;
   final String? descricao;
   final String? pcSubstitutoId;
 
-  /// Em aberto em [hoje]: sem fim, ou com o fim ainda à frente. Fim igual a
-  /// hoje é encerrada — é o que "Encerrar" grava.
+  /// Em aberto em [hoje]: já começou e o fim ainda não chegou. Fim igual a hoje
+  /// é encerrada — é o que "Encerrar" grava —, e é a mesma condição que o banco
+  /// aplica desde o card 5.4.
   bool abertaEm(DateTime hoje) {
     final fim = dataFim;
-    return fim == null || soData(fim).isAfter(soData(hoje));
+    final dia = soData(hoje);
+    return !soData(dataInicio).isAfter(dia) &&
+        (fim == null || soData(fim).isAfter(dia));
   }
 
   PcManutencao copiar({DateTime? dataFim}) => PcManutencao(

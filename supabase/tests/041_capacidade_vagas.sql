@@ -24,7 +24,7 @@
 -- =============================================================================
 
 begin;
-select plan(33);
+select plan(35);
 
 -- ===========================================================================
 -- 1. As premissas da fixture, que são o que dá sentido aos números abaixo
@@ -144,9 +144,12 @@ select is(
   'substituto da PROPRIA sala nao repoe: a maquina ja estava contada');
 
 -- O PC em manutenção COM substituto conta mesmo com `status` em MANUTENCAO — que
--- é o mundo que o tg_pc_manutencao_status do card 5.4 vai criar. Escrito hoje,
--- porque no dia em que aquele trigger existir esta asserção é a única coisa entre
--- "substituto mantém a capacidade" e a regra deixar de valer em silêncio.
+-- era "o mundo que o tg_pc_manutencao_status do card 5.4 vai criar" quando isto
+-- foi escrito, no card 5.2, e **é o mundo de agora**: o trigger existe desde
+-- 04/09/2026 e o `update` abaixo virou redundante (o trigger já pôs o PC em
+-- MANUTENCAO ao gravar a manutenção). Ficou de propósito, porque é ele que torna
+-- o estado explícito para quem lê — e a asserção continua sendo a única coisa
+-- entre "substituto mantém a capacidade" e a regra deixar de valer em silêncio.
 update public.pc_manutencao m
    set pc_substituto_id = (select p.id from public.pc p
                             where p.unidade_id = tests.unidade('ESCOLA_A')
@@ -164,8 +167,17 @@ select is(
   10,
   'status MANUTENCAO com substituto de fora: continua contando (o mundo do card 5.4)');
 
--- E o inverso: status MANUTENCAO marcado à mão, sem manutenção aberta nenhuma —
--- o mundo de HOJE, em que o formulário do card 4.5 escolhe o status — não conta.
+-- E o inverso: status MANUTENCAO marcado à mão, sem manutenção aberta nenhuma,
+-- não conta.
+--
+-- ⚠️ REESCRITO NO CARD 5.4, e a ordem das duas escritas é o que mudou. Encerrar
+--    a manutenção agora dispara `tg_pc_manutencao_status`, que devolve o PC a
+--    OPERACIONAL na mesma transação — a marcação à mão TEM de vir depois, senão
+--    o trigger a desfaz e a asserção mede outra coisa. O estado continua
+--    alcançável (`pc.status` é editável por quem tem `salas.editar`, e é um
+--    PATCH direto no PostgREST), e é ele que se mede aqui: PC marcado parado sem
+--    nada que o explique não conta vaga. `rt_pcs_normaliza` (card 5.4) o
+--    normaliza na execução seguinte, o que é outro teste, no arquivo 091.
 update public.pc_manutencao
    set data_inicio = public.fn_hoje() - 2, data_fim = public.fn_hoje() - 1
  where pc_id = (select p.id from public.pc p
@@ -173,10 +185,13 @@ update public.pc_manutencao
                    and p.identificador = 'LAB1-02')
    and data_fim is null;
 
+update public.pc set status = 'MANUTENCAO'
+ where unidade_id = tests.unidade('ESCOLA_A') and identificador = 'LAB1-02';
+
 select is(
   public.fn_capacidade_efetiva((select id from t_bloco where apelido = 'cheio')),
   9,
-  'status MANUTENCAO sem manutencao aberta: nao conta — o mundo de hoje, sem o trigger do 5.4');
+  'status MANUTENCAO sem manutencao aberta: nao conta — a fórmula olha a manutencao, nao so o status');
 
 update public.pc set status = 'OPERACIONAL'
  where unidade_id = tests.unidade('ESCOLA_A') and identificador = 'LAB1-02';
@@ -205,7 +220,24 @@ select is(
   public.fn_capacidade_efetiva((select id from t_bloco where apelido = 'cheio'),
                                public.fn_hoje() + 10),
   10,
-  'depois de data_fim a capacidade volta — o intervalo e fechado dos dois lados');
+  'depois de data_fim a capacidade volta');
+
+-- ⚠️ AS DUAS BORDAS, e elas mudaram no card 5.4: o intervalo é `[data_inicio,
+--    data_fim)`. `data_fim` é o dia em que o PC VOLTA a operar — a leitura que o
+--    card 4.5 (c) deu à coluna e que o botão "Encerrar" produz, e que o banco
+--    lia ao contrário até aqui. Sem estas duas asserções a mudança seria
+--    invisível: o teste do dia 8, no meio da janela, passa nas duas leituras.
+select is(
+  public.fn_capacidade_efetiva((select id from t_bloco where apelido = 'cheio'),
+                               public.fn_hoje() + 7),
+  9,
+  'a borda de INICIO esta DENTRO: no primeiro dia da manutencao o PC ja nao conta');
+
+select is(
+  public.fn_capacidade_efetiva((select id from t_bloco where apelido = 'cheio'),
+                               public.fn_hoje() + 9),
+  10,
+  'a borda de FIM esta FORA: data_fim e o dia em que o PC volta, nao o ultimo dia parado');
 
 -- ---------------------------------------------------------------------------
 -- 2.3 Override vence sempre; nominal é teto

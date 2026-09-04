@@ -36,7 +36,7 @@
 -- =============================================================================
 
 begin;
-select plan(47);
+select plan(49);
 
 -- ===========================================================================
 -- 1. As premissas da fixture, que dão sentido a todos os números de baixo
@@ -55,10 +55,28 @@ select is(
   'Eduarda Lima, Felipe Nunes',
   'fixture: exatamente dois alunos ATIVO/ACELERAR sem bloco — Eduarda (MODULAR) e Felipe (ACELERAR)');
 
+-- ⚠️ MUDOU NO CARD 5.4, e a mudança é o contrário de um relaxamento. Até aqui a
+--    fixture nascia sem pendência nenhuma. Com o trigger tg_pc_revalida_blocos,
+--    o `insert` em `pc_manutencao` da camada `infra_fisica` passa a abrir
+--    PC_SEM_SUBSTITUTO para o LAB2-05 — que está em manutenção aberta e sem
+--    substituto POR DESENHO (nota (c) da camada). A pendência continua não sendo
+--    SEMEADA: ela é gerada pela regra, a partir do dado que a fixture escreve, e
+--    a asserção agora prova as duas coisas de uma vez — que o caminho por evento
+--    dispara até no seed, e que ele não abre nada além do que é verdade.
 select is(
-  (select count(*)::bigint from public.pendencia),
+  (select string_agg(format('%s:%s', p.tipo, pc.identificador), ', '
+                     order by pc.identificador)
+     from public.pendencia p
+     join public.pc pc on pc.id = p.pc_id
+    where p.unidade_id = tests.unidade('ESCOLA_A')),
+  'PC_SEM_SUBSTITUTO:LAB2-05',
+  'a fixture nasce com UMA pendencia, e ela e GERADA pelo trigger do card 5.4 — nao semeada');
+
+select is(
+  (select count(*)::bigint from public.pendencia
+    where unidade_id = tests.unidade('ESCOLA_A') and pc_id is null),
   0::bigint,
-  'a fixture nasce SEM pendencia nenhuma: pendencia e gerada, nunca semeada');
+  'e nenhuma pendencia de aluno ou de bloco: essas nascem das rotinas, mais abaixo');
 
 -- ===========================================================================
 -- 2. rt_pendencias_diaria abre os três tipos desta fase
@@ -102,9 +120,11 @@ select ok(
 select public.rt_pendencias_diaria();
 select public.rt_pendencias_diaria();
 
+-- `aluno_id is not null` desde o card 5.4: a PC_SEM_SUBSTITUTO da seção 1 é da
+-- fixture e não tem nada a ver com a idempotência que se está medindo aqui.
 select is(
   (select count(*)::bigint from public.pendencia
-    where unidade_id = tests.unidade('ESCOLA_A')),
+    where unidade_id = tests.unidade('ESCOLA_A') and aluno_id is not null),
   3::bigint,
   'tres execucoes, tres linhas: o indice parcial pendencia_aberta_uk faz a deduplicacao');
 
@@ -193,26 +213,30 @@ select is(
 -- ===========================================================================
 -- 6. BLOCO_ACIMA_CAPACIDADE — a capacidade cai, a pendência aparece
 -- ===========================================================================
--- 10 alunos para 10 PCs não é "acima": a borda é o que se mede.
+-- 10 alunos para 10 PCs não é "acima": a borda é o que se mede — e a rotina roda
+-- ANTES da asserção, senão o zero significaria "ninguém olhou".
+select public.rt_capacidades();
+
 select is(
   (select count(*)::bigint from public.pendencia
     where tipo = 'BLOCO_ACIMA_CAPACIDADE' and resolvida_em is null),
   0::bigint,
   'bloco lotado (10/10) NAO e bloco acima da capacidade — a borda e >, nao >=');
 
--- Um PC do Laboratório 1 sai de operação: capacidade 10 → 9, e o bloco cheio
--- passa a ter 10 alunos para 9 lugares. É o caminho por ROTINA; o card 5.4
--- acrescenta o caminho por evento, com a MESMA chave.
-update public.pc set status = 'MANUTENCAO'
- where id = (select p.id
-               from public.pc p
-               join public.sala s on s.id = p.sala_id
-              where s.unidade_id = tests.unidade('ESCOLA_A')
-                and s.nome = 'Laboratório 1' and p.status = 'OPERACIONAL'
-              order by p.identificador
-              limit 1);
+-- ⚠️ REESCRITA NO CARD 5.4, e a escolha da fonte da queda é o ponto. Até aqui a
+--    capacidade caía pondo um PC em MANUTENCAO — e a partir do card 5.4 isso
+--    dispara `tg_pc_revalida_blocos`, de modo que a pendência apareceria ANTES
+--    de a rotina rodar: a asserção passaria sem que a rotina fizesse nada, que é
+--    a definição de teste que cegou. A queda passa a vir de `capacidade_override`
+--    reduzido à mão, que é a única fonte que trigger NENHUM observa — o caminho
+--    diário volta a ser a única explicação possível para a pendência. O caminho
+--    por EVENTO tem arquivo próprio (091).
+--
+-- 10 alunos para uma capacidade de 9: o bloco cheio passa a estar acima.
+update public.bloco_horario set capacidade_override = 9
+ where unidade_id = tests.unidade('ESCOLA_A') and dia_semana = 3;
 
-select public.rt_pendencias_diaria();
+select public.rt_capacidades();
 
 select is(
   (select format('%s/%s/%s', p.severidade,
@@ -223,14 +247,26 @@ select is(
     where p.tipo = 'BLOCO_ACIMA_CAPACIDADE'
       and p.unidade_id = tests.unidade('ESCOLA_A') and p.resolvida_em is null),
   'ALTA/t/3',
-  'PC em manutencao derruba a capacidade e a pendencia aparece com os DOIS numeros na descricao');
+  'a capacidade cai e a pendencia aparece com os DOIS numeros na descricao');
 
--- O PC volta. A rotina desfaz o que ela mesma abriu — sem ninguém pedir.
-update public.pc set status = 'OPERACIONAL'
- where status = 'MANUTENCAO'
-   and sala_id = (select id from public.sala
-                   where unidade_id = tests.unidade('ESCOLA_A')
-                     and nome = 'Laboratório 1');
+-- A rotina desfaz o que ela mesma abriu — sem ninguém pedir.
+update public.bloco_horario set capacidade_override = null
+ where unidade_id = tests.unidade('ESCOLA_A') and dia_semana = 3;
+
+select public.rt_capacidades();
+
+select is(
+  (select count(*)::bigint from public.pendencia
+    where tipo = 'BLOCO_ACIMA_CAPACIDADE' and resolvida_em is null),
+  0::bigint,
+  'normalizada a capacidade, a rotina fecha sozinha');
+
+-- E a rotina que PERDEU o tipo continua sem abri-lo: BLOCO_ACIMA_CAPACIDADE saiu
+-- de rt_pendencias_diaria no card 5.4 e voltou ao dono do catálogo §10.1. Sem
+-- esta asserção, a cópia poderia voltar num `create or replace` futuro e as duas
+-- implementações conviveriam em silêncio, livres para divergir.
+update public.bloco_horario set capacidade_override = 9
+ where unidade_id = tests.unidade('ESCOLA_A') and dia_semana = 3;
 
 select public.rt_pendencias_diaria();
 
@@ -238,7 +274,10 @@ select is(
   (select count(*)::bigint from public.pendencia
     where tipo = 'BLOCO_ACIMA_CAPACIDADE' and resolvida_em is null),
   0::bigint,
-  'normalizada a capacidade, a rotina fecha sozinha');
+  'rt_pendencias_diaria NAO abre mais BLOCO_ACIMA_CAPACIDADE — o dono e fn_revalidar_blocos_sala');
+
+update public.bloco_horario set capacidade_override = null
+ where unidade_id = tests.unidade('ESCOLA_A') and dia_semana = 3;
 
 -- ===========================================================================
 -- 7. ACELERAR_SEM_2O_BLOCO conta só bloco de VERDADE — ajuste 4 do card 2.5
@@ -517,9 +556,13 @@ select tests.encerrar_sessao();
 
 select public.rt_diaria();
 
+-- ⚠️ O tipo importa: desde o card 5.4 a fixture nasce com PC_SEM_SUBSTITUTO nas
+--    DUAS unidades (seção 1), então contar pendência de qualquer tipo passaria
+--    mesmo que rt_diaria não tivesse saído do lugar. ALUNO_SEM_TURMA só existe
+--    se a rotina rodou, e só existe na Escola B se ela rodou LÁ.
 select is(
   (select count(distinct p.unidade_id)::bigint from public.pendencia p
-    where p.resolvida_em is null),
+    where p.resolvida_em is null and p.tipo = 'ALUNO_SEM_TURMA'),
   2::bigint,
   'rt_diaria percorre as unidades ATIVAS: a Escola B tem as pendencias dela, e o contexto nao vaza');
 
@@ -563,10 +606,12 @@ select is(
 -- ===========================================================================
 -- 13. Portões: o que ainda não existe, e o dia em que passar a existir
 -- ===========================================================================
--- ⚠️ PORTÃO DO CARD 5.4 E DO 8.1. O §11 do card 2.2 dá cinco passos a rt_diaria
---    e três ainda não existem. Criar rt_pcs_normaliza, rt_capacidades ou
---    rt_projecao_demanda e esquecer de chamá-las aqui não daria erro nenhum:
---    daria uma rotina que roda todo dia sem fazer o que passou a ser dela.
+-- ⚠️ PORTÃO DO CARD 8.1 — e ele JÁ DISPAROU UMA VEZ, no card 5.4. O §11 do card
+--    2.2 dá cinco passos a rt_diaria; `rt_pcs_normaliza` e `rt_capacidades`
+--    nasceram no 5.4 e entraram aqui no mesmo commit, porque este portão
+--    reprovava enquanto não entrassem. Falta `rt_projecao_demanda` (8.1): criá-la
+--    e esquecer de chamá-la aqui não daria erro nenhum — daria uma rotina que
+--    roda todo dia sem fazer o que passou a ser dela.
 --    `prosrc` inclui os comentários do corpo — daí o regexp_replace, a lição que
 --    custou uma sessão no card 5.3.
 select is(
@@ -581,7 +626,7 @@ select is(
              join pg_namespace dn on dn.oid = d.pronamespace
             where dn.nspname = 'public' and d.proname = 'rt_diaria') !~ p.proname),
   '',
-  'PORTAO 5.4/8.1: toda rt_* do projeto e chamada por rt_diaria');
+  'PORTAO 8.1 (disparou no 5.4): toda rt_* do projeto e chamada por rt_diaria');
 
 -- ⚠️ PORTÃO DO CARD 7.1. "Sem turma" hoje é "sem bloco_aluno ativo", porque
 --    `turma_modular_aluno` não existe. No dia em que existir, todo aluno MODULAR
