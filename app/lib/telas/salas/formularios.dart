@@ -23,16 +23,18 @@ import '../../widgets/formulario.dart';
 void _recarregar(WidgetRef ref) =>
     ref.read(versaoInfraestruturaProvider.notifier).incrementar();
 
-/// O status do PC e a manutenção em aberto são duas colunas que o card 5.4
-/// amarra por trigger; até lá, quem tem `salas.editar` escolhe aqui se o
-/// status acompanha, e quem não tem (o monitor) registra a manutenção e o
-/// status fica para a ficha do PC.
-const _avisoStatusNaoMuda =
-    'Registrar a manutenção não muda o status do PC: isso é feito na ficha do '
-    'PC, por quem edita salas.';
-const _avisoStatusNaoVolta =
-    'Encerrar a manutenção não muda o status do PC: isso é feito na ficha do '
-    'PC, por quem edita salas.';
+/// O status do PC e a manutenção em aberto deixaram de ser duas colunas soltas:
+/// o card 5.4 as amarrou por trigger (`tg_pc_manutencao_status`), e `pc.status`
+/// passou a ser DERIVADO de `pc_manutencao`. Por isso saíram daqui o interruptor
+/// que oferecia a escolha e o aviso que dizia ao monitor que o status não
+/// mudaria — os dois passaram a mentir no mesmo dia. A tela informa o que o
+/// banco faz; não oferece uma decisão que ele já toma.
+const _avisoStatusSegue =
+    'O status do PC passa a "Em manutenção" automaticamente enquanto a '
+    'manutenção estiver aberta.';
+const _avisoStatusVolta =
+    'Encerrada a manutenção, o PC volta a "Operacional" automaticamente e a '
+    'contar na capacidade da sala.';
 
 // ---------------------------------------------------------------------------
 // Sala
@@ -609,7 +611,6 @@ class _FormularioManutencaoState extends ConsumerState<FormularioManutencao> {
   final _fim = TextEditingController();
   final _descricao = TextEditingController();
   String? _substitutoId;
-  bool _mudarStatus = true;
 
   @override
   void dispose() {
@@ -623,8 +624,6 @@ class _FormularioManutencaoState extends ConsumerState<FormularioManutencao> {
   Widget build(BuildContext context) {
     final permissoes = ref.watch(permissoesProvider);
     final pc = widget.pc;
-    final podeMudarStatus =
-        permissoes.contains('salas.editar') && pc.status != 'MANUTENCAO';
     final substitutos = [
       for (final p in ref.watch(pcsProvider).value ?? const <Pc>[])
         if (p.id != pc.id && p.operacional) p,
@@ -635,9 +634,7 @@ class _FormularioManutencaoState extends ConsumerState<FormularioManutencao> {
       chave: _chave,
       rotuloSalvar: 'Registrar',
       somenteLeitura: !permissoes.contains('salas.registrar_manutencao'),
-      aviso: podeMudarStatus || pc.status == 'MANUTENCAO'
-          ? null
-          : _avisoStatusNaoMuda,
+      aviso: pc.status == 'MANUTENCAO' ? null : _avisoStatusSegue,
       campos: [
         DropdownButtonFormField<String>(
           initialValue: _tipo,
@@ -666,7 +663,8 @@ class _FormularioManutencaoState extends ConsumerState<FormularioManutencao> {
             labelText: 'Previsão de fim',
             hintText: 'dd/mm/aaaa',
             helperText:
-                'Opcional. Até essa data a manutenção conta como aberta.',
+                'Opcional. É o dia em que o PC volta a operar; até lá a '
+                'manutenção conta como aberta.',
             helperMaxLines: 3,
           ),
           validator: (valor) => validarData(valor, obrigatorio: false),
@@ -695,21 +693,6 @@ class _FormularioManutencaoState extends ConsumerState<FormularioManutencao> {
           maxLines: 3,
           decoration: const InputDecoration(labelText: 'Descrição'),
         ),
-        if (podeMudarStatus)
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text(
-              'Colocar o PC em manutenção',
-              style: Tipografia.corpo,
-            ),
-            subtitle: const Text(
-              'O status passa a "Em manutenção" e o PC sai da capacidade da '
-              'sala.',
-              style: Tipografia.apoio,
-            ),
-            value: _mudarStatus,
-            onChanged: (valor) => setState(() => _mudarStatus = valor),
-          ),
       ],
       aoSalvar: () async {
         final repositorio = ref.read(infraestruturaRepositorioProvider);
@@ -723,9 +706,6 @@ class _FormularioManutencaoState extends ConsumerState<FormularioManutencao> {
             pcSubstitutoId: _substitutoId,
           ),
         );
-        if (podeMudarStatus && _mudarStatus) {
-          await repositorio.salvarPc(pc.copiar(status: 'MANUTENCAO'));
-        }
         _recarregar(ref);
         return 'salvo';
       },
@@ -752,7 +732,6 @@ class _FormularioEncerrarManutencaoState
     extends ConsumerState<FormularioEncerrarManutencao> {
   final _chave = GlobalKey<FormState>();
   final _fim = TextEditingController(text: formatarData(DateTime.now()));
-  bool _voltarOperacional = true;
 
   @override
   void dispose() {
@@ -765,17 +744,13 @@ class _FormularioEncerrarManutencaoState
     final permissoes = ref.watch(permissoesProvider);
     final pc = widget.pc;
     final manutencao = widget.manutencao;
-    final podeVoltar =
-        permissoes.contains('salas.editar') && pc.status == 'MANUTENCAO';
 
     return FormularioIm360(
       titulo: 'Encerrar manutenção — ${pc.identificador}',
       chave: _chave,
       rotuloSalvar: 'Encerrar',
       somenteLeitura: !permissoes.contains('salas.registrar_manutencao'),
-      aviso: podeVoltar || pc.status != 'MANUTENCAO'
-          ? null
-          : _avisoStatusNaoVolta,
+      aviso: pc.status == 'MANUTENCAO' ? _avisoStatusVolta : null,
       campos: [
         Text(
           '${rotuloTipoManutencao(manutencao.tipo)} desde '
@@ -793,29 +768,12 @@ class _FormularioEncerrarManutencaoState
           ),
           validator: validarData,
         ),
-        if (podeVoltar)
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text(
-              'Voltar o PC a operacional',
-              style: Tipografia.corpo,
-            ),
-            subtitle: const Text(
-              'O PC volta a contar na capacidade da sala.',
-              style: Tipografia.apoio,
-            ),
-            value: _voltarOperacional,
-            onChanged: (valor) => setState(() => _voltarOperacional = valor),
-          ),
       ],
       aoSalvar: () async {
         final repositorio = ref.read(infraestruturaRepositorioProvider);
         await repositorio.salvarManutencao(
           manutencao.copiar(dataFim: lerData(_fim.text)),
         );
-        if (podeVoltar && _voltarOperacional) {
-          await repositorio.salvarPc(pc.copiar(status: 'OPERACIONAL'));
-        }
         _recarregar(ref);
         return 'salvo';
       },

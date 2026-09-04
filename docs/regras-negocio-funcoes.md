@@ -278,6 +278,17 @@ $$;
 > marcado `MANUTENCAO` à mão, sem linha em `pc_manutencao`, não conta. As duas junto tornam a fórmula
 > correta antes e depois do card 5.4, que é o requisito de verdade.
 >
+> ⚠️ **CORREÇÃO DE FATO (04/09/2026, card 5.4) — o intervalo é `[data_inicio, data_fim)`.** O corpo
+> entregue pelo card 5.2 usava `p_data between data_inicio and coalesce(data_fim, 'infinity')`,
+> intervalo fechado, e este §4.6 dizia "ao fechar (`data_fim` preenchida e **passada**)". O app lê o
+> contrário desde o card 4.5 (c): *`data_fim` é previsão; manutenção aberta = sem fim ou fim à frente
+> de hoje, e "Encerrar" grava o fim de **hoje**"*. Duas leituras da mesma coluna, que nunca se
+> encontravam — até o status passar a ser derivado. Sob a leitura fechada, encerrar a manutenção hoje
+> deixaria o PC em MANUTENCAO até amanhã: a turma da noite perderia uma vaga por uma máquina que já
+> voltou, e a linha da tela mostraria "Em manutenção" sem manutenção aberta ao lado. **Resolvido a
+> favor do app**, que é quem produz o único "encerrar" do sistema: `data_fim` é o dia em que o PC
+> **volta a operar**. As duas bordas viraram asserção no teste `041`.
+>
 > ⚠️ **Limite conhecido, registrado e não resolvido:** o PC emprestado continua contando na **sala de
 > origem**. `pc.sala_id` diz onde a máquina está cadastrada, não onde ela está hoje, e conservar
 > máquinas entre salas exigiria modelar a mudança de lugar — decisão que não é deste card e que
@@ -443,6 +454,58 @@ Para cada `bloco_horario` ativo da sala: se `fn_ocupacao_bloco > fn_capacidade_e
 **Nunca remove aluno.** É a regra explícita do plano: a turma cheia não encolhe; ela vira
 pendência, e novas admissões ficam bloqueadas pelo `tg_bloco_aluno_admissao` até normalizar —
 o que já acontece naturalmente, já que a capacidade caiu abaixo da ocupação.
+
+> ✅ **Fechado em 04/09/2026 pelo card 5.4**, em
+> `supabase/migrations/20260904010000_manutencao_pc_capacidade.sql`, com os dois triggers, a função
+> e mais três coisas que o quadro acima não previa.
+>
+> **1. `pc.status` passou a ser DERIVADO, e a regra mora numa função só.**
+> `fn_pc_status_sincronizar(pc)` decide o status a partir de **todas** as manutenções do PC — não da
+> linha que disparou o trigger. Um PC pode ter duas em aberto (a corretiva de ontem e a preventiva de
+> hoje), e encerrar uma delas não devolve a máquina: um trigger que decidisse pelo `new` a devolveria,
+> com a capacidade da sala subindo por engano e a vaga sendo vendida. A mesma função serve ao trigger
+> (evento) e a `rt_pcs_normaliza` (passagem do tempo), porque **duas cópias divergiriam para o lado
+> silencioso** — o trigger acertando e a rotina desfazendo de madrugada.
+>
+> **2. `rt_pcs_normaliza` existe porque o tempo passar NÃO É EVENTO**, e faz as duas direções. O §11
+> a descreve como "fecha manutenções com data_fim vencida; devolve PCs a OPERACIONAL"; **divergência
+> registrada nas duas metades**. Não há manutenção a "fechar": com `data_fim` no passado ela já está
+> fechada pelas próprias datas, e escrever em `pc_manutencao` inventaria histórico que ninguém
+> registrou. E "devolver a OPERACIONAL" é só metade da regra — uma manutenção **agendada** que começa
+> hoje não dispara nada, e sem a outra direção o PC ficaria OPERACIONAL enquanto estivesse parado,
+> que é o erro na direção que vende vaga inexistente.
+>
+> **3. `PC_SEM_SUBSTITUTO` usa o MESMO "sem substituto" da fórmula da capacidade** (§4.1, decisão (b)
+> do card 5.2): substituto da **própria sala** não repõe máquina nenhuma, logo não fecha a pendência.
+> Uma condição escrita como "tem substituto?" em vez de "tem substituto que reponha?" fecharia
+> dizendo "resolvido" exatamente enquanto a capacidade seguisse caída.
+>
+> **4. `BLOCO_ACIMA_CAPACIDADE` voltou ao dono que o §10.1 sempre lhe deu.** O card 5.5 a tinha posto
+> em `rt_pendencias_diaria` (divergência registrada lá, porque a função ainda não existia); mantê-la
+> nos dois lugares seria manter **duas implementações da mesma comparação**, com o mesmo `format` e a
+> mesma severidade, livres para divergir na primeira vez que alguém mexesse numa só — a terceira
+> implementação que o card 2.3 §4.1 proíbe. O caminho diário passa a ser `rt_capacidades`, que
+> `rt_diaria` executa **antes** de `rt_pendencias_diaria`; o caminho por evento é
+> `tg_pc_revalida_blocos`; e os dois usam a **mesma** `chave_dedup`, de modo que convergem na dedup.
+>
+> **A admissão bloqueada não precisou de código novo, e isso foi CONFERIDO antes de escrever.**
+> `tg_bloco_aluno_admissao` compara `ocupacao >= capacidade` desde o card 5.3, e bloco acima da
+> capacidade satisfaz `>=` com folga. Uma segunda guarda a partir da **pendência** teria modo de falha
+> próprio: pendência é estado gravado, e um bloco já normalizado continuaria bloqueado até alguém
+> fechá-la. Virou asserção (seção 4 do teste `091`), não frase de relatório.
+>
+> **Divergência benigna com o quadro:** `tg_pc_revalida_blocos` revalida **as duas** salas quando um
+> PC muda de `sala_id` — a de destino ganha máquina e a de origem perde, e o singular do quadro não
+> tinha como dizer de qual das duas falava.
+>
+> ⚠️ **Duas contraprovas saíram VERDES e corrigiram o que estava escrito**, as duas registradas na
+> migração: (a) `fn_pc_status_sincronizar` nasceu `security definer` com a justificativa da RLS, e a
+> sabotagem que devia prová-la passou — quem atravessa a RLS é o trigger `definer` que a chama, e ela
+> virou `invoker` pelo precedente de `fn_pendencias_fechar_ausentes`; (b) a **ordem** entre os dois
+> triggers de `pc_manutencao` parecia decisiva e **não é**, porque o `update` de `pc.status` dispara
+> `tg_pc_revalida_blocos` em `pc` e revalida a sala de novo — a independência vem da redundância entre
+> os dois gatilhos, e quem remover o trigger de `pc` por achá-lo redundante traz a dependência de
+> volta, calada.
 
 ---
 
@@ -739,8 +802,9 @@ select cron.schedule('gi_rotina_diaria', '10 6 * * *', $$ select rt_diaria(); $$
 
 ```sql
 rt_diaria() → void          -- security definer; itera unidades ativas (§2.2) e chama, em ordem:
-  rt_pcs_normaliza()        -- fecha manutenções com data_fim vencida; devolve PCs a OPERACIONAL
-  rt_capacidades()          -- fn_revalidar_blocos_sala em todas as salas
+  rt_pcs_normaliza()        -- ✅ 5.4 — põe pc.status em dia com pc_manutencao, NAS DUAS DIREÇÕES
+  rt_capacidades()          -- ✅ 5.4 — fn_revalidar_blocos_sala em todas as salas, mais a varredura
+                            --    das pendências de bloco que deixou de ser ativo
   rt_pendencias_diaria()    -- abre/fecha as pendências de tempo do catálogo §10.1
   rt_rep_avaliar()          -- fn_rep_avaliar_virada por aluno com reposição aberta ou alocação REP;
                             -- abre E fecha as pendências REP_VIRADA (card 2.5)

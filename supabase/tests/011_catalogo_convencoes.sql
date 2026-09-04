@@ -212,11 +212,36 @@ select is(
             -- controle importa. fn_pendencias_fechar_ausentes também não: ela é
             -- `invoker` e só as rt_* a chamam.
             'fn_pendencia_abrir', 'fn_pendencia_resolver',
+            -- card 5.4 — as três da manutenção de PC. As duas de trigger são
+            -- definer por PRIVILÉGIO e por RLS: elas chamam funções sem grant
+            -- para authenticated (o `invoker` morreria com "permission denied
+            -- for function"), e são elas que atravessam a política de `update`
+            -- de `pc`, que exige `salas.editar` — quem registra manutenção é o
+            -- MONITOR, que não a tem, e como invoker o update afetaria ZERO
+            -- linhas sem erro nenhum, deixando o PC OPERACIONAL na ficha
+            -- enquanto estivesse quebrado. `fn_revalidar_blocos_sala` lê `pc` e
+            -- `bloco_horario` (`salas.ler`, `turmas.ler`) e escreve pendência:
+            -- como invoker percorreria zero blocos e a pendência não abriria.
+            -- Todas filtram unidade no corpo e tratam unidade nula como ERRO.
+            --
+            -- fn_pc_status_sincronizar NÃO está aqui, e a ausência custou uma
+            -- contraprova VERDE para ser descoberta: ela nasceu definer com a
+            -- justificativa da RLS, e a sabotagem que devia prová-la passou —
+            -- quem já atravessa a RLS é o trigger que a chama. Virou invoker,
+            -- pelo precedente de fn_pendencias_fechar_ausentes (card 5.5): só
+            -- quem roda como o dono a chama.
+            'fn_revalidar_blocos_sala',
+            'fn_pc_manutencao_status', 'fn_pc_revalida_blocos',
             -- card 5.5 — as três rotinas. `pg_cron` roda como `postgres` sem
             -- auth.uid(), e o contexto de rotina do card 2.2 §2.2 só existe
             -- porque elas são definer e não têm `grant` para authenticated
             -- (C9): um cliente não tem como entrar nesse contexto.
-            'rt_diaria', 'rt_pendencias_diaria', 'rt_rep_avaliar'
+            'rt_diaria', 'rt_pendencias_diaria', 'rt_rep_avaliar',
+            -- card 5.4 — as duas rotinas novas, pelo mesmo motivo das três de
+            -- cima: `pg_cron` roda como `postgres` sem auth.uid(), e o contexto
+            -- de rotina só se sustenta porque elas são definer e não têm grant
+            -- para authenticated (C9).
+            'rt_pcs_normaliza', 'rt_capacidades'
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'

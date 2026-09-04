@@ -82,7 +82,7 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
 
   ('infra_fisica', 50, '4.3',
    $$to_regclass('public.pc') is not null$$, true,
-   'APLICADA no card 4.3: uma sala com 10 PCs (capacidade real do laboratório) e uma com 6, mais uma sala modular sem PC. A borda 10/11 é o teste de lotação do card 5.3. Os seis PCs da segunda sala NÃO estão todos operacionais de propósito: capacidade nominal (6), total de PCs (6) e PCs operacionais (4) são três números distintos, e é isso que faz fn_capacidade_efetiva (card 5.2) reprovar se somar a coluna errada. Duas manutenções (uma aberta sem substituto, uma fechada) e três professores, um inativo. Nenhuma credencial: senha de fixture no repositório é o que o card 2.9 §9 recusa, e os testes de credencial gravam a sua dentro da própria transação.'),
+   'APLICADA no card 4.3: uma sala com 10 PCs (capacidade real do laboratório) e uma com 6, mais uma sala modular sem PC. A borda 10/11 é o teste de lotação do card 5.3. Os seis PCs da segunda sala NÃO estão todos operacionais de propósito: capacidade nominal (6), total de PCs (6) e PCs operacionais (4) são três números distintos, e é isso que faz fn_capacidade_efetiva (card 5.2) reprovar se somar a coluna errada. Duas manutenções (uma aberta sem substituto, uma fechada) e três professores, um inativo. Nenhuma credencial: senha de fixture no repositório é o que o card 2.9 §9 recusa, e os testes de credencial gravam a sua dentro da própria transação. Desde o card 5.4 a camada roda em CONTEXTO DE ROTINA (os triggers de manutenção exigem unidade no contexto) e, por consequência, a fixture nasce com uma pendência PC_SEM_SUBSTITUTO por unidade — a do LAB2-05, GERADA pelo trigger e não semeada.'),
 
   ('turmas', 60, '5.1',
    $$to_regclass('public.bloco_aluno') is not null$$, true,
@@ -646,6 +646,24 @@ select tests.seed_alunos(tests.unidade('ESCOLA_B'));
 -- Os PCs dos dois laboratórios TÊM histórico (manutenção), e é isso que dá ao
 -- teste da guarda de exclusão do card 4.3 os dois lados: um PC que recusa ser
 -- apagado e um que aceita.
+--
+-- ⚠️ ESTA CAMADA PASSOU A RODAR EM CONTEXTO DE ROTINA NO CARD 5.4, pelo mesmo
+--    motivo e com a mesma escolha da camada `turmas` (ver a nota da seção 7): o
+--    `insert` em `pc_manutencao` dispara `tg_pc_manutencao_status` e
+--    `tg_pc_revalida_blocos`, e os dois acabam em funções que exigem unidade no
+--    contexto. O seed roda como `postgres`, sem `auth.uid()`: sem o contexto,
+--    `fn_unidade_atual()` é nula e o `supabase db reset` inteiro morre no
+--    primeiro PC. A saída RECUSADA foi tratar unidade nula como "não faz nada"
+--    dentro das funções — isso seria um contorno permanente em produção,
+--    escrito para acomodar um arquivo de teste (card 5.3).
+--
+--    CONSEQUÊNCIA QUE VALE ESCREVER, porque muda uma asserção do teste 090: a
+--    fixture passa a NASCER com uma pendência `PC_SEM_SUBSTITUTO` por unidade —
+--    a do LAB2-05, que está em manutenção aberta e sem substituto por desenho
+--    (nota (c) acima). Ela não é semeada: é GERADA pelo trigger do card 5.4, a
+--    partir do dado que a fixture escreve, e é exatamente o que a regra manda
+--    acontecer. Uma fixture com esse PC parado e sem pendência nenhuma diria que
+--    a regra não vale.
 create or replace function tests.seed_infra_fisica(p_unidade uuid)
 returns void
 language plpgsql
@@ -657,6 +675,11 @@ declare
   v_pc_manut uuid;
   v_pc_ok    uuid;
 begin
+  -- Contexto de rotina (ver a nota ⚠️ acima). `is_local => true`: morre no fim
+  -- da transação mesmo se o `insert` falhar no meio.
+  perform set_config('app.rotina', 'on', true);
+  perform set_config('app.rotina_unidade', p_unidade::text, true);
+
   insert into sala (unidade_id, nome, tipo, capacidade_nominal)
   select p_unidade, s.nome, s.tipo, s.cap
     from (values
@@ -716,6 +739,9 @@ begin
     ) as pr(nome, ativo)
    where not exists (select 1 from professor x
                       where x.unidade_id = p_unidade and x.nome = pr.nome);
+
+  perform set_config('app.rotina', '', true);
+  perform set_config('app.rotina_unidade', '', true);
 end $$;
 
 -- As duas unidades recebem a mesma infraestrutura, com os MESMOS
