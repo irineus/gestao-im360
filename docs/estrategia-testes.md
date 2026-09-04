@@ -815,7 +815,7 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `050_trilha_estoque` (as cinco tabelas, a imutabilidade do movimento nas duas camadas, o insert POR TIPO, a guarda de coluna de `aluno_material` e as duas guardas de exclusão) | **6.1** ✅ | 6 |
 | `051_trilha_geracao` (fn_trilha_gerar e as três de edição, as três consultas derivadas, e os dois triggers em `aluno` que a matrícula e a troca de combo disparam) | **6.2** ✅ | 6 |
 | `052_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` — era `050` até o card 6.1 ocupar o número, e `051` até o 6.2 ocupar o seguinte; é o mesmo deslocamento que levou o `040` do card 5.3 a `042`. ⚠️ **Divergência registrada** | **6.3** ✅ | 6 |
-| `060_estoque_compras` | 6.5 | 6 |
+| `060_estoque_compras` (o ciclo do pedido — criar, enviar, receber parcial e total, cancelar —, o excedente como exceção de PERMISSÃO nas duas camadas, as pendências que a chegada da compra fecha e o ajuste que não deixa o saldo negativo) | **6.5** ✅ | 6 |
 | `070_modular` | 7.2 | 7 |
 | `080_projecao` | 8.1 | 8 |
 | `085_rep_virada` | **5.3** ✅ (funções REP entram na mesma migração) — mede o VEREDITO; a seção 6 era o portão da pendência, **disparou em 03/09/2026 (card 5.5)** e virou a asserção estrutural de que as duas funções da virada fecham a pendência, cada uma com o seu sufixo. O comportamento ponta a ponta ficou no `090_rotinas`, que é o arquivo da pendência | 5 |

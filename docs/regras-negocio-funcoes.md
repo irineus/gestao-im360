@@ -783,27 +783,90 @@ função serve decisão dentro de outra função. **Nenhuma das duas cacheia** �
 ✅ **`fn_saldo_material` implementada em 04/09/2026 (card 6.3)**, `stable` e `security invoker`, com
 `coalesce(sum(…), 0)`: soma de conjunto vazio é **nula**, não zero (card 2.3 §3.1), e material
 recém-cadastrado tem de valer 0 — senão `0 <= 0` vira nulo e o passo 6 da entrega não entra em ramo
-nenhum. `fn_ajustar_estoque` e `fn_pedido_receber` continuam sendo do card 6.5.
+nenhum.
 
-### 7.1 Recebimento de pedido
+✅ **`fn_ajustar_estoque` implementada em 04/09/2026 (card 6.5)**, migração
+`20260904210000_pedidos_compra_estoque.sql`, com **uma condição que este documento não previa**:
+recusa (`PT409 / SALDO_INSUFICIENTE`) o ajuste que deixaria o saldo negativo. "Sinal livre" é sobre a
+**direção** do ajuste, não sobre o saldo — saldo negativo reprova o critério (4) do marco 6.9 e é um
+número que ninguém consegue explicar. Também recusa `0` antes de o `check (quantidade <> 0)` chegar
+cru à tela (`QUANTIDADE_INVALIDA`) e material inexistente ou de outra unidade
+(`PT404 / MATERIAL_INEXISTENTE`), e serializa o material com `pg_advisory_xact_lock`.
+
+### 7.1 Ciclo do pedido de compra
+
+✅ **Implementado em 04/09/2026 (card 6.5)**, `20260904210000_pedidos_compra_estoque.sql`. O
+documento previa só o recebimento; o ciclo inteiro do card ("criação, envio e recebimento", mais o
+cancelamento da nota) precisou das outras três, e a tela do card 6.8 (`docs/wireframes.md` §10.2) é a
+consumidora delas.
 
 ```sql
+fn_pedido_criar(p_itens jsonb, p_fornecedor text default null,
+                p_observacao text default null) → uuid
+-- p_itens: [{"material_id": "…", "qtd_pedida": 10}, …]; exige compras.criar E compras.ler
+fn_pedido_enviar(p_pedido_id uuid, p_data_envio date default null) → void   -- compras.editar
+fn_pedido_cancelar(p_pedido_id uuid, p_motivo text) → void                  -- compras.editar
 fn_pedido_receber(p_pedido_id uuid, p_itens jsonb) → integer   -- nº de movimentos ENTRADA criados
 -- p_itens: [{"pedido_item_id": "…", "quantidade": 30}, …]
 ```
 
+- **`fn_pedido_criar`** monta o RASCUNHO e numera `AAAA-NNN` por unidade e ano, serializando com
+  `pg_advisory_xact_lock`. Exige **`compras.ler` além de `compras.criar`** porque o número é derivado
+  da leitura dos pedidos da unidade: sob RLS, quem não lê conta zero e repete um número já usado — a
+  redução silenciosa do card 2.3 §3.4 chegando à tela como `23505`. Recusa lista vazia
+  (`PEDIDO_SEM_ITEM`), material repetido (`MATERIAL_JA_NO_PEDIDO`, no molde do `MATERIAL_JA_NA_TRILHA`
+  do card 6.2), quantidade ≤ 0 (`QUANTIDADE_INVALIDA`) e material inexistente (`MATERIAL_INEXISTENTE`).
+- **`fn_pedido_enviar`** só aceita `RASCUNHO` (`PEDIDO_NAO_ENVIAVEL`) e exige ao menos um item
+  (`PEDIDO_SEM_ITEM`): enviado, o pedido passa a abater a parcela "já pedida" de `v_pedido_sugerido`,
+  e um pedido sem item nunca sairia de `ENVIADO`, porque o status é recalculado a partir dos itens.
+  `data_envio` sai de `fn_hoje()`, nunca do relógio do servidor.
+- **`fn_pedido_cancelar`** exige motivo e recusa `RECEBIDO` e `CANCELADO` (`PEDIDO_NAO_CANCELAVEL`).
+  Pedido **não se apaga** — não há política de `delete` (card 2.4 §3.5) —, e o motivo é acrescentado a
+  `observacao`. `RECEBIDO` não se cancela por uma razão física: as `ENTRADA` já estão no estoque e são
+  imutáveis; o desfazer certo é o estorno delas.
+
+`fn_pedido_receber`, passo a passo:
+
 1. Exige `compras.receber`; pedido em `ENVIADO` ou `PARCIAL` (`PT409 / PEDIDO_NAO_RECEBIVEL`).
+   Serializa o pedido com `pg_advisory_xact_lock` — dois recebimentos parciais simultâneos leem
+   `qtd_recebida` antes de a outra transação escrever, e o total ultrapassa `qtd_pedida` sem que
+   nenhuma das duas tenha visto o excedente. É regra de **agregado**, como o saldo: nenhuma constraint
+   pega.
 2. Por item: `qtd_recebida + quantidade <= qtd_pedida`, salvo `tem_permissao('compras.receber_excedente')`
-   (`PT422 / RECEBIMENTO_EXCEDE_PEDIDO`). Quantidade tem de ser positiva.
+   (`PT422 / RECEBIMENTO_EXCEDE_PEDIDO`). Quantidade tem de ser positiva (`QUANTIDADE_INVALIDA`), e o
+   item tem de ser **daquele** pedido (`ITEM_FORA_DO_PEDIDO`).
 3. Insere `ENTRADA` com `quantidade = +q` e `pedido_item_id` preenchido — o vínculo entre a compra
    e o estoque, que a planilha não tinha.
 4. Atualiza `pedido_item.qtd_recebida` e recalcula o status do pedido:
    todos os itens completos → `RECEBIDO`; algum parcial → `PARCIAL`.
 
+⚠️ **A exceção do passo 2 obrigou a mexer no DDL, e é a decisão mais cara do card.**
+`pedido_item_recebido_ck` (`qtd_recebida <= qtd_pedida`, card 6.1) valia para **todo mundo**: um
+`check` não conhece permissão, então a direção com `compras.receber_excedente` levaria um `23514` cru
+e `RECEBIMENTO_EXCEDE_PEDIDO` seria um código inalcançável. A constraint foi **removida** e a regra
+virou `tg_pedido_item_recebimento`, que recusa com o código do catálogo e distingue quem pode. Ver
+`docs/modelagem-dados-ddl.md` §10.
+
 | Objeto | Momento | Faz |
 |---|---|---|
-| `tg_movimento_estorno_sinal` | `before insert on movimento_estoque` (só `ESTORNO`) | o estorno tem de ter **sinal oposto e mesma magnitude** do movimento em `estorno_de_id`. ENTRADA > 0, SAIDA < 0, `quantidade <> 0` e "ESTORNO ⟺ `estorno_de_id`" **já são `check` no DDL** (`movimento_sinal_ck`, `movimento_estorno_ck`) — o trigger só cobre o que depende da outra linha |
-| `tg_movimento_resolve_pendencia` | `after insert on movimento_estoque` (ENTRADA/AJUSTE positivo) | se o saldo do material voltou a ser > 0, resolve `ESTOQUE_ZERO` e `COMPRA_SEM_ESTOQUE` daquele material |
+| `tg_movimento_valida_sinal` | `before insert on movimento_estoque` (só `ESTORNO` **com origem**) | o estorno tem de ter **sinal oposto, mesma magnitude, mesmo material e mesma unidade** do movimento em `estorno_de_id`. ENTRADA > 0, SAIDA < 0, `quantidade <> 0` e "ESTORNO ⟺ `estorno_de_id`" **já são `check` no DDL** (`movimento_sinal_ck`, `movimento_estorno_ck`) — o trigger só cobre o que depende da outra linha, e o `when` exige `estorno_de_id not null` para não roubar a mensagem da camada 1 |
+| `tg_movimento_resolve_pendencia` | `after insert on movimento_estoque` (**todo movimento positivo**) | se o saldo do material voltou a ser > 0, resolve `ESTOQUE_ZERO` daquele material e `COMPRA_SEM_ESTOQUE` de cada aluno que ainda deve receber essa apostila |
+
+⚠️ **Duas divergências registradas neste segundo trigger (card 6.5).** (a) O nome era
+`tg_movimento_estorno_sinal` neste parágrafo e `tg_movimento_valida_sinal` no §13 e no portão do teste
+`050`; venceu o do portão. (b) O gatilho era "ENTRADA/AJUSTE positivo" e passou a ser **todo
+movimento positivo**: a condição que importa é a que a coluna ao lado já dizia — "se o saldo voltou a
+ser > 0" —, e o `ESTORNO` de uma `SAIDA` devolve exemplar à prateleira exatamente como uma `ENTRADA`.
+Deixá-lo de fora manteria a pendência aberta com o material disponível, que é o mal que o trigger
+existe para impedir. `AJUSTE` negativo segue de fora, porque não repõe nada.
+
+⚠️ **`COMPRA_SEM_ESTOQUE` é dedupada por ALUNO** (`COMPRA_SEM_ESTOQUE:<aluno>`, card 6.3), não por
+material, então o trigger só a fecha para o aluno que **ainda deve aquela apostila** — pelo vínculo
+com `aluno_material` pendente. Sem esse vínculo, uma entrada de INGLÊS fecharia a pendência de um
+aluno de INTERATIVO: pendência fechada sem o problema ter sumido é pior do que pendência aberta.
+O trigger é **`security definer`** com filtro de unidade no corpo, pela razão de
+`fn_revalidar_blocos_sala` (card 5.4): quem recebe compra pode não ter `pendencias.ler` nem
+`alunos.ler`, e a RLS nega linha em vez de devolver erro.
 
 O segundo trigger fecha o ciclo aberto em §6.2: a apostila que faltou gerou pendência; a chegada
 do pedido a resolve sozinha, sem ninguém precisar lembrar de limpar a lista.
@@ -976,7 +1039,17 @@ lista nunca acumula item que já deixou de ser verdade.
 | `MOVIMENTO_JA_ESTORNADO` / `MOVIMENTO_NAO_ESTORNAVEL` | 409 | `fn_estornar_entrega` |
 | `MOVIMENTO_INEXISTENTE` | 404 | `fn_estornar_entrega` (card 6.3) — vale também para movimento de outra unidade, pelo precedente de `PC_INEXISTENTE`; sem ele, "não existe" chegaria à tela como "não pode ser estornado" |
 | `PEDIDO_NAO_RECEBIVEL` | 409 | `fn_pedido_receber` |
-| `RECEBIMENTO_EXCEDE_PEDIDO` | 422 | `fn_pedido_receber` |
+| `RECEBIMENTO_EXCEDE_PEDIDO` | 422 | `fn_pedido_receber` **e** `tg_pedido_item_recebimento` (card 6.5) — a mesma frase nas duas camadas |
+| `PEDIDO_INEXISTENTE` | 404 | `fn_pedido_enviar` / `_cancelar` / `_receber` (card 6.5) — vale também para pedido de outra unidade |
+| `MATERIAL_INEXISTENTE` | 404 | `fn_pedido_criar`, `fn_ajustar_estoque` (card 6.5) — idem |
+| `PEDIDO_NAO_ENVIAVEL` | 409 | `fn_pedido_enviar` (card 6.5) — só `RASCUNHO` se envia |
+| `PEDIDO_NAO_CANCELAVEL` | 409 | `fn_pedido_cancelar` (card 6.5) — `RECEBIDO` se corrige por estorno |
+| `PEDIDO_SEM_ITEM` | 422 | `fn_pedido_criar`, `fn_pedido_enviar`, `fn_pedido_receber` (card 6.5) |
+| `MATERIAL_JA_NO_PEDIDO` | 409 | `fn_pedido_criar` (card 6.5) — senão a `pedido_item_uk` chega crua à tela |
+| `ITEM_FORA_DO_PEDIDO` | 422 | `fn_pedido_receber` (card 6.5) |
+| `QUANTIDADE_INVALIDA` | 422 | `fn_pedido_criar`, `fn_pedido_receber`, `fn_ajustar_estoque` (card 6.5) |
+| `ESTORNO_SINAL_INVALIDO` | 422 | `tg_movimento_valida_sinal` (card 6.5) — camada 2 do estorno |
+| `SALDO_INSUFICIENTE` | 409 | `fn_ajustar_estoque` (card 6.5) — "sinal livre" não é "saldo livre" |
 | `PARAMETRO_AUSENTE` | 422 | `fn_param_int` / `fn_param_txt` |
 | `BLOCO_INEXISTENTE` | 404 | `tg_bloco_aluno_admissao`, `tg_reposicao_admissao`, `fn_bloco_admitir`, `fn_reposicao_agendar` (card 5.3) |
 | `ALOCACAO_INEXISTENTE` | 404 | `fn_bloco_remover` (card 5.3) |
@@ -1011,7 +1084,7 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | `fn_pendencia_abrir/resolver/resolver_id`, `fn_pendencias_fechar_ausentes`, `rt_pendencias_diaria`, `rt_diaria` e o job `pg_cron` | 5.5 ✅ |
 | `fn_trilha_gerar`, `fn_trilha_proximo_material`, edição da trilha, `tg_aluno_trilha_inicial`, `tg_aluno_combo_alterado` | 6.2 ✅ |
 | `tp_entrega_resultado`, `fn_registrar_entrega`, `fn_estornar_entrega`, `fn_saldo_material`, mais `fn_contexto_entrega` e `fn_trilha_reposicionar` (as duas nasceram da decisão do card — ver §6.2) | 6.3 ✅ |
-| `fn_pedido_receber`, `fn_ajustar_estoque`, `tg_movimento_valida_sinal`, `tg_movimento_resolve_pendencia` | 6.5 |
+| `fn_pedido_criar`, `fn_pedido_enviar`, `fn_pedido_cancelar`, `fn_pedido_receber`, `fn_ajustar_estoque`, `tg_movimento_valida_sinal`, `tg_movimento_resolve_pendencia`, `tg_pedido_item_recebimento` | 6.5 ✅ |
 | Funções Modular | 7.2 |
 | `rt_projecao_demanda` | 8.1 |
 | `fn_certificado_*`, `tg_certificado_*` | 8.3 |

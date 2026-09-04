@@ -875,6 +875,12 @@ que se resolve em silêncio volta como defeito na revisão seguinte.
 | 12 | **Compras (tela 7) ainda não existe**, e o §14.3 manda os três tipos de estoque para lá | Vão para **Materiais** com `?material=<id>`. Quando o card 6.8 nascer, muda uma linha em `rotaDaAcao` |
 | 13 | **Abas Trilha e Certificado** ainda não existem (cards 6.6 e 8.6), e o §14.3 manda pendências para elas | A ficha abre nelas assim mesmo: a aba está no lugar e diz qual card a entrega. Destino certo com conteúdo por vir é honesto; mandar para Dados seria mandar para o lugar errado |
 
+### Divergência do card 6.5 (04/09/2026)
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 14 | **`[Criar pedido…]` (§10.1) é guardado por `compras.criar`** | `fn_pedido_criar` exige **`compras.criar` E `compras.ler`**. O número do pedido é derivado da leitura dos pedidos da unidade: sob RLS, quem não lê conta zero e repete um número já usado — a redução silenciosa do `views-leitura.md` §3.4 chegando à tela como `23505` cru. Exigir explicitamente troca isso por `SEM_PERMISSAO`, que é uma frase que se entende. Na matriz inicial ninguém tem `compras.criar` sem `compras.ler`, então **a tela não muda**; muda o modo de falha. É a mesma regra que o card 2.4 (g) já aplica às rotas: guardar pelo conjunto mínimo que faz a tela mostrar número certo, não pela permissão óbvia |
+
 Nenhum ajuste bloqueante em documento anterior: este card consome os contratos fechados e não
 precisou corrigi-los.
 

@@ -351,7 +351,8 @@ select e.unidade_id,
          on di.unidade_id = e.unidade_id and di.material_id = e.material_id
   left join (
          select pi.unidade_id, pi.material_id,
-                sum(pi.qtd_pedida - pi.qtd_recebida)::integer as qtd_pendente
+                -- piso zero POR ITEM (card 6.5) — ver o item novo abaixo
+                sum(greatest(pi.qtd_pedida - pi.qtd_recebida, 0))::integer as qtd_pendente
            from public.pedido_item pi
            join public.pedido_compra pc on pc.id = pi.pedido_id
           where pc.status in ('ENVIADO','PARCIAL')
@@ -367,6 +368,13 @@ select e.unidade_id,
   linha continua, com as parcelas visíveis (§2.3).
 - Quantidade pendente é `qtd_pedida − qtd_recebida` do item, não do pedido: recebimento parcial é a
   regra, não a exceção.
+- ⚠️ **`greatest(…, 0)` TAMBÉM POR ITEM (card 6.5, 04/09/2026).** Enquanto `qtd_recebida` não podia
+  passar de `qtd_pedida`, a parcela por item nunca era negativa e o piso do total bastava. O card 6.5
+  tornou o recebimento com excedente possível — é o que `compras.receber_excedente` significa —, e a
+  partir daí um item com 11 de 10 recebidos entra na soma como **−1**. O piso do total não alcança
+  isso: ele age sobre a soma, e o −1 já teria abatido a necessidade de **outro material do mesmo
+  pedido**, com todas as parcelas parecendo plausíveis ao lado. O teste `060_estoque_compras` mede o
+  caso, e a contraprova (view sem o piso por item) o vê **vermelho** com `−1`.
 
 ### 6.2 Por que a coluna `qtd_projetada` já nasce como `0`
 

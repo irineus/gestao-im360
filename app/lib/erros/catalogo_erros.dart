@@ -3,8 +3,9 @@
 /// Fonte dos textos: docs/design-system.md §7.1 (card 2.7), mais `PC_INEXISTENTE`
 /// (card 2.9), os três do card 3.5, `ALUNO_INEXISTENTE` (card 4.2),
 /// `PC_COM_HISTORICO` (card 4.3), `BLOCO_COM_ALOCACAO` (card 5.1), os três do
-/// card 6.1 (trilha e estoque), `MATERIAL_JA_NA_TRILHA` (card 6.2) e
-/// `MOVIMENTO_INEXISTENTE` (card 6.3). O contrato do conjunto é
+/// card 6.1 (trilha e estoque), `MATERIAL_JA_NA_TRILHA` (card 6.2),
+/// `MOVIMENTO_INEXISTENTE` (card 6.3) e os dez do card 6.5 (pedidos de compra,
+/// recebimento e ajuste de estoque). O contrato do conjunto é
 /// `test/fixtures/codigos_erro.txt`, na raiz do repositório.
 ///
 /// O app trata SEMPRE pelo código, nunca pelo texto do banco (card 2.2 §1.2):
@@ -146,6 +147,32 @@ abstract final class CatalogoErros {
     // PC_INEXISTENTE. Não se confunde com MOVIMENTO_NAO_ESTORNAVEL: aquele fala
     // de um movimento que existe e é do tipo errado (ENTRADA, AJUSTE, ESTORNO).
     'MOVIMENTO_INEXISTENTE': 'Este movimento de estoque não foi encontrado.',
+
+    // --- card 6.5 (pedidos de compra, recebimento e ajuste de estoque)
+    // Os dois primeiros valem também para pedido e material de OUTRA unidade,
+    // pela mesma razão do PC_INEXISTENTE: quem não pode ver não descobre que
+    // existe.
+    'PEDIDO_INEXISTENTE': 'Este pedido de compra não foi encontrado.',
+    'MATERIAL_INEXISTENTE': 'Esta apostila não foi encontrada.',
+    // Três estados, três frases: reaproveitar PEDIDO_NAO_RECEBIVEL nos outros
+    // dois mandaria a pessoa procurar o problema no lugar errado.
+    'PEDIDO_NAO_ENVIAVEL':
+        'Só pedido em rascunho pode ser enviado. Este já saiu do rascunho.',
+    'PEDIDO_NAO_CANCELAVEL':
+        'Este pedido não pode ser cancelado. Pedido já recebido se corrige '
+        'estornando as entradas de estoque.',
+    'PEDIDO_SEM_ITEM': 'Informe ao menos um item para o pedido.',
+    'MATERIAL_JA_NO_PEDIDO':
+        'O mesmo material aparece mais de uma vez no pedido. Some as '
+        'quantidades numa linha só.',
+    'ITEM_FORA_DO_PEDIDO':
+        'Este item não pertence ao pedido que está sendo recebido.',
+    'QUANTIDADE_INVALIDA': 'Informe uma quantidade válida.',
+    'ESTORNO_SINAL_INVALIDO':
+        'O estorno tem de devolver exatamente o que o movimento original '
+        'movimentou.',
+    'SALDO_INSUFICIENTE':
+        'O ajuste deixaria o estoque negativo. Confira a contagem.',
 
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':
