@@ -750,7 +750,7 @@ aberta. Formato sugerido: `'<TIPO>:<id_da_referencia>'`.
 | §8 (físico) | `sala`, `pc`, `pc_manutencao`, `professor` | 4.3 |
 | §8 (turmas) | `bloco_horario`, `bloco_aluno`, `bloco_aluno_reposicao` | 5.1 |
 | §10 (pendência) | `pendencia` + rotina | 5.5 ✅ — criada em 03/09/2026 com os **quinze** tipos no `check` (os oito daqui mais os sete do ajuste 2 do §14 do card 2.2), mais `pendencia_severidade_ix` |
-| §7 (trilha), §10 (estoque) | `aluno_material`, `aluno_material_hist`, `movimento_estoque`, `pedido_compra`, `pedido_item` | 6.1 |
+| §7 (trilha), §10 (estoque) | `aluno_material`, `aluno_material_hist`, `movimento_estoque`, `pedido_compra`, `pedido_item` | 6.1 ✅ — criadas em 04/09/2026 com as **quinze** políticas do card 2.4 §4 (o `insert` de `movimento_estoque` é POR TIPO), `tg_movimento_imutavel`, a guarda de coluna de `aluno_material`, as duas guardas de exclusão (`ITEM_JA_ENTREGUE`, `PEDIDO_NAO_RASCUNHO`) e o trigger de coerência de método da pendência 9.11 |
 | §9 | `turma_modular`, `turma_modular_modulo`, `turma_modular_aluno` | 7.1 |
 | §10 (certificado) | `certificado_checklist` | 8.3 |
 

@@ -56,3 +56,10 @@ REPOSICAO_NAO_PREVISTA
 PENDENCIA_INEXISTENTE
 PENDENCIA_JA_RESOLVIDA
 RESOLUCAO_INVALIDA
+# 3 do card 6.1 (trilha e estoque)
+# COMPOSICAO_METODO_DIVERGENTE fecha a pendencia 9.11 e e codigo NOVO de
+# proposito: METODO_INCOMPATIVEL ja existe e diz "o metodo do aluno nao e o
+# metodo desta turma", que aqui seria falso em toda palavra.
+COMPOSICAO_METODO_DIVERGENTE
+PEDIDO_NAO_RASCUNHO
+MOVIMENTO_IMUTAVEL

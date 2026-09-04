@@ -212,7 +212,8 @@ A saída é declarar cada camada com a **condição que a torna devida**, em `te
 | `alunos` | 4.2 | existir `public.aluno` |
 | `infra_fisica` | 4.3 | existir `public.pc` |
 | `turmas` | 5.1 | existir `public.bloco_aluno` |
-| `trilha_estoque` | 6.1 | existir `public.movimento_estoque` |
+| `trilha_estoque` | 6.1 | ✅ aplicada (trilha dos alunos derivada do combo, três pedidos — um por estado que muda alguma conta — e os movimentos que produzem os saldos 0/0/1/n/n/n; João Pedro fica em FIM) |
+| `modular` | 7.1 | existir `public.turma_modular_aluno` |
 
 `001_infra_teste.sql` reprova a suíte quando uma camada devida continua sem ser escrita — ou seja, o
 card 4.1 **não fecha verde** sem trazer a camada de catálogo junto. E o próprio portão tem asserção
@@ -796,7 +797,7 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 
 | Suíte / arquivo | Card que cria | Fase |
 |---|---|---|
-| `seed.sql` (pgTAP, schema `tests`, helpers, escola-fixture) | 3.3 (bootstrap) → **3.4.5** (helpers e camada `acesso`) → cresce em 3.6, 4.1, 4.2, 4.3, 5.1 e 6.1 | 3+ |
+| `seed.sql` (pgTAP, schema `tests`, helpers, escola-fixture) | 3.3 (bootstrap) → **3.4.5** (helpers e camada `acesso`) → cresceu em 3.6, 4.1, 4.2, 4.3, 5.1 e **6.1** ✅ → cresce em 7.1 (camada `modular`, declarada pelo 6.1 para o portão do `001` continuar com uma sentinela) | 3+ |
 | `001_infra_teste` (helpers, fixture e o portão das camadas) | **3.4.5** | 3 |
 | `010_catalogo_rls`, `011_catalogo_convencoes` | 3.3 (nasce) → cresce em toda migração | 3+ |
 | `012_catalogo_contratos` (C10, C11, C12, C13) | 3.6 (precisa do seed de permissões) | 3 |
@@ -811,7 +812,8 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `041_capacidade_vagas` (a fórmula da capacidade, as duas metades do REP na ocupação, e a prova de que o número não depende do que o leitor enxerga) | **5.2** | 5 |
 | `042_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` — era `040` até o card 5.1 ocupar o número, e `041` até o 5.2 ocupar o seguinte | **5.3** ✅ | 5 |
 | `043_bloco_alunos` (`v_bloco_alunos` e `fn_bloco_alunos`: a lista soma o que o cabeçalho diz, a reposição aparece na data dela com o bloco de origem, bloco desativado passa a abrir `ALUNO_SEM_TURMA`, e falta de permissão vira erro em vez de lista vazia) | **5.7** ✅ | 5 |
-| `050_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` | 6.3 | 6 |
+| `050_trilha_estoque` (as cinco tabelas, a imutabilidade do movimento nas duas camadas, o insert POR TIPO, a guarda de coluna de `aluno_material` e as duas guardas de exclusão) | **6.1** ✅ | 6 |
+| `051_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` — era `050` até o card 6.1 ocupar o número, exatamente como o `040` do 5.3 virou `042`. ⚠️ **Divergência registrada** | 6.3 | 6 |
 | `060_estoque_compras` | 6.5 | 6 |
 | `070_modular` | 7.2 | 7 |
 | `080_projecao` | 8.1 | 8 |

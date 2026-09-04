@@ -25,7 +25,7 @@
 -- =============================================================================
 
 begin;
-select plan(23);
+select plan(27);
 
 -- ===========================================================================
 -- 1. Os três métodos — configuração, não catálogo de planilha
@@ -274,6 +274,76 @@ select lives_ok(
       from public.metodo m
      where m.unidade_id = public.fn_unidade_atual() and m.codigo = 'INTERATIVO'$$,
   'a secretaria tem materiais.criar e cadastra material — a contraprova do negativo acima');
+
+reset role;
+select tests.encerrar_sessao();
+
+-- ===========================================================================
+-- 7. Coerência de método na composição (pendência 9.11, fechada no card 6.1)
+-- ===========================================================================
+-- ⚠️ Esta seção nasceu em 04/09/2026, com o card **6.1**, e a nota daquele card
+--    a manda para cá de propósito: as três tabelas são deste arquivo, e o
+--    trigger é que veio depois.
+--
+-- O buraco que ela fecha: nada no banco impedia `curso_material`, `modulo` e
+-- `combo_curso` de CRUZAREM métodos. A tela do card 4.4 filtra os candidatos
+-- pelo método do pai, mas **tela não é regra** (card 2.6, decisão 2) e um `POST`
+-- direto no PostgREST passava. O resultado não seria um erro: seria uma trilha
+-- coerente para o banco e absurda para a escola — o aluno de Informática com
+-- English Book 2 como próximo livro, `METODO_INCOMPATIVEL` nunca disparando
+-- (ele compara o método do ALUNO com o da TURMA) e a projeção do card 8.1
+-- pedindo a compra da apostila errada, cada peça funcionando como escrita.
+select is(
+  tests.codigo_do_erro(
+    $$insert into public.curso_material (unidade_id, curso_id, material_id, ordem)
+      select public.fn_unidade_atual(), c.id, m.id, 9
+        from public.curso c, public.material m, public.metodo mi
+       where c.unidade_id = public.fn_unidade_atual() and c.nome = 'Informática Essencial'
+         and mi.unidade_id = public.fn_unidade_atual() and mi.codigo = 'INGLES'
+         and m.unidade_id = public.fn_unidade_atual() and m.metodo_id = mi.id
+         and m.codigo = '02'$$,
+    tests.uid('direcao@escola-a.test')),
+  'COMPOSICAO_METODO_DIVERGENTE',
+  'apostila de Ingles na sequencia de um curso Interativo e recusada');
+
+select is(
+  tests.codigo_do_erro(
+    $$insert into public.modulo (unidade_id, curso_id, material_id, nome, ordem)
+      select public.fn_unidade_atual(), c.id, m.id, 'Modulo fora do metodo', 9
+        from public.curso c, public.material m, public.metodo mi
+       where c.unidade_id = public.fn_unidade_atual() and c.nome = 'Informática Essencial'
+         and mi.unidade_id = public.fn_unidade_atual() and mi.codigo = 'MODULAR'
+         and m.unidade_id = public.fn_unidade_atual() and m.metodo_id = mi.id
+         and m.codigo = '01'$$,
+    tests.uid('direcao@escola-a.test')),
+  'COMPOSICAO_METODO_DIVERGENTE',
+  'modulo apontando para material de outro metodo tambem e recusado');
+
+select is(
+  tests.codigo_do_erro(
+    $$insert into public.combo_curso (unidade_id, combo_id, curso_id, ordem)
+      select public.fn_unidade_atual(), cb.id, c.id, 9
+        from public.combo cb, public.curso c
+       where cb.unidade_id = public.fn_unidade_atual() and cb.nome = 'Informática Completo'
+         and c.unidade_id = public.fn_unidade_atual() and c.nome = 'Inglês Kids'$$,
+    tests.uid('direcao@escola-a.test')),
+  'COMPOSICAO_METODO_DIVERGENTE',
+  'curso de Ingles dentro de um combo Interativo e recusado');
+
+-- CONTRAPROVA, e sem ela as três acima passariam com um trigger que recusa
+-- TUDO: a composição coerente continua entrando. É a mesma exigência que o §13
+-- faz a todo negativo — um insert que falha para todo mundo prova coisa nenhuma.
+select tests.autenticar(tests.uid('direcao@escola-a.test'));
+
+select lives_ok(
+  $$insert into public.curso_material (unidade_id, curso_id, material_id, ordem)
+    select public.fn_unidade_atual(), c.id, m.id, 9
+      from public.curso c, public.material m, public.metodo mi
+     where c.unidade_id = public.fn_unidade_atual() and c.nome = 'Informática Avançada'
+       and mi.unidade_id = public.fn_unidade_atual() and mi.codigo = 'INTERATIVO'
+       and m.unidade_id = public.fn_unidade_atual() and m.metodo_id = mi.id
+       and m.codigo = '01'$$,
+  'a composicao do MESMO metodo continua entrando — a guarda nao fecha a porta inteira');
 
 reset role;
 select tests.encerrar_sessao();
