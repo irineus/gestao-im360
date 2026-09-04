@@ -412,6 +412,14 @@ function EstadoJanela {
         if ($null -eq $uso) { $uso = 0 }
         $reset = if ($j.resetsAt) { [DateTimeOffset]::FromUnixTimeSeconds([long]$j.resetsAt).LocalDateTime } else { $null }
         $lidoEm = if ($j.lidoEm) { [datetime]$j.lidoEm } else { $null }
+
+        # ⚠️ Leitura cujo reset JÁ PASSOU não é velha, é INVÁLIDA: aquela
+        # utilização pertence a um ciclo que não existe mais, e o ciclo novo
+        # começa perto de zero. Devolver $null faz o driver dizer "sem leitura
+        # ainda" e seguir — em vez de anunciar um "não cabe" com o número do
+        # ciclo anterior, que é o tipo de mensagem que ensina a ignorar o aviso.
+        if ($reset -and $reset -lt (Get-Date)) { return $null }
+
         return @{ uso = [double]$uso; reset = $reset; status = $j.status; lidoEm = $lidoEm }
     } catch { return $null }
 }
