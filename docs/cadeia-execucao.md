@@ -174,10 +174,36 @@ anuncia a conta:
 A estimativa sai do **histórico próprio** (`cadeia.jsonl` guarda `janelaGasta` e `minutos` por card);
 enquanto não houver duas medidas, usa o padrão da corrida de 04/09/2026 (~11% e ~31 min).
 
-Não cabendo, o driver **espera em passos de 10 minutos** e recalcula. A conta é feita **antes** de
-abrir o card, nunca no meio: sessão que morre pela metade deixa branch criada, arquivos escritos e
-talvez PR aberto, e retomar isso automaticamente é adivinhação — parar antes de começar é
-determinístico.
+A conta é feita **antes** de abrir o card, nunca no meio: sessão que morre pela metade deixa branch
+criada, arquivos escritos e talvez PR aberto, e retomar isso automaticamente é adivinhação — parar
+antes de começar é determinístico.
+
+### A regra é de AUTONOMIA, não de "cabe inteiro"
+
+A primeira versão trancava quando `uso + estimativa > teto`, e isso **desperdiçava a sobra**: com a
+janela em 72% e um card de 29%, ela esperava e deixava 20 pontos morrerem no reset.
+
+Mas o card **não precisa caber inteiro na janela atual** — precisa apenas aguentar **até o reset**, e
+daí em diante corre no ciclo novo. Não é hipótese: o card 5.7 da primeira corrida atravessou um reset
+(a janela foi de 66% para 5% no meio dele) e terminou normalmente.
+
+A estimativa dá pontos **por minuto** (janela ÷ minutos). A sobra dividida por essa taxa é a
+**autonomia** — quantos minutos o card corre antes de encostar no teto:
+
+| Janela | Sobra | Autonomia | Reset em | Decisão |
+|---|---|---|---|---|
+| 50% | 42 pts | — | 30 min | cabe inteiro |
+| 72% | 20 pts | 24 min | 18 min | **cabe até o reset** |
+| 72% | 20 pts | 24 min | 60 min | espera |
+| 85% | 7 pts | 8 min | 5 min | cabe até o reset |
+| 91% | 1 pt | 1 min | 15 min | espera |
+
+⚠️ **A conta assume consumo linear, e não é.** Um card gasta mais escrevendo e testando do que lendo
+documento; gastando rápido no começo, pode encostar no teto antes dos minutos calculados. O teto de
+92% é a margem que cobre isso, e ela ficou mais magra do que era com a regra grosseira. A taxa,
+ainda por cima, vem de uma média de cards que variaram de **11% a 60%** — um fora da curva desmente a
+conta. Nas primeiras corridas com esta regra, `-TetoJanela 0.88` compra margem até haver medida de
+quanto a linearidade erra.
 
 ⚠️ **O caminho "a CLI recusou" não foi exercitado.** As três leituras observadas trouxeram o mesmo
 `resetsAt`, o que indica janela **fixa**; nesse caso o laço de 10 minutos apenas dorme até o reset. Se

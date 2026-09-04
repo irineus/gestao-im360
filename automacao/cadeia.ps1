@@ -234,16 +234,48 @@ function PreVoo {
     # da busca. A chamada tinha funcionado — a sonda e que reprovou por causa do
     # formato. Sonda que reprova quando o sistema esta bom ensina a ignorar
     # vermelho, que e o pior defeito que uma checagem pode ter.
+    # ⚠️ A ferramenta e NOMEADA, e nao descrita. Pedindo "a ferramenta de busca
+    # do Notion", a sessao escolheu `notion-ai-search` — que exige plano
+    # Business e devolve upsell —, e a sonda reprovou com o MCP funcionando
+    # perfeitamente (medido em 04/09/2026). Sonda que reprova com o sistema bom
+    # ensina a ignorar vermelho, e esta ja tinha caido nisso duas vezes.
+    #
+    # A consulta escolhida e a MESMA que a skill `proxima-tarefa` faz primeiro:
+    # exercita o caminho de verdade e devolve um numero, nao uma pagina.
     $perg = 'RESPONDA COM UMA UNICA PALAVRA E NADA MAIS. ' +
-            'Chame a ferramenta de busca do Notion procurando por "Roadmap de Construcao". ' +
-            'Se a chamada responder, sua resposta inteira e exatamente: PRONTO. ' +
+            'Use a ferramenta mcp__claude_ai_Notion__notion-query-data-sources (modo sql) para rodar ' +
+            'SELECT count(*) FROM "collection://e50abe7f-1688-402a-96b5-c6049b24ce82". ' +
+            'NAO use notion-ai-search nem notion-search. ' +
+            'Se a consulta responder, sua resposta inteira e exatamente: PRONTO. ' +
             'Se for negada ou falhar, sua resposta inteira e exatamente: NEGADO. ' +
-            'Nao escreva tabelas, listas, explicacoes, nem os resultados da busca.'
+            'Nao escreva tabelas, listas, explicacoes, nem o resultado da consulta.'
+
+    # ⚠️ A sonda passa PELO EXECUTOR, e não pelo `claude` direto, por um motivo
+    # que não é organização de código: o executor é quem grava o `limite.json`.
+    # Chamando o `claude` direto, o pré-voo abria uma sessão, VIA o estado da
+    # janela e o jogava fora — e o primeiro card decidia o orçamento com a
+    # leitura do fim da corrida anterior, que podia ser de horas antes. Foi o que
+    # Irineu viu em 04/09/2026: "janela em 91%" com o painel marcando 96%.
+    #
+    # Com a decisão passando a ser fina (autonomia contra tempo até o reset),
+    # número velho deixa de ser incômodo e vira erro de conta.
+    $exeClaude = ResolverExecutavelClaude
+    if (-not (Test-Path $DirLogs)) { New-Item -ItemType Directory -Path $DirLogs -Force | Out-Null }
+    $arqPergunta = Join-Path $DirLogs 'sonda-prompt.md'
+    $arqSondaLog = Join-Path $DirLogs 'sonda.log'
+    $arqSondaCru = Join-Path $DirLogs 'sonda.jsonl'
+    Set-Content -Path $arqPergunta -Value $perg -Encoding UTF8
+    Remove-Item $arqSondaLog, $arqSondaCru -Force -ErrorAction SilentlyContinue
 
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $sonda = (& claude -p $perg --permission-mode acceptEdits --allowedTools @FerramentasPermitidas 2>&1 | Out-String)
+        if ($exeClaude -and (Test-Path $ExecutorSessao)) {
+            $sonda = (& node $ExecutorSessao $exeClaude $arqPergunta $arqSondaLog $arqSondaCru $ArqLimite `
+                             @FerramentasPermitidas 2>&1 | Out-String)
+        } else {
+            $sonda = 'falhou: sem executável do claude ou sem o executor de sessão'
+        }
     } catch {
         $sonda = "falhou: $($_.Exception.Message)"
     } finally { $ErrorActionPreference = $eap }
@@ -434,25 +466,56 @@ function CabeNaJanela($indice) {
         return $true
     }
 
-    $sobra = 1.0 - $e.uso
-    $ateReset = if ($e.reset) { [int]([Math]::Max(0, ($e.reset - (Get-Date)).TotalMinutes)) } else { $null }
-    $projetado = $e.uso + $m.janela
+    $sobra = [Math]::Max(0, $TetoJanela - $e.uso)
+    $ateReset = if ($e.reset) { ($e.reset - (Get-Date)).TotalMinutes } else { $null }
+    $idade = if ($e.lidoEm) { [int]((Get-Date) - $e.lidoEm).TotalMinutes } else { $null }
+    $nota = if ($null -ne $idade -and $idade -gt 5) { " · leitura de $idade min atrás" } else { '' }
 
-    $txtReset = if ($null -ne $ateReset) { "reset em {0} min" -f $ateReset } else { 'reset desconhecido' }
-    Escrever ("  orçamento: janela em {0:P0}, sobra {1:P0}, {2}; card estimado em {3:P0} / {4:N0} min ({5})" -f `
-              $e.uso, $sobra, $txtReset, $m.janela, $m.minutos, $m.base) 'DarkGray'
+    $txtReset = if ($null -ne $ateReset) { "reset em {0:N0} min" -f $ateReset } else { 'reset desconhecido' }
+    Escrever ("  orçamento: janela em {0:P0}, sobra {1:P0} até o teto, {2}{3}" -f `
+              $e.uso, $sobra, $txtReset, $nota) 'DarkGray'
+    Escrever ("             card estimado em {0:P0} / {1:N0} min ({2})" -f $m.janela, $m.minutos, $m.base) 'DarkGray'
 
-    if ($projetado -le $TetoJanela) {
-        Escrever ("  ✓ cabe: projeção {0:P0} contra teto de {1:P0}" -f $projetado, $TetoJanela) 'DarkGray'
+    # Caso simples: o card inteiro cabe no que resta. Nem precisa da autonomia.
+    if (($e.uso + $m.janela) -le $TetoJanela) {
+        Escrever ("  ✓ cabe inteiro: projeção {0:P0} contra teto de {1:P0}" -f ($e.uso + $m.janela), $TetoJanela) 'DarkGray'
         return $true
     }
 
-    # ⚠️ A leitura pode estar VELHA: ela vem do fim da última sessão, e a janela
-    # é da conta inteira — qualquer outro uso do Claude a move sem o driver ver.
-    # Dizer isso aqui evita que o número seja lido como medida do instante.
-    $idade = if ($e.lidoEm) { [int]((Get-Date) - $e.lidoEm).TotalMinutes } else { $null }
-    $nota = if ($null -ne $idade -and $idade -gt 5) { " (leitura de $idade min atrás; a janela é da conta e pode ter subido)" } else { '' }
-    Escrever ("  ⏸ não cabe: projeção {0:P0} passaria do teto de {1:P0}.{2}" -f $projetado, $TetoJanela, $nota) 'Yellow'
+    # ---------------------------------------------------------------------
+    # AUTONOMIA — a regra que substituiu "não cabe inteiro, então tranca".
+    #
+    # Aquela regra desperdiçava a sobra: com a janela em 72% e um card de 29%,
+    # ela trancava e deixava 20 pontos morrerem no reset. Mas o card NÃO PRECISA
+    # caber inteiro na janela atual — precisa apenas AGUENTAR ATÉ O RESET, e daí
+    # em diante corre no ciclo novo.
+    #
+    # Não é hipótese: o card 5.7 da primeira corrida atravessou um reset (a
+    # janela foi de 66% para 5% no meio dele) e terminou normalmente.
+    #
+    # A conta: a estimativa dá pontos POR MINUTO (janela ÷ minutos). A sobra
+    # dividida por essa taxa é quantos minutos o card corre antes de encostar no
+    # teto — a autonomia. Se o reset chegar ANTES disso, pode começar.
+    # ---------------------------------------------------------------------
+    if ($null -eq $ateReset -or $m.minutos -le 0) {
+        Escrever '  ⏸ não cabe, e sem reset conhecido para calcular autonomia.' 'Yellow'
+        return $false
+    }
+
+    $taxa = $m.janela / $m.minutos              # pontos de janela por minuto
+    $autonomia = if ($taxa -gt 0) { $sobra / $taxa } else { [double]::PositiveInfinity }
+
+    Escrever ("             autonomia: {0:P0} de sobra ÷ {1:P2}/min = {2:N0} min até o teto" -f `
+              $sobra, $taxa, $autonomia) 'DarkGray'
+
+    if ($autonomia -ge $ateReset) {
+        Escrever ("  ✓ cabe até o reset: a janela reinicia em {0:N0} min, antes dos {1:N0} min de autonomia" -f `
+                  $ateReset, $autonomia) 'DarkGray'
+        return $true
+    }
+
+    Escrever ("  ⏸ não cabe: a autonomia de {0:N0} min acaba antes do reset ({1:N0} min) — a sessão morreria no meio.{2}" -f `
+              $autonomia, $ateReset, $(if ($nota) { ' A janela é da conta e pode ter subido desde a leitura.' } else { '' })) 'Yellow'
     return $false
 }
 

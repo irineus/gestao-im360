@@ -42,6 +42,10 @@ as ferramentas nativas `Read`, `Grep` e `Glob`, que não passam por shell nenhum
    sessão consultou primeiro, escreveu `Nome` numa coluna que se chama `Tarefa`, levou
    `validation_error` e só então carregou a skill — que avisa disso com todas as letras. Três turnos
    para descobrir o que estava escrito.
+
+   ⚠️ **Não use `notion-ai-search`.** Ela exige plano Business e devolve um upsell em vez de
+   resultado (medido em 04/09/2026). O board se consulta com `notion-query-data-sources` e as páginas
+   com `notion-fetch` — é o que a skill usa e o que funciona nesta conta.
 3. Se o card for de `Tipo` = **`Externo`**, ou se a Nota disser que ele depende de ação de Irineu que
    você não pode fazer (secret, conta em serviço externo, disparo manual de workflow): **não
    execute**. Termine com `CADEIA_FIM`.
