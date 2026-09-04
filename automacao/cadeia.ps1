@@ -121,6 +121,33 @@ function PreVoo {
         }
     }
 
+    # ⚠️ SONDA DE VERDADE, e ela existe por um motivo medido: `claude -p` sem
+    # login imprime "Not logged in · Please run /login" e **sai com código 0**
+    # (03/09/2026). Sem esta sonda a cadeia abriria a sessão do card, receberia
+    # isso, não acharia veredito e reportaria SEM_VEREDITO — diagnóstico
+    # indireto para um problema de um minuto. Custa uma chamada mínima por
+    # corrida, contra até 30 cards; e de quebra prova que a CLI responde, não só
+    # que existe no PATH.
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $sonda = (& claude -p 'Responda apenas com a palavra PRONTO, sem mais nada.' 2>&1 | Out-String)
+    } catch {
+        $sonda = "falhou: $($_.Exception.Message)"
+    } finally { $ErrorActionPreference = $eap }
+
+    if ($sonda -notmatch 'PRONTO') {
+        # O aviso de confiança e o rastro do PowerShell vêm ANTES do motivo real
+        # e o empurrariam para fora do resumo — a confiança já tem linha própria
+        # acima, e o que falta descobrir aqui é a outra causa.
+        $ruido = 'Ignoring \d+ permissions|Run Claude Code interactively|hasTrustDialogAccepted|^\s*\+|CategoryInfo|FullyQualifiedErrorId|^\S+\.ps1:\d+|^No .*:\d+ caractere'
+        $resumo = (($sonda -split "`r?`n" |
+                    Where-Object { $_.Trim() -and $_ -notmatch $ruido } |
+                    Select-Object -First 2) -join ' | ')
+        if (-not $resumo) { $resumo = '(sem saida legivel)' }
+        $problemas += "A CLI nao respondeu a sonda (login? sessao expirada?). Devolveu: $resumo"
+    }
+
     return $problemas
 }
 
