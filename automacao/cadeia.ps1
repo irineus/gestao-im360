@@ -68,10 +68,25 @@ param(
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+# ⚠️ As duas linhas são necessárias e fazem coisas DIFERENTES no PowerShell 5.1:
+# `[Console]::OutputEncoding` governa a LEITURA da saída de um processo nativo;
+# `$OutputEncoding` governa o que se ESCREVE ao canalizar de um nativo para
+# outro — e o padrão dele no 5.1 é **ASCII**. Sem esta segunda linha, a saída do
+# `claude` era reescrita em ASCII a caminho do filtro e "fumaça" chegava como
+# "fuma?a" (medido em 03/09/2026, na estreia da narração ao vivo). Um relatório
+# de card em português inteiro passa por aqui.
+#
+# ⚠️ E tem de ser `UTF8Encoding $false`: `[System.Text.Encoding]::UTF8` traz
+# **BOM**, o BOM entrava na PRIMEIRA linha entregue ao filtro, o `JSON.parse`
+# falhava só nela e ela era repassada crua — um `rate_limit_event` inteiro em
+# JSON no meio da narração, e só o primeiro. Medido em 03/09/2026.
+$OutputEncoding = New-Object System.Text.UTF8Encoding $false
+
 $RaizRepo   = Split-Path -Parent $PSScriptRoot
 $DirLogs    = Join-Path $PSScriptRoot 'logs'
 $ArqHistoria= Join-Path $DirLogs 'cadeia.jsonl'
 $ArqPrompt  = if ($Prompt) { $Prompt } else { Join-Path $PSScriptRoot 'prompt-card.md' }
+$FiltroStream = Join-Path $PSScriptRoot 'formatar-stream.mjs'
 
 function Escrever($texto, $cor = 'Gray') { Write-Host $texto -ForegroundColor $cor }
 function Titulo($texto) { Write-Host ''; Write-Host "── $texto" -ForegroundColor Cyan }
@@ -115,6 +130,7 @@ function PreVoo {
     } finally { Pop-Location }
 
     if (-not (Test-Path $ArqPrompt)) { $problemas += "Falta $ArqPrompt (o texto que cada sessão recebe)." }
+    if (-not (Test-Path $FiltroStream)) { $problemas += "Falta $FiltroStream (o tradutor do stream-json)." }
 
     # ⚠️ Enquanto o diretório não for CONFIADO, o CLI IGNORA as entradas de
     # `permissions.allow` do `.claude/settings.json` inteiras — e sessão headless
@@ -198,6 +214,7 @@ function ExecutarCard($indice) {
     $carimbo = Get-Date -Format 'yyyyMMdd-HHmmss'
     if (-not (Test-Path $DirLogs)) { New-Item -ItemType Directory -Path $DirLogs -Force | Out-Null }
     $arqSaida = Join-Path $DirLogs "card-$carimbo.log"
+    $arqBruto = Join-Path $DirLogs "card-$carimbo.jsonl"
 
     Escrever "  sessão $indice — saída em $arqSaida"
     if ($Simular) { return @{ veredito = 'SIMULADO'; linha = '(simulação)'; saida = $arqSaida } }
@@ -224,11 +241,24 @@ function ExecutarCard($indice) {
         # na primeira tentativa de rodar a cadeia. O ForEach abaixo faz as duas
         # coisas que o Tee faria — mostrar e gravar — e grava em UTF-8 de
         # verdade, que é o que o Get-Content da leitura do veredito espera.
-        & claude -p $prompt --permission-mode acceptEdits --allowedTools @FerramentasPermitidas 2>&1 | ForEach-Object {
-            $linha = [string]$_
-            Write-Host $linha
-            Add-Content -Path $arqSaida -Value $linha -Encoding UTF8
-        }
+        # ⚠️ `--output-format stream-json` não é preciosismo: em texto, `claude -p`
+        # BUFFERIZA a resposta inteira e só imprime no fim. Num card `GG` isso é
+        # meia hora de silêncio depois de uma linha dizendo onde fica o log —
+        # medido por Irineu na primeira corrida, que só mostrou algo quando deu
+        # erro. `formatar-stream.mjs` traduz os eventos em narração ao vivo e
+        # guarda o JSONL cru ao lado, para quando o resumo não bastar.
+        & claude -p $prompt --permission-mode acceptEdits `
+                 --allowedTools @FerramentasPermitidas `
+                 --output-format stream-json --verbose 2>&1 |
+            & node $FiltroStream $arqBruto |
+            ForEach-Object {
+                $linha = [string]$_
+                Write-Host $linha
+                Add-Content -Path $arqSaida -Value $linha -Encoding UTF8
+            }
+        # Numa pipeline, `$LASTEXITCODE` é do ÚLTIMO comando — o filtro. Ele sai
+        # com 3 quando não vê o evento `result`, que é como "o claude não chegou
+        # ao fim" continua chegando aqui em vez de virar um silêncio.
         $codigo = $LASTEXITCODE
     } finally {
         Pop-Location
