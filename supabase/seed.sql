@@ -1056,8 +1056,16 @@ begin
   -- -------------------------------------------------------------------------
   -- 8.1 Pedidos de compra — um por estado que muda alguma conta
   -- -------------------------------------------------------------------------
+  -- ⚠️ TODO PEDIDO NASCE RASCUNHO AQUI, E SÓ DEPOIS RECEBE O STATUS FINAL — a
+  --    fixture passou a montar o pedido na ORDEM em que o sistema o monta
+  --    (04/09/2026, card 6.8). `tg_pedido_item_edicao` recusa item novo em pedido
+  --    que não é RASCUNHO, e recusa com razão: item que entra num pedido já
+  --    enviado abate a parcela "já pedida" de `v_pedido_sugerido` sem que o
+  --    fornecedor saiba dele. Inserir o pedido já como RECEBIDO e pendurar os
+  --    itens depois era um atalho que o banco não oferece a ninguém — nem à
+  --    fixture, nem ao importador do card 9.1, que faz o mesmo par de passos.
   insert into pedido_compra (unidade_id, numero, status, data_envio, fornecedor)
-  select p_unidade, s.numero, s.status,
+  select p_unidade, s.numero, 'RASCUNHO',
          case when s.envio_ha is null then null else fn_hoje() - s.envio_ha end,
          s.fornecedor
     from (values
@@ -1082,6 +1090,20 @@ begin
                     and m.codigo = s.material
    where not exists (select 1 from pedido_item pi
                       where pi.pedido_id = pc.id and pi.material_id = m.id);
+
+  -- O status final, agora que os itens existem. `where p.status = 'RASCUNHO'`
+  -- é o que mantém a idempotência do seed (docs/seed-inicial.md): numa segunda
+  -- execução os pedidos já saíram do rascunho e nada é reescrito — e o
+  -- `2026-003`, cujo destino É o rascunho, nunca se move.
+  update pedido_compra p
+     set status = s.status
+    from (values
+      ('2026-001', 'RECEBIDO'),
+      ('2026-002', 'ENVIADO'),
+      ('2026-003', 'RASCUNHO')
+    ) as s(numero, status)
+   where p.unidade_id = p_unidade and p.numero = s.numero
+     and p.status = 'RASCUNHO' and s.status <> 'RASCUNHO';
 
   -- -------------------------------------------------------------------------
   -- 8.2 Entradas de estoque

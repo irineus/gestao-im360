@@ -9,6 +9,7 @@ import '../telas/acesso_bloqueado.dart';
 import '../telas/administracao/tela_administracao.dart';
 import '../telas/alunos/ficha_aluno.dart';
 import '../telas/alunos/tela_alunos.dart';
+import '../telas/compras/tela_compras.dart';
 import '../telas/dashboard/tela_dashboard.dart';
 import '../telas/em_construcao.dart';
 import '../telas/login.dart';
@@ -40,6 +41,11 @@ final _telaDaRota = <String, Widget Function(GoRouterState)>{
   'materiais': (estado) =>
       TelaMateriais(materialId: estado.uri.queryParameters['material']),
   'salas': (estado) => TelaSalas(pcId: estado.uri.queryParameters['pc']),
+  // `?pedido=` segue o desenho de `?material=` e `?bloco=`: a tela abre já na
+  // aba Pedidos, com o pedido escolhido no painel. Quem o usa hoje é o próprio
+  // app, ao criar um rascunho a partir do pedido sugerido.
+  'compras': (estado) =>
+      TelaCompras(pedidoId: estado.uri.queryParameters['pedido']),
   'turmas': (estado) =>
       TelaTurmas(blocoId: estado.uri.queryParameters['bloco']),
   'pendencias': (_) => const TelaPendencias(),
@@ -83,7 +89,6 @@ const _cardDaRota = <String, String>{
   // nomeia o card do que falta é a própria tela, em rodapé, e não um
   // placeholder que esconderia a metade já entregue.
   'turmas_modular': '7.3',
-  'compras': '6.8',
   'projecao': '8.5',
   'certificados': '8.6',
   'importacao': '9.1',

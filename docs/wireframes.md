@@ -905,6 +905,16 @@ precisou corrigi-los.
 | 21 | **O painel inline abaixo da tabela** não cabe no celular | No desktop e no tablet ele é o que o §9 desenha, abaixo da tabela; **no mobile abre em tela cheia** (design-system §5.4), pela mesma razão do formulário. Empilhar tabela e painel numa tela de 430 px deixaria as duas ilegíveis |
 | 22 | **O atalho `?material=<id>`** da central de pendências (§14.3) abria o **formulário** de cadastro | Passou a abrir o **painel**. As três pendências de estoque perguntam "quanto tem e por quê", e a resposta é a história do material — não o formulário de nome e categoria |
 
+### Divergências do card 6.8 (04/09/2026) — a tela de Compras
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 23 | **O §10.2 desenha o recebimento INLINE**, abaixo da lista de pedidos (`── recebimento (#23) ──`) | O recebimento abre em **formulário** (`FormularioIm360`), e não no corpo do painel. Duas razões, e nenhuma é de gosto: (a) o painel já vive em 2/5 da altura ao lado da lista, e um formulário com um campo por item ali dentro empurra a última linha para fora; (b) o formulário do projeto é quem dá **banner de erro traduzido pelo `codigo`**, primário travando reenvio e realce de campo (design-system §5.4) — inline, o `RECEBIMENTO_EXCEDE_PEDIDO` teria de ser tratado à mão, e é justamente o erro que esta tela mais produz. O conteúdo é o do desenho, linha por linha: material, `pedido N`, `recebido N` e o campo de quanto chegou |
+| 24 | **`[Editar]` e `[Enviar]` no §10.2** aparecem como botões **da linha** da lista | Ficaram no **painel** do pedido, junto de `[Receber]` e `[Cancelar pedido]`. Cinco botões por linha numa tabela de seis colunas ou estouram a largura ou viram um menu de três pontinhos — e o painel já existe, porque o recebimento precisa dos itens. A linha continua clicável, e é ela que escolhe o pedido |
+| 25 | **O §10.1 não diz o que o toque na LINHA do pedido sugerido faz** | Abre o "criar pedido" **com aquele material só** (para quem tem `compras.criar`). É o caso real que o botão em massa não cobre: falta um material, e comprar a lista inteira não é a resposta. Sem a permissão a linha não é clicável — não há o que oferecer |
+| 26 | **O §10.1 não previa ordenação** | A lista ordena por **maior sugestão primeiro**, e depois por código. É a ordem em que a compra se decide; ordenar por código puro põe o que não precisa ser comprado no topo. A conta não é refeita na tela: `qtd_sugerida` continua vindo da view |
+| 27 | **A tela ganhou três objetos de banco que o §10 não previa** — o wireframe descreve a tela como leitura de `v_pedido_sugerido` e das tabelas de pedido | `v_pedido_compra` e `v_pedido_item` (view de tela pertence ao card da tela, `views-leitura.md` §12.1) e o trigger `tg_pedido_item_edicao`, que fecha as duas metades que o card 6.1 deixou abertas: criar item e mudar `qtd_pedida` em pedido que já saiu do rascunho. Detalhe e contraprovas em `supabase/tests/062_pedidos_compra_tela.sql` |
+
 ---
 
 ## 18. Mapa tela → cards de implementação
