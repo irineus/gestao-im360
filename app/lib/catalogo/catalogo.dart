@@ -210,6 +210,7 @@ class FiltroCatalogo {
     this.metodoId,
     this.categoria,
     this.soAtivos = true,
+    this.soAbaixoMinimo = false,
   });
 
   /// O estado de "Limpar filtros": mostra **tudo**, inclusive o inativo. Voltar
@@ -221,23 +222,33 @@ class FiltroCatalogo {
   final String? categoria;
   final bool soAtivos;
 
+  /// O checkbox "só abaixo do mínimo" do wireframe §9 (card 6.7). Mora aqui, e
+  /// não num filtro próprio do estoque, porque a barra de filtros da tela 6 é
+  /// **uma** (design-system §5: componente não se duplica); as abas Cursos e
+  /// Combos simplesmente não o exibem. Desligado por padrão: a tela abre
+  /// mostrando o catálogo inteiro.
+  final bool soAbaixoMinimo;
+
   /// Quantos filtros a pessoa ligou — é o `(n)` do botão "Filtrar" no mobile.
   int get ativos =>
       (busca.trim().isNotEmpty ? 1 : 0) +
       (metodoId != null ? 1 : 0) +
       (categoria != null ? 1 : 0) +
-      (soAtivos ? 1 : 0);
+      (soAtivos ? 1 : 0) +
+      (soAbaixoMinimo ? 1 : 0);
 
   FiltroCatalogo copiar({
     String? busca,
     String? Function()? metodoId,
     String? Function()? categoria,
     bool? soAtivos,
+    bool? soAbaixoMinimo,
   }) => FiltroCatalogo(
     busca: busca ?? this.busca,
     metodoId: metodoId == null ? this.metodoId : metodoId(),
     categoria: categoria == null ? this.categoria : categoria(),
     soAtivos: soAtivos ?? this.soAtivos,
+    soAbaixoMinimo: soAbaixoMinimo ?? this.soAbaixoMinimo,
   );
 }
 

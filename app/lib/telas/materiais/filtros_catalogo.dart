@@ -18,6 +18,7 @@ class FiltrosCatalogo extends ConsumerStatefulWidget {
     required this.metodos,
     this.categorias,
     this.rotuloBusca = 'Buscar',
+    this.abaixoMinimo = false,
   });
 
   final NotifierProvider<FiltroCatalogoNotifier, FiltroCatalogo> provider;
@@ -26,6 +27,10 @@ class FiltrosCatalogo extends ConsumerStatefulWidget {
   /// Nulo = a aba não filtra por categoria.
   final List<String>? categorias;
   final String rotuloBusca;
+
+  /// Exibe o chip "Só abaixo do mínimo" (wireframe §9, card 6.7). Só a aba
+  /// Materiais o liga: Cursos e Combos não têm saldo.
+  final bool abaixoMinimo;
 
   @override
   ConsumerState<FiltrosCatalogo> createState() => _FiltrosCatalogoState();
@@ -121,6 +126,13 @@ class _FiltrosCatalogoState extends ConsumerState<FiltrosCatalogo> {
           onSelected: (valor) =>
               controlador.definir(filtro.copiar(soAtivos: valor)),
         ),
+        if (widget.abaixoMinimo)
+          FilterChip(
+            label: const Text('Só abaixo do mínimo'),
+            selected: filtro.soAbaixoMinimo,
+            onSelected: (valor) =>
+                controlador.definir(filtro.copiar(soAbaixoMinimo: valor)),
+          ),
       ],
     );
   }

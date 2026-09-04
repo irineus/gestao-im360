@@ -822,6 +822,13 @@ dizer com mais precisão:
 |---|---|---|
 | 13 | **O 🎓 do §7.3** ("Trilha concluída 🎓 — o checklist de certificado foi aberto") | **Sai o emoji, fica a frase.** O app carrega Inter/Roboto, que não têm o glifo, e a CSP do card 3.8 impede o download de uma fonte de emoji: o que apareceria é uma **caixa vazia** no meio da única frase comemorativa do sistema. Quem reprovou foi o portão do próprio projeto — `app/test/texto_de_tela_test.dart`, criado pela correção 11 acima —, e ele reprovou **antes** de a frase chegar a alguém. O texto em vigor é "…foi entregue. Trilha concluída — o checklist de certificado foi aberto.". Quem quiser o ícone de volta usa um `Icon` do Material ao lado do texto, que é o que a correção 11 já mandava; o caractere não volta |
 
+### Divergências do card 6.7 (04/09/2026) — a linha em alerta e o botão sem guarda
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 14 | **"Linha em alerta: fundo tonal … mais ícone na PRIMEIRA célula"** (§5.2) | O fundo tonal é o do §5.2 (`tertiaryContainer` para atenção, `errorContainer` para erro, e agora existe como `TomLinha` no `TabelaIm360`). O **ícone fica na célula do Saldo**, e não na primeira: é onde o wireframe §9 o desenha (`0 ⚠`, `-2 ✖`) e onde ele significa alguma coisa — ao lado do código, o mesmo ícone não diria *de que* o alerta é, numa tela que terá outros alertas. O contrato do §8.2 continua inteiro: forma própria por situação (⚠ atenção, ✖ erro) e a **palavra** no `Semantics` da célula ("Saldo -2, saldo negativo") e no `apoio` do cartão do mobile |
+| 15 | **"Sem permissão → o botão não é renderizado"** (§5.7) aplicado ao "Editar material" do painel de estoque | **Exceção estreita e escrita:** o botão não escreve nada — abre o cadastro, que quem tem `materiais.ler` sempre pôde ver (card 4.4, tocando a linha). Desde o card 6.7 a linha abre o painel, então guardá-lo por `materiais.editar` **tiraria uma leitura que já existia**. O rótulo muda com a permissão ("Editar material" / "Ver cadastro"), e o "Salvar" continua guardado pelo próprio formulário. A regra vale para botão de **ação**; navegação para uma tela que já tem guarda própria não é ação |
+
 ---
 
 *Card 2.7 — Fase 2. Fecha a cadeia de design da Fase 2: identidade (1.9) → estrutura (2.6) →

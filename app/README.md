@@ -92,6 +92,18 @@ lib/
                               fn_aluno_alterar_status / fn_aluno_reverter_status
     alunos_provider.dart      FutureProviders (lista, aluno por id, histórico), filtro e a
                               versão que toda escrita incrementa
+  estoque/                    card 6.7 — o estoque como o app o vê
+    estoque.dart              modelos de v_estoque_atual e v_material_movimento + lógica
+                              pura: situação do material (negativo vence "abaixo do
+                              mínimo"), filtros da lista e do painel, e os rótulos de
+                              "existe e você não pode ver" (aluno, pedido, autor).
+                              NADA aqui soma movimento para chegar a saldo — a conta é da
+                              view, e uma terceira seria a que o card 2.3 §4.1 proíbe
+    estoque_repositorio.dart  interface + PostgREST nas duas views; a única escrita é a RPC
+                              fn_ajustar_estoque. NÃO existe "lançar entrada": ENTRADA
+                              exige compras.receber e é recebimento de pedido (tela 7)
+    estoque_provider.dart     FutureProviders (lista e movimentos por material), filtro do
+                              painel e a versão que toda escrita incrementa
   infraestrutura/             card 4.5 — salas, PCs, manutenções e professores
     infraestrutura.dart       modelos das quatro tabelas do 4.3 + lógica pura: capacidade
                               efetiva da sala, manutenção em aberto, ação contextual do PC,
@@ -118,9 +130,15 @@ lib/
     sessao_provider.dart      Riverpod; permissoesProvider, resumoUsuarioProvider e
                               unidadeAtualProvider (a unidade que toda escrita carrega)
   telas/                      login, redefinir senha, unidade, acesso bloqueado, placeholders
-    materiais/                card 4.4 — tela 6 (parte catálogo): três abas
-      tela_materiais.dart     abas Materiais / Cursos / Combos, cada uma uma TabelaIm360
-      filtros_catalogo.dart   busca, método, categoria, "só ativos" — estado no provider
+    materiais/                cards 4.4 e 6.7 — tela 6: três abas
+      tela_materiais.dart     abas Materiais / Cursos / Combos, cada uma uma TabelaIm360.
+                              A de Materiais lê v_estoque_atual (6.7): saldo, mínimo,
+                              último movimento, linha em alerta e o painel abaixo
+      filtros_catalogo.dart   busca, método, categoria, "só ativos" e — só nos materiais —
+                              "só abaixo do mínimo" (6.7); estado no provider
+      painel_estoque.dart     card 6.7 — movimentações do material (período e tipo) e o
+                              formulário de AJUSTE. Sem botão de estorno: o estorno mora
+                              na aba Trilha do aluno, onde há contexto
       formularios.dart        material, curso, combo, módulo e o nome dos métodos
       detalhes.dart           painel do curso (sequência + módulos) e do combo (cursos)
       editor_sequencia.dart   lista ordenada com alça própria, remover e adicionar

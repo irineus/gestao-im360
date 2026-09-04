@@ -896,6 +896,15 @@ que se resolve em silêncio volta como defeito na revisão seguinte.
 Nenhum ajuste bloqueante em documento anterior: este card consome os contratos fechados e não
 precisou corrigi-los.
 
+### Divergências do card 6.7 (04/09/2026) — o estoque na tela 6
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 19 | **A nota do card no board pedia "lançamento manual de ENTRADA (sem pedido) e AJUSTE"** — e o §9 deste documento diz, com todas as letras, que *"não existe 'lançar entrada'"* | **Só o AJUSTE existe, e a nota é que estava desatualizada.** Não é preferência: a decisão (c) do card 2.4 §7 dá a `movimento_estoque` um `insert` **por tipo**, e `ENTRADA` exige **`compras.receber`** — entrada é sempre recebimento de pedido (tela 7, card 6.8), e é assim que a chegada fica ligada ao item comprado. Um "lançar entrada" aqui seria escrita **sem função** (contra o card 2.3 §1) e daria ao monitor um caminho para inventar estoque que ninguém comprou, que é exatamente o modo de falha que o `insert` por tipo existe para fechar. O caso real que a nota queria cobrir — "chegou material e não há pedido" — é atendido pelo **AJUSTE positivo**: passa por `fn_ajustar_estoque`, exige `estoque.ajustar`, tem **motivo obrigatório** e deixa a mesma linha imutável no histórico. O estado vazio do painel diz onde se lança entrada e aponta para Compras (design-system §7.2) |
+| 20 | **"Ao selecionar uma linha"** (§9) não dizia o que acontece com a **edição** do material, que desde o card 4.4 abria no toque da linha | O toque na linha passou a **abrir o painel de movimentações** (é o que o §9 desenha), e o cadastro ficou num botão do painel. Esse botão é a **exceção da regra do design-system §5.7**: não tem guarda de permissão, porque ver o cadastro nunca exigiu `materiais.editar` e guardá-lo tiraria de quem tem `materiais.ler` uma leitura que já tinha. O rótulo diz de antemão o que vai acontecer — "Editar material" para quem pode, "Ver cadastro" para quem não —, e quem decide se há "Salvar" continua sendo o `FormularioMaterial`, pela permissão |
+| 21 | **O painel inline abaixo da tabela** não cabe no celular | No desktop e no tablet ele é o que o §9 desenha, abaixo da tabela; **no mobile abre em tela cheia** (design-system §5.4), pela mesma razão do formulário. Empilhar tabela e painel numa tela de 430 px deixaria as duas ilegíveis |
+| 22 | **O atalho `?material=<id>`** da central de pendências (§14.3) abria o **formulário** de cadastro | Passou a abrir o **painel**. As três pendências de estoque perguntam "quanto tem e por quê", e a resposta é a história do material — não o formulário de nome e categoria |
+
 ---
 
 ## 18. Mapa tela → cards de implementação
