@@ -68,20 +68,17 @@ param(
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# ⚠️ As duas linhas são necessárias e fazem coisas DIFERENTES no PowerShell 5.1:
-# `[Console]::OutputEncoding` governa a LEITURA da saída de um processo nativo;
-# `$OutputEncoding` governa o que se ESCREVE ao canalizar de um nativo para
-# outro — e o padrão dele no 5.1 é **ASCII**. Sem esta segunda linha, a saída do
-# `claude` era reescrita em ASCII a caminho do filtro e "fumaça" chegava como
-# "fuma?a" (medido em 03/09/2026, na estreia da narração ao vivo). Um relatório
-# de card em português inteiro passa por aqui.
+# Esta linha governa a LEITURA da saída de um processo nativo, e é a única de
+# encoding que o script ainda precisa.
 #
-# `$OutputEncoding` (o que o PowerShell ESCREVE ao canalizar para um processo
-# nativo) não aparece mais aqui: com o `executar-sessao.mjs` abrindo o `claude`
-# por conta própria, o PowerShell deixou de escrever na entrada de qualquer
-# nativo. As duas armadilhas que ele trouxe — o padrão ASCII e o BOM do
-# `[System.Text.Encoding]::UTF8` — estão registradas em `docs/cadeia-execucao.md`
-# §7.1, porque somem do código mas não da memória de quem mexer nisto depois.
+# Havia uma segunda, `$OutputEncoding`, que governa o que o PowerShell ESCREVE
+# ao canalizar de um nativo para outro. Ela saiu junto com a pipeline: quem abre
+# o `claude` agora é o `executar-sessao.mjs`, e o PowerShell não escreve mais na
+# entrada de nativo nenhum. As duas armadilhas que ela trouxe — o padrão **ASCII**
+# do `$OutputEncoding` no 5.1, que fazia "fumaça" chegar como "fuma?a", e o
+# **BOM** do `[System.Text.Encoding]::UTF8`, que quebrava o `JSON.parse` só da
+# primeira linha — estão em `docs/cadeia-execucao.md` §7.1. Somem do código, não
+# da memória de quem mexer nisto depois.
 
 $RaizRepo   = Split-Path -Parent $PSScriptRoot
 $DirLogs    = Join-Path $PSScriptRoot 'logs'
