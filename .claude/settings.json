@@ -9,6 +9,7 @@
       "Bash(gh pr:*)", "Bash(gh run:*)", "Bash(gh api:*)",
       "Bash(supabase:*)", "Bash(flutter:*)", "Bash(dart:*)",
       "Bash(node:*)", "Bash(docker ps:*)",
+	  "Bash(cd:*)", "Bash(npx:*)", "Bash(docker:*)", "Bash(sed:*)",
       "Bash(bash supabase/tests_concorrencia/:*)"
     ],
     "deny": [

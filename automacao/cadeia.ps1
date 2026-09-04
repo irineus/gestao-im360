@@ -68,20 +68,17 @@ param(
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# ⚠️ As duas linhas são necessárias e fazem coisas DIFERENTES no PowerShell 5.1:
-# `[Console]::OutputEncoding` governa a LEITURA da saída de um processo nativo;
-# `$OutputEncoding` governa o que se ESCREVE ao canalizar de um nativo para
-# outro — e o padrão dele no 5.1 é **ASCII**. Sem esta segunda linha, a saída do
-# `claude` era reescrita em ASCII a caminho do filtro e "fumaça" chegava como
-# "fuma?a" (medido em 03/09/2026, na estreia da narração ao vivo). Um relatório
-# de card em português inteiro passa por aqui.
+# Esta linha governa a LEITURA da saída de um processo nativo, e é a única de
+# encoding que o script ainda precisa.
 #
-# `$OutputEncoding` (o que o PowerShell ESCREVE ao canalizar para um processo
-# nativo) não aparece mais aqui: com o `executar-sessao.mjs` abrindo o `claude`
-# por conta própria, o PowerShell deixou de escrever na entrada de qualquer
-# nativo. As duas armadilhas que ele trouxe — o padrão ASCII e o BOM do
-# `[System.Text.Encoding]::UTF8` — estão registradas em `docs/cadeia-execucao.md`
-# §7.1, porque somem do código mas não da memória de quem mexer nisto depois.
+# Havia uma segunda, `$OutputEncoding`, que governa o que o PowerShell ESCREVE
+# ao canalizar de um nativo para outro. Ela saiu junto com a pipeline: quem abre
+# o `claude` agora é o `executar-sessao.mjs`, e o PowerShell não escreve mais na
+# entrada de nativo nenhum. As duas armadilhas que ela trouxe — o padrão **ASCII**
+# do `$OutputEncoding` no 5.1, que fazia "fumaça" chegar como "fuma?a", e o
+# **BOM** do `[System.Text.Encoding]::UTF8`, que quebrava o `JSON.parse` só da
+# primeira linha — estão em `docs/cadeia-execucao.md` §7.1. Somem do código, não
+# da memória de quem mexer nisto depois.
 
 $RaizRepo   = Split-Path -Parent $PSScriptRoot
 $DirLogs    = Join-Path $PSScriptRoot 'logs'
@@ -152,9 +149,11 @@ function PreVoo {
     # As sessões não conseguiram subir o stack local uma única vez (`supabase
     # test db`: ZERO tentativas em 6 cards) e caíram para "o CI é o portão".
     # O CI de fato roda a suíte, então correção continuou medida; o que se perdeu
-    # foi a CONTRAPROVA por sabotagem, que é a disciplina deste projeto e não
-    # existe sem stack na máquina. Os cards relataram a degradação — mas quem lê
-    # o relatório já gastou a sessão.
+    # foi a CONTRAPROVA por sabotagem NO BANCO, que não existe sem stack na
+    # máquina. ⚠️ A do Flutter continuou acontecendo — o log do card 5.9 mostra
+    # "sabotagem das duas asserções centrais, antes de aceitá-las" —, e dizer que
+    # a disciplina inteira caiu seria exagerar o estrago. Os cards relataram a
+    # degradação; mas quem lê o relatório já gastou a sessão.
     #
     # A checagem é ESTÁTICA de propósito: lê o allow e responde se uma sessão
     # CONSEGUIRIA. Custa milissegundos e nenhuma chamada de API.
@@ -171,7 +170,7 @@ function PreVoo {
 
     if (-not $cobreSupabase) {
         $comoInvoca = if ($temSupabaseGlobal) { 'supabase' } else { 'npx supabase (nao ha supabase global nesta maquina)' }
-        $script:avisos += "As sessoes NAO vao rodar a suite pgTAP local: o allow nao cobre '$comoInvoca'. O portao vira so o CI, e a contraprova por sabotagem deixa de ser possivel."
+        $script:avisos += "As sessoes NAO vao rodar a suite pgTAP local: o allow nao cobre '$comoInvoca'. O portao do BANCO vira so o CI, e a contraprova por sabotagem no banco deixa de ser possivel — a dos testes Flutter continua valendo, e as sessoes a fizeram."
     }
     if (-not $cobreDocker) {
         $script:avisos += "O allow so permite 'docker ps'. Sem 'docker info'/'docker --version' a sessao conclui que Docker nao existe e nem tenta o stack local."
