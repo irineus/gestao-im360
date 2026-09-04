@@ -88,7 +88,12 @@ abstract interface class TurmasRepositorio {
 
   /// `fn_reposicao_cancelar` — PREVISTA → CANCELADA. A aula perdida continua em
   /// aberto: desmarcar a reposição não repõe a aula (card 2.5 §3.2).
-  Future<void> cancelarReposicao(String reposicaoId, String observacao);
+  ///
+  /// ⚠️ [observacao] é **nulável de propósito**: a função faz
+  /// `coalesce(p_observacao, observacao)`, então mandar `''` no lugar de `null`
+  /// **apaga** a observação que a reposição já tinha. Quem desmarca sem escrever
+  /// nada não está pedindo para apagar o que outra pessoa escreveu.
+  Future<void> cancelarReposicao(String reposicaoId, String? observacao);
 
   // --- card 5.8: a EXECUÇÃO da virada REP ----------------------------------
   // As duas moram aqui, e não no repositório de pendências, porque exigem
@@ -300,7 +305,7 @@ class TurmasRepositorioSupabase implements TurmasRepositorio {
   }
 
   @override
-  Future<void> cancelarReposicao(String reposicaoId, String observacao) =>
+  Future<void> cancelarReposicao(String reposicaoId, String? observacao) =>
       _cliente.rpc<dynamic>(
         'fn_reposicao_cancelar',
         params: {'p_reposicao_id': reposicaoId, 'p_observacao': observacao},

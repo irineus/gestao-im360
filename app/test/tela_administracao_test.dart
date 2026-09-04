@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/administracao/administracao.dart';
 import 'package:gestao_im360/administracao/administracao_provider.dart';
 import 'package:gestao_im360/erros/catalogo_erros.dart';
@@ -44,6 +45,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
+        retry: semRetryAutomatico,
         overrides: [
           administracaoRepositorioProvider.overrideWithValue(repositorio),
           permissoesProvider.overrideWithValue(permissoes),

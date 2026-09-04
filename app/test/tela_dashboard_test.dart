@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/dashboard/dashboard.dart';
 import 'package:gestao_im360/dashboard/dashboard_provider.dart';
 import 'package:gestao_im360/pendencias/pendencias.dart';
@@ -54,6 +55,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
+        retry: semRetryAutomatico,
         overrides: [
           dashboardRepositorioProvider.overrideWithValue(dashboard),
           pendenciasRepositorioProvider.overrideWithValue(
@@ -111,16 +113,19 @@ void main() {
     expect(find.text('INGLES'), findsOneWidget);
     // Interativo: 4 turmas, 30 alocados em 40 lugares, 11 vagas livres — e
     // 40 − 30 = 10, que é o número errado (card 5.2 não devolve vaga negativa).
-    expect(find.text('30/40 ocupados · 4 turmas'), findsOneWidget);
+    expect(
+      find.text('30 de 40 ocupados · 4 blocos de horário'),
+      findsOneWidget,
+    );
     expect(find.text('1 acima da capacidade'), findsOneWidget);
-    expect(find.text('4/6 ocupados · 1 turma'), findsOneWidget);
+    expect(find.text('4 de 6 ocupados · 1 bloco de horário'), findsOneWidget);
   });
 
   testWidgets('tocar o cartão do outro método troca a grade', (tester) async {
     await montar(tester);
     expect(find.text('1/10'), findsOneWidget);
 
-    await tester.tap(find.text('4/6 ocupados · 1 turma'));
+    await tester.tap(find.text('4 de 6 ocupados · 1 bloco de horário'));
     await carregar(tester);
 
     expect(find.text('Vagas por dia e horário — INGLES'), findsOneWidget);
@@ -222,22 +227,46 @@ void main() {
     );
   });
 
-  testWidgets('no celular a grade vira lista por dia, sem coluna vazia', (
+  // A forma do mobile passou a ser a MESMA da tela de Turmas — abas Seg–Sáb,
+  // abrindo no dia de hoje (decisão de Irineu, 04/09/2026). Antes era lista
+  // vertical por dia aqui e abas lá, com as duas specs se contradizendo.
+  testWidgets('no celular a grade vira abas por dia, abrindo em hoje', (
     tester,
   ) async {
-    await montar(tester, tamanho: const Size(420, 900));
+    await montar(tester, tamanho: const Size(599, 900));
 
-    expect(find.text('Segunda ${_hoje(1)}'), findsOneWidget);
+    // Uma aba por dia, com o dia curto e a data.
+    expect(find.textContaining('Seg '), findsOneWidget);
+    expect(find.textContaining('Sáb '), findsOneWidget);
+
+    // O conteúdo à vista é o de HOJE, e só o dele: numa matriz os quatro
+    // apareceriam juntos.
+    const vagasDoDia = {1: '10/10', 2: '1/10'};
+    final hoje = hojeSaoPaulo().weekday;
+    for (final entrada in vagasDoDia.entries) {
+      expect(
+        find.text(entrada.value),
+        entrada.key == hoje ? findsOneWidget : findsNothing,
+        reason: 'só o dia de hoje está à vista',
+      );
+    }
+
+    // Trocar de aba mostra o outro dia.
+    // A barra de abas rola sozinha até hoje, então a aba de terça pode estar
+    // fora da vista — sem isto o toque cai no vazio e o teste "passa" testando
+    // nada.
+    await tester.ensureVisible(find.textContaining('Ter '));
+    await carregar(tester);
+    await tester.tap(find.textContaining('Ter '));
+    await carregar(tester);
     expect(find.text('1/10'), findsOneWidget);
-    // Sexta e sábado não têm bloco de Interativo: na matriz a coluna fica (a
-    // forma fixa é o que deixa comparar os dias), na lista a seção não nasce.
-    expect(find.text('Sexta ${_hoje(5)}'), findsNothing);
   });
 
   testWidgets('a célula é atalho e leva à MESMA semana e ao MESMO método', (
     tester,
   ) async {
     final container = ProviderContainer(
+      retry: semRetryAutomatico,
       overrides: [
         dashboardRepositorioProvider.overrideWithValue(DashboardFalso()),
         permissoesProvider.overrideWithValue(comTurmas),
@@ -271,7 +300,114 @@ void main() {
     await carregar(tester);
 
     expect(container.read(filtroGradeProvider).metodoId, 'm-int');
-    expect(container.read(semanaProvider), segundaDe(DateTime.now()));
+    // A semana é a que o BANCO devolveu (`data_referencia`), e não a do
+    // relógio do aparelho.
+    expect(container.read(semanaProvider), segundaDe(hojeSaoPaulo()));
+  });
+
+  // -------------------------------------------------------------------------
+  // Card 5.11 — a região que falha não leva a tela junto
+  // -------------------------------------------------------------------------
+
+  testWidgets('vagas falhando: a tela CONTINUA com as pendências e o erro fica '
+      'na região', (tester) async {
+    await montar(tester, repositorio: DashboardFalso.queFalha());
+
+    // A regra do design-system §7.2 para o dashboard é "região nunca some", e
+    // ela vale também quando a região FALHA: as pendências e o rodapé não
+    // dependem da consulta de vagas.
+    expect(find.text('Pendências abertas'), findsOneWidget);
+    expect(find.text(textoRestanteDoDashboard), findsOneWidget);
+    expect(find.text('Tentar de novo'), findsOneWidget);
+
+    // E nada de contagem inventada: "0 blocos ativos" seria número errado com
+    // cara de certo.
+    expect(find.textContaining('blocos de horário ativos'), findsNothing);
+  });
+
+  testWidgets('o EstadoErro é ESTÁVEL — não pisca entre erro e esqueleto', (
+    tester,
+  ) async {
+    // ⚠️ É o teste da política de `retry` do projeto: com a repetição
+    // automática do Riverpod 3 ligada, o estado voltaria a `AsyncLoading` e a
+    // tela terminaria em "Carregando…" para sempre (medido no card 5.9).
+    await montar(tester, repositorio: DashboardFalso.queFalha());
+    expect(find.text('Tentar de novo'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(seconds: 30));
+    expect(
+      find.text('Tentar de novo'),
+      findsOneWidget,
+      reason: 'o erro continua em tela; nada o substituiu por um esqueleto',
+    );
+  });
+
+  testWidgets('cada severidade das pendências é atalho para a central JÁ '
+      'filtrada', (tester) async {
+    final container = ProviderContainer(
+      retry: semRetryAutomatico,
+      overrides: [
+        dashboardRepositorioProvider.overrideWithValue(DashboardFalso()),
+        pendenciasRepositorioProvider.overrideWithValue(
+          PendenciasFalso.fixture(),
+        ),
+        permissoesProvider.overrideWithValue(comTurmas),
+        unidadeAtualProvider.overrideWithValue('unidade-teste'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: appDeTeste(
+          construtor: (filho) => filho,
+          conteudo: const Scaffold(body: TelaDashboard()),
+        ),
+      ),
+    );
+    await carregar(tester);
+
+    // O número é botão: tocá-lo abre a central filtrada por aquela severidade
+    // (wireframes §5 e §3.3). Antes ele dizia quantas são e mandava
+    // procurá-las de novo.
+    await tester.tap(find.text('ALTA'));
+    await carregar(tester);
+    expect(container.read(filtroPendenciasProvider).severidade, 'ALTA');
+  });
+
+  testWidgets('a célula anuncia dia, hora e o que o número significa', (
+    tester,
+  ) async {
+    final semantica = tester.ensureSemantics();
+    await montar(tester);
+
+    // Sem a coordenada, o leitor de tela anuncia "1 vaga livre de 10" sem
+    // dizer QUANDO — e quem lê assim não tem a coluna nem a linha à vista.
+    expect(
+      find.bySemanticsLabel(RegExp('^Terça 08:00, 1 vaga livre de 10')),
+      findsOneWidget,
+    );
+    // A célula VAZIA também é anunciada: antes ficava fora do `Semantics`.
+    expect(find.bySemanticsLabel(RegExp('sem turma')), findsWidgets);
+    semantica.dispose();
+  });
+
+  testWidgets('o rodapé conta BLOCOS DE HORÁRIO — o mesmo nome do cartão', (
+    tester,
+  ) async {
+    await montar(tester);
+    expect(
+      find.textContaining('blocos de horário ativos nesta semana.'),
+      findsOneWidget,
+      reason:
+          'o cartão dizia "4 turmas" e o rodapé "4 blocos ativos" — o '
+          'mesmo objeto com dois nomes na mesma tela',
+    );
   });
 }
 
@@ -287,13 +423,4 @@ class _PendenciasQueFalham implements PendenciasRepositorio {
     required String resolucao,
     String? justificativa,
   }) async => throw UnimplementedError();
-}
-
-/// A data que a coluna do dia mostra nesta semana — a fixture do dashboard usa
-/// a semana corrente, como a view faz no banco.
-String _hoje(int diaSemana) {
-  final segunda = segundaDe(DateTime.now());
-  return formatarDataCurta(
-    DateTime(segunda.year, segunda.month, segunda.day + (diaSemana - 1)),
-  );
 }

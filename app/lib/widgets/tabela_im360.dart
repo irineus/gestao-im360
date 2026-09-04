@@ -48,6 +48,8 @@ class CartaoIm360 {
     required this.titulo,
     this.subtitulo,
     this.apoio,
+    this.iconeApoio,
+    this.corApoio,
     this.destaque,
     this.badge,
   });
@@ -55,6 +57,19 @@ class CartaoIm360 {
   final String titulo;
   final String? subtitulo;
   final String? apoio;
+
+  /// Ícone antes da linha de apoio — é como o ⚠ de "sem turma" existe no
+  /// celular.
+  ///
+  /// ⚠️ **Ícone, e nunca o caractere.** O app empacota só Inter e Roboto: um
+  /// `⚠` no texto vira caixa vazia na web (a CSP bloqueia o download da fonte
+  /// de emoji, cards 3.8/3.9) e o leitor de tela anuncia "sinal de aviso" antes
+  /// do texto. A célula do desktop já fazia assim; o cartão do mobile ficou
+  /// para trás e perdeu o alerta inteiro quando o glifo saiu (revisão da
+  /// fase 05, item A1).
+  final IconData? iconeApoio;
+  final Color? corApoio;
+
   final String? destaque;
 
   /// Badge à direita do título (design-system §5.2: "título, linha
@@ -332,11 +347,32 @@ class TabelaIm360<T> extends StatelessWidget {
                               ),
                             ),
                           if (dados.apoio != null)
-                            Text(
-                              dados.apoio!,
-                              style: Tipografia.apoio.copyWith(
-                                color: cores.onSurfaceVariant,
-                              ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (dados.iconeApoio != null) ...[
+                                  Icon(
+                                    dados.iconeApoio,
+                                    size: 14,
+                                    color:
+                                        dados.corApoio ??
+                                        cores.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: Dim.e4),
+                                ],
+                                Flexible(
+                                  child: Text(
+                                    dados.apoio!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Tipografia.apoio.copyWith(
+                                      color:
+                                          dados.corApoio ??
+                                          cores.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                         ],
                       ),

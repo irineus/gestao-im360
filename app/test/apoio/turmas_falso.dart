@@ -1,3 +1,4 @@
+import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/turmas/turmas.dart';
 import 'package:gestao_im360/turmas/turmas_repositorio.dart';
 
@@ -32,6 +33,19 @@ class TurmasFalso implements TurmasRepositorio {
        },
        turmas_ = List.of(turmas ?? const []),
        reposicoes_ = List.of(reposicoes ?? const []);
+
+  /// Um repositório em que **toda leitura falha** — é como se exercita o quarto
+  /// estado do wireframe §2.3, que as telas da fase 05 tinham escrito e nenhum
+  /// teste cobria (revisão da fase 05, grupo G).
+  factory TurmasFalso.queFalha({ErroApp? erro}) => TurmasFalso.fixture()
+    ..erroDeLeitura =
+        erro ??
+        const ErroApp(
+          mensagem:
+              'Não foi possível falar com o servidor. Verifique a conexão e '
+              'tente de novo.',
+          traduzido: true,
+        );
 
   factory TurmasFalso.fixture() => TurmasFalso(
     celulas: [
@@ -147,6 +161,17 @@ class TurmasFalso implements TurmasRepositorio {
         ),
       ],
       'b-vazio': [reposicaoFalsa()],
+      // Onze numa capacidade de dez: é o bloco ACIMA da capacidade, e a lista
+      // precisa ter os onze porque o painel deriva o banner dela — a célula da
+      // grade é o retrato de quando o painel abriu (revisão da fase 05).
+      'b-acima': [
+        for (var i = 1; i <= 11; i++)
+          alocacaoFalsa(
+            alunoId: 'al-acima-\$i',
+            nome: 'Aluno Acima \$i',
+            tipo: 'PRE',
+          ),
+      ],
     },
     turmas: [
       turmaFalsa(alunoId: 'al-3001', blocoId: 'b-cheio', tipo: 'REM'),
@@ -193,11 +218,20 @@ class TurmasFalso implements TurmasRepositorio {
   /// o provider.
   DateTime? ultimaSemana;
 
+  /// Quando não nulo, **toda leitura** levanta este erro.
+  ErroApp? erroDeLeitura;
+
+  void _conferirLeitura() {
+    final erro = erroDeLeitura;
+    if (erro != null) throw erro;
+  }
+
   final List<BlocoHorario> salvos = [];
   final List<String> excluidos = [];
 
   @override
   Future<List<CelulaGrade>> grade(DateTime segunda) async {
+    _conferirLeitura();
     if (atrasoLeitura > Duration.zero) {
       await Future<void>.delayed(atrasoLeitura);
     }
@@ -231,6 +265,7 @@ class TurmasFalso implements TurmasRepositorio {
 
   @override
   Future<List<BlocoHorario>> blocos() async {
+    _conferirLeitura();
     if (atrasoLeitura > Duration.zero) {
       await Future<void>.delayed(atrasoLeitura);
     }
@@ -257,11 +292,25 @@ class TurmasFalso implements TurmasRepositorio {
   /// hora (ajuste 7 do card 2.2 §14).
   String veredito = 'MANTER';
 
+  /// O erro que `registrarReposicao` levanta, quando o teste quer o caminho
+  /// vermelho: `REPOSICAO_NAO_PREVISTA` (alguém já marcou noutra aba),
+  /// `SEM_PERMISSAO`, rede. Nulo = caminho feliz.
+  ErroApp? erroAoRegistrar;
+
+  /// O erro que `situacaoRep` levanta — `ALUNO_INEXISTENTE`, permissão, rede.
+  /// Nulo = caminho feliz.
+  ErroApp? erroAoLerSituacao;
+
+  /// O erro que `admitir` e `virarContinuo` levantam — `BLOCO_LOTADO`,
+  /// `METODO_INCOMPATIVEL`, `REP_JA_CONTINUO`. Nulo = caminho feliz.
+  ErroApp? erroAoAdmitir;
+
   @override
   Future<List<AlunoDoBloco>> alunosDoBloco(
     String blocoId,
     DateTime data,
   ) async {
+    _conferirLeitura();
     if (atrasoLeitura > Duration.zero) {
       await Future<void>.delayed(atrasoLeitura);
     }
@@ -270,6 +319,7 @@ class TurmasFalso implements TurmasRepositorio {
 
   @override
   Future<List<TurmaDoAluno>> turmas() async {
+    _conferirLeitura();
     if (atrasoLeitura > Duration.zero) {
       await Future<void>.delayed(atrasoLeitura);
     }
@@ -278,6 +328,7 @@ class TurmasFalso implements TurmasRepositorio {
 
   @override
   Future<List<ReposicaoAluno>> reposicoesDoAluno(String alunoId) async {
+    _conferirLeitura();
     if (atrasoLeitura > Duration.zero) {
       await Future<void>.delayed(atrasoLeitura);
     }
@@ -288,15 +339,19 @@ class TurmasFalso implements TurmasRepositorio {
   }
 
   @override
-  Future<SituacaoRep> situacaoRep(String alunoId) async =>
-      situacao ??
-      const SituacaoRep(
-        debito: 0,
-        semanasUteis: 0,
-        capacidade: 1,
-        faltasRecentes: 0,
-        veredito: 'MANTER',
-      );
+  Future<SituacaoRep> situacaoRep(String alunoId) async {
+    _conferirLeitura();
+    final erro = erroAoLerSituacao;
+    if (erro != null) throw erro;
+    return situacao ??
+        const SituacaoRep(
+          debito: 0,
+          semanasUteis: 0,
+          capacidade: 1,
+          faltasRecentes: 0,
+          veredito: 'MANTER',
+        );
+  }
 
   @override
   Future<String> admitir({
@@ -306,6 +361,8 @@ class TurmasFalso implements TurmasRepositorio {
     DateTime? dataInicioPrevista,
   }) async {
     admitidos.add('$blocoId|$alunoId|$tipo');
+    final erro = erroAoAdmitir;
+    if (erro != null) throw erro;
     (alunos_[blocoId] ??= []).add(
       alocacaoFalsa(alunoId: alunoId, nome: alunoId, tipo: tipo),
     );
@@ -336,7 +393,23 @@ class TurmasFalso implements TurmasRepositorio {
     String? observacao,
   }) async {
     reposicoesLancadas.add('$blocoId|$alunoId|${dataIso(data)}');
-    return 'reposicao-$alunoId';
+    // Insere de verdade: sem isto o teste de recarga depois de lançar mediria
+    // um mundo em que salvar não muda nada — a mesma lição que fez o falso
+    // reproduzir admitir/remover (card 5.7).
+    final id = 'reposicao-$alunoId-${reposicoes_.length}';
+    reposicoes_.add(
+      ReposicaoAluno(
+        id: id,
+        blocoId: blocoId,
+        alunoId: alunoId,
+        data: data,
+        status: 'PREVISTA',
+        blocoOrigemId: blocoOrigemId,
+        dataOrigem: dataOrigem,
+        observacao: observacao,
+      ),
+    );
+    return id;
   }
 
   @override
@@ -345,12 +418,32 @@ class TurmasFalso implements TurmasRepositorio {
     required bool veio,
   }) async {
     presencas.add('$reposicaoId|${veio ? 'VEIO' : 'FALTOU'}');
+    final erro = erroAoRegistrar;
+    if (erro != null) throw erro;
+    for (var i = 0; i < reposicoes_.length; i++) {
+      if (reposicoes_[i].id == reposicaoId) {
+        final r = reposicoes_[i];
+        reposicoes_[i] = ReposicaoAluno(
+          id: r.id,
+          blocoId: r.blocoId,
+          alunoId: r.alunoId,
+          data: r.data,
+          status: veio ? 'REALIZADA' : 'FALTOU',
+          blocoOrigemId: r.blocoOrigemId,
+          dataOrigem: r.dataOrigem,
+          observacao: r.observacao,
+        );
+      }
+    }
+    for (final lista in alunos_.values) {
+      lista.removeWhere((a) => a.ehReposicao && a.registroId == reposicaoId);
+    }
     return veredito;
   }
 
   @override
-  Future<void> cancelarReposicao(String reposicaoId, String observacao) async {
-    canceladas.add('$reposicaoId|$observacao');
+  Future<void> cancelarReposicao(String reposicaoId, String? observacao) async {
+    canceladas.add('$reposicaoId|${observacao ?? ''}');
     for (final lista in alunos_.values) {
       lista.removeWhere((a) => a.ehReposicao && a.registroId == reposicaoId);
     }
@@ -369,6 +462,8 @@ class TurmasFalso implements TurmasRepositorio {
     String? observacao,
   }) async {
     viradas.add('$alunoId|$blocoId|${observacao ?? ''}');
+    final erro = erroAoAdmitir;
+    if (erro != null) throw erro;
     // Reproduz o efeito da função: o aluno passa a ter alocação REP no bloco e
     // as reposições PREVISTA são canceladas. Sem isso os testes mediriam um
     // mundo em que executar a virada não muda nada — a lição do card 5.4.

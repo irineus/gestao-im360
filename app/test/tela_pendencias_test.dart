@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/alunos/alunos_provider.dart';
+import 'package:gestao_im360/erros/erro_app.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gestao_im360/pendencias/pendencias.dart';
 import 'package:gestao_im360/pendencias/pendencias_provider.dart';
 import 'package:gestao_im360/rotas/rotas.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/telas/pendencias/formularios.dart';
+import 'package:gestao_im360/turmas/turmas_widgets.dart';
 import 'package:gestao_im360/telas/pendencias/painel_pendencia.dart';
 import 'package:gestao_im360/telas/pendencias/tela_pendencias.dart';
 import 'package:gestao_im360/theme/tema.dart';
@@ -63,6 +67,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
+        retry: semRetryAutomatico,
         overrides: [
           pendenciasRepositorioProvider.overrideWithValue(repoPendencias),
           turmasRepositorioProvider.overrideWithValue(repoTurmas),
@@ -453,6 +458,7 @@ void main() {
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
         ProviderScope(
+          retry: semRetryAutomatico,
           overrides: [
             pendenciasRepositorioProvider.overrideWithValue(pendencias),
             permissoesProvider.overrideWithValue(permissoes),
@@ -503,5 +509,232 @@ void main() {
       expect(rota.exige, {'pendencias.ler'});
       expect(idsBarraInferior, contains('pendencias'));
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Card 5.11 — o rótulo, o caminho com o id, e o caminho vermelho
+  // -------------------------------------------------------------------------
+
+  /// Harness com `GoRouter` de **verdade**: o anterior era um `MaterialApp`
+  /// sem rotas, e nele "Ver turma" não tinha para onde ir — a navegação era a
+  /// metade que nenhum teste media (revisão da fase 05, grupo G).
+  Future<GoRouter> montarComRotas(
+    WidgetTester tester, {
+    PendenciasFalso? pendencias,
+    TurmasFalso? turmas,
+    Set<String> permissoes = secretaria,
+  }) async {
+    final roteador = GoRouter(
+      initialLocation: '/pendencias',
+      routes: [
+        GoRoute(
+          path: '/pendencias',
+          builder: (_, _) => const Scaffold(body: TelaPendencias()),
+        ),
+        GoRoute(
+          path: '/turmas',
+          builder: (_, _) => const Scaffold(body: Text('tela de turmas')),
+        ),
+        GoRoute(
+          path: '/salas',
+          builder: (_, _) => const Scaffold(body: Text('tela de salas')),
+        ),
+        GoRoute(
+          path: '/materiais',
+          builder: (_, _) => const Scaffold(body: Text('tela de materiais')),
+        ),
+        GoRoute(
+          path: '/alunos/:id',
+          builder: (_, _) => const Scaffold(body: Text('ficha do aluno')),
+        ),
+      ],
+    );
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        retry: semRetryAutomatico,
+        overrides: [
+          pendenciasRepositorioProvider.overrideWithValue(
+            pendencias ?? PendenciasFalso.fixture(),
+          ),
+          turmasRepositorioProvider.overrideWithValue(
+            turmas ?? TurmasFalso.fixture(),
+          ),
+          alunosRepositorioProvider.overrideWithValue(AlunosFalso.fixture()),
+          permissoesProvider.overrideWithValue(permissoes),
+          unidadeAtualProvider.overrideWithValue('unidade-teste'),
+        ],
+        child: MaterialApp.router(routerConfig: roteador, theme: temaClaro()),
+      ),
+    );
+    await carregar(tester);
+    return roteador;
+  }
+
+  group('a ação contextual leva o ID e a ABA', () {
+    test('cada tipo tem o rótulo do que se vai FAZER, não do destino', () {
+      // "Ver aluno" para os oito tipos que apontam para a ficha é o oposto de
+      // uma fila de trabalho (wireframe §14.3).
+      expect(rotuloAcaoPendencia('ALUNO_SEM_TURMA'), 'Alocar');
+      expect(rotuloAcaoPendencia('SUGERIR_FORMADO'), 'Formar');
+      expect(rotuloAcaoPendencia('CERTIFICADO_INCONSISTENTE'), 'Ver checklist');
+      expect(rotuloAcaoPendencia('BLOCO_ACIMA_CAPACIDADE'), 'Ver turma');
+      expect(rotuloAcaoPendencia('ROTINA_FALHOU'), '');
+    });
+
+    test('a aba da ficha é a do problema, e não sempre a primeira', () {
+      expect(abaDaFicha('ALUNO_SEM_TURMA'), 'turmas');
+      expect(abaDaFicha('ACELERAR_SEM_2O_BLOCO'), 'turmas');
+      expect(abaDaFicha('CERTIFICADO_INCONSISTENTE'), 'certificado');
+      expect(abaDaFicha('TRILHA_DIVERGENTE_COMBO'), 'trilha');
+      expect(abaDaFicha('SUGERIR_FORMADO'), 'dados');
+      // E o índice sai da MESMA lista que a ficha usa para montar as abas.
+      expect(indiceAbaFicha('turmas'), abasFicha.indexOf('turmas'));
+      expect(indiceAbaFicha('inexistente'), 0, reason: 'cai na primeira');
+    });
+
+    test('as duas metades do REP_VIRADA têm rótulos diferentes', () {
+      // Um rótulo só para as duas fazia a lista, o título do painel e a
+      // confirmação dizerem a mesma coisa em dois casos contrários.
+      Pendencia rep(String sufixo) => pendenciaFalsa(
+        id: 'p-$sufixo',
+        tipo: 'REP_VIRADA',
+        severidade: 'MEDIA',
+        descricao: 'x',
+        chaveDedup: 'REP:al-1:$sufixo',
+        alunoId: 'al-1',
+        alunoNome: 'Alguém',
+      );
+      expect(
+        rotuloPendencia(rep('CONTINUO')),
+        contains('virada para contínuo'),
+      );
+      expect(rotuloPendencia(rep('VOLTA')), contains('volta para pontual'));
+      // O menu de FILTRO continua com o rótulo do tipo: lá se filtra por tipo.
+      expect(rotuloTipoPendencia('REP_VIRADA'), tiposPendencia['REP_VIRADA']);
+    });
+
+    test('referência oculta pela RLS não vira botão — nos quatro destinos', () {
+      // O id chega por `left join` mesmo quando o nome não chega (card 2.3 §9):
+      // é exatamente o caso de quem não pode ler a tabela de destino, e a
+      // regra vale para os quatro, não só para o aluno.
+      final oculta = pendenciaFalsa(
+        id: 'p',
+        tipo: 'PC_SEM_SUBSTITUTO',
+        severidade: 'ALTA',
+        descricao: 'x',
+        chaveDedup: 'PC:pc-1',
+        pcId: 'pc-1',
+      );
+      expect(referenciaDaAcaoPresente(oculta), isFalse);
+
+      final visivel = pendenciaFalsa(
+        id: 'p',
+        tipo: 'PC_SEM_SUBSTITUTO',
+        severidade: 'ALTA',
+        descricao: 'x',
+        chaveDedup: 'PC:pc-1',
+        pcId: 'pc-1',
+        pcIdentificador: 'LAB1-03',
+      );
+      expect(referenciaDaAcaoPresente(visivel), isTrue);
+      expect(idDaAcao(visivel), 'pc-1');
+      expect(parametroDaAcao(acaoDe(visivel.tipo)), 'pc');
+    });
+
+    testWidgets('"Ver turma" navega para /turmas COM o id do bloco', (
+      tester,
+    ) async {
+      final roteador = await montarComRotas(tester);
+      await abrir(tester, descCapacidade);
+      await tester.tap(find.text('Ver turma'));
+      await carregar(tester);
+
+      final uri = roteador.state.uri;
+      expect(uri.path, '/turmas');
+      expect(
+        uri.queryParameters['bloco'],
+        'b-acima',
+        reason: 'sem o id, a tela de destino abre a grade inteira',
+      );
+    });
+
+    testWidgets('"Alocar" abre a ficha na aba Turmas', (tester) async {
+      final roteador = await montarComRotas(tester);
+      await abrir(tester, descSemTurma);
+      await tester.tap(find.text('Alocar'));
+      await carregar(tester);
+
+      final uri = roteador.state.uri;
+      expect(uri.path, '/alunos/al-3005');
+      expect(uri.queryParameters['aba'], 'turmas');
+    });
+  });
+
+  group('os caminhos vermelhos', () {
+    testWidgets('marcar presença que falha vira BANNER, e não exceção crua', (
+      tester,
+    ) async {
+      final turmas = TurmasFalso.fixture()
+        ..situacao = SituacaoRep(
+          debito: 3,
+          aulaMaisAntiga: DateTime(2026, 9, 12),
+          prazoFinal: DateTime(2026, 10, 12),
+          semanasUteis: 2,
+          capacidade: 1,
+          faltasRecentes: 0,
+          veredito: 'SUGERIR_CONTINUO',
+        )
+        ..erroAoRegistrar = const ErroApp(
+          codigo: 'REPOSICAO_NAO_PREVISTA',
+          mensagem: 'Esta reposição já não está prevista.',
+          traduzido: true,
+        );
+      await montar(tester, turmas: turmas);
+      await abrir(tester, descRepContinuo);
+      await tester.tap(find.text('Veio'));
+      await carregar(tester);
+
+      expect(find.text('Esta reposição já não está prevista.'), findsOneWidget);
+      expect(find.text('Presença registrada'), findsNothing);
+    });
+
+    testWidgets('PENDENCIA_JA_RESOLVIDA recarrega a lista e fecha o '
+        'formulário — "atualize a tela" só vale se a tela atualizar', (
+      tester,
+    ) async {
+      final pendencias = PendenciasFalso.fixture()
+        ..erroAoResolver = const ErroApp(
+          codigo: 'PENDENCIA_JA_RESOLVIDA',
+          mensagem: 'Esta pendência já foi encerrada.',
+          traduzido: true,
+        );
+      final (repo, _) = await montar(tester, pendencias: pendencias);
+      final antes = repo.leituras;
+      await abrir(tester, descSemTurma);
+      await tester.tap(find.text('Resolver'));
+      await carregar(tester);
+      await tester.tap(find.byKey(chaveBotaoSalvar));
+      await carregar(tester);
+
+      expect(repo.leituras, greaterThan(antes), reason: 'a lista recarregou');
+      expect(find.byKey(chaveBotaoSalvar), findsNothing);
+    });
+  });
+
+  testWidgets('o cabeçalho traz a contagem do §14.1', (tester) async {
+    await montar(tester);
+    expect(find.text(tituloPendencias(6)), findsOneWidget);
+  });
+
+  testWidgets('a severidade aparece UMA vez no cabeçalho do painel', (
+    tester,
+  ) async {
+    await montar(tester);
+    await abrir(tester, descSemTurma);
+    expect(find.textContaining('ALTA · aberta'), findsNothing);
+    expect(find.textContaining('Aberta há 2 dias'), findsOneWidget);
   });
 }

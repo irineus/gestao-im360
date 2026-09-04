@@ -190,7 +190,39 @@ const rotasAplicacao = <Rota>[
 /// conjunto da lista — é a tela 3 do card 2.4 §6 ("lista e ficha"), não uma
 /// rota nova; a aba Trilha é a 3b, acima.
 const caminhoAlunos = '/alunos';
-String caminhoFichaAluno(String id) => '$caminhoAlunos/$id';
+
+/// As abas da ficha, **na ordem em que aparecem**. A ordem é contrato: é ela
+/// que traduz `?aba=turmas` em `initialIndex`, e mudá-la aqui muda a ficha.
+const abasFicha = <String>[
+  'dados',
+  'trilha',
+  'turmas',
+  'historico',
+  'certificado',
+];
+
+/// O índice da aba pedida na URL. Aba desconhecida — ou uma que ainda não
+/// existe — cai na primeira, que é o comportamento honesto: melhor abrir a
+/// ficha em Dados do que não abrir.
+int indiceAbaFicha(String? aba) {
+  final i = abasFicha.indexOf(aba ?? '');
+  return i < 0 ? 0 : i;
+}
+
+/// A ficha, opcionalmente já na aba em que o problema se resolve — é o que a
+/// central de pendências usa (wireframe §14.3).
+String caminhoFichaAluno(String id, {String? aba}) =>
+    aba == null ? '$caminhoAlunos/$id' : '$caminhoAlunos/$id?aba=$aba';
+
+/// Os atalhos que a central de pendências monta: a tela de destino **com o id**
+/// da referência, para ela abrir já no que a pendência descreve (§3.3 e §14.3).
+/// Sem o id, "Ver turma" leva a uma grade inteira e a pessoa procura de novo o
+/// que a lista já sabia.
+String caminhoDeRota(String rotaId, {String? parametro, String? valor}) {
+  final rota = rotasAplicacao.firstWhere((r) => r.id == rotaId);
+  if (parametro == null || valor == null) return rota.caminho;
+  return '${rota.caminho}?$parametro=${Uri.encodeQueryComponent(valor)}';
+}
 
 /// Todas as rotas guardadas, incluindo a seleção de unidade — é a tabela que o
 /// teste `guardas_rota_test.dart` percorre (card 2.8 §9.1).

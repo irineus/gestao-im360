@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../dashboard/dashboard.dart';
 import '../../dashboard/dashboard_provider.dart';
-import '../../theme/cores.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../widgets/card_dashboard.dart';
 
 /// Os totais por método do wireframe §5 — e, ao mesmo tempo, o **seletor** da
 /// grade de vagas abaixo.
@@ -23,59 +23,67 @@ class CartoesMetodo extends ConsumerWidget {
     final visivel = ref.watch(metodoVisivelProvider);
     final controlador = ref.read(metodoDashboardProvider.notifier);
 
-    return Wrap(
-      spacing: Dim.e12,
-      runSpacing: Dim.e12,
-      children: [
-        for (final total in totais)
-          _CartaoMetodo(
-            total: total,
-            selecionado: total.metodoId == visivel?.metodoId,
-            // Um método só: o cartão continua mostrando os números, mas não se
-            // anuncia como botão que não muda nada.
-            aoTocar: totais.length == 1
-                ? null
-                : () => controlador.escolher(total.metodoId),
-          ),
-      ],
+    return LayoutBuilder(
+      builder: (context, restricoes) {
+        // ⚠️ No mobile os cartões **empilham** (design-system §3). Com largura
+        // fixa de 200 px eles cabiam dois lado a lado numa tela de 430 px, que
+        // é o oposto da regra — e a segunda coluna ficava com o número colado
+        // na borda.
+        final mobile = faixaDe(restricoes.maxWidth) == Faixa.mobile;
+        final cartoes = [
+          for (final total in totais)
+            _CartaoMetodo(
+              total: total,
+              selecionado: total.metodoId == visivel?.metodoId,
+              largura: mobile ? null : larguraCardDashboard,
+              // Um método só: o cartão continua mostrando os números, mas não
+              // se anuncia como botão que não muda nada.
+              aoTocar: totais.length == 1
+                  ? null
+                  : () => controlador.escolher(total.metodoId),
+            ),
+        ];
+
+        return mobile
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final cartao in cartoes)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Dim.e12),
+                      child: cartao,
+                    ),
+                ],
+              )
+            : Wrap(spacing: Dim.e12, runSpacing: Dim.e12, children: cartoes);
+      },
     );
   }
 }
-
-const _larguraCartao = 200.0;
 
 class _CartaoMetodo extends StatelessWidget {
   const _CartaoMetodo({
     required this.total,
     required this.selecionado,
+    this.largura,
     this.aoTocar,
   });
 
   final TotalMetodo total;
   final bool selecionado;
+  final double? largura;
   final VoidCallback? aoTocar;
 
   @override
   Widget build(BuildContext context) {
-    final tema = Theme.of(context);
-    final cores = tema.colorScheme;
-    final escuro = tema.brightness == Brightness.dark;
-    final corAtencao = escuro ? Cores.atencaoEscuro : Cores.atencao;
+    final cores = Theme.of(context).colorScheme;
 
-    final conteudo = Container(
-      width: _larguraCartao,
-      padding: const EdgeInsets.all(Dim.e12),
-      decoration: BoxDecoration(
-        // Sistema plano com bordas (design-system §2.4): a seleção é borda mais
-        // forte e fundo tonal, nunca sombra.
-        border: Border.all(
-          color: selecionado ? cores.primary : cores.outlineVariant,
-          width: selecionado ? 2 : 1,
-        ),
-        borderRadius: BorderRadius.circular(Dim.raio),
-        color: selecionado ? cores.surfaceContainerHighest : null,
-      ),
-      child: Column(
+    return CardDashboard(
+      selecionado: selecionado,
+      aoTocar: aoTocar,
+      largura: largura,
+      semantica: descricaoMetodo(total),
+      filho: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -96,14 +104,23 @@ class _CartaoMetodo extends StatelessWidget {
           ),
           const SizedBox(height: Dim.e8),
           Text(
-            '${total.ocupacaoTexto} ocupados · ${total.blocosTexto}',
+            // "30 de 40 ocupados", e não "30/40": vinte e quatro pixels acima
+            // de células que também dizem `n/m` — e ali `n/m` são vagas —, a
+            // barra convida a ler a mesma coisa duas vezes de jeitos opostos.
+            '${total.ocupacaoPorExtenso} · ${total.blocosTexto}',
             style: Tipografia.numero(Tipografia.apoio),
           ),
           if (total.blocosLotados > 0)
             Text(
               '${total.blocosLotados} '
-              '${total.blocosLotados == 1 ? 'lotada' : 'lotadas'}',
-              style: Tipografia.apoio.copyWith(color: corAtencao),
+              '${total.blocosLotados == 1 ? 'lotado' : 'lotados'}',
+              // Lotado é **peso**, não cor de alerta (design-system §6): é o
+              // sistema funcionando, e o âmbar aqui gastava o alerta que a
+              // turma ESTOURADA, logo abaixo, precisa.
+              style: Tipografia.apoio.copyWith(
+                fontWeight: FontWeight.w600,
+                color: cores.onSurfaceVariant,
+              ),
             ),
           if (total.temAlerta)
             Row(
@@ -122,20 +139,6 @@ class _CartaoMetodo extends StatelessWidget {
         ],
       ),
     );
-
-    return Semantics(
-      button: aoTocar != null,
-      selected: selecionado,
-      label: descricaoMetodo(total),
-      excludeSemantics: true,
-      child: aoTocar == null
-          ? conteudo
-          : InkWell(
-              onTap: aoTocar,
-              borderRadius: BorderRadius.circular(Dim.raio),
-              child: conteudo,
-            ),
-    );
   }
 }
 
@@ -145,9 +148,9 @@ String descricaoMetodo(TotalMetodo total) {
   final partes = <String>[
     total.metodoCodigo,
     total.vagasTexto,
-    '${total.ocupacao} ocupados de ${total.capacidade}',
+    total.ocupacaoPorExtenso,
     total.blocosTexto,
-    if (total.blocosLotados > 0) '${total.blocosLotados} lotadas',
+    if (total.blocosLotados > 0) '${total.blocosLotados} lotados',
     if (total.temAlerta) '${total.blocosAcimaCapacidade} acima da capacidade',
   ];
   return partes.join(', ');

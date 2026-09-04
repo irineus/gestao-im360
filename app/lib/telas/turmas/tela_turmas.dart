@@ -13,6 +13,7 @@ import '../../turmas/turmas.dart';
 import '../../turmas/turmas_provider.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
+import '../../widgets/abertura_por_url.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
 import '../../widgets/painel_detalhe.dart';
@@ -36,8 +37,38 @@ import 'painel_bloco.dart';
 /// do painel. A troca é o que o wireframe §7.2 desenha, e é a leitura certa do
 /// gesto: quem clica numa turma quer ver quem está nela; editar horário e sala
 /// é o caso raro.
-class TelaTurmas extends ConsumerWidget {
-  const TelaTurmas({super.key});
+class TelaTurmas extends ConsumerStatefulWidget {
+  const TelaTurmas({super.key, this.blocoId});
+
+  /// `?bloco=<id>` — o atalho da central de pendências (`BLOCO_ACIMA_CAPACIDADE`
+  /// leva para cá, wireframe §14.3). A tela vai para a semana corrente e abre o
+  /// painel daquele bloco assim que a grade chega; sem isso, "Ver turma" abria
+  /// a grade inteira e a pessoa procurava de novo o que a lista já sabia.
+  final String? blocoId;
+
+  @override
+  ConsumerState<TelaTurmas> createState() => _TelaTurmasState();
+}
+
+class _TelaTurmasState extends ConsumerState<TelaTurmas>
+    with AberturaPorUrl<TelaTurmas> {
+  @override
+  void initState() {
+    super.initState();
+    // A pendência é sobre **agora**: a semana em que alguém deixou esta tela
+    // não é onde o bloco apontado precisa ser visto.
+    if (widget.blocoId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) ref.read(semanaProvider.notifier).hoje();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(TelaTurmas anterior) {
+    super.didUpdateWidget(anterior);
+    if (anterior.blocoId != widget.blocoId) reabrirNaProxima();
+  }
 
   Future<void> _novoBloco(
     BuildContext context, {
@@ -71,7 +102,7 @@ class TelaTurmas extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final semana = ref.watch(semanaProvider);
     final grade = ref.watch(gradeProvider);
     final filtro = ref.watch(filtroGradeProvider);
@@ -81,6 +112,17 @@ class TelaTurmas extends ConsumerWidget {
     final todas = grade.value ?? const <CelulaGrade>[];
     final visiveis = filtrarGrade(todas, filtro);
     final montada = montarGrade(semana, visiveis);
+
+    // O atalho abre o painel do bloco pedido — na primeira grade que o
+    // contenha, e uma vez só.
+    final pedido = widget.blocoId;
+    if (pedido != null && grade.hasValue) {
+      CelulaGrade? alvo;
+      for (final c in todas) {
+        if (c.blocoId == pedido) alvo ??= c;
+      }
+      abrirUmaVez(alvo, (celula) => _abrirBloco(context, celula));
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -133,7 +175,11 @@ class TelaTurmas extends ConsumerWidget {
             },
             data: (_) => montada.vazia
                 ? _Vazio(
-                    temGrade: todas.isNotEmpty,
+                    // "Nenhum bloco com esses filtros" **também** quando existe
+                    // filtro ligado e nada casou: sem esta metade a tela dizia
+                    // "nenhum bloco cadastrado" — que é falso — e não oferecia
+                    // "Limpar filtros", que é a saída.
+                    temGrade: todas.isNotEmpty || filtro.ativos > 0,
                     podeCriar: permissoes.contains('turmas.criar'),
                     aoLimpar: ref.read(filtroGradeProvider.notifier).limpar,
                     aoCriar: () => _novoBloco(context),
@@ -156,7 +202,8 @@ class TelaTurmas extends ConsumerWidget {
   }
 }
 
-/// Estado vazio da tela (design-system §7.2).
+/// Estado vazio da tela — os textos são os do design-system §7.2, que pede a
+/// ação junto: estado vazio de tabela nunca é só uma tabela sem linhas.
 const vazioTurmas = 'Nenhum bloco de horário cadastrado.';
 const vazioTurmasFiltro = 'Nenhum bloco com esses filtros nesta semana.';
 
@@ -200,7 +247,9 @@ class _NavegacaoSemana extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controlador = ref.read(semanaProvider.notifier);
-    final corrente = segundaDe(DateTime.now());
+    // A semana corrente é a de São Paulo — a mesma que o banco fixa com
+    // `fn_hoje()`. Pelo relógio do aparelho, "Hoje" podia levar à semana errada.
+    final corrente = segundaDe(hojeSaoPaulo());
     final ehCorrente = semana.isAtSameMomentAs(corrente);
 
     return Row(

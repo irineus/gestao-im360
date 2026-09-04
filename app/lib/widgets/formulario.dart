@@ -86,6 +86,7 @@ class FormularioIm360 extends StatefulWidget {
     required this.campos,
     this.aoSalvar,
     this.rotuloSalvar = 'Salvar',
+    this.nivelSalvar = NivelBotao.primario,
     this.aviso,
     this.acoes = const [],
     this.somenteLeitura = false,
@@ -100,6 +101,11 @@ class FormularioIm360 extends StatefulWidget {
   /// O que devolver fecha o formulário com esse resultado (`true` se nulo).
   final Future<Object?> Function()? aoSalvar;
   final String rotuloSalvar;
+
+  /// O primário é vermelho quando a ação **destrói** algo (design-system §5.7):
+  /// remover da turma, excluir. A cor faz parte do aviso, e um "Remover" na cor
+  /// de ação lê-se igual a "Salvar".
+  final NivelBotao nivelSalvar;
 
   /// Aviso de consequência, no par tonal de atenção, antes do botão
   /// (design-system §5.4).
@@ -286,6 +292,12 @@ class _FormularioIm360State extends State<FormularioIm360> {
                   child: FilledButton(
                     key: chaveBotaoSalvar,
                     onPressed: _executando ? null : _salvar,
+                    style: widget.nivelSalvar == NivelBotao.destrutivo
+                        ? FilledButton.styleFrom(
+                            backgroundColor: cores.error,
+                            foregroundColor: cores.onError,
+                          )
+                        : null,
                     child: _executando
                         ? const SizedBox(
                             height: 18,

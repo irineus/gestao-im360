@@ -29,9 +29,15 @@ import 'formularios.dart';
 /// o destino de deep-link e o ponto de partida da jornada nº 1 do monitor
 /// (ficha → Trilha → Registrar entrega, card 2.6 §3.2).
 class FichaAluno extends ConsumerWidget {
-  const FichaAluno({super.key, required this.alunoId});
+  const FichaAluno({super.key, required this.alunoId, this.aba});
 
   final String alunoId;
+
+  /// A aba que abre, vinda de `?aba=` — é como a central de pendências manda
+  /// "Alocar" para Turmas e "Ver checklist" para Certificado, em vez de largar
+  /// os oito tipos que apontam para a ficha na primeira aba (wireframe §14.3).
+  /// Nula ou desconhecida abre em Dados.
+  final String? aba;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,7 +59,7 @@ class FichaAluno extends ConsumerWidget {
               rotuloAcao: 'Voltar para Alunos',
               aoAgir: () => context.go(caminhoAlunos),
             )
-          : _Ficha(aluno: a),
+          : _Ficha(aluno: a, aba: aba),
     );
   }
 }
@@ -63,9 +69,10 @@ class FichaAluno extends ConsumerWidget {
 const fichaInexistente = 'Este aluno não existe ou você não tem acesso a ele.';
 
 class _Ficha extends ConsumerWidget {
-  const _Ficha({required this.aluno});
+  const _Ficha({required this.aluno, this.aba});
 
   final Aluno aluno;
+  final String? aba;
 
   Future<void> _alterarStatus(BuildContext context) async {
     final resultado = await mostrarFormulario<String>(
@@ -110,7 +117,8 @@ class _Ficha extends ConsumerWidget {
     ].join(' · ');
 
     return DefaultTabController(
-      length: 5,
+      length: abasFicha.length,
+      initialIndex: indiceAbaFicha(aba),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

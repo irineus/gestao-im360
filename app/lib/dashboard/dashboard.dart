@@ -21,7 +21,6 @@ export '../turmas/turmas.dart'
     show
         CelulaGrade,
         GradeSemana,
-        diasDaGrade,
         formatarDataCurta,
         montarGrade,
         nomeDia,
@@ -86,17 +85,20 @@ class TotalMetodo {
 
   bool get temAlerta => blocosAcimaCapacidade > 0;
 
-  /// Nula quando a capacidade é zero — todos os PCs em manutenção, por exemplo.
-  /// `0/0` não é "0% ocupado", é "não há o que ocupar", e uma barra em zero ali
-  /// diria que há folga onde não há máquina nenhuma.
-  double? get taxaOcupacao => capacidade == 0 ? null : ocupacao / capacidade;
-
   String get vagasTexto =>
       '$vagasLivres ${vagasLivres == 1 ? 'vaga livre' : 'vagas livres'}';
 
-  String get ocupacaoTexto => '$ocupacao/$capacidade';
+  /// "30 de 40 ocupados". Por extenso, e não `30/40`: no cartão este número
+  /// fica 24 px acima de células que também dizem `n/m` — e ali `n/m` são
+  /// **vagas**, a leitura oposta. A barra convidava a ler as duas do mesmo
+  /// jeito (achado da revisão da fase 05).
+  String get ocupacaoPorExtenso => '$ocupacao de $capacidade ocupados';
 
-  String get blocosTexto => '$blocos ${blocos == 1 ? 'turma' : 'turmas'}';
+  /// **"bloco de horário"**, e não "turma": o sistema chamava o mesmo objeto de
+  /// dois nomes na mesma tela — "3 turmas" no cartão, "3 blocos ativos" no
+  /// rodapé —, e turma é o que a escola chama de outra coisa no Modular.
+  String get blocosTexto =>
+      '$blocos ${blocos == 1 ? 'bloco de horário' : 'blocos de horário'}';
 }
 
 /// Um total por método, do **maior para o menor** em número de turmas, com o
@@ -168,7 +170,6 @@ class VagasNaCelula {
   const VagasNaCelula({
     required this.blocos,
     required this.capacidade,
-    required this.ocupacao,
     required this.vagasLivres,
     required this.acimaCapacidade,
     required this.salas,
@@ -177,7 +178,6 @@ class VagasNaCelula {
   static const vazia = VagasNaCelula(
     blocos: 0,
     capacidade: 0,
-    ocupacao: 0,
     vagasLivres: 0,
     acimaCapacidade: false,
     salas: 0,
@@ -185,7 +185,11 @@ class VagasNaCelula {
 
   final int blocos;
   final int capacidade;
-  final int ocupacao;
+
+  /// ⚠️ **Não há `ocupacao` aqui, de propósito.** A célula do dashboard lê
+  /// vagas livres / capacidade; a ocupação nunca foi mostrada nem lida, e um
+  /// campo somado que ninguém consome é um convite a recalcular a vaga por
+  /// `capacidade − ocupacao` — a conta que esta classe existe para não fazer.
   final int vagasLivres;
 
   /// Verdadeiro quando **algum** bloco do cruzamento está acima da capacidade —
@@ -199,7 +203,16 @@ class VagasNaCelula {
   final int salas;
 
   bool get semBloco => blocos == 0;
-  bool get lotada => !semBloco && vagasLivres == 0 && !acimaCapacidade;
+
+  /// ⚠️ Exige **capacidade maior que zero**, pela mesma razão de
+  /// `CelulaGrade.lotado`: todos os PCs em manutenção dão `0/0`, e sem esta
+  /// condição a célula aparecia como lotada — o oposto do que houve, e ainda
+  /// contando em `blocosLotados` no cartão do método.
+  bool get lotada =>
+      !semBloco && capacidade > 0 && vagasLivres == 0 && !acimaCapacidade;
+
+  /// Sem nenhum lugar a oferecer — é o fato que `PC_SEM_SUBSTITUTO` descreve.
+  bool get semCapacidade => !semBloco && capacidade == 0 && !acimaCapacidade;
 
   /// `2/10` — **vagas livres / capacidade**, e não alocados/capacidade.
   ///
@@ -223,13 +236,11 @@ class VagasNaCelula {
 VagasNaCelula vagasDa(List<CelulaGrade> blocos) {
   if (blocos.isEmpty) return VagasNaCelula.vazia;
   var capacidade = 0;
-  var ocupacao = 0;
   var vagas = 0;
   var acima = false;
   final salas = <String>{};
   for (final b in blocos) {
     capacidade += b.capacidade;
-    ocupacao += b.ocupacao;
     vagas += b.vagasLivres;
     acima = acima || b.acimaCapacidade;
     salas.add(b.salaId);
@@ -237,7 +248,6 @@ VagasNaCelula vagasDa(List<CelulaGrade> blocos) {
   return VagasNaCelula(
     blocos: blocos.length,
     capacidade: capacidade,
-    ocupacao: ocupacao,
     vagasLivres: vagas,
     acimaCapacidade: acima,
     salas: salas.length,
@@ -293,7 +303,8 @@ String descricaoCelula(int dia, String hora, VagasNaCelula vagas) {
         'de ${vagas.capacidade}',
     if (vagas.salas > 1) '${vagas.salas} salas',
     if (vagas.acimaCapacidade) 'acima da capacidade',
-    if (vagas.lotada) 'lotada',
+    if (vagas.lotada) 'lotado',
+    if (vagas.semCapacidade) 'sem capacidade',
   ];
   return partes.join(', ');
 }

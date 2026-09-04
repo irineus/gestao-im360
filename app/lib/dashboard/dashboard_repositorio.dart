@@ -29,11 +29,20 @@ class DashboardRepositorioSupabase implements DashboardRepositorio {
 
   final SupabaseClient _cliente;
 
-  /// As mesmas colunas de `fn_grade_semana`, porque a view **é** a função na
-  /// semana corrente — e por isso o modelo também é o mesmo (`CelulaGrade`).
+  /// As colunas de `fn_grade_semana` **menos o professor**, porque o dashboard
+  /// não o mostra.
+  ///
+  /// ⚠️ A ausência é decisão de 04/09/2026 (revisão da fase 05, decisão de
+  /// Irineu). `professor_id`/`professor_nome` eram lidos à toa, e a
+  /// `views-leitura.md` §11 chegava a declarar `professores.ler` para esta
+  /// view — permissão que a rota do dashboard nunca exigiu. Das duas saídas —
+  /// mostrar o professor e exigir a permissão, ou parar de lê-lo —, exigir
+  /// tiraria o dashboard de quem não tem `professores.ler`, e o professor já
+  /// aparece na tela de Turmas, cuja rota o exige. O modelo continua sendo o
+  /// mesmo `CelulaGrade`; `professorNome` fica nulo, e nada nesta tela o lê.
   static const _colunas =
       'bloco_id, dia_semana, hora_inicio, data_referencia, metodo_id, '
-      'metodo_codigo, sala_id, sala_nome, professor_id, professor_nome, '
+      'metodo_codigo, sala_id, sala_nome, '
       'capacidade_override, capacidade, ocupacao, vagas_livres, '
       'acima_capacidade';
 

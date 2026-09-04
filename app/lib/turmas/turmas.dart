@@ -218,7 +218,15 @@ class CelulaGrade {
   final bool acimaCapacidade;
 
   bool get semProfessor => professorNome == null;
-  bool get lotado => vagasLivres == 0 && !acimaCapacidade;
+
+  /// ⚠️ Exige **capacidade maior que zero**: todos os PCs da sala em manutenção
+  /// dão `0/0`, e sem esta condição o bloco aparecia como "lotado" — que é o
+  /// oposto do que houve. Bloco sem capacidade não está cheio: não há o que
+  /// ocupar, e é isso que a pendência `PC_SEM_SUBSTITUTO` descreve.
+  bool get lotado => capacidade > 0 && vagasLivres == 0 && !acimaCapacidade;
+
+  /// Sem nenhum lugar — a sala perdeu os PCs (card 5.4).
+  bool get semCapacidade => capacidade == 0 && !acimaCapacidade;
 
   /// `8/10` — a leitura da célula do wireframe §7.1.
   String get ocupacaoTexto => '$ocupacao/$capacidade';
@@ -699,7 +707,10 @@ List<String> resumoSituacaoRep(SituacaoRep s) => [
   if (s.aulaMaisAntiga != null)
     'mais antiga em ${formatarData(s.aulaMaisAntiga!)}',
   if (s.prazoFinal != null) 'prazo até ${formatarData(s.prazoFinal!)}',
-  'cabem ${s.semanasUteis * s.capacidade} até lá',
+  // "cabem N até lá" só existe quando há um "lá": sem prazo (aluno contínuo em
+  // dia, sem aula em aberto) a frase saía como "cabem 0 até lá", que soa a
+  // impossibilidade e é só ausência de prazo.
+  if (s.prazoFinal != null) 'cabem ${s.semanasUteis * s.capacidade} até lá',
   if (s.faltasRecentes > 0) '${s.faltasRecentes} falta(s) recente(s)',
   if (s.repDesde != null)
     'em reposição contínua desde ${formatarData(s.repDesde!)}',

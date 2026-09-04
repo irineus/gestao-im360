@@ -4,13 +4,14 @@ import '../../theme/cores.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../turmas/turmas.dart';
+import '../../widgets/matriz_semanal.dart';
 
 /// A grade semanal do wireframe §7.1: dia × horário, cada célula com método,
 /// ocupação/capacidade e professor.
 ///
-/// Duas faixas (card 2.6 §2.1): no `desktop` e no `tablet` a matriz inteira;
-/// no `mobile`, **um dia por vez** em abas, com as células em lista — uma
-/// matriz de seis colunas num celular só se lê com zoom.
+/// A forma da matriz — cabeçalho, coluna de hora, abas no mobile — é a
+/// [MatrizSemanal], compartilhada com a grade de vagas do dashboard. O que é
+/// desta tela é o **conteúdo** da célula.
 ///
 /// A célula é uma **lista** de blocos, não um bloco: a `unique` de
 /// `bloco_horario` é por `(unidade, sala, dia, hora)`, então duas salas podem
@@ -32,194 +33,44 @@ class GradeSemanal extends StatelessWidget {
   final void Function(int dia, String hora)? aoTocarVazio;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, restricoes) =>
-        faixaDe(restricoes.maxWidth) == Faixa.mobile
-        ? _GradeMobile(
-            grade: grade,
-            aoTocarBloco: aoTocarBloco,
-            aoTocarVazio: aoTocarVazio,
-          )
-        : _GradeDesktop(
-            grade: grade,
-            aoTocarBloco: aoTocarBloco,
-            aoTocarVazio: aoTocarVazio,
-          ),
-  );
-}
-
-const _larguraHora = 72.0;
-
-class _GradeDesktop extends StatelessWidget {
-  const _GradeDesktop({
-    required this.grade,
-    required this.aoTocarBloco,
-    this.aoTocarVazio,
-  });
-
-  final GradeSemana grade;
-  final void Function(CelulaGrade celula) aoTocarBloco;
-  final void Function(int dia, String hora)? aoTocarVazio;
-
-  @override
-  Widget build(BuildContext context) {
-    final cores = Theme.of(context).colorScheme;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(Dim.e16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const SizedBox(width: _larguraHora),
-              for (final dia in grade.dias)
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: Dim.e4),
-                    child: Column(
-                      children: [
-                        Text(
-                          nomeDiaCurto(dia),
-                          style: Tipografia.cabecalhoTabela,
-                        ),
-                        Text(
-                          formatarDataCurta(grade.dataDe(dia)),
-                          style: Tipografia.numero(Tipografia.apoio)
-                              .copyWith(color: cores.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const Divider(),
-          for (final hora in grade.horas) ...[
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    width: _larguraHora,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: Dim.e8),
-                      child: Text(
-                        hora,
-                        style: Tipografia.numero(Tipografia.rotulo),
-                      ),
-                    ),
-                  ),
-                  for (final dia in grade.dias)
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: Dim.e4,
-                          vertical: Dim.e4,
-                        ),
-                        child: _Celula(
-                          blocos: grade.em(dia, hora),
-                          aoTocarBloco: aoTocarBloco,
-                          aoTocarVazio: aoTocarVazio == null
-                              ? null
-                              : () => aoTocarVazio!(dia, hora),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-          ],
-          const SizedBox(height: Dim.e8),
-          const _Legenda(),
-        ],
-      ),
-    );
-  }
-}
-
-class _GradeMobile extends StatelessWidget {
-  const _GradeMobile({
-    required this.grade,
-    required this.aoTocarBloco,
-    this.aoTocarVazio,
-  });
-
-  final GradeSemana grade;
-  final void Function(CelulaGrade celula) aoTocarBloco;
-  final void Function(int dia, String hora)? aoTocarVazio;
-
-  @override
-  Widget build(BuildContext context) => DefaultTabController(
-    length: grade.dias.length,
-    child: Column(
-      children: [
-        TabBar(
-          isScrollable: true,
-          tabs: [
-            for (final dia in grade.dias)
-              Tab(
-                text:
-                    '${nomeDiaCurto(dia)} '
-                    '${formatarDataCurta(grade.dataDe(dia))}',
-              ),
-          ],
-        ),
-        Expanded(
-          child: TabBarView(
-            children: [
-              for (final dia in grade.dias)
-                ListView(
-                  padding: const EdgeInsets.all(Dim.e16),
-                  children: [
-                    for (final hora in grade.horas)
-                      if (grade.em(dia, hora).isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: Dim.e12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                hora,
-                                style: Tipografia.numero(Tipografia.rotulo),
-                              ),
-                              const SizedBox(height: Dim.e4),
-                              _Celula(
-                                blocos: grade.em(dia, hora),
-                                aoTocarBloco: aoTocarBloco,
-                              ),
-                            ],
-                          ),
-                        ),
-                    if (grade.horas.every((h) => grade.em(dia, h).isEmpty))
-                      Padding(
-                        padding: const EdgeInsets.all(Dim.e24),
-                        child: Text(
-                          'Nenhum bloco em ${nomeDia(dia).toLowerCase()}.',
-                          textAlign: TextAlign.center,
-                          style: Tipografia.corpo,
-                        ),
-                      ),
-                    const SizedBox(height: Dim.e8),
-                    const _Legenda(),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ],
+  Widget build(BuildContext context) => MatrizSemanal(
+    dias: grade.dias,
+    horas: grade.horas,
+    dataDe: grade.dataDe,
+    temConteudo: (dia, hora) => grade.em(dia, hora).isNotEmpty,
+    larguraHora: 72,
+    // Abre no dia de hoje, e não sempre em segunda: a grade de segunda é a
+    // resposta errada para quem abre o app na quinta.
+    diaInicial: hojeSaoPaulo().weekday,
+    // ⚠️ No mobile os cruzamentos vazios só aparecem para quem pode criar
+    // bloco — e aparecem justamente para que "célula vazia → criar bloco ali"
+    // exista no celular, e não só no desktop (achado da revisão da fase 05).
+    mostrarHorasVazias: aoTocarVazio != null,
+    vazioDoDia: 'Nenhum bloco em',
+    celula: (dia, hora) => _Celula(
+      dia: dia,
+      hora: hora,
+      blocos: grade.em(dia, hora),
+      aoTocarBloco: aoTocarBloco,
+      aoTocarVazio: aoTocarVazio == null
+          ? null
+          : () => aoTocarVazio!(dia, hora),
     ),
+    legenda: const _Legenda(),
   );
 }
 
 class _Celula extends StatelessWidget {
   const _Celula({
+    required this.dia,
+    required this.hora,
     required this.blocos,
     required this.aoTocarBloco,
     this.aoTocarVazio,
   });
 
+  final int dia;
+  final String hora;
   final List<CelulaGrade> blocos;
   final void Function(CelulaGrade celula) aoTocarBloco;
   final VoidCallback? aoTocarVazio;
@@ -227,17 +78,24 @@ class _Celula extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (blocos.isEmpty) {
-      if (aoTocarVazio == null) return const SizedBox(height: Dim.e32);
-      return InkWell(
-        onTap: aoTocarVazio,
-        borderRadius: BorderRadius.circular(Dim.raio),
-        child: SizedBox(
-          height: Dim.e32,
-          child: Center(
-            child: Icon(
-              Icons.add,
-              size: 16,
-              color: Theme.of(context).colorScheme.outlineVariant,
+      if (aoTocarVazio == null) return const SizedBox(height: Dim.alturaBotao);
+      return Semantics(
+        button: true,
+        label: '${nomeDia(dia)} $hora, sem turma, criar bloco',
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: aoTocarVazio,
+          borderRadius: BorderRadius.circular(Dim.raio),
+          child: SizedBox(
+            // Alvo de toque: 32 px era menos que o mínimo do §8.4 nas duas
+            // faixas, e no celular esta é a área que cria um bloco.
+            height: Dim.alturaBotao,
+            child: Center(
+              child: Icon(
+                Icons.add,
+                size: 16,
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
             ),
           ),
         ),
@@ -279,11 +137,17 @@ class _CartaoBloco extends StatelessWidget {
 
     return Semantics(
       button: true,
+      // ⚠️ Dia e hora primeiro: numa matriz, o `Semantics` de uma célula sem a
+      // coordenada anuncia "Interativo, 8 de 10" sem dizer QUANDO — e quem lê
+      // por leitor de tela não tem a coluna nem a linha à vista (§8.5).
       label:
+          '${nomeDia(celula.diaSemana)} ${celula.horaInicio}, '
           '${celula.metodoCodigo}, ${celula.ocupacao} de ${celula.capacidade}, '
           '${celula.salaNome}, '
           '${celula.professorNome ?? 'sem professor'}'
-          '${grave ? ', acima da capacidade' : ''}',
+          '${grave ? ', acima da capacidade' : ''}'
+          '${celula.lotado ? ', lotado' : ''}'
+          '${celula.semCapacidade ? ', sem capacidade' : ''}',
       child: InkWell(
         onTap: aoTocar,
         borderRadius: BorderRadius.circular(Dim.raio),
@@ -307,8 +171,13 @@ class _CartaoBloco extends StatelessWidget {
                       celula.metodoCodigo,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Tipografia.badge.copyWith(
-                        color: cores.onSurfaceVariant,
+                      // `apoio` em caixa alta, e não `badge` (§6): badge é o
+                      // vocabulário do status do aluno e do tipo na turma, e
+                      // aqui isto é só o rótulo do método.
+                      style: Tipografia.apoio.copyWith(
+                        color: grave
+                            ? cores.onErrorContainer
+                            : cores.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -334,19 +203,33 @@ class _CartaoBloco extends StatelessWidget {
               ),
               Text(
                 celula.ocupacaoTexto,
-                style: Tipografia.numero(Tipografia.rotulo),
+                // **Lotado é peso, não cor** (design-system §6): lotado é fato,
+                // não problema — a turma cheia é o sistema funcionando. Cor de
+                // alerta ali gasta o alerta que a turma ESTOURADA precisa.
+                style: Tipografia.numero(Tipografia.rotulo).copyWith(
+                  fontWeight: celula.lotado ? FontWeight.w600 : FontWeight.w500,
+                  color: grave ? cores.onErrorContainer : null,
+                ),
               ),
               Text(
                 celula.professorNome ?? '—',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+                style: Tipografia.apoio.copyWith(
+                  color: grave
+                      ? cores.onErrorContainer
+                      : cores.onSurfaceVariant,
+                ),
               ),
               Text(
                 celula.salaNome,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+                style: Tipografia.apoio.copyWith(
+                  color: grave
+                      ? cores.onErrorContainer
+                      : cores.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -376,6 +259,10 @@ class _Legenda extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Text('Célula: método · alocados/capacidade · professor', style: estilo),
+        Text(
+          'bloco lotado',
+          style: estilo.copyWith(fontWeight: FontWeight.w600),
+        ),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [

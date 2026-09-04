@@ -648,7 +648,7 @@ o número certo se o leitor tiver **todo** o conjunto (§3.4), e é esse conjunt
 | `v_demanda_imediata_aluno` / `v_demanda_imediata` | `alunos.ler`, `materiais.ler` |
 | `v_demanda_projetada` | `materiais.ler`, `estoque.ler` |
 | `v_pedido_sugerido` | `materiais.ler`, `estoque.ler`, `alunos.ler`, `compras.ler` |
-| `v_bloco_vagas_semana` | `turmas.ler`, `salas.ler`, **`materiais.ler`**, `professores.ler` |
+| `v_bloco_vagas_semana` | `turmas.ler`, `salas.ler`, **`materiais.ler`** |
 | `v_turma_modular_lotacao` | `turmas.ler`, `salas.ler`, **`materiais.ler`** |
 | `v_dashboard_alunos_metodo` | `alunos.ler`, **`materiais.ler`** |
 | `v_dashboard_conclusoes_semestre` | `alunos.ler`, **`materiais.ler`** |
@@ -666,6 +666,15 @@ errado era só esta tabela, que é o contrato declarado. ✅ Para `v_bloco_vagas
 ser parágrafo em 04/09/2026: `supabase/tests/095_views_paridade.sql` ganhou o perfil `SEM_MATERI`, que
 vê a grade **vazia** e a recebe **inteira** de volta assim que `materiais.ler` é concedida. As outras
 quatro continuam com os cards 7.4 e 8.7.
+
+⚠️ **`professores.ler` SAIU da linha de `v_bloco_vagas_semana` em 04/09/2026** (card 5.11, decisão de
+Irineu). A permissão foi declarada aqui pelo achado nº 2 do §7 — o `left join` em professor mente em
+vez de esvaziar —, mas **o dashboard não mostra professor**: a rota dele (`permissoes-matriz.md` §6)
+nunca exigiu a permissão, e `professor_id`/`professor_nome` eram lidos à toa. Das duas saídas
+possíveis — mostrar o professor no `Semantics` e passar a exigir a permissão na rota, ou parar de
+lê-lo —, Irineu escolheu a segunda: exigir tiraria o dashboard de quem não tem `professores.ler`, e
+o professor já aparece na tela de **Turmas**, cuja rota o exige (e onde `fn_grade_semana`, não esta
+view, é a fonte). A leitura foi removida de `dashboard_repositorio.dart` no mesmo dia.
 
 Nove códigos novos, todos no padrão `<dominio>.ler`: `alunos.ler`, `materiais.ler`, `estoque.ler`,
 `compras.ler`, `turmas.ler`, `salas.ler`, `certificados.ler`, `pendencias.ler`, `admin.ler`.
@@ -690,10 +699,14 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 
 ### 12.1 Views de tela, que pertencem aos seus próprios cards
 
-Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_lista` (4.6),
-`v_aluno_trilha` (6.6), `v_bloco_alunos` (5.7), `v_material_movimento` (6.7),
-`v_certificado_fila` (8.6). São views de listagem, sem número derivado — o cuidado de §3 vale, o
-resto é do card da tela.
+Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6),
+`v_bloco_alunos` (5.7), `v_material_movimento` (6.7), `v_certificado_fila` (8.6). São views de
+listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+
+~~`v_aluno_lista` (4.6)~~ — **não existe, e não vai existir.** A lista de alunos lê a tabela `aluno`
+e junta método, combo e turmas em memória: a view juntaria os três num objeto de banco a mais sem
+tirar nenhuma consulta da tela (decisão do card 4.6). *(O `wireframes.md` §6.1 ainda a citava como
+fonte da tela; corrigido em 04/09/2026, na revisão da fase 05.)*
 
 ✅ **`v_bloco_alunos` nasceu em 03/09/2026 (card 5.7), e virou DUAS coisas — divergência registrada.**
 O nome estava reservado para "a lista de alunos do bloco", que é o wireframe §7.2; mas essa lista é

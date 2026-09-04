@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../dashboard/dashboard.dart';
-import '../../theme/cores.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../util/datas.dart';
+import '../../widgets/matriz_semanal.dart';
 
 /// A grade de vagas do wireframe §5: dia × horário, cada célula com **vagas
 /// livres / capacidade** — a leitura que responde "onde ainda cabe alguém".
@@ -14,9 +15,11 @@ import '../../theme/tipografia.dart';
 /// grade e não um enfeite abaixo dela, e cada célula carrega um `Semantics` que
 /// diz "2 vagas livres de 10" por extenso.
 ///
-/// Duas faixas (card 2.6 §2.1): no `desktop` e no `tablet` a matriz inteira; no
-/// `mobile`, uma lista vertical por dia — uma matriz de seis colunas num celular
-/// só se lê com zoom, e o wireframe §5 já manda degradá-la assim.
+/// A forma — matriz no desktop e no tablet, **abas Seg–Sáb no mobile** — é a
+/// [MatrizSemanal], a mesma da tela de Turmas. As duas telas usavam formas
+/// diferentes no celular (aqui, lista vertical por dia); Irineu decidiu por
+/// abas nas duas em 04/09/2026, e o design-system §6 já mandava isso para as
+/// telas 2 e 4 — a divergência estava no wireframe §5, corrigido.
 class GradeVagas extends StatelessWidget {
   const GradeVagas({super.key, required this.grade, this.aoTocarCelula});
 
@@ -28,140 +31,30 @@ class GradeVagas extends StatelessWidget {
   final void Function(int dia, String hora)? aoTocarCelula;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, restricoes) =>
-        faixaDe(restricoes.maxWidth) == Faixa.mobile
-        ? _ListaPorDia(grade: grade, aoTocarCelula: aoTocarCelula)
-        : _MatrizVagas(grade: grade, aoTocarCelula: aoTocarCelula),
+  Widget build(BuildContext context) => MatrizSemanal(
+    dias: grade.dias,
+    horas: grade.horas,
+    dataDe: grade.dataDe,
+    temConteudo: (dia, hora) => grade.em(dia, hora).isNotEmpty,
+    // Abre no dia de hoje: quem consulta vaga na quinta quer a quinta.
+    diaInicial: hojeSaoPaulo().weekday,
+    padding: EdgeInsets.zero,
+    // A caixinha de vagas é baixa; a grade de Turmas desenha cartões.
+    alturaLinhaMobile: 64,
+    celula: (dia, hora) => _CelulaVagas(
+      dia: dia,
+      hora: hora,
+      vagas: vagasDa(grade.em(dia, hora)),
+      aoTocar: aoTocarCelula,
+    ),
+    legenda: const LegendaVagas(),
   );
 }
 
-const _larguraHora = 64.0;
-
-class _MatrizVagas extends StatelessWidget {
-  const _MatrizVagas({required this.grade, this.aoTocarCelula});
-
-  final GradeSemana grade;
-  final void Function(int dia, String hora)? aoTocarCelula;
-
-  @override
-  Widget build(BuildContext context) {
-    final cores = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            const SizedBox(width: _larguraHora),
-            for (final dia in grade.dias)
-              Expanded(
-                child: Column(
-                  children: [
-                    Text(nomeDiaCurto(dia), style: Tipografia.cabecalhoTabela),
-                    Text(
-                      formatarDataCurta(grade.dataDe(dia)),
-                      style: Tipografia.numero(Tipografia.apoio)
-                          .copyWith(color: cores.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-        const Divider(),
-        for (final hora in grade.horas) ...[
-          Row(
-            children: [
-              SizedBox(
-                width: _larguraHora,
-                child: Text(hora, style: Tipografia.numero(Tipografia.rotulo)),
-              ),
-              for (final dia in grade.dias)
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(Dim.e4),
-                    child: _CelulaVagas(
-                      dia: dia,
-                      hora: hora,
-                      vagas: vagasDa(grade.em(dia, hora)),
-                      aoTocar: aoTocarCelula,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const Divider(height: 1),
-        ],
-        const SizedBox(height: Dim.e8),
-        const LegendaVagas(),
-      ],
-    );
-  }
-}
-
-class _ListaPorDia extends StatelessWidget {
-  const _ListaPorDia({required this.grade, this.aoTocarCelula});
-
-  final GradeSemana grade;
-  final void Function(int dia, String hora)? aoTocarCelula;
-
-  @override
-  Widget build(BuildContext context) {
-    final cores = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final dia in grade.dias)
-          // Dia sem turma nenhuma não vira seção vazia na lista: no celular a
-          // rolagem é o recurso escasso, e "Quinta — nada" ocuparia o espaço de
-          // um horário que existe. Na matriz a coluna fica, porque lá a forma
-          // fixa é o que deixa comparar os dias.
-          if (grade.horas.any((h) => grade.em(dia, h).isNotEmpty)) ...[
-            Padding(
-              padding: const EdgeInsets.only(top: Dim.e12, bottom: Dim.e4),
-              child: Text(
-                '${nomeDia(dia)} ${formatarDataCurta(grade.dataDe(dia))}',
-                style: Tipografia.cabecalhoTabela.copyWith(
-                  color: cores.onSurfaceVariant,
-                ),
-              ),
-            ),
-            for (final hora in grade.horas)
-              if (grade.em(dia, hora).isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: Dim.e4),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: _larguraHora,
-                        child: Text(
-                          hora,
-                          style: Tipografia.numero(Tipografia.rotulo),
-                        ),
-                      ),
-                      Expanded(
-                        child: _CelulaVagas(
-                          dia: dia,
-                          hora: hora,
-                          vagas: vagasDa(grade.em(dia, hora)),
-                          aoTocar: aoTocarCelula,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-          ],
-        const SizedBox(height: Dim.e12),
-        const LegendaVagas(),
-      ],
-    );
-  }
-}
-
 /// `2/10` = duas vagas livres de dez lugares. A cor nunca é o único portador do
-/// significado (card 1.9): lotada e acima da capacidade têm cada uma o seu
-/// ícone e o seu texto na legenda.
+/// significado (card 1.9): acima da capacidade tem o seu ícone e o seu texto na
+/// legenda; **lotada não tem ícone nenhum**, e isso é a regra do §6 — lotado é
+/// fato, não problema.
 class _CelulaVagas extends StatelessWidget {
   const _CelulaVagas({
     required this.dia,
@@ -177,30 +70,35 @@ class _CelulaVagas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tema = Theme.of(context);
-    final cores = tema.colorScheme;
-    final escuro = tema.brightness == Brightness.dark;
+    final cores = Theme.of(context).colorScheme;
 
     if (vagas.semBloco) {
-      return SizedBox(
-        height: Dim.e32,
-        child: Center(
-          child: Text(
-            '·',
-            style: Tipografia.apoio.copyWith(color: cores.outlineVariant),
+      // Traço e não "·": o ponto médio é decoração e o leitor de tela o
+      // anuncia como pontuação. E a célula vazia também é anunciada — antes
+      // ficava fora do `Semantics` e sumia da leitura (§8.5).
+      return Semantics(
+        label: descricaoCelula(dia, hora, vagas),
+        excludeSemantics: true,
+        child: SizedBox(
+          height: Dim.alturaBotao,
+          child: Center(
+            child: Text(
+              '—',
+              style: Tipografia.apoio.copyWith(color: cores.outlineVariant),
+            ),
           ),
         ),
       );
     }
 
     final corTexto = vagas.acimaCapacidade
-        ? cores.error
-        : vagas.lotada
-        ? (escuro ? Cores.atencaoEscuro : Cores.atencao)
+        ? cores.onErrorContainer
         : cores.onSurface;
 
     final conteudo = Container(
-      height: Dim.e32,
+      // Alvo de toque do §8.4: a célula é atalho para a grade de Turmas, e 32
+      // px ficavam abaixo do mínimo do desktop, quanto mais do celular.
+      height: Dim.alturaBotao,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         border: Border.all(
@@ -215,21 +113,25 @@ class _CelulaVagas extends StatelessWidget {
         children: [
           Text(
             vagas.texto,
-            style: Tipografia.numero(Tipografia.rotulo)
-                .copyWith(color: corTexto),
+            style: Tipografia.numero(Tipografia.rotulo).copyWith(
+              color: corTexto,
+              // Lotada é **peso**, não cor e não ícone (design-system §6).
+              fontWeight: vagas.lotada ? FontWeight.w600 : FontWeight.w500,
+            ),
           ),
           if (vagas.acimaCapacidade) ...[
             const SizedBox(width: Dim.e4),
             Icon(Icons.warning_amber_rounded, size: 14, color: cores.error),
-          ] else if (vagas.lotada) ...[
-            const SizedBox(width: Dim.e4),
-            Icon(Icons.block, size: 14, color: corTexto),
           ],
           if (vagas.salas > 1) ...[
             const SizedBox(width: Dim.e4),
             Text(
               '${vagas.salas}×',
-              style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+              style: Tipografia.apoio.copyWith(
+                color: vagas.acimaCapacidade
+                    ? cores.onErrorContainer
+                    : cores.onSurfaceVariant,
+              ),
             ),
           ],
         ],
@@ -258,11 +160,7 @@ class LegendaVagas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tema = Theme.of(context);
-    final cores = tema.colorScheme;
-    final corAtencao = tema.brightness == Brightness.dark
-        ? Cores.atencaoEscuro
-        : Cores.atencao;
+    final cores = Theme.of(context).colorScheme;
     final estilo = Tipografia.apoio.copyWith(color: cores.onSurfaceVariant);
 
     return Wrap(
@@ -271,13 +169,9 @@ class LegendaVagas extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Text(rotuloLegendaVagas, style: estilo),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.block, size: 14, color: corAtencao),
-            const SizedBox(width: Dim.e4),
-            Text('turma lotada', style: estilo),
-          ],
+        Text(
+          'bloco lotado',
+          style: estilo.copyWith(fontWeight: FontWeight.w600),
         ),
         Row(
           mainAxisSize: MainAxisSize.min,

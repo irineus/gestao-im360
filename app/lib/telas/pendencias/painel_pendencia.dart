@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../erros/erro_app.dart';
 import '../../pendencias/pendencias.dart';
 import '../../pendencias/pendencias_provider.dart';
 import '../../rotas/rotas.dart';
@@ -10,6 +11,7 @@ import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../turmas/turmas.dart';
 import '../../turmas/turmas_provider.dart';
+import '../../turmas/turmas_widgets.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
@@ -17,7 +19,6 @@ import '../../widgets/painel_detalhe.dart';
 import '../turmas/formularios.dart' show recarregarTurmas;
 import 'formularios.dart';
 import 'severidade.dart';
-import 'tela_pendencias.dart';
 
 /// O detalhe de uma pendência e o lugar de onde se age sobre ela (wireframe
 /// §14.2 e §14.3), card 5.8.
@@ -73,6 +74,28 @@ class PainelPendencia extends ConsumerWidget {
     roteador.go(caminho);
   }
 
+  /// O caminho da ação **com o id** da referência (wireframe §3.3 e §14.3):
+  /// `/turmas?bloco=…` abre o painel daquele bloco, `/salas?pc=…` a sala
+  /// daquele PC, `/materiais?material=…` aquele material, e a ficha do aluno
+  /// abre na aba em que o problema se resolve. Sem o id, "Ver turma" levava à
+  /// grade inteira e a pessoa procurava de novo o que a lista já sabia.
+  static String? caminhoDaAcao(Pendencia pendencia) {
+    final acao = acaoDe(pendencia.tipo);
+    if (acao == AcaoPendencia.verAluno) {
+      return caminhoFichaAluno(
+        pendencia.alunoId!,
+        aba: abaDaFicha(pendencia.tipo),
+      );
+    }
+    final rotaId = rotaDaAcao(acao);
+    if (rotaId == null) return null;
+    return caminhoDeRota(
+      rotaId,
+      parametro: parametroDaAcao(acao),
+      valor: idDaAcao(pendencia),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pendencia = ref.watch(pendenciaProvider(pendenciaId));
@@ -93,10 +116,13 @@ class PainelPendencia extends ConsumerWidget {
         pendencia.tipo == 'REP_VIRADA' && pendencia.sentido != null;
 
     return PainelDetalhe(
-      titulo: rotuloTipoPendencia(pendencia.tipo),
+      // O rótulo é o da PENDÊNCIA, não o do tipo: as duas metades do
+      // `REP_VIRADA` pedem ações opostas e não podem abrir com o mesmo título.
+      titulo: rotuloPendencia(pendencia),
+      // A severidade sai daqui: ela já é o chip à direita, e dizê-la duas vezes
+      // na mesma linha de cabeçalho não acrescenta nada (design-system §5.2).
       subtitulo:
-          '${rotuloSeveridade(pendencia.severidade)} · aberta '
-          '${rotuloIdade(pendencia.diasAberta)} '
+          'Aberta ${rotuloIdade(pendencia.diasAberta)} '
           '(${formatarData(pendencia.criadoEm)})',
       acoes: [Severidade(pendencia.severidade)],
       filho: Column(
@@ -193,12 +219,13 @@ class _AcaoContextual extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    final caminho = acao == AcaoPendencia.verAluno
-        ? caminhoFichaAluno(pendencia.alunoId!)
-        : destino.caminho;
+    final caminho = PainelPendencia.caminhoDaAcao(pendencia);
+    if (caminho == null) return const SizedBox.shrink();
 
     return BotaoAcao(
-      rotulo: rotuloAcao(acao),
+      // O rótulo diz o que se vai FAZER, e não para onde a tela vai: "Alocar",
+      // "Formar", "Ver checklist" (wireframe §14.3).
+      rotulo: rotuloAcaoPendencia(pendencia.tipo),
       icone: Icons.arrow_forward,
       aoTocar: () => aoIr(caminho),
     );
@@ -213,47 +240,49 @@ class _AcaoContextual extends ConsumerWidget {
 /// `fn_reposicao_registrar`, que devolve o **veredito** recalculado: é o que
 /// permite quitar o débito aqui mesmo e ver, na hora, que a virada deixou de ser
 /// sugerida — em vez de esperar a rotina das 03:10 fechar a pendência.
-class _BlocoVirada extends ConsumerWidget {
+class _BlocoVirada extends ConsumerStatefulWidget {
   const _BlocoVirada({required this.pendencia});
 
   final Pendencia pendencia;
 
+  @override
+  ConsumerState<_BlocoVirada> createState() => _BlocoViradaState();
+}
+
+class _BlocoViradaState extends ConsumerState<_BlocoVirada> {
+  /// `registrarReposicao` é a única escrita deste painel que não passa por um
+  /// `FormularioIm360`, então o banner dela é responsabilidade daqui
+  /// (design-system §5.4 e §7.1). Sem ele, `REPOSICAO_NAO_PREVISTA` — alguém
+  /// já marcou noutra aba —, falta de permissão e queda de rede viravam
+  /// exceção crua, sem nada em tela.
+  String? _erro;
+
   Future<void> _registrar(
-    BuildContext context,
-    WidgetRef ref,
     ReposicaoAluno reposicao, {
     required bool veio,
   }) async {
-    final veredito = await ref
-        .read(turmasRepositorioProvider)
-        .registrarReposicao(reposicao.id, veio: veio);
-    recarregarTurmas(ref);
-    recarregarPendencias(ref);
-    if (!context.mounted) return;
-
-    // Resultado que muda a próxima ação é diálogo, nunca snackbar (card 2.7 f):
-    // o veredito é o que diz se ainda há uma virada a decidir.
-    final aviso = avisoVeredito(veredito);
-    await showDialog<void>(
-      context: context,
-      builder: (contexto) => AlertDialog(
-        title: Text(veio ? 'Presença registrada' : 'Falta registrada'),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Text(aviso ?? avisoVereditoManter, style: Tipografia.corpo),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(contexto).pop(),
-            child: const Text('Entendi'),
-          ),
-        ],
-      ),
-    );
+    setState(() => _erro = null);
+    try {
+      final veredito = await ref
+          .read(turmasRepositorioProvider)
+          .registrarReposicao(reposicao.id, veio: veio);
+      recarregarTurmas(ref);
+      recarregarPendencias(ref);
+      if (!mounted) return;
+      await mostrarVeredito(context, veio: veio, veredito: veredito);
+    } catch (erro) {
+      final traduzido = erro is ErroApp ? erro : traduzirErro(erro);
+      if (traduzido.codigo == 'REPOSICAO_NAO_PREVISTA') {
+        recarregarTurmas(ref);
+        recarregarPendencias(ref);
+      }
+      if (mounted) setState(() => _erro = traduzido.mensagem);
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final pendencia = widget.pendencia;
     // A aba Turmas da ficha faz o mesmo recorte, e pelo mesmo motivo: sem
     // `turmas.ler` a situação e as reposições viriam vazias, e "nenhuma
     // reposição prevista" seria indistinguível de "você não pode ver".
@@ -272,16 +301,28 @@ class _BlocoVirada extends ConsumerWidget {
         if (r.prevista) r,
     ]..sort((a, b) => a.data.compareTo(b.data));
     final blocos = ref.watch(blocosPorIdProvider);
-    final hoje = soData(DateTime.now());
+    // "Hoje" é o de São Paulo, o mesmo que o banco usa — pelo relógio do
+    // aparelho, "ainda vai acontecer" apareceria (ou faltaria) por um dia.
+    final hoje = hojeSaoPaulo();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const TituloSecao(
+        if (_erro != null) ...[
+          AvisoTonal(mensagem: _erro!, erro: true),
+          const SizedBox(height: Dim.e16),
+        ],
+        TituloSecao(
           texto: 'Situação de reposição',
-          apoio:
-              'O débito de aulas cabe no prazo, ou a reposição '
-              'vira contínua? A decisão é sua — o sistema só sugere.',
+          // O apoio muda com o SENTIDO: no `:VOLTA` a pergunta não é se o
+          // débito cabe, é se o aluno já pode largar a vaga fixa. Dizer a frase
+          // da ida nos dois casos descreve o contrário do que a tela sugere.
+          apoio: pendencia.sentido == SentidoVirada.volta
+              ? 'O aluno zerou o que tinha a repor e está fora da carência: '
+                    'devolvê-lo a reposição pontual libera a vaga fixa. A '
+                    'decisão é sua — o sistema só sugere.'
+              : 'O débito de aulas cabe no prazo, ou a reposição '
+                    'vira contínua? A decisão é sua — o sistema só sugere.',
         ),
         if (situacao == null)
           const EstadoCarregando(linhas: 1)
@@ -315,18 +356,13 @@ class _BlocoVirada extends ConsumerWidget {
                     : rotuloBloco(bloco.diaSemana, bloco.horaInicio);
               }(),
               futura: reposicao.data.isAfter(hoje),
-              aoRegistrar: (veio) =>
-                  _registrar(context, ref, reposicao, veio: veio),
+              aoRegistrar: (veio) => _registrar(reposicao, veio: veio),
             ),
         const SizedBox(height: Dim.e16),
       ],
     );
   }
 }
-
-const avisoVereditoManter =
-    'A reposição foi registrada. A situação do débito continua como estava — '
-    'a sugestão desta pendência não mudou.';
 
 const avisoSemTurmasLer =
     'Esta pendência é sobre reposição, e o seu perfil não lê turmas. Os números '

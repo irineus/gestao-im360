@@ -1,3 +1,4 @@
+import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/pendencias/pendencias.dart';
 import 'package:gestao_im360/pendencias/pendencias_repositorio.dart';
 
@@ -99,8 +100,17 @@ class PendenciasFalso implements PendenciasRepositorio {
   /// `<id>|<resolucao>|<justificativa>` — é como o teste confere a chamada.
   final List<String> fechadas = [];
 
+  /// Quantas vezes a lista foi lida — é como se assere que a tela **recarregou**
+  /// depois de uma escrita, sem espionar o provider.
+  int leituras = 0;
+
+  /// O erro que `resolver` levanta — `PENDENCIA_JA_RESOLVIDA`,
+  /// `PENDENCIA_INEXISTENTE`, `MOTIVO_OBRIGATORIO`. Nulo = caminho feliz.
+  ErroApp? erroAoResolver;
+
   @override
   Future<List<Pendencia>> abertas() async {
+    leituras++;
     final atraso = atrasoLeitura;
     if (atraso != null) await Future<void>.delayed(atraso);
     return ordenarPendencias(pendencias_);
@@ -113,6 +123,8 @@ class PendenciasFalso implements PendenciasRepositorio {
     String? justificativa,
   }) async {
     fechadas.add('$pendenciaId|$resolucao|${justificativa ?? ''}');
+    final erro = erroAoResolver;
+    if (erro != null) throw erro;
     pendencias_.removeWhere((p) => p.id == pendenciaId);
   }
 }

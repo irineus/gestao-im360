@@ -37,6 +37,14 @@ const _esquemaEscuro = ColorScheme.dark(
   outline: Cores.divisorEscuro,
   error: Cores.erroEscuro,
   onError: Cores.grafite900,
+  // ⚠️ Sem estes dois o Flutter devolve `error` no lugar de `errorContainer`, e
+  // toda superfície tonal de erro do tema escuro fica com fundo, borda e texto
+  // na MESMA cor — ilegível, e sem erro nenhum em teste ou em `analyze`
+  // (medido na revisão da fase 05: a célula "acima da capacidade" das duas
+  // grades e o `AvisoTonal(erro: true)`). O par é o CANCELADO escuro de
+  // `BadgesStatus.escuro`, cujo contraste já foi verificado.
+  errorContainer: Cores.erroFundoEscuro,
+  onErrorContainer: Cores.erroEscuro,
 );
 
 ThemeData _tema(

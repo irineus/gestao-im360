@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../infraestrutura/infraestrutura.dart';
 import '../../infraestrutura/infraestrutura_provider.dart';
 import '../../sessao/sessao_provider.dart';
+import '../../widgets/abertura_por_url.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
@@ -24,7 +25,13 @@ import 'formularios.dart';
 /// e amarrar `pc.status` à manutenção em aberto é a regra do card 5.4. Aqui a
 /// capacidade efetiva é **informativa** — PCs operacionais até o teto nominal.
 class TelaSalas extends StatelessWidget {
-  const TelaSalas({super.key});
+  const TelaSalas({super.key, this.pcId});
+
+  /// `?pc=<id>` — o atalho da central de pendências (`PC_SEM_SUBSTITUTO` leva
+  /// para cá, wireframe §14.3). A tela abre o detalhe da **sala daquele PC**;
+  /// sem o id, "Ver PC" abria a lista de salas e a pessoa procurava de novo o
+  /// que a pendência já sabia.
+  final String? pcId;
 
   @override
   Widget build(BuildContext context) => DefaultTabController(
@@ -39,7 +46,10 @@ class TelaSalas extends StatelessWidget {
         ),
         Expanded(
           child: TabBarView(
-            children: [const AbaSalas(), const AbaProfessores()],
+            children: [
+              AbaSalas(pcId: pcId),
+              const AbaProfessores(),
+            ],
           ),
         ),
       ],
@@ -58,8 +68,23 @@ const vazioProfessoresFiltro = 'Nenhum professor com esses filtros.';
 // Salas e PCs
 // ---------------------------------------------------------------------------
 
-class AbaSalas extends ConsumerWidget {
-  const AbaSalas({super.key});
+class AbaSalas extends ConsumerStatefulWidget {
+  const AbaSalas({super.key, this.pcId});
+
+  /// O PC pedido na URL — a aba abre o detalhe da sala dele.
+  final String? pcId;
+
+  @override
+  ConsumerState<AbaSalas> createState() => _AbaSalasState();
+}
+
+class _AbaSalasState extends ConsumerState<AbaSalas>
+    with AberturaPorUrl<AbaSalas> {
+  @override
+  void didUpdateWidget(AbaSalas anterior) {
+    super.didUpdateWidget(anterior);
+    if (anterior.pcId != widget.pcId) reabrirNaProxima();
+  }
 
   Future<void> _novaSala(BuildContext context) async {
     final resultado = await mostrarFormulario<String>(
@@ -81,11 +106,14 @@ class AbaSalas extends ConsumerWidget {
     }
   }
 
-  Future<void> _detalhe(BuildContext context, Sala sala) async {
+  Future<void> _detalhe(BuildContext context, Sala sala) =>
+      _detalhePorId(context, sala.id!);
+
+  Future<void> _detalhePorId(BuildContext context, String salaId) async {
     final resultado = await mostrarFormulario<String>(
       context,
       largura: larguraDetalhe,
-      construtor: (_) => DetalheSala(salaId: sala.id!),
+      construtor: (_) => DetalheSala(salaId: salaId),
     );
     if (resultado == 'excluido' && context.mounted) {
       confirmarEfemero(context, 'Sala excluída.');
@@ -93,9 +121,19 @@ class AbaSalas extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final salas = ref.watch(salasProvider);
     final pcs = ref.watch(pcsProvider).value ?? const <Pc>[];
+
+    // O atalho da pendência traz o **PC**; a tela de destino é a sala dele.
+    final pedido = widget.pcId;
+    if (pedido != null && salas.hasValue) {
+      String? salaDoPc;
+      for (final pc in pcs) {
+        if (pc.id == pedido) salaDoPc = pc.salaId;
+      }
+      abrirUmaVez(salaDoPc, (salaId) => _detalhePorId(context, salaId));
+    }
     final resumo = resumirSalas(salas.value ?? const <Sala>[], pcs);
     final filtro = ref.watch(filtroSalasProvider);
     final permissoes = ref.watch(permissoesProvider);

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/alunos/alunos_provider.dart';
 import 'package:gestao_im360/catalogo/catalogo.dart';
+import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
 import 'package:gestao_im360/infraestrutura/infraestrutura_provider.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
@@ -10,6 +12,7 @@ import 'package:gestao_im360/telas/alunos/aba_turmas.dart';
 import 'package:gestao_im360/telas/alunos/ficha_aluno.dart';
 import 'package:gestao_im360/telas/alunos/formularios.dart';
 import 'package:gestao_im360/telas/alunos/tela_alunos.dart';
+import 'package:gestao_im360/turmas/turmas_widgets.dart';
 import 'package:gestao_im360/theme/tema.dart';
 import 'package:gestao_im360/turmas/turmas.dart';
 import 'package:gestao_im360/turmas/turmas_provider.dart';
@@ -85,6 +88,7 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
+        retry: semRetryAutomatico,
         overrides: [
           alunosRepositorioProvider.overrideWithValue(repositorio),
           catalogoRepositorioProvider.overrideWithValue(
@@ -226,6 +230,27 @@ void main() {
       expect(find.text('Ana Paula Ribeiro'), findsOneWidget);
       expect(find.text('3001 · Interativo'), findsOneWidget);
       expect(find.byType(BadgeStatus), findsAtLeastNWidgets(3));
+    });
+
+    testWidgets('no mobile o cartão traz a TURMA e o alerta como ÍCONE — o '
+        'caractere não existe nas fontes do app', (tester) async {
+      // ⚠️ O teste anterior usava um perfil SEM `turmas.ler`, então nunca
+      // exercitava a linha de apoio com turma nenhuma — e foi por isso que o
+      // cartão ficou sem alerta quando o glifo quebrado saiu (revisão da
+      // fase 05, item A1).
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        permissoes: comTurmas,
+        tamanho: const Size(390, 800),
+      );
+
+      expect(find.text('Qua 08:00'), findsWidgets, reason: 'a turma no cartão');
+      expect(find.text('sem turma'), findsWidgets);
+      // O alerta é um `Icon`, e nunca o caractere: o portão de
+      // `texto_de_tela_test.dart` já reprova o caractere no código; aqui se
+      // assere que o ícone tomou o lugar dele em vez de sumir.
+      expect(find.byIcon(Icons.warning_amber_rounded), findsWidgets);
     });
   });
 
@@ -481,7 +506,66 @@ void main() {
       );
       // Bruno, Carla, Gabriela, Henrique, Lucas e Eduarda não estão em bloco
       // ativo; só os EM CURSO (ATIVO/ACELERAR) recebem o ⚠.
-      expect(find.text('sem turma'), findsWidgets);
+      // Por LINHA, e não `findsWidgets` solto: só quem está EM CURSO recebe o
+      // alerta. Gabriela está em STANDBY e não é problema nenhum.
+      Finder linhaDe(String nome) =>
+          find.ancestor(of: find.text(nome), matching: find.byType(Row));
+      expect(
+        find.descendant(
+          of: linhaDe('Bruno Carvalho').first,
+          matching: find.text('sem turma'),
+        ),
+        findsOneWidget,
+        reason: 'ATIVO sem turma',
+      );
+      expect(
+        find.descendant(
+          of: linhaDe('Gabriela Souza').first,
+          matching: find.text('sem turma'),
+        ),
+        findsNothing,
+        reason: 'STANDBY não está em curso',
+      );
+    });
+
+    testWidgets('enquanto as turmas CARREGAM ninguém é marcado como sem turma', (
+      tester,
+    ) async {
+      // ⚠️ `turmasPorAlunoProvider` lê `turmasProvider.value ?? []`: em
+      // `loading` o conjunto é vazio e o alerta caía sobre TODO aluno em curso
+      // (revisão da fase 05, item B1).
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        turmas: TurmasFalso(
+          celulas: const [],
+          turmas: const [],
+          atrasoLeitura: const Duration(milliseconds: 200),
+        ),
+        permissoes: comTurmas,
+      );
+      await tester.pump();
+      expect(find.text('sem turma'), findsNothing);
+      await carregar(tester);
+    });
+
+    testWidgets('turmas que FALHAM não viram "sem turma" para a escola '
+        'inteira', (tester) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        turmas: TurmasFalso.queFalha(),
+        permissoes: comTurmas,
+      );
+      expect(
+        find.text('sem turma'),
+        findsNothing,
+        reason:
+            'alerta falso na tela inteira é a falha calada que o projeto '
+            'cataloga',
+      );
+      // E a coluna DIZ que não deu para saber, com o caminho de volta.
+      expect(find.byIcon(Icons.refresh), findsWidgets);
     });
 
     testWidgets(
@@ -672,5 +756,214 @@ void main() {
       expect(find.byType(EstadoSemAcesso), findsOneWidget);
       expect(find.text(vazioTurmasAluno), findsNothing);
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Card 5.11 — as ações da aba Turmas, e os estados que faltavam
+  // -------------------------------------------------------------------------
+
+  group('aba Turmas — ações', () {
+    const podeAlocar = {...comTurmas, 'turmas.alocar'};
+
+    Future<TurmasFalso> abrirAba(
+      WidgetTester tester, {
+      TurmasFalso? turmas,
+      String aluno = 'al-3001',
+      Set<String> permissoes = podeAlocar,
+    }) async {
+      final repo = turmas ?? TurmasFalso.fixture();
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        turmas: repo,
+        permissoes: permissoes,
+        rotaInicial: '/alunos/$aluno',
+      );
+      await tester.tap(find.text('Turmas'));
+      await carregar(tester);
+      return repo;
+    }
+
+    testWidgets('sem turmas.alocar a aba continua só de leitura', (
+      tester,
+    ) async {
+      await abrirAba(tester, permissoes: comTurmas);
+      expect(find.text('Alocar em bloco'), findsNothing);
+      expect(find.text('Lançar reposição'), findsNothing);
+      expect(find.text('Remover'), findsNothing);
+      // E a lista continua visível: ler turma é o que a aba exige.
+      expect(find.text('Qua 08:00'), findsOneWidget);
+    });
+
+    testWidgets('alocar em bloco escolhe o horário e chama fn_bloco_admitir', (
+      tester,
+    ) async {
+      // Bruno não está em turma nenhuma — é o caso do estado vazio com ação.
+      final turmas = await abrirAba(tester, aluno: 'al-3002');
+      expect(find.text(vazioTurmasAluno), findsOneWidget);
+
+      await tester.tap(find.text('Alocar em bloco').first);
+      await carregar(tester);
+
+      // Só blocos do método dele e com vaga: o de quarta está 10/10 e o de
+      // Inglês é de outro método.
+      expect(find.textContaining('Seg 08:00 · Laboratório 1'), findsOneWidget);
+      expect(find.textContaining('Qua 08:00 · Laboratório 1'), findsNothing);
+      expect(find.textContaining('Laboratório 2'), findsNothing);
+
+      await tester.tap(find.textContaining('Seg 08:00 · Laboratório 1'));
+      await carregar(tester);
+      await tester.tap(find.byKey(chaveBotaoSalvar));
+      await carregar(tester);
+
+      expect(turmas.admitidos, ['b-vazio|al-3002|REM']);
+      expect(find.text('Aluno alocado.'), findsOneWidget);
+    });
+
+    testWidgets('sem escolher bloco é erro do formulário, não do banco', (
+      tester,
+    ) async {
+      final turmas = await abrirAba(tester, aluno: 'al-3002');
+      await tester.tap(find.text('Alocar em bloco').first);
+      await carregar(tester);
+      await tester.tap(find.byKey(chaveBotaoSalvar));
+      await carregar(tester);
+      expect(find.text(escolhaBloco), findsOneWidget);
+      expect(turmas.admitidos, isEmpty);
+    });
+
+    testWidgets('BLOCO_LOTADO do banco vira banner — a tela não pré-validou', (
+      tester,
+    ) async {
+      final turmas = TurmasFalso.fixture()
+        ..erroAoAdmitir = const ErroApp(
+          codigo: 'BLOCO_LOTADO',
+          mensagem: 'Este bloco não tem vaga livre nesta data.',
+          traduzido: true,
+        );
+      await abrirAba(tester, turmas: turmas, aluno: 'al-3002');
+      await tester.tap(find.text('Alocar em bloco').first);
+      await carregar(tester);
+      await tester.tap(find.textContaining('Seg 08:00 · Laboratório 1'));
+      await carregar(tester);
+      await tester.tap(find.byKey(chaveBotaoSalvar));
+      await carregar(tester);
+
+      expect(
+        find.text('Este bloco não tem vaga livre nesta data.'),
+        findsOneWidget,
+      );
+      expect(turmas.admitidos, isNotEmpty, reason: 'a chamada foi feita');
+    });
+
+    testWidgets('lançar reposição pela ficha escolhe bloco e data, e a lista '
+        'recarrega', (tester) async {
+      final turmas = await abrirAba(tester, aluno: 'al-3002');
+      await tester.tap(find.text('Lançar reposição'));
+      await carregar(tester);
+
+      // Repor é encaixe de um dia: o bloco cheio TAMBÉM é oferecido.
+      expect(find.textContaining('Qua 08:00 · Laboratório 1'), findsOneWidget);
+      await tester.tap(find.textContaining('Qua 08:00 · Laboratório 1'));
+      await carregar(tester);
+      await tester.tap(find.byKey(chaveBotaoSalvar));
+      await carregar(tester);
+
+      expect(turmas.reposicoesLancadas.single, startsWith('b-cheio|al-3002|'));
+      expect(find.text('Reposição lançada.'), findsOneWidget);
+      // O falso INSERE de verdade, então a aba mostra o que acabou de nascer —
+      // sem isso o teste mediria um mundo em que salvar não muda nada.
+      expect(find.text('Próximas'), findsOneWidget);
+    });
+
+    testWidgets(
+      'alocação em bloco DESATIVADO se remove daqui — e é a única tela que a '
+      'desfaz',
+      (tester) async {
+        // Eduarda está alocada no bloco de sexta, que está desativado: ele não
+        // aparece na grade, então o painel do bloco nunca abre para ele.
+        final turmas = await abrirAba(tester, aluno: 'al-3005');
+        expect(find.text('Sex 14:00'), findsOneWidget);
+        expect(find.text('bloco desativado'), findsOneWidget);
+        expect(find.text(avisoTurmaDesativada), findsOneWidget);
+
+        await tester.tap(find.text('Remover'));
+        await carregar(tester);
+        await tester.enterText(
+          find.byType(TextFormField).first,
+          'bloco encerrado',
+        );
+        await tester.tap(find.byKey(chaveBotaoSalvar));
+        await carregar(tester);
+
+        expect(turmas.removidos, ['b-inativo|al-3005|bloco encerrado']);
+        expect(find.text('Aluno removido da turma.'), findsOneWidget);
+      },
+    );
+
+    testWidgets('remover a última turma ATIVA avisa que abre pendência', (
+      tester,
+    ) async {
+      await abrirAba(tester);
+      await tester.tap(find.text('Remover'));
+      await carregar(tester);
+      expect(find.textContaining('ficará sem nenhuma turma'), findsOneWidget);
+    });
+
+    testWidgets('remover alocação órfã NÃO avisa que ficará sem turma — ela já '
+        'não contava', (tester) async {
+      await abrirAba(tester, aluno: 'al-3005');
+      await tester.tap(find.text('Remover'));
+      await carregar(tester);
+      expect(find.textContaining('ficará sem nenhuma turma'), findsNothing);
+    });
+  });
+
+  group('aba Turmas — o quarto estado', () {
+    testWidgets('erro ao ler as turmas mostra "Tentar de novo", e não uma '
+        'lista vazia', (tester) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        turmas: TurmasFalso.queFalha(),
+        permissoes: comTurmas,
+        rotaInicial: '/alunos/al-3001',
+      );
+      await tester.tap(find.text('Turmas'));
+      await carregar(tester);
+
+      // Três regiões falham juntas (turmas, reposições e situação REP), e
+      // nenhuma delas some em silêncio.
+      expect(find.text('Tentar de novo'), findsWidgets);
+      expect(find.text(vazioTurmasAluno), findsNothing);
+      expect(find.text(vazioReposicoes), findsNothing);
+    });
+
+    testWidgets(
+      'a situação REP que falha DIZ que falhou — antes era indistinguível de '
+      'aluno em dia',
+      (tester) async {
+        await montar(
+          tester,
+          repositorio: AlunosFalso.fixture(),
+          turmas: TurmasFalso.fixture()
+            ..erroAoLerSituacao = const ErroApp(
+              codigo: 'ALUNO_INEXISTENTE',
+              mensagem: 'Este aluno não existe ou você não tem acesso a ele.',
+              traduzido: true,
+            ),
+          permissoes: comTurmas,
+          rotaInicial: '/alunos/al-3001',
+        );
+        await tester.tap(find.text('Turmas'));
+        await carregar(tester);
+
+        expect(find.text('Situação de reposição'), findsOneWidget);
+        expect(
+          find.text('Este aluno não existe ou você não tem acesso a ele.'),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }

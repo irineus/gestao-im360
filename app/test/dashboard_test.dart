@@ -68,17 +68,26 @@ void main() {
       expect(totais.single.vagasTexto, '0 vagas livres');
     });
 
-    test('capacidade zero não vira "0% ocupado"', () {
-      final totais = totaisPorMetodo([
-        vagaFalsa(
-          blocoId: 'b1',
-          dia: 1,
-          dataReferencia: DateTime(2026, 1, 5),
-          capacidade: 0,
-          vagasLivres: 0,
-        ),
-      ]);
-      expect(totais.single.taxaOcupacao, isNull);
+    // Todos os PCs da sala em manutenção dão `0/0`. Antes o bloco entrava em
+    // `blocosLotados` e a célula era pintada como lotada — o oposto do que
+    // houve: não está cheio, não há o que ocupar (revisão da fase 05).
+    test('capacidade zero não é "lotado"', () {
+      final celula = vagaFalsa(
+        blocoId: 'b1',
+        dia: 1,
+        dataReferencia: DateTime(2026, 1, 5),
+        capacidade: 0,
+        vagasLivres: 0,
+      );
+      expect(celula.lotado, isFalse);
+      expect(celula.semCapacidade, isTrue);
+      expect(totaisPorMetodo([celula]).single.blocosLotados, 0);
+
+      final vagas = vagasDa([celula]);
+      expect(vagas.lotada, isFalse);
+      expect(vagas.semCapacidade, isTrue);
+      expect(descricaoCelula(1, '08:00', vagas), contains('sem capacidade'));
+      expect(descricaoCelula(1, '08:00', vagas), isNot(contains('lotado')));
     });
   });
 

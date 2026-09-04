@@ -33,6 +33,14 @@ import '../../widgets/painel_detalhe.dart';
 void recarregarTurmas(WidgetRef ref) =>
     ref.read(versaoTurmasProvider.notifier).incrementar();
 
+/// O texto do design-system §7.3 para a capacidade manual: diz **qual** número
+/// o valor informado substitui. Sem ele, quem digita 12 numa sala de 8 PCs não
+/// vê que acabou de vencer o cálculo — e a diferença só aparece no dia em que a
+/// nona pessoa não couber na sala.
+String avisoOverride(int derivada) =>
+    'A capacidade calculada pelos PCs desta sala é $derivada. O valor '
+    'informado substitui esse cálculo.';
+
 class FormularioBloco extends ConsumerStatefulWidget {
   const FormularioBloco({
     super.key,
@@ -138,11 +146,17 @@ class _FormularioBlocoState extends ConsumerState<FormularioBloco> {
       // desativar tira o bloco da grade e não realoca ninguém. A realocação é
       // da tela do card 5.7, e dizer isto aqui é melhor do que descobrir na
       // semana seguinte que uma turma inteira sumiu do horário.
+      // Dois avisos possíveis, e a ordem é a da consequência maior: desativar
+      // some com o bloco da grade; a capacidade manual substitui o cálculo dos
+      // PCs em silêncio, e o §7.3 manda dizer isso com o número ao lado — o
+      // `helperText` explica o campo, o aviso mostra o que o valor vai vencer.
       aviso: (!_ativo && ocupacao > 0)
           ? 'Este bloco tem $ocupacao aluno(s) nesta semana. Desativá-lo o tira '
                 'da grade, mas não realoca ninguém — realoque antes, na tela do '
                 'bloco.'
-          : null,
+          : _override.text.trim().isEmpty
+          ? null
+          : avisoOverride(resumo[_salaId]?.efetiva ?? 0),
       campos: [
         DropdownButtonFormField<int>(
           initialValue: _dia,
@@ -243,6 +257,7 @@ class _FormularioBlocoState extends ConsumerState<FormularioBloco> {
           validator: (valor) => (valor == null || valor.trim().isEmpty)
               ? null
               : validarInteiroPositivo(valor),
+          onChanged: (_) => setState(() {}),
         ),
         if (editando)
           SwitchListTile(
