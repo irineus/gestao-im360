@@ -73,3 +73,27 @@ MATERIAL_JA_NA_TRILHA
 # leitura e invoker — quem nao pode ver nao descobre que existe. Reaproveitar
 # MOVIMENTO_NAO_ESTORNAVEL mandaria procurar o problema no lugar errado.
 MOVIMENTO_INEXISTENTE
+# 10 do card 6.5 (pedidos de compra, recebimento e ajuste de estoque)
+# Familia de PC_INEXISTENTE / ALUNO_INEXISTENTE / MOVIMENTO_INEXISTENTE: vale
+# tambem para pedido e material de OUTRA unidade, porque a leitura e invoker.
+PEDIDO_INEXISTENTE
+MATERIAL_INEXISTENTE
+# Os tres estados que recusam uma acao de pedido. Nao se resumem num codigo so:
+# "nao esta aguardando recebimento", "so rascunho se envia" e "este pedido nao
+# pode ser cancelado" sao tres frases diferentes na tela, e reaproveitar um deles
+# mandaria a pessoa procurar o problema no lugar errado.
+PEDIDO_NAO_ENVIAVEL
+PEDIDO_NAO_CANCELAVEL
+PEDIDO_SEM_ITEM
+# O mesmo material duas vezes no pedido violaria pedido_item_uk e chegaria a tela
+# como 23505 cru — mesmo molde do MATERIAL_JA_NA_TRILHA do card 6.2.
+MATERIAL_JA_NO_PEDIDO
+ITEM_FORA_DO_PEDIDO
+QUANTIDADE_INVALIDA
+# Camada 2 do estorno: sinal oposto, mesma magnitude, mesmo material e mesma
+# unidade do movimento de origem. Nao se confunde com MOVIMENTO_NAO_ESTORNAVEL,
+# que fala do TIPO do movimento, nem com MOVIMENTO_JA_ESTORNADO.
+ESTORNO_SINAL_INVALIDO
+# "Sinal livre" no ajuste e sobre a direcao, nao sobre o saldo: saldo negativo
+# reprova o criterio (4) do marco 6.9 e e um numero que ninguem explica.
+SALDO_INSUFICIENTE

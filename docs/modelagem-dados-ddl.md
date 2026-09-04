@@ -661,8 +661,16 @@ create table public.pedido_item (
   qtd_recebida integer not null default 0 check (qtd_recebida >= 0),
   criado_em timestamptz not null default now(), criado_por uuid,
   atualizado_em timestamptz, atualizado_por uuid,
-  constraint pedido_item_uk unique (pedido_id, material_id),
-  constraint pedido_item_recebido_ck check (qtd_recebida <= qtd_pedida)
+  constraint pedido_item_uk unique (pedido_id, material_id)
+  -- ⚠️ `constraint pedido_item_recebido_ck check (qtd_recebida <= qtd_pedida)`
+  --    existiu do card 6.1 ao 6.5 e FOI REMOVIDA em 04/09/2026 (card 6.5). Um
+  --    `check` não conhece permissão: ele valia igual para a direção e tornava
+  --    `compras.receber_excedente` (card 2.4 §5.2) inalcançável, com
+  --    RECEBIMENTO_EXCEDE_PEDIDO — que está no contrato de erros desde o card
+  --    2.2 §12 — sem nenhum caminho até a tela. A regra virou
+  --    `tg_pedido_item_recebimento`, que é mais forte (alcança BYPASSRLS igual e
+  --    ainda distingue quem pode) e devolve o código do catálogo em vez de um
+  --    `23514`. `qtd_recebida >= 0` continua `check`: não depende de permissão.
 );
 
 alter table public.movimento_estoque

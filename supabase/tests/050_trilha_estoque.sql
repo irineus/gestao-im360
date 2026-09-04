@@ -185,6 +185,15 @@ select throws_ok(
   '23505', null,
   'um movimento so se estorna UMA vez — a unique parcial de estorno_de_id');
 
+-- ⚠️ Era um `23514` de `pedido_item_recebido_ck` até o card 6.5, e a mudança é
+-- decisão registrada, não regressão: `check` não conhece permissão, então ele
+-- valia igual para a direção e tornava `compras.receber_excedente` (card 2.4
+-- §5.2) INALCANÇÁVEL — com `RECEBIMENTO_EXCEDE_PEDIDO`, que está no contrato de
+-- erros desde o card 2.2 §12, sem nenhum caminho até a tela. A regra virou
+-- `tg_pedido_item_recebimento`, que é MAIS forte (alcança BYPASSRLS igual, e
+-- ainda distingue quem pode) e devolve o código do catálogo em vez do erro cru
+-- que o card 2.2 §1.2 proíbe. Aqui a sessão é `postgres` sem auth.uid(), então
+-- tem_permissao é falsa e a recusa acontece.
 select throws_ok(
   $$update public.pedido_item set qtd_recebida = qtd_pedida + 1
      where unidade_id = tests.unidade('ESCOLA_A')
@@ -195,8 +204,8 @@ select throws_ok(
                             join public.metodo me on me.id = m.metodo_id
                            where m.unidade_id = tests.unidade('ESCOLA_A')
                              and me.codigo = 'INTERATIVO' and m.codigo = '02')$$,
-  '23514', null,
-  'receber mais do que foi pedido e recusado pelo check — a excecao e permissao, no card 6.5');
+  'PT422', null,
+  'receber mais do que foi pedido e recusado — e a excecao e PERMISSAO, medida no 060');
 
 -- ===========================================================================
 -- 3. `deferrable initially deferred` — reordenar em UM update
@@ -489,27 +498,29 @@ select is(
   'e a trilha inteira da unidade A, sem nenhuma linha da unidade B');
 
 -- ===========================================================================
--- 9. Portão dos dois triggers de movimento_estoque que são do card 6.5
+-- 9. Portão dos dois triggers de movimento_estoque — DISPARADO no card 6.5
 -- ===========================================================================
 -- `tg_movimento_valida_sinal` (o estorno com sinal oposto e mesma magnitude do
 -- movimento de origem) e `tg_movimento_resolve_pendencia` (a chegada do pedido
--- fechando ESTOQUE_ZERO e COMPRA_SEM_ESTOQUE) são do card 6.5, e nenhum deles
--- pode nascer aqui: o primeiro depende de fn_estornar_entrega para ter um
--- chamador real e o segundo depende dos dois tipos de pendência, que só o card
--- 6.3 passa a abrir.
+-- fechando ESTOQUE_ZERO e COMPRA_SEM_ESTOQUE) eram do card 6.5, e não podiam
+-- nascer aqui: o primeiro dependia de fn_estornar_entrega para ter um chamador
+-- real e o segundo dos dois tipos de pendência, que só o card 6.3 passa a abrir.
 --
--- Esquecê-los não daria erro nenhum: daria um estorno de magnitude qualquer
--- (devolvendo ao estoque mais do que saiu) e uma central de pendências que
--- continua pedindo a compra de um material que já chegou — as duas com cara de
--- sistema funcionando.
+-- ✅ O card 6.5 fechou os dois em 04/09/2026, e o portão MUDOU DE LADO: até
+--    aqui ele vigiava a ausência da função; agora vigia a ausência dos triggers,
+--    que é o que continua podendo desaparecer numa refatoração — e a razão de o
+--    portão continuar existindo é que esquecê-los não daria erro nenhum. Daria
+--    um estorno de magnitude qualquer (devolvendo ao estoque mais do que saiu) e
+--    uma central de pendências que continua pedindo a compra de um material que
+--    já chegou: as duas com cara de sistema funcionando.
 create temporary view portao_estoque (gatilho, card) as values
   ('tg_movimento_valida_sinal',      '6.5'),
   ('tg_movimento_resolve_pendencia', '6.5');
 
--- A condição casa pelo NOME e ignora a assinatura: o card 6.5 ainda pode
--- escolher outros parâmetros para fn_pedido_receber, e um portão preso a
--- `(uuid, jsonb)` deixaria de disparar em silêncio — que é o pior desfecho
--- possível para um portão, pior do que não existir.
+-- A condição casa pelo NOME e ignora a assinatura: um portão preso a
+-- `(uuid, jsonb)` deixaria de disparar em silêncio no dia em que a função
+-- mudasse de parâmetros — que é o pior desfecho possível para um portão, pior do
+-- que não existir.
 create temporary view portao_estoque_devido as
   select coalesce(string_agg(format('fn_pedido_receber existe (card %s) e %s nao', p.card, p.gatilho),
                              '; ' order by p.gatilho), '') as devido
@@ -521,21 +532,15 @@ create temporary view portao_estoque_devido as
                       where t.tgname = p.gatilho and not t.tgisinternal);
 
 select is((select devido from portao_estoque_devido), '',
-  'nenhum trigger de estoque esta devido — fn_pedido_receber, do card 6.5, ainda nao existe');
+  'portao em dia: fn_pedido_receber existe (card 6.5) e os dois triggers dela tambem');
 
--- Prova por construção, dentro da transação: nascida a função do card 6.5, o
--- portão nomeia os dois triggers e o card deles.
-create function public.fn_pedido_receber(p_pedido_id uuid, p_itens jsonb) returns void
-language plpgsql set search_path = public, pg_temp as $sentinela$
-begin
-  perform 1;
-end $sentinela$;
+-- Prova por construção, dentro da transação: portão que nunca foi visto vermelho
+-- é decoração. O `rollback` do fim devolve o trigger.
+drop trigger tg_movimento_resolve_pendencia on public.movimento_estoque;
 
 select is((select devido from portao_estoque_devido),
-  'fn_pedido_receber existe (card 6.5) e tg_movimento_resolve_pendencia nao; fn_pedido_receber existe (card 6.5) e tg_movimento_valida_sinal nao',
-  'nascida fn_pedido_receber, o portao acusa os dois triggers que ficaram para tras');
-
-drop function public.fn_pedido_receber(uuid, jsonb);
+  'fn_pedido_receber existe (card 6.5) e tg_movimento_resolve_pendencia nao',
+  'retirado o trigger, o portao o nomeia — e nomeia o card de quem o deve');
 
 select * from finish();
 rollback;
