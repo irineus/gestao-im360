@@ -48,6 +48,20 @@ pelas políticas do usuário que perguntou.
 Vale também para view sobre view: a opção é **por view**, não herdada. `v_demanda_imediata` lê
 `v_demanda_imediata_aluno`; as duas declaram.
 
+⚠️ **Medido em 04/09/2026 (card 6.4), e o custo de esquecer é ASSIMÉTRICO — não é o que a leitura
+ingênua da regra sugere.** Com `alter view … reset (security_invoker)` nas duas pontas da cadeia:
+
+- tirar a opção da view **de baixo** (`v_demanda_imediata_aluno`) **vaza até em cima**: a agregada,
+  que continua `invoker`, passa a ler a de baixo como o **dono** dela, que tem `BYPASSRLS` (card
+  3.3), e a soma das **duas unidades** chega à tela com a cara de um número certo. Três asserções de
+  paridade do teste `095` ficam vermelhas;
+- tirar a opção da view **de cima**, sozinha, **não vaza**: com a de baixo ainda `invoker`, as
+  tabelas continuam sendo checadas contra o usuário da sessão e a contagem não muda. **Quem acusa
+  esse caso é só o C5**, e é por isso que ele não é redundante com o teste de paridade.
+
+Consequência para os cards 8.1 e 8.2, que vão empilhar mais uma view aqui: a opção segue obrigatória
+nas duas pontas, mas a que **precisa** de teste de comportamento é a de baixo.
+
 ### 2.2 Nunca `materialized view`
 
 Uma matview **não respeita RLS** — é um instantâneo materializado com a visibilidade de quem deu o
@@ -384,6 +398,12 @@ replace view` que troca **duas expressões** e nada mais:
 O zero é honesto e está documentado como reserva: até a Fase 8, o pedido sugerido é a v1 do plano, e
 a tela mostra a coluna projetada zerada em vez de fingir que ela não existe.
 
+✅ **A reserva deixou de ser parágrafo em 04/09/2026 (card 6.4).** O teste `095` assere a **posição**
+pelo catálogo — `qtd_projetada` é a 10ª coluna e a view tem 12, com `qtd_sugerida` na última —, que
+é a asserção que o card 2.8 §14 pedia para esta decisão. Exercitada: recriando a view com a coluna
+**no fim**, que é como ela nasceria se o 6.4 a tivesse deixado para a Fase 8, a asserção fica
+vermelha sozinha. É ela que garante ao card 8.2 o `create or replace` de duas expressões.
+
 > **Consequência para o board:** o card 8.2 deixa de ser "evoluir a view" e passa a ser "preencher a
 > parcela e mostrar a coluna na tela de Compras". Registrado nas Notas do card.
 
@@ -645,7 +665,7 @@ o número certo se o leitor tiver **todo** o conjunto (§3.4), e é esse conjunt
 | View | Permissões de leitura exigidas |
 |---|---|
 | `v_estoque_atual` | `materiais.ler`, `estoque.ler` |
-| `v_demanda_imediata_aluno` / `v_demanda_imediata` | `alunos.ler`, `materiais.ler` |
+| `v_demanda_imediata_aluno` / `v_demanda_imediata` | `alunos.ler` — ⚠️ ~~`materiais.ler`~~, ver a correção abaixo |
 | `v_demanda_projetada` | `materiais.ler`, `estoque.ler` |
 | `v_pedido_sugerido` | `materiais.ler`, `estoque.ler`, `alunos.ler`, `compras.ler` |
 | `v_bloco_vagas_semana` | `turmas.ler`, `salas.ler`, **`materiais.ler`** |
@@ -676,6 +696,18 @@ lê-lo —, Irineu escolheu a segunda: exigir tiraria o dashboard de quem não t
 o professor já aparece na tela de **Turmas**, cuja rota o exige (e onde `fn_grade_semana`, não esta
 view, é a fonte). A leitura foi removida de `dashboard_repositorio.dart` no mesmo dia.
 
+⚠️ **`materiais.ler` SAIU da linha das duas views de demanda em 04/09/2026** (card 6.4), fechando o
+achado nº 12 de `docs/permissoes-matriz.md` §7, que estava atribuído a este card desde 01/09/2026.
+Ao contrário das cinco linhas em negrito acima, `v_demanda_imediata_aluno` **não faz `join` em
+material nenhum**: ela lê `aluno_material` e `aluno`, as duas com política de `select` por
+`alunos.ler`, e devolve `material_id`. Quem precisa do **nome** do material é a tela, que já carregou
+o catálogo. Declarar a permissão a mais não deixava a view errada — deixava o **contrato** errado, e
+contrato de permissão errado é o que faz alguém guardar uma rota por um conjunto que não é o mínimo
+(ou enxugar a matriz confiando numa linha que nunca foi medida). Agora foi: `supabase/tests/095_views_paridade.sql`
+ganhou o perfil `SO_ALUNOS`, que tem **só** `alunos.ler` e recebe as duas views **inteiras** — e o
+mesmo perfil vê `v_estoque_atual` vazia, que é a coerência do outro lado. Se um dia a view passar a
+citar `material`, a asserção cai e diz que a linha voltou a estar errada.
+
 Nove códigos novos, todos no padrão `<dominio>.ler`: `alunos.ler`, `materiais.ler`, `estoque.ler`,
 `compras.ler`, `turmas.ler`, `salas.ler`, `certificados.ler`, `pendencias.ler`, `admin.ler`.
 Na matriz inicial do plano, o **monitor** não tem `compras.ler` — logo não recebe a tela de Compras,
@@ -691,7 +723,7 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | `v_pendencias_abertas` | **5.5** ✅ — a primeira view do projeto, e com ela nasceu o C5 (toda view `security_invoker`, zero matview) | 5 |
 | `v_bloco_vagas_semana`, `fn_grade_semana` | **5.6** ✅ (grade) — o **5.9** (dashboard) ✅ é consumidor da view e **não criou objeto nenhum de banco** | 5 |
 | `v_bloco_alunos`, `fn_bloco_alunos` | **5.7** ✅ — ver §12.1 | 5 |
-| `v_estoque_atual`, `v_demanda_imediata_aluno`, `v_demanda_imediata`, `v_pedido_sugerido` | 6.4 | 6 |
+| `v_estoque_atual`, `v_demanda_imediata_aluno`, `v_demanda_imediata`, `v_pedido_sugerido` | **6.4** ✅ — `20260904180000_views_estoque_demanda.sql`, as quatro sem uma linha de dado; o teste `095` cresceu de 29 para 86 asserções | 6 |
 | `v_turma_modular_lotacao` | 7.4 | 7 |
 | `demanda_projetada`, `v_demanda_projetada` | 8.1 | 8 |
 | `v_pedido_sugerido` — troca do literal `0` pela parcela projetada | 8.2 | 8 |
