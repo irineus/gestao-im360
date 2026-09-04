@@ -16,11 +16,12 @@ import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
+import 'aba_turmas.dart';
 import 'formularios.dart';
 
 /// A ficha do aluno (docs/wireframes.md §6.2) — cabeçalho com status e as
-/// ações do dia a dia, e as abas. Neste card existem **Dados** e
-/// **Histórico**; Trilha (6.6), Turmas (5.7) e Certificado (8.6) ficam no
+/// ações do dia a dia, e as abas. Existem **Dados** e **Histórico** desde o
+/// card 4.6 e **Turmas** desde o 5.7; Trilha (6.6) e Certificado (8.6) ficam no
 /// lugar, dizendo qual card as entrega, para a ordem das abas não mudar
 /// debaixo de quem já aprendeu a tela.
 ///
@@ -204,7 +205,7 @@ class _Ficha extends ConsumerWidget {
                   nomeCombo: nomeCombo,
                 ),
                 const _AbaFutura(nome: 'Trilha', card: '6.6'),
-                const _AbaFutura(nome: 'Turmas', card: '5.7'),
+                AbaTurmas(aluno: aluno),
                 AbaHistorico(aluno: aluno),
                 const _AbaFutura(nome: 'Certificado', card: '8.6'),
               ],

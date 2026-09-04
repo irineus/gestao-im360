@@ -15,9 +15,12 @@ import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
 import '../../widgets/painel_detalhe.dart';
 
-/// Os formulários da grade semanal (card 5.6). Devolvem `'salvo'` ou
-/// `'excluido'` ao fechar, para a tela mostrar a confirmação efêmera certa
-/// (design-system §5.8).
+/// Os formulários da grade semanal (card 5.6): o cadastro do bloco e a lista de
+/// inativos. Os de **alocação** (adicionar, remover, repor) são do card 5.7 e
+/// moram em `formularios_alocacao.dart`, ao lado do painel que os abre.
+///
+/// Devolvem `'salvo'` ou `'excluido'` ao fechar, para a tela mostrar a
+/// confirmação efêmera certa (design-system §5.8).
 ///
 /// Nenhum deles verifica regra: submete e traduz o erro pelo código
 /// (card 2.6 decisão 2). O que se valida aqui é formato — obrigatório, número,
@@ -25,7 +28,9 @@ import '../../widgets/painel_detalhe.dart';
 /// `unique` do banco (23505, já traduzido desde o card 4.4); quem recusa apagar
 /// bloco com histórico é `tg_bloco_exclusao_valida` (`BLOCO_COM_ALOCACAO`).
 
-void _recarregar(WidgetRef ref) =>
+/// Recarrega tudo o que depende de turmas depois de uma escrita — compartilhada
+/// com os formulários de alocação do card 5.7.
+void recarregarTurmas(WidgetRef ref) =>
     ref.read(versaoTurmasProvider.notifier).incrementar();
 
 class FormularioBloco extends ConsumerStatefulWidget {
@@ -270,7 +275,7 @@ class _FormularioBlocoState extends ConsumerState<FormularioBloco> {
                 ativo: _ativo,
               ),
             );
-        _recarregar(ref);
+        recarregarTurmas(ref);
         return 'salvo';
       },
       acoes: [
@@ -289,7 +294,7 @@ class _FormularioBlocoState extends ConsumerState<FormularioBloco> {
             ),
             executar: () async {
               await ref.read(turmasRepositorioProvider).excluirBloco(bloco.id!);
-              _recarregar(ref);
+              recarregarTurmas(ref);
               return 'excluido';
             },
           ),
@@ -309,8 +314,7 @@ class DialogoBlocosInativos extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cores = Theme.of(context).colorScheme;
-    final inativos =
-        ref.watch(blocosInativosProvider).value ?? const <BlocoHorario>[];
+    final inativos = ref.watch(blocosInativosProvider);
     final metodos = {
       for (final m in ref.watch(metodosProvider).value ?? const <Metodo>[])
         m.id: m.nome,

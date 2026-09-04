@@ -269,4 +269,269 @@ void main() {
       },
     );
   });
+
+  // -------------------------------------------------------------------------
+  // Card 5.7
+  // -------------------------------------------------------------------------
+
+  group('alunos do bloco', () {
+    test('a linha da reposição diz de que aula ela é (wireframe §7.2)', () {
+      expect(
+        reposicaoFalsa().rotuloReposicao,
+        'reposição de Qua 08:00 27/08',
+        reason: 'o apontamento #3 do §17 do card 2.6 existe para isto',
+      );
+    });
+
+    test('sem bloco de origem a linha diz o que sabe, e não inventa', () {
+      // `bloco_origem_id` é nulo de propósito (card 2.5 §3.1): a escola nem
+      // sempre sabe qual encontro foi perdido.
+      expect(
+        reposicaoFalsa(
+          blocoOrigemDia: null,
+          blocoOrigemHora: null,
+        ).rotuloReposicao,
+        'reposição de 27/08',
+      );
+      expect(
+        const AlunoDoBloco(
+          origem: OrigemNoBloco.reposicao,
+          registroId: 'rep-1',
+          alunoId: 'al-9',
+          alunoNome: 'Lucas',
+          alunoStatus: 'ATIVO',
+          tipo: 'REP',
+        ).rotuloReposicao,
+        'reposição avulsa',
+        reason: 'sem origem nenhuma, a linha diz o que é e para de inventar',
+      );
+    });
+
+    test('alocação não tem rótulo de reposição', () {
+      final aloc = alocacaoFalsa(alunoId: 'x', nome: 'Fulano', tipo: 'REM');
+      expect(aloc.ehReposicao, isFalse);
+      expect(aloc.rotuloReposicao, isNull);
+    });
+
+    test('deLinha lê as duas origens que fn_bloco_alunos devolve', () {
+      final aloc = AlunoDoBloco.deLinha(const {
+        'origem': 'ALOCACAO',
+        'registro_id': 'aloc-1',
+        'aluno_id': 'al-1',
+        'aluno_nome': 'Ana',
+        'codigo_sgf': '3001',
+        'aluno_status': 'ATIVO',
+        'tipo': 'REM',
+        'tipo_desde': '2026-03-12',
+        'data_inicio_prevista': null,
+        'bloco_ativo': true,
+        'data': null,
+        'bloco_origem_id': null,
+        'bloco_origem_dia': null,
+        'bloco_origem_hora': null,
+        'data_origem': null,
+        'observacao': null,
+      });
+      expect(aloc.origem, OrigemNoBloco.alocacao);
+      expect(aloc.tipoDesde, DateTime(2026, 3, 12));
+
+      final rep = AlunoDoBloco.deLinha(const {
+        'origem': 'REPOSICAO',
+        'registro_id': 'rep-1',
+        'aluno_id': 'al-9',
+        'aluno_nome': 'Lucas',
+        'codigo_sgf': null,
+        'aluno_status': 'ATIVO',
+        'tipo': 'REP',
+        'tipo_desde': null,
+        'data_inicio_prevista': null,
+        'bloco_ativo': true,
+        'data': '2026-09-07',
+        'bloco_origem_id': 'b-cheio',
+        'bloco_origem_dia': 3,
+        'bloco_origem_hora': '08:00:00',
+        'data_origem': '2026-08-27',
+        'observacao': 'faltou',
+      });
+      expect(rep.ehReposicao, isTrue);
+      expect(rep.data, DateTime(2026, 9, 7));
+      expect(
+        rep.blocoOrigemHora,
+        '08:00:00',
+        reason: 'o corte para hh:mm é do rótulo, não do modelo',
+      );
+      expect(rep.rotuloReposicao, 'reposição de Qua 08:00 27/08');
+    });
+
+    test('resumoLotacao separa fixos de reposições do dia', () {
+      final lista = [
+        alocacaoFalsa(alunoId: 'a', nome: 'A', tipo: 'REM'),
+        alocacaoFalsa(alunoId: 'b', nome: 'B', tipo: 'PRE'),
+        reposicaoFalsa(),
+      ];
+      expect(
+        resumoLotacao(lista, capacidade: 10),
+        'Ocupação 3/10 (2 fixos + 1 reposição no dia)',
+      );
+    });
+
+    test('sem reposição o resumo não fala de reposição nenhuma', () {
+      expect(
+        resumoLotacao([
+          alocacaoFalsa(alunoId: 'a', nome: 'A', tipo: 'REM'),
+        ], capacidade: 6),
+        'Ocupação 1/6 (1 aluno)',
+      );
+      expect(resumoLotacao(const [], capacidade: 6), 'Ocupação 0/6 (0 alunos)');
+    });
+  });
+
+  group('turmas do aluno', () {
+    test(
+      'rotuloBloco é o nome curto do bloco em toda tela que não é a grade',
+      () {
+        expect(rotuloBloco(1, '08:00'), 'Seg 08:00');
+        expect(rotuloBloco(6, '14:30:00'), 'Sáb 14:30');
+      },
+    );
+
+    test('agruparPorAluno ordena por dia e depois por hora', () {
+      final turmas = [
+        turmaFalsa(
+          alunoId: 'al-1',
+          blocoId: 'b-2',
+          tipo: 'REM',
+          diaSemana: 4,
+          horaInicio: '09:30',
+        ),
+        turmaFalsa(
+          alunoId: 'al-1',
+          blocoId: 'b-1',
+          tipo: 'REM',
+          diaSemana: 2,
+          horaInicio: '19:00',
+        ),
+        turmaFalsa(
+          alunoId: 'al-1',
+          blocoId: 'b-3',
+          tipo: 'PRE',
+          diaSemana: 2,
+          horaInicio: '08:00',
+        ),
+      ];
+      expect(agruparPorAluno(turmas)['al-1']!.map((t) => t.rotulo).toList(), [
+        'Ter 08:00',
+        'Ter 19:00',
+        'Qui 09:30',
+      ]);
+    });
+
+    test('rotuloTurmasDoAluno mostra só os blocos ATIVOS', () {
+      final turmas = [
+        turmaFalsa(alunoId: 'al-1', blocoId: 'b-1', tipo: 'REM'),
+        turmaFalsa(
+          alunoId: 'al-1',
+          blocoId: 'b-inativo',
+          tipo: 'REM',
+          diaSemana: 5,
+          horaInicio: '14:00',
+          blocoAtivo: false,
+        ),
+      ];
+      expect(rotuloTurmasDoAluno(turmas), 'Qua 08:00');
+      expect(rotuloTurmasDoAluno(const []), '—');
+    });
+
+    test(
+      'alunosEmTurma ignora alocação em bloco desativado — a mesma definição '
+      'de rt_pendencias_diaria desde o card 5.7',
+      () {
+        final turmas = [
+          turmaFalsa(alunoId: 'al-1', blocoId: 'b-1', tipo: 'REM'),
+          turmaFalsa(
+            alunoId: 'al-2',
+            blocoId: 'b-inativo',
+            tipo: 'REM',
+            blocoAtivo: false,
+          ),
+        ];
+        expect(alunosEmTurma(turmas), {'al-1'});
+      },
+    );
+
+    test('deLinha de v_bloco_alunos lê o hh:mm:ss e o bloco_ativo', () {
+      final turma = TurmaDoAluno.deLinha(const {
+        'alocacao_id': 'aloc-1',
+        'bloco_id': 'b-1',
+        'aluno_id': 'al-1',
+        'dia_semana': 3,
+        'hora_inicio': '08:00:00',
+        'metodo_id': 'm-int',
+        'sala_id': 's-lab1',
+        'bloco_ativo': false,
+        'tipo': 'NOVO',
+        'tipo_desde': '2026-03-12',
+        'data_inicio_prevista': '2026-09-10',
+      });
+      expect(turma.rotulo, 'Qua 08:00');
+      expect(turma.blocoAtivo, isFalse);
+      expect(turma.dataInicioPrevista, DateTime(2026, 9, 10));
+    });
+  });
+
+  group('situação REP', () {
+    SituacaoRep situacao({
+      int debito = 0,
+      DateTime? repDesde,
+      String veredito = 'MANTER',
+    }) => SituacaoRep(
+      debito: debito,
+      semanasUteis: 2,
+      capacidade: 1,
+      faltasRecentes: 0,
+      repDesde: repDesde,
+      veredito: veredito,
+    );
+
+    test('aluno em dia e pontual não vira painel na ficha', () {
+      // Um painel permanente dizendo "0 aulas a repor" em toda ficha treina a
+      // pessoa a não olhar para ele.
+      expect(situacao().relevante, isFalse);
+    });
+
+    test(
+      'débito, contínuo ou veredito diferente de MANTER tornam relevante',
+      () {
+        expect(situacao(debito: 3).relevante, isTrue);
+        expect(situacao(repDesde: DateTime(2026, 8, 1)).relevante, isTrue);
+        expect(situacao(veredito: 'SUGERIR_VOLTA').relevante, isTrue);
+      },
+    );
+
+    test(
+      'só os dois vereditos de sugestão têm aviso — MANTER não é notícia',
+      () {
+        expect(avisoVeredito('MANTER'), isNull);
+        expect(avisoVeredito('SUGERIR_CONTINUO'), isNotNull);
+        expect(avisoVeredito('SUGERIR_VOLTA'), isNotNull);
+      },
+    );
+
+    test('deLinha lê o tipo composto tp_rep_situacao', () {
+      final s = SituacaoRep.deLinha(const {
+        'debito': 3,
+        'aula_mais_antiga': '2026-09-12',
+        'prazo_final': '2026-10-12',
+        'semanas_uteis': 2,
+        'capacidade': 1,
+        'faltas_recentes': 1,
+        'rep_desde': null,
+        'veredito': 'SUGERIR_CONTINUO',
+      });
+      expect(s.debito, 3);
+      expect(s.prazoFinal, DateTime(2026, 10, 12));
+      expect(s.continuo, isFalse);
+      expect(s.relevante, isTrue);
+    });
+  });
 }

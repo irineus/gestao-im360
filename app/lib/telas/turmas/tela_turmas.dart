@@ -15,8 +15,10 @@ import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
+import '../../widgets/painel_detalhe.dart';
 import 'formularios.dart';
 import 'grade_semanal.dart';
+import 'painel_bloco.dart';
 
 /// Tela 4 — Turmas por horário, a grade semanal (docs/wireframes.md §7.1),
 /// card 5.6. Substitui as seis abas Segunda…Sábado da planilha.
@@ -29,8 +31,11 @@ import 'grade_semanal.dart';
 /// Nada aqui calcula capacidade, ocupação ou vaga: os três números chegam
 /// prontos do banco (card 5.2 é o dono da fórmula). A tela mostra e navega.
 ///
-/// A lista de alunos de um bloco — o que o wireframe §7.2 desenha e que se abre
-/// tocando a célula — é do card **5.7**, que estende esta camada.
+/// **Tocar a célula abre os alunos daquele bloco naquela data** ([PainelBloco],
+/// card 5.7) — e não o cadastro do bloco, que fica no `[Editar bloco]` de dentro
+/// do painel. A troca é o que o wireframe §7.2 desenha, e é a leitura certa do
+/// gesto: quem clica numa turma quer ver quem está nela; editar horário e sala
+/// é o caso raro.
 class TelaTurmas extends ConsumerWidget {
   const TelaTurmas({super.key});
 
@@ -49,14 +54,18 @@ class TelaTurmas extends ConsumerWidget {
     }
   }
 
+  /// O painel devolve o resultado do formulário de bloco quando alguém edita ou
+  /// exclui lá dentro — a confirmação é dada aqui, porque lá o painel já pode
+  /// estar descrevendo um bloco que deixou de existir.
   Future<void> _abrirBloco(BuildContext context, CelulaGrade celula) async {
     final resultado = await mostrarFormulario<String>(
       context,
-      construtor: (_) => FormularioBloco(bloco: celula.bloco, celula: celula),
+      largura: larguraDetalhe,
+      construtor: (_) => PainelBloco(celula: celula),
     );
     if (resultado == 'excluido' && context.mounted) {
       confirmarEfemero(context, 'Bloco excluído.');
-    } else if (resultado != null && context.mounted) {
+    } else if (resultado == 'salvo' && context.mounted) {
       confirmarEfemero(context, 'Bloco salvo.');
     }
   }
@@ -67,8 +76,7 @@ class TelaTurmas extends ConsumerWidget {
     final grade = ref.watch(gradeProvider);
     final filtro = ref.watch(filtroGradeProvider);
     final permissoes = ref.watch(permissoesProvider);
-    final inativos =
-        ref.watch(blocosInativosProvider).value ?? const <BlocoHorario>[];
+    final inativos = ref.watch(blocosInativosProvider);
 
     final todas = grade.value ?? const <CelulaGrade>[];
     final visiveis = filtrarGrade(todas, filtro);
