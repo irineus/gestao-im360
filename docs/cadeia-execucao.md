@@ -52,8 +52,19 @@ exceções da migração (9.3), que é sua.
 - `gh` autenticado, `git`, `node`, e **Docker rodando** — sem ele o `supabase start` não sobe e a
   sessão gasta uma rodada descobrindo isso.
 - Working tree limpo e `HEAD` fora de `main`.
+- **Diretório confiado pela CLI e login feito.** Sem a confiança, a CLI **ignora o `permissions.allow`
+  inteiro** do `.claude/settings.json`; sem login, `claude -p` imprime `Not logged in` e **sai com
+  código 0**. As duas se resolvem rodando `claude` interativamente aqui uma vez.
+- **MCP do Notion pré-autorizado.** `--permission-mode acceptEdits` cobre edição de arquivo e **não**
+  ferramenta de MCP: o driver passa `--allowedTools mcp__claude_ai_Notion`. A concessão mora no
+  driver, e não no `permissions.allow`, para valer **só** na cadeia — sessão interativa continua
+  perguntando.
 
-`.\automacao\cadeia.ps1 -Verificar` mede os seis e não executa nada.
+`.\automacao\cadeia.ps1 -Verificar` mede tudo isso e não executa nada. A última checagem é uma
+**sonda de verdade**: abre uma sessão mínima e manda chamar o Notion, porque é a primeira coisa que
+todo card faz. Ela assere por **marcador de falha** e não por token de sucesso — duas versões que
+exigiam a palavra exata reprovaram com o sistema bom (a sessão devolveu uma tabela numa, e "OK" na
+outra), e checagem que reprova à toa ensina a ignorar vermelho.
 
 ## 5. Por que o driver não acredita na sessão
 

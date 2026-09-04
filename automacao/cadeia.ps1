@@ -48,7 +48,21 @@ param(
     # Arquivo com o texto que cada sessão recebe. Existe para rodar um card
     # específico e para exercitar a mecânica do driver (invocação, captura,
     # leitura do veredito, conferência do SHA) sem gastar um card de verdade.
-    [string]$Prompt
+    [string]$Prompt,
+
+    # Ferramentas pré-autorizadas nas sessões da cadeia.
+    #
+    # ⚠️ `--permission-mode acceptEdits` cobre EDIÇÃO DE ARQUIVO e **não**
+    # ferramenta de MCP — medido em 03/09/2026, quando a primeira corrida real
+    # parou por três chamadas negadas ao Notion. Sem board não há card a
+    # escolher nem status a gravar, então toda sessão da fila bateria na mesma
+    # parede.
+    #
+    # A concessão fica AQUI, e não no `permissions.allow` do
+    # `.claude/settings.json`, de propósito: assim ela vale só para a cadeia, e
+    # a sessão interativa continua perguntando como sempre. Menos privilégio, e
+    # no arquivo de quem usa.
+    [string[]]$FerramentasPermitidas = @('mcp__claude_ai_Notion')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -128,15 +142,40 @@ function PreVoo {
     # indireto para um problema de um minuto. Custa uma chamada mínima por
     # corrida, contra até 30 cards; e de quebra prova que a CLI responde, não só
     # que existe no PATH.
+    # A sonda NÃO se contenta em ver a CLI responder: ela manda a sessão CHAMAR
+    # o Notion, porque é isso que todo card faz na primeira coisa que executa.
+    # Medido em 03/09/2026: com a CLI logada, confiada e respondendo, a primeira
+    # corrida real ainda morreu — o MCP era negado, e a descoberta custou uma
+    # sessão inteira. Sonda que mede a CLI e não o board mediria o degrau errado.
+    # ⚠️ A instrucao e ASSIM DE INSISTENTE por medida: a primeira versao pedia
+    # "responda apenas PRONTO" e a sessao devolveu uma TABELA com os resultados
+    # da busca. A chamada tinha funcionado — a sonda e que reprovou por causa do
+    # formato. Sonda que reprova quando o sistema esta bom ensina a ignorar
+    # vermelho, que e o pior defeito que uma checagem pode ter.
+    $perg = 'RESPONDA COM UMA UNICA PALAVRA E NADA MAIS. ' +
+            'Chame a ferramenta de busca do Notion procurando por "Roadmap de Construcao". ' +
+            'Se a chamada responder, sua resposta inteira e exatamente: PRONTO. ' +
+            'Se for negada ou falhar, sua resposta inteira e exatamente: NEGADO. ' +
+            'Nao escreva tabelas, listas, explicacoes, nem os resultados da busca.'
+
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $sonda = (& claude -p 'Responda apenas com a palavra PRONTO, sem mais nada.' 2>&1 | Out-String)
+        $sonda = (& claude -p $perg --permission-mode acceptEdits --allowedTools @FerramentasPermitidas 2>&1 | Out-String)
     } catch {
         $sonda = "falhou: $($_.Exception.Message)"
     } finally { $ErrorActionPreference = $eap }
 
-    if ($sonda -notmatch 'PRONTO') {
+    # ⚠️ A asserção procura MARCADOR DE FALHA, não token de sucesso. Duas
+    # tentativas de exigir a palavra exata reprovaram com o sistema BOM: a
+    # sessão devolveu uma tabela numa, e "OK" na outra. O que a sonda precisa
+    # distinguir é bem definido — CLI sem login e MCP negado têm texto próprio —
+    # enquanto "sucesso" pode ser escrito de mil maneiras. Exigir a forma do
+    # sucesso é o caminho curto para uma checagem que ninguém mais lê.
+    $marcaFalha = "Not logged in|haven't granted|hasn't granted|requested permissions|" +
+                  'permission denied|NEGADO|no such tool|not authorized'
+
+    if ($sonda -match $marcaFalha -or -not $sonda.Trim()) {
         # O aviso de confiança e o rastro do PowerShell vêm ANTES do motivo real
         # e o empurrariam para fora do resumo — a confiança já tem linha própria
         # acima, e o que falta descobrir aqui é a outra causa.
@@ -145,7 +184,7 @@ function PreVoo {
                     Where-Object { $_.Trim() -and $_ -notmatch $ruido } |
                     Select-Object -First 2) -join ' | ')
         if (-not $resumo) { $resumo = '(sem saida legivel)' }
-        $problemas += "A CLI nao respondeu a sonda (login? sessao expirada?). Devolveu: $resumo"
+        $problemas += "Sonda reprovada — a sessao nao chegou ao Notion (login? MCP negado?). Devolveu: $resumo"
     }
 
     return $problemas
@@ -185,7 +224,7 @@ function ExecutarCard($indice) {
         # na primeira tentativa de rodar a cadeia. O ForEach abaixo faz as duas
         # coisas que o Tee faria — mostrar e gravar — e grava em UTF-8 de
         # verdade, que é o que o Get-Content da leitura do veredito espera.
-        & claude -p $prompt --permission-mode acceptEdits 2>&1 | ForEach-Object {
+        & claude -p $prompt --permission-mode acceptEdits --allowedTools @FerramentasPermitidas 2>&1 | ForEach-Object {
             $linha = [string]$_
             Write-Host $linha
             Add-Content -Path $arqSaida -Value $linha -Encoding UTF8
