@@ -180,8 +180,9 @@ class TurmasFalso implements TurmasRepositorio {
   final List<ReposicaoAluno> reposicoes_;
 
   /// O que `fn_rep_situacao` devolve. Nulo = "MANTER sem débito", que é o caso
-  /// da maioria dos alunos e faz a seção sumir da ficha.
-  final SituacaoRep? situacao;
+  /// da maioria dos alunos e faz a seção sumir da ficha. Mutável para o teste da
+  /// central (card 5.8) montar a fixture e depois pôr o aluno em débito.
+  SituacaoRep? situacao;
 
   /// O card 4.4 mediu que teste instantâneo não constrói a tela no estado em
   /// que o banco a apanha: durante a recarga o `AsyncValue` ainda carrega o
@@ -342,13 +343,54 @@ class TurmasFalso implements TurmasRepositorio {
   Future<String> registrarReposicao(
     String reposicaoId, {
     required bool veio,
-  }) async => veredito;
+  }) async {
+    presencas.add('$reposicaoId|${veio ? 'VEIO' : 'FALTOU'}');
+    return veredito;
+  }
 
   @override
   Future<void> cancelarReposicao(String reposicaoId, String observacao) async {
     canceladas.add('$reposicaoId|$observacao');
     for (final lista in alunos_.values) {
       lista.removeWhere((a) => a.ehReposicao && a.registroId == reposicaoId);
+    }
+  }
+
+  // --- card 5.8 ------------------------------------------------------------
+
+  final List<String> viradas = [];
+  final List<String> voltas = [];
+  final List<String> presencas = [];
+
+  @override
+  Future<String> virarContinuo({
+    required String alunoId,
+    required String blocoId,
+    String? observacao,
+  }) async {
+    viradas.add('$alunoId|$blocoId|${observacao ?? ''}');
+    // Reproduz o efeito da função: o aluno passa a ter alocação REP no bloco e
+    // as reposições PREVISTA são canceladas. Sem isso os testes mediriam um
+    // mundo em que executar a virada não muda nada — a lição do card 5.4.
+    (alunos_[blocoId] ??= []).add(
+      alocacaoFalsa(alunoId: alunoId, nome: alunoId, tipo: 'REP'),
+    );
+    turmas_.add(turmaFalsa(alunoId: alunoId, blocoId: blocoId, tipo: 'REP'));
+    reposicoes_.removeWhere((r) => r.alunoId == alunoId && r.prevista);
+    return 'alocacao-$alunoId';
+  }
+
+  @override
+  Future<void> voltarPontual({
+    required String alunoId,
+    required String motivo,
+  }) async {
+    voltas.add('$alunoId|$motivo');
+    turmas_.removeWhere((t) => t.alunoId == alunoId && t.tipo == 'REP');
+    for (final lista in alunos_.values) {
+      lista.removeWhere(
+        (a) => a.alunoId == alunoId && !a.ehReposicao && a.tipo == 'REP',
+      );
     }
   }
 }

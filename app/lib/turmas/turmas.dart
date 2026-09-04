@@ -686,6 +686,25 @@ class SituacaoRep {
   bool get relevante => debito > 0 || continuo || veredito != 'MANTER';
 }
 
+/// Os números do critério do card 2.5 §3 em uma linha, na ordem em que se lê:
+/// débito, aula mais antiga, prazo, quanto cabe até lá.
+///
+/// Mora aqui, e não na aba Turmas da ficha, porque a **central de pendências**
+/// (card 5.8) mostra exatamente a mesma frase ao lado do `REP_VIRADA` — e é ela
+/// que torna a sugestão acionável ("3 aulas em aberto, prazo até 12/10, cabem
+/// 2" decide; "sugerido virar contínuo" não). Duas cópias divergiriam na
+/// primeira vez que alguém mexesse numa só (card 5.4 (4)).
+List<String> resumoSituacaoRep(SituacaoRep s) => [
+  '${s.debito} aula(s) a repor em aberto',
+  if (s.aulaMaisAntiga != null)
+    'mais antiga em ${formatarData(s.aulaMaisAntiga!)}',
+  if (s.prazoFinal != null) 'prazo até ${formatarData(s.prazoFinal!)}',
+  'cabem ${s.semanasUteis * s.capacidade} até lá',
+  if (s.faltasRecentes > 0) '${s.faltasRecentes} falta(s) recente(s)',
+  if (s.repDesde != null)
+    'em reposição contínua desde ${formatarData(s.repDesde!)}',
+];
+
 /// O que cada veredito significa para quem acabou de marcar uma falta — é o
 /// texto que o §7.2 manda mostrar na hora, e não no dia seguinte, quando a
 /// rotina do card 5.5 abrir a pendência.

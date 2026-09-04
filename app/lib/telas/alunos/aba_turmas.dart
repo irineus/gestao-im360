@@ -217,18 +217,9 @@ class _SituacaoRep extends ConsumerWidget {
     final situacao = ref.watch(situacaoRepProvider(aluno.id!)).value;
     if (situacao == null || !situacao.relevante) return const SizedBox.shrink();
 
-    final linhas = <String>[
-      '${situacao.debito} aula(s) a repor em aberto',
-      if (situacao.aulaMaisAntiga != null)
-        'mais antiga em ${formatarData(situacao.aulaMaisAntiga!)}',
-      if (situacao.prazoFinal != null)
-        'prazo até ${formatarData(situacao.prazoFinal!)}',
-      'cabem ${situacao.semanasUteis * situacao.capacidade} até lá',
-      if (situacao.faltasRecentes > 0)
-        '${situacao.faltasRecentes} falta(s) recente(s)',
-      if (situacao.repDesde != null)
-        'em reposição contínua desde ${formatarData(situacao.repDesde!)}',
-    ];
+    // A MESMA frase que a central de pendências mostra ao lado do REP_VIRADA
+    // (card 5.8) — uma implementação só, em `turmas.dart`.
+    final linhas = resumoSituacaoRep(situacao);
 
     final aviso = avisoVeredito(situacao.veredito);
     return Column(

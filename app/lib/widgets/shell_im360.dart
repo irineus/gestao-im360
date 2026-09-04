@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../pendencias/pendencias_provider.dart';
 import '../rotas/rotas.dart';
 import '../sessao/sessao_provider.dart';
 import '../theme/dimensoes.dart';
@@ -25,14 +26,17 @@ class ShellIm360 extends ConsumerWidget {
     final permissoes = ref.watch(permissoesProvider);
     final itens = menuPara(permissoes);
     final atual = _rotaAtual(context, itens);
+    // O contador do menu (card 2.6 decisão f, card 5.8). Zero para quem não tem
+    // `pendencias.ler` — e para esse perfil o item de menu também não existe.
+    final altas = ref.watch(pendenciasAltasProvider);
 
     return LayoutBuilder(
       builder: (context, restricoes) {
         final faixa = faixaDe(restricoes.maxWidth);
         return switch (faixa) {
-          Faixa.desktop => _comMenuLateral(context, ref, itens, atual),
-          Faixa.tablet => _comTrilho(context, ref, itens, atual),
-          Faixa.mobile => _comBarraInferior(context, ref, itens, atual),
+          Faixa.desktop => _comMenuLateral(context, ref, itens, atual, altas),
+          Faixa.tablet => _comTrilho(context, ref, itens, atual, altas),
+          Faixa.mobile => _comBarraInferior(context, ref, itens, atual, altas),
         };
       },
     );
@@ -66,13 +70,14 @@ class ShellIm360 extends ConsumerWidget {
     WidgetRef ref,
     List<Rota> itens,
     Rota? atual,
+    int altas,
   ) {
     return Scaffold(
       body: Row(
         children: [
           SizedBox(
             width: Dim.larguraMenu,
-            child: _MenuLateral(itens: itens, atual: atual),
+            child: _MenuLateral(itens: itens, atual: atual, altas: altas),
           ),
           const VerticalDivider(width: 1),
           Expanded(
@@ -94,6 +99,7 @@ class ShellIm360 extends ConsumerWidget {
     WidgetRef ref,
     List<Rota> itens,
     Rota? atual,
+    int altas,
   ) {
     return Scaffold(
       appBar: _barra(context, atual?.titulo ?? 'Gestão IM360'),
@@ -106,7 +112,7 @@ class ShellIm360 extends ConsumerWidget {
             destinations: [
               for (final rota in itens)
                 NavigationRailDestination(
-                  icon: Icon(rota.icone),
+                  icon: iconeComContador(rota, altas),
                   label: Text(rota.titulo),
                 ),
             ],
@@ -126,6 +132,7 @@ class ShellIm360 extends ConsumerWidget {
     WidgetRef ref,
     List<Rota> itens,
     Rota? atual,
+    int altas,
   ) {
     final fixos = [
       for (final id in idsBarraInferior)
@@ -144,7 +151,7 @@ class ShellIm360 extends ConsumerWidget {
                   children: [
                     for (final rota in naGaveta)
                       ListTile(
-                        leading: Icon(rota.icone),
+                        leading: iconeComContador(rota, altas),
                         title: Text(rota.titulo, style: Tipografia.corpo),
                         minTileHeight: Dim.alvoMobile,
                         onTap: () {
@@ -171,7 +178,7 @@ class ShellIm360 extends ConsumerWidget {
               destinations: [
                 for (final rota in fixos)
                   NavigationDestination(
-                    icon: Icon(rota.icone),
+                    icon: iconeComContador(rota, altas),
                     label: rota.titulo,
                   ),
                 const NavigationDestination(
@@ -186,6 +193,25 @@ class ShellIm360 extends ConsumerWidget {
   PreferredSizeWidget _barra(BuildContext context, String titulo) => AppBar(
     title: Text(titulo, style: Tipografia.subtitulo),
     actions: const [_MenuUsuario()],
+  );
+}
+
+/// O ícone do item de menu, com o contador quando ele existe.
+///
+/// **Só o item de Pendências, e só severidade ALTA** (card 2.6 decisão f): um
+/// sino que dispara sempre não é avisado, é ignorado — e o total incluiria as
+/// `BAIXA` de estoque abaixo do mínimo, que ficam abertas por semanas e
+/// esconderiam a entrega bloqueada que apareceu hoje.
+///
+/// O número **não** é o único portador do significado: o `Semantics` diz o que
+/// ele conta, senão a leitura de tela anuncia "Pendências, 3" sem dizer 3 do quê.
+Widget iconeComContador(Rota rota, int altas) {
+  if (rota.id != 'pendencias' || altas <= 0) return Icon(rota.icone);
+  return Semantics(
+    label:
+        '$altas ${altas == 1 ? 'pendência' : 'pendências'} de severidade '
+        'alta em aberto',
+    child: Badge(label: Text('$altas'), child: Icon(rota.icone)),
   );
 }
 
@@ -207,10 +233,15 @@ class _Cabecalho extends StatelessWidget {
 }
 
 class _MenuLateral extends ConsumerWidget {
-  const _MenuLateral({required this.itens, required this.atual});
+  const _MenuLateral({
+    required this.itens,
+    required this.atual,
+    required this.altas,
+  });
 
   final List<Rota> itens;
   final Rota? atual;
+  final int altas;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -229,7 +260,7 @@ class _MenuLateral extends ConsumerWidget {
       final selecionada = rota == atual;
       linhas.add(
         ListTile(
-          leading: Icon(rota.icone),
+          leading: iconeComContador(rota, altas),
           title: Text(rota.titulo, style: Tipografia.rotulo),
           selected: selecionada,
           selectedTileColor: cores.surfaceContainerHighest,
