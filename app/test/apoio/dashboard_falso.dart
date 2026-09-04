@@ -1,4 +1,5 @@
 import 'package:gestao_im360/dashboard/dashboard.dart';
+import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/dashboard/dashboard_repositorio.dart';
 
 import 'turmas_falso.dart';
@@ -26,6 +27,17 @@ class DashboardFalso implements DashboardRepositorio {
   /// Sem nenhum bloco ativo — o estado vazio da tela.
   factory DashboardFalso.vazio() => DashboardFalso(celulas: const []);
 
+  /// A leitura que **falha** — é como se exercita o quarto estado do wireframe
+  /// §2.3 nesta tela, que o card 5.9 escreveu e nenhum teste cobria (revisão
+  /// da fase 05, grupo G).
+  factory DashboardFalso.queFalha() => DashboardFalso()
+    ..erro = const ErroApp(
+      mensagem:
+          'Não foi possível falar com o servidor. Verifique a conexão e tente '
+          'de novo.',
+      traduzido: true,
+    );
+
   final TurmasFalso? _turmas;
   final List<CelulaGrade>? _celulas;
 
@@ -35,12 +47,17 @@ class DashboardFalso implements DashboardRepositorio {
 
   int leituras = 0;
 
+  /// Quando não nulo, a leitura levanta este erro.
+  ErroApp? erro;
+
   @override
   Future<List<CelulaGrade>> vagasDaSemana() async {
     if (atrasoLeitura > Duration.zero) {
       await Future<void>.delayed(atrasoLeitura);
     }
     leituras++;
+    final falha = erro;
+    if (falha != null) throw falha;
     final fixas = _celulas;
     if (fixas != null) return List.of(fixas);
     // Aqui o relógio é o do teste porque não há outro; no banco quem fixa a

@@ -237,7 +237,11 @@ com a legenda "alocações, não alunos"; grade de vagas = `v_bloco_vagas_semana
   o bloco; a linha Modular abre a turma.
 - `sem_previsao` fica ao lado das conclusões porque sem ele a soma dos semestres não fecha com o
   total de ativos (card 2.3 §8.1) — o dashboard mostra a conta fechando, não números soltos.
-- Mobile: os cards por método empilham; grade de vagas e lotação viram listas verticais por dia.
+- Mobile: os cards por método empilham; a grade de vagas vira **abas Seg–Sáb**, abrindo no dia de
+  hoje — a mesma forma da grade de Turmas (§7.1). *(Corrigido em 04/09/2026, decisão de Irineu na
+  revisão da fase 05: aqui estava escrito "listas verticais por dia" e o design-system §6 mandava
+  abas para as telas 2 **e** 4. As duas telas passaram a usar o mesmo componente, `MatrizSemanal`;
+  duas formas para a mesma matriz eram duas telas para aprender.)*
 
 ---
 
@@ -261,7 +265,10 @@ Rota: `alunos.ler + materiais.ler` (aba Trilha soma `estoque.ler`). Perfis: todo
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- Fonte: `v_aluno_lista` (card 4.6). Filtros = os do plano (método, status, turma, combo) + busca
+- Fonte: a tabela `aluno` mais `v_bloco_alunos` para a coluna Turmas, juntadas **em memória** — não
+  há `v_aluno_lista`. *(Corrigido em 04/09/2026, revisão da fase 05; a decisão é do card 4.6 e já
+  estava registrada em `views-leitura.md` §12.1: a view juntaria método, combo e turmas num objeto
+  de banco a mais sem tirar nenhuma consulta da tela.)* Filtros = os do plano (método, status, turma, combo) + busca
   por nome/`codigo_sgf`. Aluno ATIVO/ACELERAR sem turma recebe ícone ⚠ na coluna Turmas — é a
   pendência `ALUNO_SEM_TURMA` vista de onde a secretaria olha.
 - `[+ Matricular]` exige `alunos.criar`; abre formulário com dados + combo (a trilha nasce do combo
@@ -690,8 +697,12 @@ Rota: `pendencias.ler`. Perfis: todos (resolver exige `pendencias.resolver` — 
 
 ### 14.2 Resolver
 
-`[✓]` abre o diálogo de resolução com **justificativa obrigatória** (`resolucao` é NOT NULL —
-card 2.2); chama `fn_pendencia_resolver`. Pendências que o sistema fecha sozinho (dedup/rotina)
+`[✓]` abre o diálogo de resolução; chama `fn_pendencia_resolver`. A **justificativa é obrigatória
+só ao IGNORAR**, e quem a cobra é a função (`MOTIVO_OBRIGATORIO`). *(Corrigido em 04/09/2026,
+decisão de Irineu na revisão da fase 05: este parágrafo dizia "justificativa obrigatória
+(`resolucao` é NOT NULL)" e confundia duas coisas — `resolucao` é o **enum** RESOLVIDA/IGNORADA,
+esse sim NOT NULL, e a justificativa é o texto. Resolver é o caso comum e se resolve **fazendo** a
+ação, não explicando-a; ignorar é o que precisa de motivo, porque a pendência volta.)* Pendências que o sistema fecha sozinho (dedup/rotina)
 exibem "fecha automaticamente quando …" no detalhe, para ninguém resolvê-las à mão sem necessidade.
 
 ### 14.3 Ação contextual — a pendência como fila de trabalho
@@ -701,18 +712,38 @@ problema se resolve**, além do resolver genérico:
 
 | Tipo | Ação primária | Destino |
 |---|---|---|
-| `ALUNO_SEM_TURMA` | Alocar | ficha do aluno, aba Turmas (§6.4) |
-| `COMPRA_SEM_ESTOQUE`, `ESTOQUE_ZERO`, `ESTOQUE_ABAIXO_MINIMO` | Ver compra | tela 7, linha do material |
-| `BLOCO_ACIMA_CAPACIDADE` | Ver bloco | tela 4, bloco |
-| `PC_SEM_SUBSTITUTO` | Ver PC | tela 10, sala do PC |
+| `ALUNO_SEM_TURMA` | Alocar | ficha do aluno, aba Turmas (§6.4) — `?aba=turmas` |
+| `COMPRA_SEM_ESTOQUE`, `ESTOQUE_ZERO`, `ESTOQUE_ABAIXO_MINIMO` | Ver material | tela 6, `?material=<id>` (Compras é do card 6.8) |
+| `BLOCO_ACIMA_CAPACIDADE` | Ver turma | tela 4, `?bloco=<id>` — abre o painel do bloco na semana corrente |
+| `PC_SEM_SUBSTITUTO` | Ver PC | tela 10, `?pc=<id>` — abre o detalhe da sala daquele PC |
+| `STANDBY_PROLONGADO` | Ver aluno | ficha, aba Histórico — `?aba=historico` |
+| `ALUNO_ULTIMO_LIVRO` | Ver trilha | ficha, aba Trilha — `?aba=trilha` |
 | `REP_VIRADA` (`:CONTINUO`) | **Executar** — escolher o bloco e confirmar `fn_rep_virar_continuo` | seletor de bloco com vagas |
 | `REP_VIRADA` (`:VOLTA`) | **Executar** — confirmar `fn_rep_voltar_pontual` | diálogo de confirmação |
-| `SUGERIR_FORMADO` | Formar | ficha, alterar status (gate do certificado) |
-| `PREVISAO_VENCIDA`, `TRILHA_DIVERGENTE_COMBO` | Ver aluno | ficha, aba Dados/Trilha |
-| `ACELERAR_SEM_2O_BLOCO` | Ver turmas do aluno | ficha, aba Turmas |
-| `CERTIFICADO_INCONSISTENTE` | Ver checklist | ficha, aba Certificado |
+| `SUGERIR_FORMADO` | Formar | ficha, alterar status (gate do certificado) — `?aba=dados` |
+| `PREVISAO_VENCIDA` | Ver previsão | ficha, aba Dados — `?aba=dados` |
+| `TRILHA_DIVERGENTE_COMBO` | Ver trilha | ficha, aba Trilha — `?aba=trilha` |
+| `ACELERAR_SEM_2O_BLOCO` | Ver turmas do aluno | ficha, aba Turmas — `?aba=turmas` |
+| `CERTIFICADO_INCONSISTENTE` | Ver checklist | ficha, aba Certificado — `?aba=certificado` |
 | `TURMA_MODULAR_SEM_CRONOGRAMA` | Ver turma | tela 5, cronograma |
 | `ROTINA_FALHOU` | (sem ação de tela) | detalhe técnico p/ direção |
+
+**O id vai na URL** (04/09/2026, revisão da fase 05). Sem ele "Ver turma" abria a grade inteira e a
+pessoa procurava na tela de destino a linha que já tinha na de origem. As três telas de destino leem
+o parâmetro ao montar e abrem o detalhe **uma vez**. As abas Trilha (card 6.6) e Certificado (8.6)
+ainda não existem: a ficha abre nelas assim mesmo, com o texto que diz qual card as entrega — o
+destino certo com o conteúdo por vir é honesto, mandar para Dados seria mandar para o lugar errado.
+
+**O rótulo é por tipo, não por destino** (04/09/2026): "Alocar", "Formar", "Ver checklist". Um
+"Ver aluno" para os oito tipos que levam à ficha é o oposto de uma fila de trabalho — o botão diz o
+que se vai fazer.
+
+**Dois tipos do §14.3 e três do `check` não coincidiam** (registrado em 04/09/2026):
+`TURMA_MODULAR_SEM_CRONOGRAMA` está nesta tabela e **não** no `check` de `pendencia.tipo`
+(migração `20260903234500_pendencias_rotinas.sql`) — quem o acrescenta é o card **7.3**, dono da
+tela 5. `STANDBY_PROLONGADO` e `ALUNO_ULTIMO_LIVRO` estavam no `check` e não aqui; entraram na
+tabela acima, e quem os **abre** é o card **8.x** (rotina de projeção e de status). Enquanto os
+donos não chegarem, nenhuma dessas linhas tem efeito: a rotina não abre esses tipos.
 
 O caso `REP_VIRADA` é o motivo da regra: a virada é **sugerida, nunca automática** (card 2.5) —
 a pendência é onde a pessoa executa, e o "Executar" da ida abre o seletor de bloco justamente
@@ -827,6 +858,22 @@ Divergências e apontamentos para outros cards:
 | 4 | ✅ **Fechado em 03/09/2026 (card 5.7).** A ficha exibe a situação REP (`fn_rep_situacao`) na aba Turmas, **com os números e não só o veredito** — e só quando há o que dizer: débito, aluno já contínuo, ou veredito diferente de MANTER. Painel permanente dizendo "0 aulas a repor" em toda ficha treina a pessoa a não olhar para ele | 5.7 / 6.6 |
 | 5 | Tela de Administração reserva aba "Histórico" da matriz para o card 4.7.5 (§15) | 4.7.5 |
 | 6 | O aviso pós-troca de combo ("trilha não regenera; abre pendência") vai no formulário de Dados (§6.4) — texto final no card 2.7 | 4.6 |
+
+### Divergências fechadas na revisão da fase 05 (04/09/2026)
+
+Estas nasceram do card 5.11 — a revisão das quatro telas da fase 05 contra este documento. Onde a
+correção **não** foi implementar o que o wireframe desenhava, o motivo está escrito aqui: divergência
+que se resolve em silêncio volta como defeito na revisão seguinte.
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 7 | **Mobile do dashboard** (§5) desenhava lista vertical por dia; o design-system §6 mandava abas Seg–Sáb para as telas 2 e 4 | Abas nas duas, decisão de Irineu. O §5 foi corrigido e as duas telas passaram a usar `MatrizSemanal` |
+| 8 | **Justificativa ao Resolver** (§14.2) dita obrigatória; o banco só a exige ao Ignorar | Fica opcional; o §14.2 foi corrigido. Decisão de Irineu — obrigar exigiria migração, que este card não tem |
+| 9 | **"Lançar reposição" do painel do bloco** (§7.2) manda chamar `fn_reposicao_registrar` e mostrar o veredito | Lançar continua sendo **agendar** (`fn_reposicao_agendar`), que é a leitura certa do botão. O que faltava era o **registro de presença**: Veio/Faltou passou a existir na linha da reposição do dia, no painel do bloco, com o veredito em diálogo — "na mão de quem lançou", que é o que o §7.2 queria |
+| 10 | **Reposições na aba Turmas** (§6.4) fala em "reposições pontuais futuras" | A aba separa **Próximas** (PREVISTA, data ≥ hoje) de **Histórico**, e o histórico fica completo: é dele que o débito do card 2.5 se compõe, e escondê-lo tiraria a explicação do número que a seção de cima mostra |
+| 11 | **`professores.ler` para `v_bloco_vagas_semana`** (`views-leitura.md` §11) sem consumidor: a rota do dashboard não exige a permissão e a tela não mostra professor | Decisão de Irineu: o dashboard **deixou de ler** `professor_id`/`professor_nome` e a tabela §11 deixou de citar `professores.ler`. O professor aparece na tela de Turmas, onde a permissão é exigida |
+| 12 | **Compras (tela 7) ainda não existe**, e o §14.3 manda os três tipos de estoque para lá | Vão para **Materiais** com `?material=<id>`. Quando o card 6.8 nascer, muda uma linha em `rotaDaAcao` |
+| 13 | **Abas Trilha e Certificado** ainda não existem (cards 6.6 e 8.6), e o §14.3 manda pendências para elas | A ficha abre nelas assim mesmo: a aba está no lugar e diz qual card a entrega. Destino certo com conteúdo por vir é honesto; mandar para Dados seria mandar para o lugar errado |
 
 Nenhum ajuste bloqueante em documento anterior: este card consome os contratos fechados e não
 precisou corrigi-los.

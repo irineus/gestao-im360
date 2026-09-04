@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/pendencias/pendencias.dart';
+import 'package:gestao_im360/rotas/rotas.dart';
 
 import 'apoio/pendencias_falso.dart';
 
@@ -188,15 +189,14 @@ void main() {
       // Se o id da rota mudar em `rotas.dart`, o botão navegaria para lugar
       // nenhum sem erro nenhum — daí a asserção contra o catálogo, e não contra
       // uma lista escrita à mão.
+      // Percorre o CATÁLOGO, e não um conjunto escrito à mão aqui: uma lista
+      // repetida no teste envelhece junto com a de `rotas.dart` e deixa de
+      // acusar exatamente o dia em que uma delas muda.
+      final ids = {for (final rota in rotasAplicacao) rota.id};
       for (final acao in AcaoPendencia.values) {
         final rotaId = rotaDaAcao(acao);
         if (rotaId == null) continue;
-        expect(const {
-          'alunos',
-          'turmas',
-          'salas',
-          'materiais',
-        }, contains(rotaId));
+        expect(ids, contains(rotaId));
       }
     });
 

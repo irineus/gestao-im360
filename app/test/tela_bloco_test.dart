@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/alunos/alunos_provider.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
+import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/infraestrutura/infraestrutura_provider.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/telas/turmas/formularios_alocacao.dart';
@@ -10,6 +12,7 @@ import 'package:gestao_im360/telas/turmas/painel_bloco.dart';
 import 'package:gestao_im360/theme/tema.dart';
 import 'package:gestao_im360/turmas/turmas.dart';
 import 'package:gestao_im360/turmas/turmas_provider.dart';
+import 'package:gestao_im360/turmas/turmas_widgets.dart';
 import 'package:gestao_im360/widgets/formulario.dart';
 
 import 'apoio/alunos_falso.dart';
@@ -50,14 +53,19 @@ void main() {
     TurmasFalso? repositorio,
     Set<String> permissoes = secretaria,
     Size tamanho = const Size(1400, 900),
+    ErroApp? erroDepoisDeAbrir,
   }) async {
     final turmas = repositorio ?? TurmasFalso.fixture();
+    // A célula vem da grade, que é leitura: quebrar o repositório antes disso
+    // quebraria o próprio harness, e não a tela que se quer medir.
     final celula = await celulaDe(turmas, bloco);
+    turmas.erroDeLeitura = erroDepoisDeAbrir;
     tester.view.physicalSize = tamanho;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
+        retry: semRetryAutomatico,
         overrides: [
           turmasRepositorioProvider.overrideWithValue(turmas),
           alunosRepositorioProvider.overrideWithValue(AlunosFalso.fixture()),
@@ -287,5 +295,129 @@ void main() {
   ) async {
     await montar(tester, bloco: 'b-acima');
     expect(find.text(avisoAcimaCapacidade), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------------
+  // Card 5.11 — marcar presença aqui, e os estados que faltavam
+  // -------------------------------------------------------------------------
+
+  testWidgets('Veio/Faltou existe na reposição do dia e mostra o VEREDITO em '
+      'diálogo — na mão de quem lançou', (tester) async {
+    final turmas = TurmasFalso.fixture()..veredito = 'SUGERIR_CONTINUO';
+    await montar(tester, bloco: 'b-vazio', repositorio: turmas);
+
+    // A alocação não tem Veio/Faltou: só a reposição PONTUAL do dia.
+    expect(find.text('Veio'), findsOneWidget);
+    expect(find.text('Faltou'), findsOneWidget);
+
+    await tester.tap(find.text('Faltou'));
+    await carregar(tester);
+
+    expect(turmas.presencas, ['rep-al-lucas|FALTOU']);
+    expect(find.text('Falta registrada'), findsOneWidget);
+    expect(find.text(vereditosRep['SUGERIR_CONTINUO']!), findsOneWidget);
+  });
+
+  testWidgets('veredito MANTER também é dito — sem ele, silêncio', (
+    tester,
+  ) async {
+    final turmas = TurmasFalso.fixture()..veredito = 'MANTER';
+    await montar(tester, bloco: 'b-vazio', repositorio: turmas);
+    await tester.tap(find.text('Veio'));
+    await carregar(tester);
+    expect(find.text('Presença registrada'), findsOneWidget);
+    expect(find.text(avisoVereditoManter), findsOneWidget);
+  });
+
+  testWidgets('REPOSICAO_NAO_PREVISTA vira banner, e não exceção crua', (
+    tester,
+  ) async {
+    final turmas = TurmasFalso.fixture()
+      ..erroAoRegistrar = const ErroApp(
+        codigo: 'REPOSICAO_NAO_PREVISTA',
+        mensagem:
+            'Esta reposição já não está prevista — alguém a registrou ou '
+            'cancelou.',
+        traduzido: true,
+      );
+    await montar(tester, bloco: 'b-vazio', repositorio: turmas);
+    await tester.tap(find.text('Veio'));
+    await carregar(tester);
+
+    expect(
+      find.text(
+        'Esta reposição já não está prevista — alguém a registrou ou '
+        'cancelou.',
+      ),
+      findsOneWidget,
+    );
+    // E nenhum diálogo de veredito: não houve veredito.
+    expect(find.text('Presença registrada'), findsNothing);
+  });
+
+  testWidgets('sem turmas.alocar não há Veio nem Faltou', (tester) async {
+    await montar(tester, bloco: 'b-vazio', permissoes: leitura);
+    expect(find.text('Veio'), findsNothing);
+    expect(find.text('Faltou'), findsNothing);
+  });
+
+  testWidgets('o banner de acima da capacidade sai quando o 11º é removido — '
+      'ele descreve a LISTA, não a célula de quando o painel abriu', (
+    tester,
+  ) async {
+    final turmas = await montar(tester, bloco: 'b-acima');
+    expect(find.text(avisoAcimaCapacidade), findsOneWidget);
+
+    await tester.tap(find.text('Remover').first);
+    await carregar(tester);
+    await tester.tap(find.byKey(chaveBotaoSalvar));
+    await carregar(tester);
+
+    expect(turmas.removidos, hasLength(1));
+    expect(
+      find.text(avisoAcimaCapacidade),
+      findsNothing,
+      reason: 'dez em dez não é acima da capacidade',
+    );
+  });
+
+  testWidgets('o estado vazio do bloco oferece a ação do §7.2', (tester) async {
+    final turmas = TurmasFalso(
+      celulas: (await TurmasFalso.fixture().grade(DateTime(2026, 9, 7))),
+      alunos: const {},
+    );
+    await montar(tester, repositorio: turmas);
+    expect(find.text(vazioBloco), findsOneWidget);
+    expect(find.text('+ Adicionar aluno'), findsOneWidget);
+
+    // Sem `turmas.alocar` o estado vazio continua dizendo por que está vazio,
+    // mas não oferece o que a RLS recusaria.
+    await montar(tester, repositorio: turmas, permissoes: leitura);
+    expect(find.text(vazioBloco), findsOneWidget);
+    expect(find.text('+ Adicionar aluno'), findsNothing);
+  });
+
+  testWidgets('a lista que falha mostra "Tentar de novo" — o quarto estado', (
+    tester,
+  ) async {
+    await montar(
+      tester,
+      erroDepoisDeAbrir: const ErroApp(
+        mensagem:
+            'Não foi possível falar com o servidor. Verifique a conexão e '
+            'tente de novo.',
+        traduzido: true,
+      ),
+    );
+    expect(find.text('Tentar de novo'), findsOneWidget);
+    expect(find.text(vazioBloco), findsNothing);
+  });
+
+  testWidgets('o cabeçalho traz o NOME do método, não o código do banco', (
+    tester,
+  ) async {
+    await montar(tester);
+    expect(find.textContaining('Interativo'), findsWidgets);
+    expect(find.textContaining('INTERATIVO'), findsNothing);
   });
 }

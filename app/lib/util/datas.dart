@@ -42,3 +42,20 @@ String? validarData(String? valor, {bool obrigatorio = true}) {
   if (texto.isEmpty) return obrigatorio ? 'Campo obrigatório.' : null;
   return lerData(texto) == null ? 'Informe uma data como dd/mm/aaaa.' : null;
 }
+
+/// **Hoje em São Paulo** — a mesma data que `fn_hoje()` responde no banco.
+///
+/// ⚠️ Não é `DateTime.now()`. O relógio do aparelho pode estar em outro fuso
+/// (o app é web e roda em qualquer máquina) ou simplesmente errado, e o banco
+/// decide por São Paulo: se uma reposição é retroativa, qual é a semana
+/// corrente, quando fecha o prazo do débito. Perguntar ao aparelho produziria
+/// uma tela que discorda do banco por um dia — sem erro nenhum, que é a família
+/// de falha calada que este projeto cataloga.
+///
+/// O deslocamento é fixo em −3: o Brasil não tem horário de verão desde 2019, e
+/// `America/Sao_Paulo` é UTC−3 o ano inteiro. Se voltar a ter, é esta função —
+/// uma só — que muda.
+DateTime hojeSaoPaulo() {
+  final agora = DateTime.now().toUtc().subtract(const Duration(hours: 3));
+  return DateTime(agora.year, agora.month, agora.day);
+}

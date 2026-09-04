@@ -48,14 +48,24 @@ TurmasRepositorio _repositorio(Ref ref) {
 /// widget para a semana sobreviver a abrir e fechar o painel de um bloco
 /// (design-system §5.3) — voltar sempre para a semana corrente depois de editar
 /// um bloco de outra semana esconderia o resultado da própria edição.
+///
+/// A semana corrente sai de [hojeSaoPaulo], nunca de `DateTime.now()`: quem
+/// decide qual é "esta semana" é o banco, com `fn_hoje()` (São Paulo), e o
+/// relógio do aparelho pode estar em outro fuso — a grade certa sob a semana
+/// errada é a família de falha calada que este projeto cataloga.
 class SemanaNotifier extends Notifier<DateTime> {
   @override
-  DateTime build() => segundaDe(DateTime.now());
+  DateTime build() => segundaDe(hojeSaoPaulo());
 
   void mover(int semanas) =>
       state = DateTime(state.year, state.month, state.day + 7 * semanas);
 
-  void hoje() => state = segundaDe(DateTime.now());
+  void hoje() => state = segundaDe(hojeSaoPaulo());
+
+  /// Ir para a semana de uma data — é o que o atalho da célula do dashboard
+  /// usa para abrir Turmas na **mesma** semana que o dashboard rotulou, que vem
+  /// de `data_referencia` e não do relógio.
+  void definir(DateTime data) => state = segundaDe(data);
 }
 
 final semanaProvider = NotifierProvider<SemanaNotifier, DateTime>(
@@ -68,6 +78,17 @@ final gradeProvider = FutureProvider<List<CelulaGrade>>((ref) {
   final semana = ref.watch(semanaProvider);
   return _traduzindo(() => _repositorio(ref).grade(semana));
 });
+
+/// A grade da **semana corrente**, independente de [semanaProvider].
+///
+/// ⚠️ Existe porque [gradeProvider] carrega o estado da tela de Turmas, que
+/// sobrevive à navegação: quem foi ver dezembro lá e depois abriu o seletor de
+/// bloco da virada REP via as vagas de dezembro sob o texto "nesta semana"
+/// (achado da revisão da fase 05). A virada é alocação **permanente**, e a vaga
+/// que decide é a de agora.
+final gradeCorrenteProvider = FutureProvider<List<CelulaGrade>>(
+  (ref) => _traduzindo(() => _repositorio(ref).grade(hojeSaoPaulo())),
+);
 
 final blocosProvider = FutureProvider<List<BlocoHorario>>(
   (ref) => _traduzindo(_repositorio(ref).blocos),

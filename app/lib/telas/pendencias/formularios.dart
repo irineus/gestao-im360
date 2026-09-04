@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../alunos/alunos.dart';
 import '../../alunos/alunos_provider.dart';
 import '../../erros/erro_app.dart';
 import '../../pendencias/pendencias.dart';
 import '../../pendencias/pendencias_provider.dart';
-import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../turmas/turmas.dart';
 import '../../turmas/turmas_provider.dart';
+import '../../turmas/turmas_widgets.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
 import '../turmas/formularios.dart' show recarregarTurmas;
@@ -77,10 +76,21 @@ class _FormularioFecharPendenciaState
         if (erro.codigo == 'MOTIVO_OBRIGATORIO') {
           setState(() => _erroJustificativa = erro.mensagem);
         }
+        // ⚠️ "Atualize a tela" só vale se a tela atualizar. Estes dois códigos
+        // dizem que a pendência **já não está aberta** — outra pessoa a
+        // resolveu, ou a rotina a fechou —, e sem recarregar a lista o painel
+        // continuava oferecendo Resolver numa linha que já não existe.
+        if (erro.codigo == 'PENDENCIA_JA_RESOLVIDA' ||
+            erro.codigo == 'PENDENCIA_INEXISTENTE') {
+          recarregarPendencias(ref);
+          // O painel por trás cai no "Já não está aberta" sozinho, porque
+          // `pendenciaProvider` deixa de encontrar o id.
+          if (mounted) Navigator.of(context).pop();
+        }
       },
       campos: [
         Text(
-          '${rotuloTipoPendencia(pendencia.tipo)} — ${pendencia.descricao}',
+          '${rotuloPendencia(pendencia)} — ${pendencia.descricao}',
           style: Tipografia.corpo,
         ),
         TextFormField(
@@ -157,7 +167,11 @@ class _FormularioVirarContinuoState
   Widget build(BuildContext context) {
     final pendencia = widget.pendencia;
     final alunoId = pendencia.alunoId!;
-    final grade = ref.watch(gradeProvider);
+    // ⚠️ A grade da semana **corrente**, e não a de [gradeProvider], que carrega
+    // o estado da tela de Turmas: quem foi ver dezembro lá via as vagas de
+    // dezembro sob o texto "nesta semana". A virada é alocação permanente, e a
+    // vaga que decide é a de agora (achado da revisão da fase 05).
+    final grade = ref.watch(gradeCorrenteProvider);
 
     // Esperar a grade em vez de ler com `?? const []`: sem ela a lista de blocos
     // sai vazia e a pessoa conclui que não há horário nenhum (a lição do
@@ -181,33 +195,21 @@ class _FormularioVirarContinuoState
 
     // ⚠️ O método filtra **quando se sabe qual é**. A rota da central exige só
     // `pendencias.ler` (card 2.4 §6), então um perfil sem `alunos.ler` chega
-    // aqui e a lista de alunos vem vazia pela RLS: filtrar por um método
-    // desconhecido esvaziaria o seletor, e "nenhum horário" é a mentira que
-    // este projeto cataloga. Sem o método, oferece-se tudo o que tem vaga e
-    // quem recusa é `tg_bloco_aluno_admissao`, com `METODO_INCOMPATIVEL`
-    // traduzido — erro honesto vale mais que lista vazia.
-    String? metodoDoAluno;
-    for (final aluno in ref.watch(alunosProvider).value ?? const <Aluno>[]) {
-      if (aluno.id == alunoId) metodoDoAluno = aluno.metodoId;
-    }
+    // aqui e o aluno vem nulo pela RLS: filtrar por um método desconhecido
+    // esvaziaria o seletor, e "nenhum horário" é a mentira que este projeto
+    // cataloga. Sem o método, oferece-se tudo o que tem vaga e quem recusa é
+    // `tg_bloco_aluno_admissao`, com `METODO_INCOMPATIVEL` traduzido — erro
+    // honesto vale mais que lista vazia.
+    //
+    // Lê o aluno **sozinho**: carregar a lista inteira para achar um `metodoId`
+    // é uma consulta de centenas de linhas para usar um campo.
+    final metodoDoAluno = ref.watch(alunoProvider(alunoId)).value?.metodoId;
 
-    // Um bloco por horário, não um por dia da semana: a grade traz a mesma
-    // turma uma vez por data, e repetir "Seg 08:00" cinco vezes na lista faria
-    // a escolha parecer maior do que é.
-    final candidatos = <String, CelulaGrade>{};
-    for (final c in grade.requireValue) {
-      if (metodoDoAluno != null && c.metodoId != metodoDoAluno) continue;
-      if (c.vagasLivres > 0 || jaAlocado.contains(c.blocoId)) {
-        candidatos.putIfAbsent(c.blocoId, () => c);
-      }
-    }
-    final blocos = candidatos.values.toList()
-      ..sort((a, b) {
-        final dia = a.diaSemana.compareTo(b.diaSemana);
-        if (dia != 0) return dia;
-        final hora = a.horaInicio.compareTo(b.horaInicio);
-        return hora != 0 ? hora : a.salaNome.compareTo(b.salaNome);
-      });
+    final blocos = blocosParaEscolha(
+      grade.requireValue,
+      metodoId: metodoDoAluno,
+      jaAlocado: jaAlocado,
+    );
 
     return FormularioIm360(
       titulo: 'Virar reposição contínua',
@@ -216,7 +218,8 @@ class _FormularioVirarContinuoState
       aviso: avisoVirarContinuo,
       campos: [
         Text(pendencia.descricao, style: Tipografia.corpo),
-        _ListaBlocos(
+        SeletorBloco(
+          rotulo: 'Bloco da reposição contínua *',
           blocos: blocos,
           jaAlocado: jaAlocado,
           selecionado: _blocoId,
@@ -254,94 +257,11 @@ class _FormularioVirarContinuoState
   }
 }
 
-/// Falta de escolha na lista **não** é erro do banco: é o formulário dizendo o
-/// que falta, como qualquer validação de formato (design-system §5.4).
-const escolhaBloco = 'Escolha o bloco na lista acima.';
-
 const avisoVirarContinuo =
     'A reposição contínua ocupa uma vaga fixa no bloco, toda semana, e as '
     'reposições pontuais ainda previstas deste aluno são canceladas. O relógio '
     'do débito recomeça hoje: o aluno só volta a ser pontual depois de zerar as '
     'aulas em aberto e cumprir a carência.';
-
-const semBlocoComVaga =
-    'Nenhum bloco com vaga livre nesta semana, e o aluno não está alocado em '
-    'nenhum. Libere uma vaga, aumente a capacidade manual de um bloco ou '
-    'cadastre outro horário antes de virar contínuo.';
-
-/// A lista de blocos do seletor.
-///
-/// Não é `DropdownButtonFormField` pela mesma razão do card 5.7: a lista muda
-/// com a semana carregada, e um valor selecionado fora dos itens é um `assert`
-/// do framework que derruba a tela (medido no card 5.6).
-class _ListaBlocos extends StatelessWidget {
-  const _ListaBlocos({
-    required this.blocos,
-    required this.jaAlocado,
-    required this.selecionado,
-    required this.aoSelecionar,
-  });
-
-  final List<CelulaGrade> blocos;
-  final Set<String> jaAlocado;
-  final String? selecionado;
-  final void Function(String blocoId) aoSelecionar;
-
-  @override
-  Widget build(BuildContext context) {
-    final cores = Theme.of(context).colorScheme;
-    if (blocos.isEmpty) {
-      return Text(
-        semBlocoComVaga,
-        style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Bloco da reposição contínua *',
-          style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
-        ),
-        for (final bloco in blocos)
-          InkWell(
-            onTap: () => aoSelecionar(bloco.blocoId),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: Dim.e4),
-              child: Row(
-                children: [
-                  Icon(
-                    bloco.blocoId == selecionado
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_unchecked,
-                    size: 18,
-                    color: bloco.blocoId == selecionado
-                        ? cores.primary
-                        : cores.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: Dim.e8),
-                  Expanded(
-                    child: Text(
-                      [
-                        rotuloBloco(bloco.diaSemana, bloco.horaInicio),
-                        bloco.salaNome,
-                        bloco.metodoCodigo,
-                        jaAlocado.contains(bloco.blocoId)
-                            ? 'já é a turma dele'
-                            : '${bloco.vagasLivres} vaga(s)',
-                      ].join(' · '),
-                      style: Tipografia.corpoTabela,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
 
 /// `REP_VIRADA:VOLTA` — devolver o aluno a reposição pontual, liberando a vaga
 /// fixa. Motivo obrigatório, cobrado por `fn_rep_voltar_pontual`.

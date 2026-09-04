@@ -56,72 +56,81 @@ class TelaDashboard extends ConsumerWidget {
     final permissoes = ref.watch(permissoesProvider);
     final podeVerTurmas = podeAbrir(_rotaTurmas, permissoes);
 
-    return vagas.when(
-      loading: () => const EstadoCarregando(),
-      error: (erro, _) {
-        final traduzido = erro is ErroApp ? erro : traduzirErro(erro);
-        return EstadoErro(
-          mensagem: traduzido.mensagem,
-          codigoTecnico: traduzido.traduzido ? null : traduzido.codigo,
-          aoRepetir: () => ref.invalidate(vagasSemanaProvider),
-        );
-      },
-      // A região sem dado **diz** por que não há número, e não some — a regra do
-      // design-system §7.2 para o dashboard. Por isso o estado vazio substitui a
-      // região de vagas, e não a tela: as pendências abertas continuam à vista
-      // numa escola que ainda não tem bloco nenhum cadastrado.
-      data: (linhas) => SingleChildScrollView(
-        padding: const EdgeInsets.all(Dim.e16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (grade == null || visivel == null)
-              SizedBox(
-                height: _alturaVazio,
-                child: EstadoVazio(
-                  mensagem: vazioDashboard,
-                  icone: Icons.grid_view_outlined,
-                  rotuloAcao: podeVerTurmas ? 'Ir para Turmas' : null,
-                  aoAgir: podeVerTurmas
-                      ? () => context.go(_rotaTurmas.caminho)
-                      : null,
-                ),
-              )
-            else ...[
-              _TituloSemana(segunda: grade.segunda, dias: grade.dias),
-              const SizedBox(height: Dim.e12),
-              const CartoesMetodo(),
-              const SizedBox(height: Dim.e24),
-              Text(
-                'Vagas por dia e horário — ${visivel.metodoCodigo}',
-                style: Tipografia.subtitulo,
+    // ⚠️ **A tela não some por causa das vagas.** `loading` e `error` de
+    // `vagasSemanaProvider` substituíam a `Column` inteira, e com ela as
+    // pendências abertas e o rodapé — que não dependem daquela consulta. A
+    // regra do design-system §7.2 para o dashboard é *região nunca some*, e ela
+    // vale também quando a região falha: o estado de carregar e o de erro moram
+    // **dentro** do slot das vagas, como o estado vazio já morava.
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(Dim.e16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: vagas.hasValue && grade != null && visivel != null
+                ? null
+                : _alturaVazio,
+            child: switch (vagas) {
+              // `hasError` antes de `hasValue`: mesmo com o retry desligado no
+              // `ProviderScope`, perguntar pelo estado (e não casar pela
+              // classe) é o contrato que o design-system §5.6 fixou.
+              AsyncValue(hasError: true, :final error?) => _ErroVagas(
+                erro: error,
               ),
-              Text(
-                textoUmMetodoPorVez,
-                style: Tipografia.apoio.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: Dim.e12),
-              GradeVagas(
-                grade: grade,
-                // Toda célula do dashboard é atalho (wireframes §3.3), e o
-                // destino desta é a grade de Turmas — mas só para quem pode
-                // abri-la: botão que leva a "Sem acesso" ensina a não clicar
-                // nos outros (card 5.8, decisão 1).
-                aoTocarCelula: podeVerTurmas
-                    ? (_, _) => _irParaTurmas(context, ref, visivel.metodoId)
+              AsyncValue(hasValue: false) => const EstadoCarregando(linhas: 5),
+              _ when grade == null || visivel == null => EstadoVazio(
+                mensagem: vazioDashboard,
+                icone: Icons.grid_view_outlined,
+                rotuloAcao: podeVerTurmas ? 'Ir para Turmas' : null,
+                aoAgir: podeVerTurmas
+                    ? () => context.go(_rotaTurmas.caminho)
                     : null,
               ),
-            ],
-            const SizedBox(height: Dim.e24),
-            const Divider(),
-            const SizedBox(height: Dim.e8),
-            const PendenciasAbertas(),
-            const SizedBox(height: Dim.e24),
-            _NotaDoQueFalta(linhas: linhas.length),
-          ],
-        ),
+              _ => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _TituloSemana(segunda: grade.segunda, dias: grade.dias),
+                  const SizedBox(height: Dim.e12),
+                  const CartoesMetodo(),
+                  const SizedBox(height: Dim.e24),
+                  Text(
+                    'Vagas por dia e horário — ${visivel.metodoCodigo}',
+                    style: Tipografia.subtitulo,
+                  ),
+                  Text(
+                    textoUmMetodoPorVez,
+                    style: Tipografia.apoio.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: Dim.e12),
+                  GradeVagas(
+                    grade: grade,
+                    // Toda célula do dashboard é atalho (wireframes §3.3), e o
+                    // destino desta é a grade de Turmas — mas só para quem pode
+                    // abri-la: botão que leva a "Sem acesso" ensina a não
+                    // clicar nos outros (card 5.8, decisão 1).
+                    aoTocarCelula: podeVerTurmas
+                        ? (_, _) => _irParaTurmas(
+                            context,
+                            ref,
+                            metodoId: visivel.metodoId,
+                            segunda: grade.segunda,
+                          )
+                        : null,
+                  ),
+                ],
+              ),
+            },
+          ),
+          const SizedBox(height: Dim.e24),
+          const Divider(),
+          const SizedBox(height: Dim.e8),
+          const PendenciasAbertas(),
+          const SizedBox(height: Dim.e24),
+          _NotaDoQueFalta(linhas: vagas.value?.length),
+        ],
       ),
     );
   }
@@ -130,12 +139,40 @@ class TelaDashboard extends ConsumerWidget {
   /// tocar: sem isso a grade de Turmas abriria na semana e nos filtros em que
   /// alguém a deixou (o estado sobrevive à navegação, card 5.6), e a pessoa
   /// procuraria na tela de destino a célula que clicou na de origem.
-  void _irParaTurmas(BuildContext context, WidgetRef ref, String metodoId) {
-    ref.read(semanaProvider.notifier).hoje();
+  ///
+  /// ⚠️ A semana é a que o **banco** devolveu (`data_referencia`), e não a do
+  /// relógio do aparelho: o rótulo de cima já sai de lá, e mandar Turmas para a
+  /// semana do aparelho podia abrir a tela de destino numa semana diferente da
+  /// que se acabou de olhar.
+  void _irParaTurmas(
+    BuildContext context,
+    WidgetRef ref, {
+    required String metodoId,
+    required DateTime segunda,
+  }) {
+    ref.read(semanaProvider.notifier).definir(segunda);
     ref
         .read(filtroGradeProvider.notifier)
         .definir(FiltroGrade(metodoId: metodoId));
     context.go(_rotaTurmas.caminho);
+  }
+}
+
+/// O erro da região de vagas — dentro do slot, nunca no lugar da tela.
+class _ErroVagas extends ConsumerWidget {
+  const _ErroVagas({required this.erro});
+
+  final Object erro;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final original = erro;
+    final traduzido = original is ErroApp ? original : traduzirErro(original);
+    return EstadoErro(
+      mensagem: traduzido.mensagem,
+      codigoTecnico: traduzido.traduzido ? null : traduzido.codigo,
+      aoRepetir: () => ref.invalidate(vagasSemanaProvider),
+    );
   }
 }
 
@@ -194,11 +231,14 @@ class _TituloSemana extends StatelessWidget {
 class _NotaDoQueFalta extends StatelessWidget {
   const _NotaDoQueFalta({required this.linhas});
 
-  final int linhas;
+  /// Nulo enquanto a leitura não voltou (ou falhou) — aí não há contagem a
+  /// afirmar, e "0 blocos ativos" seria número errado com cara de certo.
+  final int? linhas;
 
   @override
   Widget build(BuildContext context) {
     final cores = Theme.of(context).colorScheme;
+    final n = linhas;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -208,12 +248,13 @@ class _NotaDoQueFalta extends StatelessWidget {
           textoRestanteDoDashboard,
           style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
         ),
-        Text(
-          '$linhas ${linhas == 1 ? 'bloco ativo' : 'blocos ativos'} nesta '
-          'semana.',
-          style: Tipografia.numero(Tipografia.apoio)
-              .copyWith(color: cores.onSurfaceVariant),
-        ),
+        if (n != null)
+          Text(
+            '$n ${n == 1 ? 'bloco de horário ativo' : 'blocos de horário '
+                      'ativos'} nesta semana.',
+            style: Tipografia.numero(Tipografia.apoio)
+                .copyWith(color: cores.onSurfaceVariant),
+          ),
       ],
     );
   }

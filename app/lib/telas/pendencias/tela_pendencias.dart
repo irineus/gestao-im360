@@ -69,6 +69,40 @@ class TelaPendencias extends ConsumerWidget {
           (a, b) => rotuloTipoPendencia(a).compareTo(rotuloTipoPendencia(b)),
         );
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // O cabeçalho do §14.1, com a contagem: numa fila de trabalho, "quantas
+        // há" é a primeira informação, e ela não cabe em nenhuma coluna.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(Dim.e16, Dim.e16, Dim.e16, 0),
+          child: Text(
+            tituloPendencias(pendencias.value?.length),
+            style: Tipografia.subtitulo,
+          ),
+        ),
+        Expanded(
+          child: _tabela(
+            context,
+            ref,
+            filtro: filtro,
+            tiposPresentes: tiposPresentes,
+            pendencias: pendencias,
+            haPendencia: haPendencia,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _tabela(
+    BuildContext context,
+    WidgetRef ref, {
+    required FiltroPendencias filtro,
+    required List<String> tiposPresentes,
+    required AsyncValue<List<Pendencia>> pendencias,
+    required bool haPendencia,
+  }) {
     return TabelaIm360<Pendencia>(
       filtros: FiltrosPendencias(tiposPresentes: tiposPresentes),
       filtrosAtivos: filtro.ativos,
@@ -82,7 +116,7 @@ class TelaPendencias extends ConsumerWidget {
         ),
         ColunaIm360(
           titulo: 'Pendência',
-          texto: (p) => rotuloTipoPendencia(p.tipo),
+          texto: rotuloPendencia,
           flex: 2,
           larguraMin: 180,
         ),
@@ -112,7 +146,7 @@ class TelaPendencias extends ConsumerWidget {
       ],
       linhas: pendencias.whenData((lista) => filtrarPendencias(lista, filtro)),
       cartao: (p) => CartaoIm360(
-        titulo: rotuloTipoPendencia(p.tipo),
+        titulo: rotuloPendencia(p),
         subtitulo: p.descricao,
         apoio: '${p.referencia} · ${rotuloIdade(p.diasAberta)}',
         badge: Severidade(p.severidade),
@@ -143,29 +177,8 @@ class TelaPendencias extends ConsumerWidget {
 const vazioPendencias = 'Nenhuma pendência aberta.';
 const vazioPendenciasFiltro = 'Nenhuma pendência com esses filtros.';
 
-/// Uma linha de rótulo e valor do painel de detalhe — o par que a central
-/// repete em "Descrição", "Referência" e "Aberta desde".
-class LinhaDetalhe extends StatelessWidget {
-  const LinhaDetalhe({super.key, required this.rotulo, required this.valor});
-
-  final String rotulo;
-  final String valor;
-
-  @override
-  Widget build(BuildContext context) {
-    final cores = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Dim.e8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            rotulo,
-            style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
-          ),
-          Text(valor, style: Tipografia.corpo),
-        ],
-      ),
-    );
-  }
-}
+/// O cabeçalho do §14.1. Sem contagem enquanto a leitura não voltou — um "0"
+/// ali seria número errado com cara de certo.
+String tituloPendencias(int? abertas) => abertas == null
+    ? 'Pendências'
+    : 'Pendências ($abertas ${abertas == 1 ? 'aberta' : 'abertas'})';

@@ -279,13 +279,17 @@ TabelaIm360<T>(
 
 ### 5.5 `CardDashboard`
 
-- Superfície com borda (sem sombra), raio 8, padding 16; título `rotulo` em texto secundário;
+Existe em `lib/widgets/card_dashboard.dart` desde 04/09/2026 (antes era privado dentro dos cartões
+por método do card 5.9; o card 8.7 traz mais cinco).
+
+- Superfície com borda (sem sombra), raio 8, padding 12; título `rotulo` em texto secundário;
   valor principal `titulo` (24/700, tnum); linhas secundárias `corpoTabela` com badge/ícone de
   atenção quando houver (`9 standby ⚠`).
 - **O card inteiro é clicável** e navega para a lista filtrada (card 2.6 §5); estado de foco/hover
   do tema. Números secundários com alerta também são alvos individuais.
-- Grade: desktop 3 colunas (cards de método), demais blocos em 2; mobile empilha na ordem do
-  wireframe.
+- Grade: desktop 3 colunas (cards de método), demais blocos em 2; **mobile empilha** na ordem do
+  wireframe — largura livre, e não a fixa do desktop, que punha dois cartões lado a lado numa tela
+  de 430 px (corrigido em 04/09/2026).
 
 ### 5.6 Estados de tela — `EstadoCarregando`, `EstadoVazio`, `EstadoErro`, `EstadoSemAcesso`
 
@@ -300,10 +304,22 @@ Os quatro estados do card 2.6 §2.3, componentizados **uma vez**:
   técnico em `apoio` quando não mapeado. Sem stack trace em tela — isso vai ao Sentry.
 - **`EstadoSemAcesso`** — tela inteira (deep-link/permissão revogada): "Você não tem acesso a esta
   tela" + o conjunto que falta em `apoio` (diagnóstico, card 2.6 §2.3.4) + botão para o Dashboard.
-  Sem dado nenhum da tela por trás.
+  Sem dado nenhum da tela por trás. **Dentro de uma aba o texto muda** (04/09/2026): a tela abriu, e
+  o que não abre é aquele pedaço — o componente aceita o texto daquela região.
 
 `AsyncValue` do Riverpod liga os quatro: `loading` → skeleton, `error` → `EstadoErro`,
 `data` vazio → `EstadoVazio`, `data` → conteúdo.
+
+⚠️ **A política de `retry` do projeto é "não repetir"** (04/09/2026, revisão da fase 05):
+`ProviderScope(retry: (_, _) => null)` em `lib/main.dart`, decidido **uma vez** e não tela a tela.
+O Riverpod 3 repete sozinho o provider que falhou, com espera crescente, até dez vezes — o estado
+passa por `AsyncError` e volta a `AsyncLoading`, e um `.when(error:)` mostra a mensagem e some: a
+tela pisca entre erro e esqueleto e termina em "Carregando…" para sempre. Medido no card 5.9.
+Desligar é o certo aqui porque (a) toda tela já tem "Tentar de novo", que é o quarto estado do
+card 2.6 §2.3, e (b) a falha típica deste app não é transitória — RLS, permissão revogada, erro de
+regra —, e repetir esconde o diagnóstico. Com a política desligada, `.when(error:)` volta a ser
+seguro; onde houver dúvida, perguntar `hasError` antes continua valendo. **O widget test que
+exercita erro precisa passar a mesma política ao `ProviderScope`**, senão mede outro mundo.
 
 ### 5.7 Botões — hierarquia e a regra de exibição
 
@@ -343,7 +359,12 @@ célula carrega três informações e dois estados de alerta:
   `BLOCO_ACIMA_CAPACIDADE`); **sem professor** (ícone ⚠ no par de atenção); vazia (traço, e com
   `turmas.criar` vira alvo de "criar bloco aqui").
 - Numerais tabulares obrigatórios — as colunas de dias alinham.
-- Mobile: um dia por vez (abas Seg–Sáb), células empilhadas como lista.
+- Mobile: um dia por vez (**abas Seg–Sáb**), células empilhadas como lista, **abrindo no dia de
+  hoje** — a grade de segunda é a resposta errada para quem abre o app na quinta. Vale para as duas
+  telas: desde 04/09/2026 as duas usam o mesmo `MatrizSemanal`, e o wireframe §5 (que desenhava
+  lista vertical no dashboard) foi corrigido.
+- A célula **vazia é alvo nas duas faixas**: no celular também, senão "criar bloco aqui" existe só
+  no desktop (corrigido em 04/09/2026).
 
 ---
 
@@ -393,8 +414,8 @@ Regras: mensagens de **validação de campo** aparecem no campo; as demais em ba
 | Ficha → Trilha | "Este aluno não tem trilha. Gere a partir do combo em **Editar trilha**." | — |
 | Ficha → Turmas | "O aluno não está em nenhuma turma. **+ Alocar em bloco**." (se ATIVO/ACELERAR, com o aviso de `ALUNO_SEM_TURMA`) | — |
 | Ficha → Histórico | "Nenhuma mudança de status registrada." | — |
-| Grade de turmas | "Nenhum bloco cadastrado. **+ Novo bloco**." | "Nenhum bloco com esses filtros — **Limpar filtros**." |
-| Bloco (alunos) | "Nenhum aluno neste bloco. **+ Adicionar aluno**." | — |
+| Grade de turmas | "Nenhum bloco de horário cadastrado. **+ Novo bloco**." | "Nenhum bloco com esses filtros nesta semana — **Limpar filtros**." |
+| Bloco (alunos) | "Nenhum aluno neste bloco nesta data. **+ Adicionar aluno**." (a lotação é de um dia) | — |
 | Turmas Modular | "Nenhuma turma Modular. **+ Nova turma**." | idem filtros |
 | Materiais/estoque | "Nenhum material cadastrado. **+ Novo material**." | idem filtros |
 | Movimentações de material | "Nenhuma movimentação. Entrada de estoque acontece pelo recebimento de pedido, na tela **Compras**." | idem período/tipo |
@@ -403,9 +424,10 @@ Regras: mensagens de **validação de campo** aparecem no campo; as demais em ba
 | Projeção | Rotina ok e sem linhas: "Sem demanda projetada no horizonte atual." **Rotina falhou:** "A projeção não foi calculada — veja a pendência **ROTINA_FALHOU**." (nunca tabela zerada com cara de 'sem demanda' — card 2.6 §11) | — |
 | Certificados | "Ninguém chegando ao fim do curso agora." | idem filtros |
 | Salas e PCs | "Nenhuma sala cadastrada. **+ Nova sala**." Professores (2ª aba, card 4.5): "Nenhum professor cadastrado. **+ Novo professor**." | idem filtros (card 4.5) |
-| Pendências | "Nenhuma pendência aberta. 🎉" | "Nenhuma pendência com esses filtros — **Limpar filtros**." |
+| Pendências | "Nenhuma pendência aberta." | "Nenhuma pendência com esses filtros — **Limpar filtros**." |
 | Administração → usuários | "Só você por aqui. **+ Convidar usuário**." | — |
 | Dashboard (região sem dado) | região mostra zero real, nunca some — número que desaparece parece erro | — |
+| Dashboard (região que **falhou**) | o erro e o carregamento moram **dentro** do slot da região, nunca no lugar da tela: as pendências abertas e o rodapé não dependem da consulta de vagas (corrigido em 04/09/2026) | — |
 
 ### 7.3 Avisos e resultados padronizados
 
@@ -535,6 +557,9 @@ abstract final class Cores {
   static const atencaoEscuro = Color(0xFFE5B65C);
   static const erroEscuro    = Color(0xFFF87A6E);
   static const infoEscuro    = Color(0xFF7FB4F0);
+  // Fundo tonal de erro no escuro — o mesmo par do badge CANCELADO escuro,
+  // contraste já verificado no §2.3 (acrescentado em 04/09/2026).
+  static const erroFundoEscuro = Color(0xFF3D212B);
 
   // FORMADO (violeta própria — card 1.9 §6)
   static const formado       = Color(0xFF4C3FA8);
@@ -673,6 +698,10 @@ const _esquemaEscuro = ColorScheme.dark(
   onSurfaceVariant: Cores.textoEscuroSec,
   outline: Cores.divisorEscuro,
   error: Cores.erroEscuro,        onError: Cores.grafite900,
+  // ⚠️ Sem estes dois o Flutter devolve `error` no lugar de `errorContainer` e
+  // toda superfície tonal de erro do tema escuro fica com fundo, borda e texto
+  // na mesma cor (achado de 04/09/2026, revisão da fase 05).
+  errorContainer: Cores.erroFundoEscuro, onErrorContainer: Cores.erroEscuro,
 );
 
 ThemeData _tema(ColorScheme esquema, {required bool escuro, required bool compacto}) {
@@ -767,6 +796,23 @@ Apontamentos para outros cards (nenhum bloqueante; nenhuma correção a document
 | 3 | Os erros `REP_JA_CONTINUO`/`REP_NAO_CONTINUO` (card 2.5 §8) já estão no catálogo de mensagens; conferir que o card 5.3 os cria com esses códigos | 5.3 |
 | 4 | `Semantics` da grade de vagas ("segunda 8h, 8 de 10 vagas…") exige que `v_bloco_vagas_semana`/`fn_grade_semana` continuem devolvendo dia e hora separados | 5.6 |
 | 5 | O texto de `PARAMETRO_AUSENTE` cita a tela de Parâmetros — vale para a direção; para os demais perfis o caso não deve ocorrer (depende de `fn_param_int` como `security definer`, ajuste bloqueante já registrado para o card 3.4) | 3.4 |
+
+### Correções vindas da revisão da fase 05 (04/09/2026, card 5.11)
+
+As quatro telas da fase 05 foram construídas sem que **nenhuma** das sessões abrisse este documento
+— a causa foi medida e corrigida na origem (`automacao/prompt-card.md` passou a declarar as
+especificações vinculantes por `Tipo` de card). O que a revisão encontrou e este documento passou a
+dizer com mais precisão:
+
+| # | Correção | Onde |
+|---|---|---|
+| 6 | **Política de `retry` do Riverpod 3**, decidida uma vez para o projeto — sem ela `.when(error:)` pisca e a tela termina em esqueleto | §5.6 |
+| 7 | **`errorContainer`/`onErrorContainer` faltavam no esquema escuro**: o Flutter devolvia `error` no lugar, e fundo, borda e texto de toda superfície tonal de erro ficavam na mesma cor. Nenhum teste e nenhum `analyze` veem isso | §10.1, §10.4 |
+| 8 | **Lotado é peso 600, sem cor e sem ícone** — o §6 já dizia, e as duas grades e o cartão do método pintavam de âmbar com `Icons.block`. O alerta gasto ali falta na turma **estourada** | §6 |
+| 9 | **Alvos de toque**: células de grade a 32 px, linhas de escolha a 26–28 px, nome do aluno a ~20 px, contra os 40/44 px do §8.4. O componente `LinhaEscolha` passou a ser o "rádio" das três listas de escolha, com semântica de rádio | §8.4, §8.5 |
+| 10 | **`Semantics` da célula sem dia e hora**: numa matriz, "Interativo, 8 de 10" não diz *quando*, e quem lê por leitor de tela não tem a coluna à vista | §8.5 |
+| 11 | **Jargão interno em texto de usuário** — referência a card do board e código de permissão entre crases. Virou portão automático em `app/test/texto_de_tela_test.dart`, junto com o de glifo fora de Inter/Roboto | §7 |
+| 12 | **Vocabulário**: o mesmo objeto era "turma" no cartão e "bloco" no rodapé da mesma tela. O nome é **bloco de horário** | §7 |
 
 ---
 

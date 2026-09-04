@@ -28,12 +28,20 @@ const _caminhoAcesso = '/acesso';
 
 /// As telas já entregues, por id de rota. O que não está aqui abre o
 /// placeholder que diz qual card entrega.
-final _telaDaRota = <String, WidgetBuilder>{
+///
+/// Recebem o `GoRouterState` por causa dos **atalhos da central de pendências**
+/// (wireframe §14.3): `?bloco=`, `?pc=` e `?material=` levam o id da referência
+/// para a tela de destino abrir já no que a pendência descreve. Sem o
+/// parâmetro, "Ver turma" levava à grade inteira e a pessoa procurava de novo o
+/// que a lista já sabia.
+final _telaDaRota = <String, Widget Function(GoRouterState)>{
   'dashboard': (_) => const TelaDashboard(),
   'alunos': (_) => const TelaAlunos(),
-  'materiais': (_) => const TelaMateriais(),
-  'salas': (_) => const TelaSalas(),
-  'turmas': (_) => const TelaTurmas(),
+  'materiais': (estado) =>
+      TelaMateriais(materialId: estado.uri.queryParameters['material']),
+  'salas': (estado) => TelaSalas(pcId: estado.uri.queryParameters['pc']),
+  'turmas': (estado) =>
+      TelaTurmas(blocoId: estado.uri.queryParameters['bloco']),
   'pendencias': (_) => const TelaPendencias(),
   'administracao': (_) => const TelaAdministracao(),
 };
@@ -47,7 +55,14 @@ List<RouteBase> _subRotas(Rota rota) => switch (rota.id) {
       path: ':id',
       builder: (_, estado) => _TelaGuardada(
         rota: rota,
-        construtor: (_) => FichaAluno(alunoId: estado.pathParameters['id']!),
+        estado: estado,
+        // `?aba=` abre a ficha na aba em que o problema se resolve — é como a
+        // central de pendências manda "Alocar" para Turmas e "Formar" para
+        // Dados, em vez de largar todo mundo na primeira aba.
+        construtor: (estado) => FichaAluno(
+          alunoId: estado.pathParameters['id']!,
+          aba: estado.uri.queryParameters['aba'],
+        ),
       ),
     ),
   ],
@@ -131,7 +146,7 @@ final roteadorProvider = Provider<GoRouter>((ref) {
           for (final rota in rotasAplicacao)
             GoRoute(
               path: rota.caminho,
-              builder: (_, _) => _TelaGuardada(rota: rota),
+              builder: (_, estado) => _TelaGuardada(rota: rota, estado: estado),
               routes: _subRotas(rota),
             ),
         ],
@@ -169,13 +184,21 @@ String? _destinoComSessao(String caminho, Sessao sessao) {
 /// mudança vale imediatamente) — aí o `build` da tela é o último ponto em que
 /// dá para não mostrar nada.
 class _TelaGuardada extends ConsumerWidget {
-  const _TelaGuardada({required this.rota, this.construtor});
+  const _TelaGuardada({
+    required this.rota,
+    required this.estado,
+    this.construtor,
+  });
 
   final Rota rota;
 
+  /// A rota como o `GoRouter` a leu — é de onde saem os parâmetros de caminho
+  /// e de consulta que as telas de destino usam.
+  final GoRouterState estado;
+
   /// A tela, quando não é a de `_telaDaRota` — a ficha do aluno, que
   /// precisa do parâmetro da rota.
-  final WidgetBuilder? construtor;
+  final Widget Function(GoRouterState estado)? construtor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -187,7 +210,7 @@ class _TelaGuardada extends ConsumerWidget {
       );
     }
     final construtor = this.construtor ?? _telaDaRota[rota.id];
-    if (construtor != null) return construtor(context);
+    if (construtor != null) return construtor(estado);
     return TelaEmConstrucao(rota: rota, card: _cardDaRota[rota.id] ?? '—');
   }
 }

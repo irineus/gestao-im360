@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/ambiente.dart';
 import 'config/estrategia_url.dart';
 import 'config/link_inicial.dart';
+import 'config/politica_retry.dart';
 import 'observabilidade/observabilidade.dart';
 import 'rotas/roteador.dart';
 import 'theme/dimensoes.dart';
@@ -46,7 +47,7 @@ Future<void> _subir() async {
     publishableKey: Ambiente.supabaseAnonKey,
   );
 
-  runApp(const ProviderScope(child: AppIm360()));
+  runApp(ProviderScope(retry: semRetryAutomatico, child: const AppIm360()));
 }
 
 class AppIm360 extends ConsumerWidget {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../dashboard/dashboard.dart';
+import '../../pendencias/pendencias.dart';
 import '../../pendencias/pendencias_provider.dart';
 import '../../rotas/rotas.dart';
 import '../../theme/cores.dart';
@@ -70,7 +71,18 @@ class PendenciasAbertas extends ConsumerWidget {
             style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
           )
         else
-          _Contagens(totais: totaisPorSeveridade(abertas.requireValue)),
+          _Contagens(
+            totais: totaisPorSeveridade(abertas.requireValue),
+            // Toda célula/número do dashboard é atalho (wireframes §5 e §3.3):
+            // tocar "ALTA 3" abre a central **já filtrada** por ALTA. Sem isso
+            // o número dizia quantas são e mandava procurá-las de novo.
+            aoTocar: (severidade) {
+              ref
+                  .read(filtroPendenciasProvider.notifier)
+                  .definir(FiltroPendencias(severidade: severidade));
+              context.go(_rotaPendencias.caminho);
+            },
+          ),
       ],
     );
   }
@@ -81,9 +93,10 @@ const erroPendenciasDashboard =
     'Não foi possível ler as pendências agora. Abra a central para conferir.';
 
 class _Contagens extends StatelessWidget {
-  const _Contagens({required this.totais});
+  const _Contagens({required this.totais, required this.aoTocar});
 
   final List<TotalSeveridade> totais;
+  final void Function(String severidade) aoTocar;
 
   @override
   Widget build(BuildContext context) {
@@ -103,36 +116,47 @@ class _Contagens extends StatelessWidget {
       children: [
         for (final total in totais)
           Semantics(
+            button: true,
             label:
                 '${total.qtd} '
                 '${total.qtd == 1 ? 'pendência' : 'pendências'} '
                 'de severidade ${total.rotulo.toLowerCase()} em aberto',
             excludeSemantics: true,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // A severidade é ícone + texto, e não um terceiro vocabulário de
-                // badge (card 5.8, decisão 5): o sistema já usa badge preenchido
-                // para status do aluno e de contorno para tipo na turma.
-                Icon(
-                  Icons.flag_outlined,
-                  size: 14,
-                  color: cor(total.severidade),
+            child: InkWell(
+              onTap: () => aoTocar(total.severidade),
+              borderRadius: BorderRadius.circular(Dim.raio),
+              child: ConstrainedBox(
+                // Alvo de toque do §8.4 — o número é botão, e botão de 16 px
+                // não se acerta com o polegar.
+                constraints: const BoxConstraints(minHeight: Dim.alvoMobile),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // A severidade é ícone + texto, e não um terceiro
+                    // vocabulário de badge (card 5.8, decisão 5): o sistema já
+                    // usa badge preenchido para status do aluno e de contorno
+                    // para tipo na turma.
+                    Icon(
+                      Icons.flag_outlined,
+                      size: 14,
+                      color: cor(total.severidade),
+                    ),
+                    const SizedBox(width: Dim.e4),
+                    Text(
+                      total.rotulo,
+                      style: Tipografia.apoio.copyWith(
+                        color: cores.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: Dim.e8),
+                    Text(
+                      '${total.qtd}',
+                      style: Tipografia.numero(Tipografia.rotulo)
+                          .copyWith(color: cor(total.severidade)),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: Dim.e4),
-                Text(
-                  total.rotulo,
-                  style: Tipografia.apoio.copyWith(
-                    color: cores.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(width: Dim.e8),
-                Text(
-                  '${total.qtd}',
-                  style: Tipografia.numero(Tipografia.rotulo)
-                      .copyWith(color: cor(total.severidade)),
-                ),
-              ],
+              ),
             ),
           ),
       ],

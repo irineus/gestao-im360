@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
 import 'package:gestao_im360/infraestrutura/infraestrutura_provider.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
+import 'package:gestao_im360/telas/turmas/grade_semanal.dart';
 import 'package:gestao_im360/telas/turmas/tela_turmas.dart';
 import 'package:gestao_im360/theme/tema.dart';
 import 'package:gestao_im360/turmas/turmas.dart';
 import 'package:gestao_im360/turmas/turmas_provider.dart';
+import 'package:gestao_im360/widgets/formulario.dart';
 
 import 'apoio/carregar.dart';
 import 'apoio/catalogo_falso.dart';
@@ -41,6 +44,7 @@ void main() {
     TurmasFalso? repositorio,
     Set<String> permissoes = leitura,
     Size tamanho = const Size(1400, 900),
+    String? blocoId,
   }) async {
     final turmas = repositorio ?? TurmasFalso.fixture();
     tester.view.physicalSize = tamanho;
@@ -48,6 +52,7 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
+        retry: semRetryAutomatico,
         overrides: [
           turmasRepositorioProvider.overrideWithValue(turmas),
           catalogoRepositorioProvider.overrideWithValue(
@@ -61,7 +66,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: temaClaro(),
-          home: const Scaffold(body: TelaTurmas()),
+          home: Scaffold(body: TelaTurmas(blocoId: blocoId)),
         ),
       ),
     );
@@ -163,6 +168,7 @@ void main() {
     tester,
   ) async {
     final container = ProviderContainer(
+      retry: semRetryAutomatico,
       overrides: [
         turmasRepositorioProvider.overrideWithValue(TurmasFalso.fixture()),
         catalogoRepositorioProvider.overrideWithValue(CatalogoFalso.fixture()),
@@ -238,17 +244,177 @@ void main() {
     expect(find.textContaining('Capacidade derivada'), findsOneWidget);
   });
 
-  testWidgets('no mobile a grade vira um dia por vez', (tester) async {
-    await montar(tester, tamanho: const Size(420, 900));
+  testWidgets('no mobile a grade vira um dia por vez, e abre no dia de hoje', (
+    tester,
+  ) async {
+    await montar(tester, tamanho: const Size(599, 900));
     // As abas trazem o dia e a data; a matriz de seis colunas não existe aqui.
     expect(find.textContaining('Ter '), findsOneWidget);
-    expect(
-      find.text('9/10'),
-      findsNothing,
-      reason: 'terça não é a aba inicial',
-    );
+
+    // A aba inicial é a de HOJE, e não sempre segunda (design-system §6): a
+    // grade de segunda é a resposta errada para quem abre o app na quinta.
+    const ocupacaoDoDia = {1: '0/10', 2: '9/10', 3: '10/10', 4: '11/10'};
+    final hoje = hojeSaoPaulo().weekday;
+    for (final entrada in ocupacaoDoDia.entries) {
+      expect(
+        find.text(entrada.value),
+        entrada.key == hoje ? findsOneWidget : findsNothing,
+        reason: 'só o dia de hoje está à vista',
+      );
+    }
+
+    // A barra de abas rola sozinha até hoje, então a aba de terça pode estar
+    // fora da vista — sem isto o toque cai no vazio e o teste "passa" testando
+    // nada.
+    await tester.ensureVisible(find.textContaining('Ter '));
+    await carregar(tester);
     await tester.tap(find.textContaining('Ter '));
     await carregar(tester);
     expect(find.text('9/10'), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------------
+  // Card 5.11 — o quarto estado, a célula vazia e o atalho da pendência
+  // -------------------------------------------------------------------------
+
+  testWidgets('a grade que falha mostra "Tentar de novo", e não uma semana '
+      'vazia', (tester) async {
+    await montar(tester, repositorio: TurmasFalso.queFalha());
+    expect(find.text('Tentar de novo'), findsOneWidget);
+    expect(
+      find.text(vazioTurmas),
+      findsNothing,
+      reason:
+          'sem isto, falha de rede seria indistinguível de escola sem '
+          'bloco nenhum',
+    );
+  });
+
+  testWidgets('vazio COM filtro ligado oferece "Limpar filtros", e não '
+      '"nenhum bloco cadastrado"', (tester) async {
+    // Um método que não existe na grade: a lista filtrada fica vazia, mas há
+    // blocos cadastrados — antes a tela dizia que não havia nenhum, e não
+    // oferecia a saída.
+    final container = ProviderContainer(
+      retry: semRetryAutomatico,
+      overrides: [
+        turmasRepositorioProvider.overrideWithValue(TurmasFalso.fixture()),
+        catalogoRepositorioProvider.overrideWithValue(CatalogoFalso.fixture()),
+        infraestruturaRepositorioProvider.overrideWithValue(
+          InfraestruturaFalso.fixture(),
+        ),
+        permissoesProvider.overrideWithValue(secretaria),
+        unidadeAtualProvider.overrideWithValue('unidade-teste'),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(filtroGradeProvider.notifier)
+        .definir(const FiltroGrade(metodoId: 'm-inexistente'));
+
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: temaClaro(),
+          home: const Scaffold(body: TelaTurmas()),
+        ),
+      ),
+    );
+    await carregar(tester);
+
+    expect(find.text(vazioTurmasFiltro), findsOneWidget);
+    expect(find.text('Limpar filtros'), findsOneWidget);
+    expect(find.text(vazioTurmas), findsNothing);
+  });
+
+  testWidgets('célula vazia abre o formulário de bloco já com o dia e a hora '
+      'daquele cruzamento', (tester) async {
+    await montar(tester, permissoes: secretaria);
+    // O `+` da célula vazia, e não o do botão "Novo bloco" do cabeçalho: o
+    // último cruzamento sem bloco é sábado às 09:30.
+    final vazias = find.descendant(
+      of: find.byType(GradeSemanal),
+      matching: find.byIcon(Icons.add),
+    );
+    expect(vazias, findsWidgets);
+    await tester.tap(vazias.last);
+    await carregar(tester);
+
+    // O dia e o horário chegam pré-preenchidos: sem isso a pessoa aponta um
+    // cruzamento e digita de novo o que já apontou.
+    expect(find.text('09:30'), findsWidgets);
+    expect(find.text('Sábado'), findsWidgets);
+  });
+
+  testWidgets('salvar e excluir o bloco chegam ao repositório', (tester) async {
+    final turmas = await montar(tester, permissoes: secretaria);
+    // Pelo "Editar bloco" de dentro do painel, que é onde o cadastro mora
+    // (§7.2): os campos vêm preenchidos, e é o caminho real.
+    await tester.tap(find.text('9/10'));
+    await carregar(tester);
+    await tester.tap(find.text('Editar bloco'));
+    await carregar(tester);
+    await tester.tap(find.byKey(chaveBotaoSalvar));
+    await carregar(tester);
+
+    expect(
+      turmas.salvos,
+      hasLength(1),
+      reason: 'o falso registrava os salvos e nenhum teste os assertava',
+    );
+    expect(find.text('Bloco salvo.'), findsOneWidget);
+
+    await tester.tap(find.text('9/10'));
+    await carregar(tester);
+    await tester.tap(find.text('Editar bloco'));
+    await carregar(tester);
+    await tester.tap(find.text('Excluir'));
+    await carregar(tester);
+    // Consequência dita e o botão nomeando a ação, nunca "OK" (§5.8).
+    expect(find.text('Excluir bloco?'), findsOneWidget);
+    await tester.tap(find.text('Excluir').last);
+    await carregar(tester);
+
+    expect(turmas.excluidos, ['b-quase']);
+    expect(find.text('Bloco excluído.'), findsOneWidget);
+  });
+
+  testWidgets('os blocos inativos são alcançáveis e reativáveis — desativar '
+      'não é porta de mão única', (tester) async {
+    final turmas = await montar(tester, permissoes: secretaria);
+    expect(find.text('Inativos (1)'), findsOneWidget);
+    await tester.tap(find.text('Inativos (1)'));
+    await carregar(tester);
+    expect(find.textContaining('Sexta'), findsWidgets);
+
+    // O bloco inativo se reabre e se reativa pelo interruptor "Ativo".
+    await tester.tap(find.text('Abrir'));
+    await carregar(tester);
+    await tester.tap(find.byType(SwitchListTile));
+    await carregar(tester);
+    await tester.tap(find.byKey(chaveBotaoSalvar));
+    await carregar(tester);
+
+    expect(turmas.salvos.single.id, 'b-inativo');
+    expect(turmas.salvos.single.ativo, isTrue);
+  });
+
+  testWidgets('o atalho da pendência abre o painel DAQUELE bloco', (
+    tester,
+  ) async {
+    // É o `?bloco=<id>` do wireframe §14.3: sem ele "Ver turma" abria a grade
+    // inteira e a pessoa procurava de novo o que a lista já sabia.
+    await montar(tester, blocoId: 'b-cheio');
+    expect(find.text('Ana Paula Ribeiro'), findsOneWidget);
+    expect(find.textContaining('Ocupação 3/10'), findsOneWidget);
+  });
+
+  testWidgets('sem o parâmetro nenhum painel abre sozinho', (tester) async {
+    await montar(tester);
+    expect(find.text('Ana Paula Ribeiro'), findsNothing);
   });
 }

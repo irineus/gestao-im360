@@ -47,6 +47,20 @@ const tiposPendencia = <String, String>{
 
 String rotuloTipoPendencia(String tipo) => tiposPendencia[tipo] ?? tipo;
 
+/// O rótulo de **uma** pendência — igual ao do tipo, menos no `REP_VIRADA`.
+///
+/// ⚠️ As duas metades da virada são o mesmo tipo e pedem ações opostas: uma
+/// põe o aluno em vaga fixa, a outra a devolve. Um rótulo só para as duas
+/// ("Reposição — virada sugerida") faz a lista, o título do painel e a
+/// confirmação dizerem a mesma coisa em dois casos contrários — e quem lê
+/// decide qual é pelo texto da descrição, quando devia decidir pelo nome.
+/// O menu de **filtro** continua com o rótulo do tipo: lá se filtra por tipo.
+String rotuloPendencia(Pendencia p) => switch (p.sentido) {
+  SentidoVirada.continuo => 'REP: sugerida virada para contínuo',
+  SentidoVirada.volta => 'REP: sugerida volta para pontual',
+  null => rotuloTipoPendencia(p.tipo),
+};
+
 /// As três do `check` de `pendencia.severidade`. `INFO` **não existe** — o
 /// ajuste 4 do card 2.3, que o card 5.5 aplicou.
 const severidadesPendencia = <String, String>{
@@ -107,7 +121,10 @@ class Pendencia {
     ordemSeveridade: (linha['ordem_severidade'] as num?)?.toInt() ?? 9,
     descricao: '${linha['descricao']}',
     chaveDedup: '${linha['chave_dedup']}',
-    criadoEm: DateTime.parse('${linha['criado_em']}'),
+    // `.toLocal()` porque `criado_em` é `timestamptz` e chega em UTC: sem ele,
+    // pendência aberta às 23h aparece com a data do dia seguinte. É o padrão da
+    // casa desde os cards 4.5 e 4.6.
+    criadoEm: DateTime.parse('${linha['criado_em']}').toLocal(),
     diasAberta: (linha['dias_aberta'] as num?)?.toInt() ?? 0,
     alunoId: linha['aluno_id'] == null ? null : '${linha['aluno_id']}',
     alunoNome: linha['aluno_nome'] as String?,
@@ -262,13 +279,61 @@ AcaoPendencia acaoDe(String tipo) => switch (tipo) {
   _ => AcaoPendencia.nenhuma,
 };
 
-String rotuloAcao(AcaoPendencia acao) => switch (acao) {
-  AcaoPendencia.nenhuma => '',
-  AcaoPendencia.verAluno => 'Ver aluno',
-  AcaoPendencia.verBloco => 'Ver turma',
-  AcaoPendencia.verPc => 'Ver PC',
-  AcaoPendencia.verMaterial => 'Ver material',
-  AcaoPendencia.executarVirada => 'Executar',
+/// O rótulo do botão, **por tipo** e não por destino (wireframe §14.3).
+///
+/// "Ver aluno" servia aos oito tipos que levam à ficha, e isso é o oposto de
+/// uma fila de trabalho: o botão precisa dizer o que se vai FAZER — alocar,
+/// formar, conferir o checklist —, não para onde a tela vai. Foi o achado da
+/// revisão da fase 05.
+String rotuloAcaoPendencia(String tipo) => switch (tipo) {
+  'ALUNO_SEM_TURMA' => 'Alocar',
+  'ACELERAR_SEM_2O_BLOCO' => 'Ver turmas do aluno',
+  'SUGERIR_FORMADO' => 'Formar',
+  'CERTIFICADO_INCONSISTENTE' => 'Ver checklist',
+  'TRILHA_DIVERGENTE_COMBO' || 'ALUNO_ULTIMO_LIVRO' => 'Ver trilha',
+  'PREVISAO_VENCIDA' => 'Ver previsão',
+  'STANDBY_PROLONGADO' => 'Ver aluno',
+  'BLOCO_ACIMA_CAPACIDADE' => 'Ver turma',
+  'PC_SEM_SUBSTITUTO' => 'Ver PC',
+  'COMPRA_SEM_ESTOQUE' ||
+  'ESTOQUE_ZERO' ||
+  'ESTOQUE_ABAIXO_MINIMO' => 'Ver material',
+  'REP_VIRADA' => 'Executar',
+  _ => '',
+};
+
+/// A aba da ficha em que o problema daquele tipo se desfaz (wireframe §14.3).
+///
+/// ⚠️ **Trilha (card 6.6) e Certificado (8.6) ainda não existem** — as duas
+/// abas estão no lugar, dizendo qual card as entrega, e a ficha abre nelas do
+/// mesmo jeito: o destino certo com o conteúdo por vir é honesto; mandar para
+/// Dados seria mandar para o lugar errado. Registrado no §17 do wireframe.
+String abaDaFicha(String tipo) => switch (tipo) {
+  'ALUNO_SEM_TURMA' || 'ACELERAR_SEM_2O_BLOCO' => 'turmas',
+  'TRILHA_DIVERGENTE_COMBO' || 'ALUNO_ULTIMO_LIVRO' => 'trilha',
+  'CERTIFICADO_INCONSISTENTE' => 'certificado',
+  'STANDBY_PROLONGADO' => 'historico',
+  _ => 'dados',
+};
+
+/// O parâmetro de consulta que leva o **id** da referência à tela de destino —
+/// `?bloco=`, `?pc=`, `?material=`. Nulo quando a ação não navega, ou quando o
+/// destino é a ficha do aluno, que tem rota própria.
+String? parametroDaAcao(AcaoPendencia acao) => switch (acao) {
+  AcaoPendencia.verBloco => 'bloco',
+  AcaoPendencia.verPc => 'pc',
+  AcaoPendencia.verMaterial => 'material',
+  AcaoPendencia.verAluno ||
+  AcaoPendencia.nenhuma ||
+  AcaoPendencia.executarVirada => null,
+};
+
+/// O id que vai no parâmetro — o da referência daquela ação.
+String? idDaAcao(Pendencia p) => switch (acaoDe(p.tipo)) {
+  AcaoPendencia.verBloco => p.blocoId,
+  AcaoPendencia.verPc => p.pcId,
+  AcaoPendencia.verMaterial => p.materialId,
+  _ => null,
 };
 
 /// O **id de rota** (docs/permissoes-matriz.md §6) da tela de destino, para a
@@ -288,15 +353,19 @@ String? rotaDaAcao(AcaoPendencia acao) => switch (acao) {
   AcaoPendencia.nenhuma || AcaoPendencia.executarVirada => null,
 };
 
-/// A ação só é oferecida quando existe **para onde ir**: a referência tem de
-/// ter chegado (id não nulo). Referência oculta pela RLS mantém a pendência na
-/// lista — mas oferecer "Ver aluno" para quem não pode ler aluno nenhum seria
-/// oferecer o que vai falhar (card 4.4 (d)).
+/// A ação só é oferecida quando existe **para onde ir**.
+///
+/// A prova de que dá para ir é o **nome**, não o id: as quatro referências
+/// chegam por `left join` e o id vem mesmo quando a RLS escondeu o resto
+/// (card 2.3 §9). Id sem nome é exatamente o caso de quem não pode ler a tabela
+/// de destino — oferecer o botão ali seria oferecer o que vai falhar
+/// (card 4.4 (d)). A regra é a mesma para os quatro; antes era só para o aluno,
+/// e a assimetria não tinha razão (revisão da fase 05).
 bool referenciaDaAcaoPresente(Pendencia p) => switch (acaoDe(p.tipo)) {
   AcaoPendencia.verAluno => p.alunoNome != null,
-  AcaoPendencia.verBloco => p.blocoId != null,
-  AcaoPendencia.verPc => p.pcId != null,
-  AcaoPendencia.verMaterial => p.materialId != null,
+  AcaoPendencia.verBloco => p.blocoId != null && p.blocoDiaSemana != null,
+  AcaoPendencia.verPc => p.pcId != null && p.pcIdentificador != null,
+  AcaoPendencia.verMaterial => p.materialId != null && p.materialNome != null,
   AcaoPendencia.executarVirada => p.alunoId != null && p.sentido != null,
   AcaoPendencia.nenhuma => false,
 };
