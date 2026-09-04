@@ -79,6 +79,11 @@ não medição. Vigente desde 02/09/2026: **fins de semana + algumas noites** = 
 No P50 assume-se que **60%** da latência não se sobrepõe ao desenvolvimento; no P80, **100%** (nada
 se sobrepõe) e a revisão das lojas vai a **duas** rodadas.
 
+⚠️ **Nenhum destes blocos foi medido até o fim.** O primeiro em curso é o do card 4.8, aberto em
+03/09/2026 — ver §4. **Ao fechar cada um, anotar aqui os dias corridos que ele de fato consumiu**,
+da abertura ao aceite; a coluna "Dias" acima é declaração, não medição, e desde 03/09/2026 ela pesa
+mais na data do que toda a velocidade de desenvolvimento junta.
+
 ### Como sair de P50 e P80
 
 - **P50** = velocidade central medida (líquida de escopo novo — ver §6b), latência parcialmente
@@ -88,7 +93,9 @@ se sobrepõe) e a revisão das lojas vai a **duas** rodadas.
   ser medido. Era **2** enquanto as telas de negócio eram o grande vão; virou **1,5** em 03/09/2026,
   quando quatro telas de negócio saíram no tamanho atribuído (§6a). O que o 1,5 ainda cobre é a fase
   09 e a fase 10, sem medição nenhuma. **Rever o divisor a cada rodada, para cima ou para baixo,
-  conforme o que ainda estiver por medir** — divisor que não se mexe vira superstição.
+  conforme o que ainda estiver por medir** — divisor que não se mexe vira superstição. *Revisto e
+  mantido em 1,5 em 04/09/2026 (card 5.10), com o motivo em §7(b): a fase 05 não encostou em nada do
+  que o divisor cobre.*
 
 ⚠️ **Se a consulta ao board falhar por cota** ("usage limit for Query Data Source"), os mesmos
 números saem de uma visão agrupada do board na UI do Notion, por `Tipo` e por `Concluído em`.
@@ -108,14 +115,28 @@ Metade do trabalho restante estava apoiada em uma medição de outra natureza. E
 **4.9** era o mais importante da série. A banda **encolheu**, como se esperava, e não foi preciso
 quebrar os `GG` em cards menores.
 
-⚠️ **A maior incerteza agora é a tabela de blocos de latência do §3** — os 31 dias corridos até o
-go-live. Ela foi escrita de uma vez, por analogia, e **nunca foi medida contra a realidade**: nenhum
-marco de validação, revisão de terceiro ou treinamento aconteceu ainda. Desde 03/09/2026 a latência
-é maior que o esforço no P50, ou seja, **o número menos confiável do modelo passou a ser o que mais
-pesa na data**. O primeiro teste é o marco 4.8 (bloco declarado de 4 dias): ao fechá-lo, anotar
-quantos dias corridos ele de fato consumiu e comparar com o bloco. O mesmo vale para 6.9, 8.8, 9.3,
-9.4, 9.6 e 9.7 — sem essa anotação, a próxima rodada recalibra a velocidade e deixa intacta a
-metade da conta que hoje pesa mais.
+⚠️ **A maior incerteza continua sendo a tabela de blocos de latência do §3** — os 31 dias corridos
+até o go-live. Ela foi escrita de uma vez, por analogia, e **nunca foi medida até o fim**: nenhum
+marco de validação, revisão de terceiro ou treinamento **terminou** ainda. Desde 03/09/2026 a
+latência é maior que o esforço no P50; desde 04/09/2026 ela é **a maior parte dele** — ou seja, **o
+número menos confiável do modelo é o que mais pesa na data**, e a distância entre os dois só cresce.
+
+**A primeira medição está em curso e já diz alguma coisa (04/09/2026, card 5.10).** O marco 4.8
+abriu em 03/09/2026 com bloco declarado de **4 dias** e, em 04/09, **continua aberto** — duas das
+pré-condições que faltam são de Irineu (convidar três usuários em homologação e fazer os cadastros
+do roteiro antes dos quatro logins, pendência 9.14) e a terceira é a sessão com a secretaria.
+Ainda não é estouro: 2 dos 4 dias corridos. É cedo para corrigir o bloco, e cedo **não é** motivo
+para não anotar — o que esta rodada registra é o relógio ligado e o ponto em que ele parou.
+
+O que a mesma medição já confirmou, e isso vale mais: **a latência do 4.8 correu em paralelo com o
+desenvolvimento**, que é exatamente o que a premissa dos 60% do §3 assume. Enquanto o marco esperava
+gente, a cadeia entregou os cards 5.6 a 5.9. A premissa da sobreposição está certa; é a **duração**
+do bloco que segue sem resposta.
+
+Ao fechar o 4.8 — e o 6.9, o 8.8, o 9.3, o 9.4, o 9.6 e o 9.7 — anotar **quantos dias corridos ele
+de fato consumiu**, contados da abertura ao aceite, e comparar com o bloco declarado. Sem essa
+anotação, cada rodada recalibra a velocidade com precisão crescente e deixa intacta a metade da
+conta que hoje decide a data.
 
 ## 5. Primeira estimativa (02/09/2026)
 
@@ -192,3 +213,49 @@ caindo de 225 para 177 pontos e a velocidade subindo de 18 para 26, **a latênci
 para 7,0 dias-plenos (o ritmo de fato observado de 29/08 a 03/09) antecipa o P50 em apenas 9 dias.
 Daqui em diante a data se ganha encurtando marco de validação, revisão do pedagógico e treinamento
 — não codando mais rápido.
+
+## 7. Terceira rodada (04/09/2026, card 5.10) — o que mudou no método
+
+Os **números** continuam morando na subpágina Notion "Estimativa de entrega" do card 3.13. Aqui, só
+o que mudou no método.
+
+**(a) Nada mudou no método, e isso é o registro.** Nenhuma das três escolhas do §1, nenhuma das três
+mudanças do §6 e nenhum parâmetro do §3 precisou ser tocado nesta rodada. É a primeira rodada em que
+a receita foi apenas **executada** — e ela reproduziu, ponto a ponto, a série da rodada anterior: os
+pontos por dia de 29/08 a 02/09 saíram idênticos aos publicados em 03/09 (5, 11, 31, 75, 54), o que
+é a prova de que a régua não se mexeu entre sessões. Um método que dá números diferentes para os
+mesmos dias não mede nada; este deu os mesmos.
+
+**(b) O divisor do P80 fica em 1,5, e o motivo está escrito.** O §3 manda revê-lo a cada rodada,
+"para cima ou para baixo, conforme o que ainda estiver por medir" — e **o que ele cobre não foi
+medido nesta rodada**. A fase 05 exercitou `Schema/migração`, `Função/regra` e `Tela`, os três já
+medidos na fase 04; o que o 1,5 precifica é a fase 09 (`9.1` e `9.2`, dois `GG` de natureza inédita)
+e a fase 10 inteira, e nenhuma das duas encostou em nada. Baixar o divisor agora seria retirar do
+preço um risco que **não foi testado**, e não um risco que foi medido e não apareceu — que foi o que
+autorizou a queda de 2 para 1,5 em 03/09. ⚠️ O divisor **não** é o lugar da incerteza de latência:
+essa já entra no P80 de outra forma, integral e sem sobreposição.
+
+**(c) A taxa de descoberta de escopo se confirmou, e isso promove o §6(b) de conserto a instrumento.**
+Ela foi introduzida em 03/09 medindo ~4,2 pts/dia-pleno; medida de novo em 04/09 sobre uma janela um
+dia maior, deu **~4,6**. Duas medições próximas em janelas diferentes é o que separa um número de um
+palpite — a taxa passa a ser tratada como parâmetro do modelo, e não como correção pontual. Regra
+que fica: contam os cards de `Ordem` decimal criados desde a rodada anterior **mais** os cards
+existentes cujo `Tamanho` subiu por descoberta (não por transferência documentada de escopo, que
+apenas muda o ponto de lugar).
+
+**(d) Cards de fase 11 são escopo novo, mas não entram na taxa.** Nasceram dois nesta janela (11.5,
+revisar custos do Supabase; 11.6, falha do vigia para o Sentry). A fase 11 é backlog aberto e nunca
+entrou em estimativa — somá-los à taxa faria a velocidade do go-live pagar por trabalho que não está
+no caminho do go-live. Ficam registrados à parte, e a regra vale para as próximas rodadas.
+
+**(e) O passo 2 saiu com saldo +2 e cinco mudanças, três para cima.** O §6(d) manda desconfiar de um
+saldo perto de zero — "ou o board está bem dimensionado, ou o passo não foi feito de verdade". Este
+saldo está perto de zero **por compensação**, não por imobilidade: +3 no `6.1`, +3 no `6.3` e +2 no
+`7.1`, contra −3 no `6.7` e −3 no `8.7`. E as duas famílias têm origens diferentes, o que é o que
+torna a compensação legível: as **subidas** vêm de escopo transferido por documento (pendência 9.11
+→ `6.1`; a suíte de concorrência que a própria nota do `6.3` já exigia; pendência 9.17 → `7.1`), e
+as **descidas** vêm de reúso medido (tela que se acrescenta a uma página que já existe — o mesmo
+argumento que levou `6.6` de `G` a `M` na rodada anterior). ⚠️ O viés do §6(d) **continua de pé**:
+as descidas seguem sendo julgadas por analogia, e analogia é gentil. A contraprova disponível é
+fraca de propósito e vale dizer qual é: a fase 05 inteira saiu **no tamanho atribuído**, incluindo o
+`5.7` que a rodada anterior tinha subido de `G` para `GG`.
