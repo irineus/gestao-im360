@@ -4,7 +4,13 @@ Leia este documento e o `CLAUDE.md` da raiz ao iniciar qualquer sessão. Depois,
 
 Este guia é curto de propósito (card 6.1,5, 04/09/2026): o **log cronológico** de tudo o que já foi feito mora em `historico-marcos.md`, e o Histórico da página Decisões vigentes mora numa **subpágina** dela. Os dois se consultam **quando a tarefa pedir**, não na partida — nenhum dos dois é leitura obrigatória de início de sessão.
 
-A página Decisões vigentes é curta pelo mesmo motivo (card 6.2,5, 04/09/2026): a **§2** guarda o *enunciado* de cada regra — o que vale hoje e onde ela mora no código — mais a **armadilha concreta** que aquela regra já custou, com teto de **6 linhas por regra**; o raciocínio, as medições e as contraprovas desceram para **nove subpáginas de detalhe por domínio** (modelagem/views/projeção, acesso e RLS, alunos, currículo, trilha e estoque, alocação/REP, capacidade e PCs, pendências e testes, app e design system). Abre-se a subpágina do domínio **quando a tarefa mexer nele** — "estou mexendo em estoque, o que já decidiram sobre isso?" —, nunca na partida. A página foi de 259 KB para ~180 KB e voltou a caber numa leitura só; nenhuma linha foi resumida ou apagada.
+A página Decisões vigentes é curta pelo mesmo motivo (cards 6.2,5 e 6.2,6, 04/09/2026): cada seção enxugada guarda o *enunciado* de cada regra — o que vale hoje e onde ela mora no código — mais a **armadilha concreta** que aquela regra já custou, com **teto de 6 linhas escrito na própria seção**; o raciocínio, as medições e as contraprovas desceram para **subpáginas de detalhe**. São **catorze** hoje:
+
+- **§2 — nove, por domínio** (card 6.2,5): modelagem/views/projeção, acesso e RLS, alunos, currículo, trilha e estoque, alocação/REP, capacidade e PCs, pendências e testes, app e design system;
+- **§1 — três, por peça** (card 6.2,6): deploy web/CI-CD/portão de migrações; vigia, backup e observabilidade; fluxo de entrega, guarda de destrutivos e Edge Function;
+- **§5 — duas, por dono** (card 6.2,6): ajustes por card e achados transferidos; configuração de Irineu, promoções e estimativa.
+
+Abre-se a subpágina **quando a tarefa mexer naquilo** — "estou mexendo em estoque, o que já decidiram sobre isso?" —, nunca na partida. A página foi de 259 KB para ~180 KB (6.2,5) e daí para **~125 KB** (6.2,6); nenhuma linha foi resumida ou apagada em nenhuma das cirurgias — mudou de lugar. ⚠️ O alvo de ~100 KB do card 6.2,6 **não foi alcançado e a razão é aritmética**: §1 e §5 somavam 99 KB e saíram com 29 KB, que é o piso do que "enunciado + armadilha" ocupa; os ~25 KB que faltam para 100 estão na **§2**, que ainda é a maior seção da página (~78 KB) e é território do card **6.2,7**.
 
 ## Contexto em uma frase
 
@@ -64,6 +70,8 @@ O que **é** card está no board do Notion — use a skill `proxima-tarefa`. O q
 3. O `default public.fn_hoje()` no lugar de `current_date` continua pendente nas colunas do **card 7.1** (card 2.3, §10). Os cards 4.2 e 5.1 já o aplicaram.
 4. `.claude/settings.json` **nega** `psql`, `supabase db push` e `supabase db reset`. A via correta na máquina é `supabase start` + `supabase test db`, que não toca banco remoto nenhum.
 5. ~~Aplicar na skill `proxima-tarefa` o apontamento para as nove subpáginas de detalhe da §2 (card 6.2,5).~~ ✅ **Feito em 04/09/2026 por sessão interativa.** A skill ganhou a tabela das nove subpáginas com o critério de quando abrir cada uma (só a do domínio da tarefa), e a seção de encerramento passou a separar os **três destinos** de uma decisão: enunciado na página-mãe (teto de 6 linhas), raciocínio na subpágina do domínio, log na 📜 Histórico. A sessão da cadeia não conseguiu fazê-lo porque escrever dentro de `.claude/` é recusado pela permissão — recusa deliberada, e é por isso que este tipo de ajuste fica para sessão interativa.
+
+6. ⚠️ **Para sessão interativa (ou Irineu):** acrescentar em `.claude/skills/proxima-tarefa/SKILL.md`, logo abaixo da tabela das nove subpáginas da §2, a tabela das **cinco subpáginas novas** criadas pelo card 6.2,6 (três da §1, duas da §5) e trocar "o enunciado curto vai para a §2" por "vai para a seção (§1, §2 ou §5), respeitando o teto de 6 linhas". A sessão da cadeia **tentou e foi recusada** — escrever dentro de `.claude/` exige permissão que a sessão não interativa não tem, e a recusa é deliberada. É o mesmo motivo pelo qual a pendência 5 acima ficou para sessão interativa. O texto pronto está na subpágina de resultado do card 6.2,6.
 
 O log do que já foi feito — inclusive a Fase 0 inteira — está em `historico-marcos.md`.
 
