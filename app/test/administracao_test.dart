@@ -133,7 +133,7 @@ void main() {
           ),
           perfisPorId,
         ),
-        '⚠ sem perfil · convite pendente',
+        'sem perfil · convite pendente',
         reason: 'sem perfil e convite pendente são coisas diferentes',
       );
       expect(

@@ -122,7 +122,7 @@ class TelaAlunos extends ConsumerWidget {
         if (mostraTurmas)
           ColunaIm360(
             titulo: 'Turmas',
-            texto: (a) => semTurma(a) ? '⚠ sem turma' : turmasDe(a),
+            texto: (a) => semTurma(a) ? 'sem turma' : turmasDe(a),
             celula: (a) =>
                 _CelulaTurmas(rotulo: turmasDe(a), alerta: semTurma(a)),
             prioridade: 2,
@@ -142,7 +142,7 @@ class TelaAlunos extends ConsumerWidget {
         // No mobile a linha de apoio é uma só, e a turma vale mais que o combo:
         // é o que o monitor precisa para achar o aluno no laboratório.
         apoio: mostraTurmas
-            ? (semTurma(a) ? '⚠ sem turma' : turmasDe(a))
+            ? (semTurma(a) ? 'sem turma' : turmasDe(a))
             : (a.comboId == null ? null : comboDe(a)),
         badge: BadgeStatus(a.status),
       ),

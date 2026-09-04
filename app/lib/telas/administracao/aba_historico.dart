@@ -7,8 +7,8 @@ import '../../widgets/estados.dart';
 import '../../widgets/tabela_im360.dart';
 
 const vazioHistorico =
-    'Nenhuma alteração na matriz registrada. O histórico começa no card 4.7.5: '
-    'o que foi marcado antes dele não tem rastro.';
+    'Nenhuma alteração na matriz registrada. O registro começou quando esta '
+    'tela passou a existir: o que foi marcado antes não tem rastro.';
 
 /// Histórico da matriz (card 4.7.5): toda concessão e remoção de permissão a
 /// um perfil, com quem e quando — escrito por trigger, imutável, legível com

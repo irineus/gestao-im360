@@ -29,7 +29,35 @@ pergunta**. Execute **um** card do board, do começo ao fim, e termine com a lin
    com a linha `AGUARDANDO RETORNO DOS USUÁRIOS desde <data>` no topo das Notas — e feche com
    `CARD_OK` normalmente, porque a parte automatizável foi entregue e a fila não deve parar.
 5. Execute o card respeitando o `CLAUDE.md`: migrações só via CI/CD, regra de negócio no banco, RLS
-   em toda tabela, nomes em português snake_case, credenciais nunca em texto puro.
+   em toda tabela, nomes em português snake_case, credenciais nunca em texto puro. **E as
+   especificações vinculantes do tipo do card, abaixo — elas não são leitura opcional.**
+
+## Especificações vinculantes, por `Tipo` de card
+
+⚠️ **Isto existe porque foi medido, não por precaução.** Na corrida de 04/09/2026, das quatro telas da
+fase 05: o `docs/design-system.md` **não foi aberto por nenhuma delas**, o `docs/wireframes.md` foi
+aberto 3, 1, 0 e 2 vezes, e a tela de pendências (5.8) **não abriu especificação alguma**. A revisão
+seguinte encontrou 7 grupos de defeitos, e os grupos de texto, estado vazio, estado visual e
+acessibilidade são exatamente o conteúdo do documento que ninguém leu. O modelo era o mesmo; o que
+faltou foi a instrução de que estes documentos mandam.
+
+| `Tipo` | Documentos que mandam |
+|---|---|
+| **Tela** | `docs/wireframes.md` **e** `docs/design-system.md` (os dois, sempre) + `docs/views-leitura.md` (contrato com o banco) + `docs/permissoes-matriz.md` (conjunto da rota) |
+| **Schema/migração**, **Função/regra**, **View** | `docs/modelagem-dados-ddl.md` + `docs/estrategia-testes.md` + `docs/views-leitura.md` |
+| **Infra/CI** | `docs/ci-cd.md` + `docs/estrategia-testes.md` |
+| **Marco/validação** | `docs/estrategia-testes.md` §15 (critérios de aceite) |
+
+**Como usar, e a forma importa mais que a leitura:**
+
+1. **Antes de escrever código**, abrir os documentos do tipo, localizar as seções que descrevem *este*
+   entregável e **extrair os requisitos como lista explícita** — um item por exigência, com a seção de
+   origem. Ler prosa e sair construindo é o que produziu os defeitos: a exigência de três botões numa
+   aba estava escrita e não foi implementada.
+2. **Antes de abrir o PR**, percorrer a lista item a item contra o que ficou pronto. O que não fechou
+   **não some em silêncio**: vira divergência registrada em `docs/wireframes.md` §17 ou
+   `docs/design-system.md` §11, com o motivo, e é dito no corpo do PR.
+3. O documento é **fonte**, não sugestão. Discordar dele é legítimo; discordar sem registrar, não.
 6. **Exercite, não leia.** Suíte pgTAP (`supabase test db`) verde, `flutter test`, `flutter analyze
    --fatal-infos`, `dart format`, portão de migrações. Se o card criar regra nova, o teste que a mede
    precisa ter sido visto **vermelho** com a regra sabotada — é o padrão do projeto e é o que separa
