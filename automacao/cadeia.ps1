@@ -43,7 +43,12 @@ param(
     [switch]$Verificar,
 
     # Mostra o que faria, sem abrir sessão nenhuma.
-    [switch]$Simular
+    [switch]$Simular,
+
+    # Arquivo com o texto que cada sessão recebe. Existe para rodar um card
+    # específico e para exercitar a mecânica do driver (invocação, captura,
+    # leitura do veredito, conferência do SHA) sem gastar um card de verdade.
+    [string]$Prompt
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,7 +57,7 @@ $ErrorActionPreference = 'Stop'
 $RaizRepo   = Split-Path -Parent $PSScriptRoot
 $DirLogs    = Join-Path $PSScriptRoot 'logs'
 $ArqHistoria= Join-Path $DirLogs 'cadeia.jsonl'
-$ArqPrompt  = Join-Path $PSScriptRoot 'prompt-card.md'
+$ArqPrompt  = if ($Prompt) { $Prompt } else { Join-Path $PSScriptRoot 'prompt-card.md' }
 
 function Escrever($texto, $cor = 'Gray') { Write-Host $texto -ForegroundColor $cor }
 function Titulo($texto) { Write-Host ''; Write-Host "── $texto" -ForegroundColor Cyan }
@@ -106,6 +111,7 @@ function PreVoo {
 function ExecutarCard($indice) {
     $prompt = Get-Content -Path $ArqPrompt -Raw -Encoding UTF8
     $carimbo = Get-Date -Format 'yyyyMMdd-HHmmss'
+    if (-not (Test-Path $DirLogs)) { New-Item -ItemType Directory -Path $DirLogs -Force | Out-Null }
     $arqSaida = Join-Path $DirLogs "card-$carimbo.log"
 
     Escrever "  sessão $indice — saída em $arqSaida"
@@ -116,9 +122,18 @@ function ExecutarCard($indice) {
         # `--permission-mode acceptEdits` aceita edição de arquivo; o que a
         # sessão pode RODAR continua vindo do allow/deny do .claude/settings.json
         # e do hook guarda-destrutivos.mjs. Nada aqui afrouxa isso.
-        & claude -p $prompt --permission-mode acceptEdits 2>&1 |
-            Tee-Object -FilePath $arqSaida -Encoding UTF8 |
-            Out-Host
+        #
+        # ⚠️ NÃO usar `Tee-Object -Encoding`: o parâmetro só existe no PowerShell
+        # 6+, e no 5.1 (o que vem no Windows) o bind falha com
+        # NamedParameterNotFound ANTES de a sessão abrir. Medido em 03/09/2026,
+        # na primeira tentativa de rodar a cadeia. O ForEach abaixo faz as duas
+        # coisas que o Tee faria — mostrar e gravar — e grava em UTF-8 de
+        # verdade, que é o que o Get-Content da leitura do veredito espera.
+        & claude -p $prompt --permission-mode acceptEdits 2>&1 | ForEach-Object {
+            $linha = [string]$_
+            Write-Host $linha
+            Add-Content -Path $arqSaida -Value $linha -Encoding UTF8
+        }
         $codigo = $LASTEXITCODE
     } finally { Pop-Location }
 
@@ -166,7 +181,7 @@ function ShaDevelop {
 
 # ---------------------------------------------------------------------------
 Titulo 'Pré-voo'
-$problemas = PreVoo
+$problemas = @(PreVoo)
 if ($problemas.Count -gt 0) {
     foreach ($p in $problemas) { Escrever "  ✗ $p" 'Red' }
     Escrever ''
