@@ -154,11 +154,20 @@ function alvoDaFerramenta(nome, input = {}) {
   }
 }
 
-/** Ferramentas de MCP viram `Notion·fetch`, que cabe na coluna. */
+/**
+ * Ferramentas de MCP viram `Notion·fetch`, que cabe na coluna.
+ *
+ * ⚠️ O nome do servidor PODE TER `_` — o do Notion é `claude_ai_Notion`. A
+ * primeira versão usava `[^_]*` e não casava com ele, então o nome saía inteiro
+ * e, sendo maior que a coluna, colava no alvo:
+ * `mcp__claude_ai_Notion__notion-fetch3d12f3f4-…`. Ilegível justamente nas
+ * chamadas que mais importam ler, que são as do board.
+ */
 function nomeCurto(nome) {
-  const m = /^mcp__[^_]*_?([A-Za-z]+)__(.+)$/.exec(nome);
+  const m = /^mcp__(.+?)__(.+)$/.exec(nome);
   if (!m) return nome;
-  return `${m[1]}·${m[2].replace(/^notion-/, '')}`;
+  const servidor = m[1].split('_').pop();          // claude_ai_Notion -> Notion
+  return `${servidor}·${m[2].replace(/^notion-/, '')}`;
 }
 
 let viuResultado = false;

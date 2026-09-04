@@ -77,6 +77,26 @@ param(
     # matar a sessão no meio, que é o desfecho caro.
     [double]$TetoJanela = 0.92,
 
+    # Teto da janela SEMANAL, mais alto que o de 5 h de propósito — e a razão é
+    # medida, não intuição. A margem existe para absorver o erro da estimativa
+    # de UM card, e o erro tem tamanhos muito diferentes nas duas janelas:
+    #
+    #   5 h     : média 18 pontos por card, MÁXIMO 54 -> erro de até +36
+    #   semanal : média 1,5 ponto por card, máximo  2 -> erro de até +0,5
+    #
+    # A API reporta a utilização semanal em ponto percentual INTEIRO (os únicos
+    # valores medidos foram 1 e 2), o que dá ±0,5 de incerteza NA LEITURA. ⚠️ Ela
+    # NÃO acumula entre decisões: cada card relê a utilização corrente, então o
+    # que importa é a imprecisão de uma leitura só. (Primeira versão desta conta
+    # somava o arredondamento de várias leituras e chegava a 0,94 — conservador
+    # demais por erro de aritmética, não por prudência.)
+    #
+    # Pior desfecho ao começar em U: U + 0,5 (leitura) + 2,5 (card) = U + 3.
+    # Com 0,96 o card só começa se U <= 94,4, e o pior caso termina em 97,4% —
+    # não estoura. Com o 0,88 do de 5 h sobrariam 12 pontos, quatro vezes o
+    # necessário: ~7 cards de capacidade semanal jogados fora por semana.
+    [double]$TetoSemanal = 0.96,
+
     # Quanto o driver aceita ESPERAR por um reset antes de desistir e parar.
     # Existe porque a janela SEMANAL reinicia às segundas: quem tranca por ela
     # teria três dias de espera, e script que dorme três dias não é espera, é
@@ -510,7 +530,8 @@ function CabeNaJanela($indice) {
 
     foreach ($j in $e.janelas) {
         $est = if ($j.chave -eq 'five_hour') { $m.janela } else { $m.semanal }
-        $sobra = [Math]::Max([double]0, $TetoJanela - $j.uso)
+        $teto = if ($j.chave -eq 'five_hour') { $TetoJanela } else { $TetoSemanal }
+        $sobra = [Math]::Max([double]0, $teto - $j.uso)
         $ateReset = if ($j.reset) { ($j.reset - (Get-Date)).TotalMinutes } else { $null }
         $txtReset = if ($null -ne $ateReset) { "reset em {0:N0} min" -f $ateReset } else { 'reset desconhecido' }
 
@@ -518,7 +539,7 @@ function CabeNaJanela($indice) {
                   $j.nome, $j.uso, $sobra, $txtReset) 'DarkGray'
 
         # Caso simples: o card inteiro cabe no que resta desta janela.
-        if (($j.uso + $est) -le $TetoJanela) { continue }
+        if (($j.uso + $est) -le $teto) { continue }
 
         # ---------------------------------------------------------------
         # AUTONOMIA — substituiu "não cabe inteiro, então tranca".
