@@ -13,13 +13,16 @@ import 'package:gestao_im360/widgets/badge_tipo.dart';
 /// é a FORMA que separa os dois vocabulários numa tela onde os dois aparecem
 /// lado a lado — sem ela, restaria a cor, que morre em P&B e em daltonismo.
 void main() {
-  Future<void> montar(WidgetTester tester, String tipo, {bool escuro = false}) =>
-      tester.pumpWidget(
-        MaterialApp(
-          theme: escuro ? temaEscuro() : temaClaro(),
-          home: Scaffold(body: Center(child: BadgeTipo(tipo))),
-        ),
-      );
+  Future<void> montar(
+    WidgetTester tester,
+    String tipo, {
+    bool escuro = false,
+  }) => tester.pumpWidget(
+    MaterialApp(
+      theme: escuro ? temaEscuro() : temaClaro(),
+      home: Scaffold(body: Center(child: BadgeTipo(tipo))),
+    ),
+  );
 
   Container caixa(WidgetTester tester) => tester.widget<Container>(
     find.ancestor(of: find.byType(Text), matching: find.byType(Container)),

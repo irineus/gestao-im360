@@ -25,7 +25,7 @@
 -- =============================================================================
 
 begin;
-select plan(34);
+select plan(36);
 
 -- ===========================================================================
 -- 1. As premissas da fixture, que são o que dá sentido aos números abaixo
@@ -274,6 +274,32 @@ select is(
       and p.aluno_id in (select aluno_id from t_alunos_quase)),
   0::bigint,
   'reativado, a rotina fecha as oito — o caminho de volta existe');
+
+-- ⚠️ A asserção que este card pagou para aprender, e que fica aqui ao lado da
+--    substituição que a provocou: reescrever `rt_pendencias_diaria` inteira é
+--    fácil de fazer a partir da definição ERRADA. A primeira versão deste card
+--    partiu do corpo do 5.5 e reintroduziu `BLOCO_ACIMA_CAPACIDADE`, desfazendo
+--    a decisão do 5.4 sem que nada no diff parecesse errado — o texto de volta
+--    era código legítimo, só de outra época. Quem pegou foi a asserção gêmea no
+--    teste 090; esta a repete no arquivo do card que mexeu na função, porque o
+--    PRÓXIMO card a substituí-la vai olhar para cá.
+select is(
+  (select count(*)::bigint
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'rt_pendencias_diaria'
+      and regexp_replace(p.prosrc, '--[^\n]*', '', 'g') ~ 'BLOCO_ACIMA_CAPACIDADE'),
+  0::bigint,
+  'rt_pendencias_diaria continua SEM BLOCO_ACIMA_CAPACIDADE: substituir a funcao nao pode desfazer o card 5.4');
+
+select is(
+  (select count(*)::bigint
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'rt_pendencias_diaria'
+      and regexp_replace(p.prosrc, '--[^\n]*', '', 'g') ~ 'v_bloco_alunos'),
+  1::bigint,
+  'e ela le v_bloco_alunos: o que conta como turma tem UMA definicao, partilhada com o ⚠ da lista');
 
 -- ===========================================================================
 -- 5. Permissão: erro alto no lugar de lista vazia

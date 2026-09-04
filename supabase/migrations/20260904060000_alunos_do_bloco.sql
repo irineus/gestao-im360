@@ -213,9 +213,11 @@ grant  execute on function public.fn_bloco_alunos(uuid, date) to authenticated;
 -- -----------------------------------------------------------------------------
 -- 3. rt_pendencias_diaria — "em turma" passa a significar "em turma que existe"
 -- -----------------------------------------------------------------------------
--- Substituição de `create or replace`; o resto do corpo é o do card 5.5, palavra
--- por palavra. O que muda são as DUAS contagens de alocação, que passam a ler
--- `v_bloco_alunos` com `bloco_ativo`:
+-- Substituição de `create or replace`; a base é o corpo que o card **5.4**
+-- deixou — DUAS seções, sem `BLOCO_ACIMA_CAPACIDADE`, que voltou ao dono do
+-- catálogo §10.1 (`fn_revalidar_blocos_sala`, chamada todo dia por
+-- `rt_capacidades`). O que muda são as duas contagens de alocação, que passam a
+-- ler `v_bloco_alunos` com `bloco_ativo`:
 --
 --   (1) ALUNO_SEM_TURMA — fecha o ajuste que o card 5.6 registrou. Um bloco
 --       desativado tira a turma da grade e deixa as alocações de pé; até aqui a
@@ -245,6 +247,17 @@ grant  execute on function public.fn_bloco_alunos(uuid, date) to authenticated;
 --
 -- ⚠️ PORTÃO DO CARD 7.1, no teste 090: `turma_modular_aluno` ainda não existe,
 --    então "sem turma" hoje continua sendo "sem alocação em bloco ativo".
+--
+-- ⚠️ LIÇÃO DE MÉTODO, e ela custou uma rodada de CI: a primeira versão deste
+--    arquivo copiou o corpo do card **5.5** em vez do do **5.4**, e com isso
+--    reintroduziu a seção de `BLOCO_ACIMA_CAPACIDADE` que o 5.4 tinha removido —
+--    um `create or replace` desfaz uma decisão sem que nada no diff pareça
+--    errado, porque o texto reintroduzido É código legítimo, só de outra época.
+--    Quem pegou foi a asserção que o próprio card 5.4 escreveu no teste 090
+--    ("rt_pendencias_diaria NÃO abre mais BLOCO_ACIMA_CAPACIDADE"), e o registro
+--    fica: **substituir função inteira exige partir da ÚLTIMA definição
+--    aplicada, não da que criou a função** — é a mesma família do defeito que o
+--    portão do card 4.0,5 teve em 02/09/2026, e a razão de a asserção existir.
 create or replace function public.rt_pendencias_diaria()
 returns void
 language plpgsql
@@ -329,49 +342,17 @@ begin
   perform public.fn_pendencias_fechar_ausentes('ACELERAR_SEM_2O_BLOCO', v_chaves);
 
   -- ---------------------------------------------------------------------------
-  -- BLOCO_ACIMA_CAPACIDADE (ALTA)
+  -- BLOCO_ACIMA_CAPACIDADE saiu daqui no card 5.4, e continua fora
   -- ---------------------------------------------------------------------------
-  -- A rotina vê a queda de capacidade venha ela de onde vier — PC posto em
-  -- manutenção, PC desativado, `capacidade_override` reduzido à mão. O card 5.4
-  -- acrescenta o caminho por EVENTO (fn_revalidar_blocos_sala, na hora em que a
-  -- manutenção é registrada), com a MESMA chave: os dois convergem na dedup em
-  -- vez de duplicar pendência.
-  --
-  -- ⚠️ `> 0` e não `is not null`: fn_capacidade_efetiva e fn_ocupacao_bloco são
-  --    `security definer` e devolvem NULO para bloco de outra unidade (card 5.2).
-  --    Aqui elas nunca deveriam devolver nulo — o `where` já limita à unidade
-  --    corrente —, mas comparar nulos daria `null`, que num `where` é falso: a
-  --    pendência simplesmente não abriria, em silêncio, se algum dia a premissa
-  --    mudasse. O `coalesce(..., -1)` faz esse dia REPROVAR em voz alta, porque
-  --    -1 > qualquer ocupação é falso e a contagem do teste 090 acusa.
-  v_chaves := '{}';
-
-  for r in select b.id,
-                  public.fn_ocupacao_bloco(b.id)     as ocupacao,
-                  public.fn_capacidade_efetiva(b.id) as capacidade,
-                  s.nome as sala, b.dia_semana, b.hora_inicio
-             from public.bloco_horario b
-             join public.sala s on s.id = b.sala_id
-            where b.unidade_id = v_unidade
-              and b.ativo
-              and coalesce(public.fn_ocupacao_bloco(b.id), -1)
-                > coalesce(public.fn_capacidade_efetiva(b.id), -1)
-            order by b.dia_semana, b.hora_inicio, b.id
-  loop
-    v_chaves := v_chaves || ('CAPACIDADE:' || r.id::text);
-    perform public.fn_pendencia_abrir(
-      'BLOCO_ACIMA_CAPACIDADE', 'CAPACIDADE:' || r.id::text,
-      format('%s, dia %s às %s: %s aluno(s) para capacidade de %s. Admissão bloqueada até normalizar.',
-             r.sala, r.dia_semana, to_char(r.hora_inicio, 'HH24:MI'),
-             r.ocupacao, r.capacidade),
-      'ALTA', p_bloco_id => r.id);
-  end loop;
-
-  perform public.fn_pendencias_fechar_ausentes('BLOCO_ACIMA_CAPACIDADE', v_chaves);
+  -- O dono é fn_revalidar_blocos_sala, como o catálogo §10.1 sempre disse, e
+  -- quem a chama todo dia é rt_capacidades — que rt_diaria executa ANTES desta
+  -- rotina. Manter a cópia aqui seria manter duas implementações da mesma
+  -- comparação, livres para divergir na primeira vez que alguém mexer numa só.
 end $$;
 
 comment on function public.rt_pendencias_diaria() is
-  'Abre e fecha ALUNO_SEM_TURMA, ACELERAR_SEM_2O_BLOCO e BLOCO_ACIMA_CAPACIDADE na unidade do contexto corrente (card 5.5). Desde o card 5.7 as duas primeiras leem v_bloco_alunos com bloco_ativo: alocação em bloco desativado não é turma, e antes disso desativar um bloco tirava a turma da grade sem abrir pendência nenhuma.';
+  'Abre E fecha, na unidade do contexto corrente, ALUNO_SEM_TURMA e ACELERAR_SEM_2O_BLOCO (contando só blocos de tipo <> REP). BLOCO_ACIMA_CAPACIDADE saiu daqui no card 5.4 e é de fn_revalidar_blocos_sala. Desde o card 5.7 as duas contagens leem v_bloco_alunos com bloco_ativo: alocação em bloco desativado não é turma, e antes disso desativar um bloco tirava a turma da grade sem abrir pendência nenhuma.';
 
 revoke execute on function public.rt_pendencias_diaria() from public;
 revoke execute on function public.rt_pendencias_diaria() from anon;
+revoke execute on function public.rt_pendencias_diaria() from authenticated;
