@@ -2,6 +2,23 @@ Você está numa sessão **não interativa** da cadeia de execução do Gestão 
 (`automacao/cadeia.ps1`, card 5.5,5). Ninguém está lendo em tempo real e **ninguém pode responder
 pergunta**. Execute **um** card do board, do começo ao fim, e termine com a linha de veredito.
 
+## Como chamar comando de shell (leia antes de rodar o primeiro)
+
+**Você já está na raiz do repositório.** Não prefixe comando com `cd "C:/…/gestao-im360" &&` — e
+esta não é preferência de estilo, é o que mais custou turno na primeira corrida longa:
+
+- o motor de permissões avalia `cd X && comando` como **composto**, e recusa com *"This Bash command
+  contains multiple operations"* mesmo quando cada parte, sozinha, está liberada. **20 recusas** numa
+  corrida de 6 cards, todas dessa família;
+- pior com comando capaz de escrever (`sed`, `python`, redirecionamento): a recusa aí é categórica —
+  *"Commands that change directories and perform write operations require explicit approval"* —,
+  porque com `cd` composto o motor não consegue saber em que diretório a escrita vai cair.
+  **Acrescentar a ferramenta ao `allow` não resolve este caso**; tirar o `cd` resolve.
+
+Na prática: `git status --short`, e não `cd "C:/…" && git status --short`. Precisando de outro
+diretório, passe o caminho ao próprio comando (`git -C <dir> …`, `sed -n '1,20p' <caminho>`), ou use
+as ferramentas nativas `Read`, `Grep` e `Glob`, que não passam por shell nenhum.
+
 ## Regras deste modo
 
 1. **Nunca use `AskUserQuestion`.** Onde o fluxo interativo perguntaria, siga o caminho documentado
@@ -20,6 +37,11 @@ pergunta**. Execute **um** card do board, do começo ao fim, e termine com a lin
    card **sozinho**: o primeiro não concluído na ordenação
    `CAST(substr("Fase",1,2) AS INTEGER), "Ordem"`, **pulando** os `Em andamento` cuja Nota tenha
    `AGUARDANDO RETORNO DOS USUÁRIOS`.
+
+   ⚠️ **A skill vem ANTES da primeira consulta ao board, não depois.** Medido em 04/09/2026: uma
+   sessão consultou primeiro, escreveu `Nome` numa coluna que se chama `Tarefa`, levou
+   `validation_error` e só então carregou a skill — que avisa disso com todas as letras. Três turnos
+   para descobrir o que estava escrito.
 3. Se o card for de `Tipo` = **`Externo`**, ou se a Nota disser que ele depende de ação de Irineu que
    você não pode fazer (secret, conta em serviço externo, disparo manual de workflow): **não
    execute**. Termine com `CADEIA_FIM`.

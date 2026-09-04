@@ -16,6 +16,14 @@ entregue com o que a spec pediu.
 Esta revisão é a segunda passada **com a spec na mão**. Não é auditoria de estilo: é conferir se o
 que foi construído é o que foi especificado.
 
+## Como chamar comando de shell
+
+**Você já está na raiz do repositório.** Não prefixe comando com `cd "C:/…/gestao-im360" &&`: o motor
+de permissões avalia isso como comando composto e recusa mesmo quando cada parte está liberada — foi
+o que mais custou turno na primeira corrida longa. Use o caminho no próprio comando (`git -C <dir>`,
+`sed -n '1,20p' <caminho>`) ou as ferramentas nativas `Read`, `Grep` e `Glob`, que não passam por
+shell. E invoque a skill `proxima-tarefa` **antes** da primeira consulta ao board.
+
 ## Regras deste modo
 
 1. **Nunca use `AskUserQuestion`.** Onde houver dúvida que só Irineu decide, marque o item como
