@@ -89,6 +89,29 @@ abstract interface class TurmasRepositorio {
   /// `fn_reposicao_cancelar` — PREVISTA → CANCELADA. A aula perdida continua em
   /// aberto: desmarcar a reposição não repõe a aula (card 2.5 §3.2).
   Future<void> cancelarReposicao(String reposicaoId, String observacao);
+
+  // --- card 5.8: a EXECUÇÃO da virada REP ----------------------------------
+  // As duas moram aqui, e não no repositório de pendências, porque exigem
+  // `turmas.alocar` e delegam vaga e método a fn_bloco_admitir/fn_bloco_remover
+  // (card 5.3). Quem as chama é a central de pendências, que é onde a decisão
+  // acontece — a virada é SUGERIDA, nunca automática (card 2.5).
+
+  /// `fn_rep_virar_continuo` — cancela as reposições PREVISTA do aluno, cria (ou
+  /// reativa) a alocação de tipo `REP` no bloco escolhido e **fecha** a pendência
+  /// `REP:<aluno>:CONTINUO` na mesma transação. Devolve o id da alocação.
+  ///
+  /// `BLOCO_LOTADO` e `METODO_INCOMPATIVEL` vêm do trigger de admissão, com o
+  /// advisory lock, e `REP_JA_CONTINUO` da própria função — todos traduzidos.
+  Future<String> virarContinuo({
+    required String alunoId,
+    required String blocoId,
+    String? observacao,
+  });
+
+  /// `fn_rep_voltar_pontual` — desativa a alocação `REP` gravando o motivo e
+  /// fecha a pendência `REP:<aluno>:VOLTA`. Motivo é obrigatório
+  /// (`MOTIVO_OBRIGATORIO`), e quem cobra é a função.
+  Future<void> voltarPontual({required String alunoId, required String motivo});
 }
 
 class TurmasRepositorioSupabase implements TurmasRepositorio {
@@ -282,4 +305,30 @@ class TurmasRepositorioSupabase implements TurmasRepositorio {
         'fn_reposicao_cancelar',
         params: {'p_reposicao_id': reposicaoId, 'p_observacao': observacao},
       );
+
+  @override
+  Future<String> virarContinuo({
+    required String alunoId,
+    required String blocoId,
+    String? observacao,
+  }) async {
+    final id = await _cliente.rpc<dynamic>(
+      'fn_rep_virar_continuo',
+      params: {
+        'p_aluno_id': alunoId,
+        'p_bloco_id': blocoId,
+        'p_observacao': observacao,
+      },
+    );
+    return '$id';
+  }
+
+  @override
+  Future<void> voltarPontual({
+    required String alunoId,
+    required String motivo,
+  }) => _cliente.rpc<dynamic>(
+    'fn_rep_voltar_pontual',
+    params: {'p_aluno_id': alunoId, 'p_motivo': motivo},
+  );
 }

@@ -12,6 +12,7 @@ import '../telas/alunos/tela_alunos.dart';
 import '../telas/em_construcao.dart';
 import '../telas/login.dart';
 import '../telas/materiais/tela_materiais.dart';
+import '../telas/pendencias/tela_pendencias.dart';
 import '../telas/redefinir_senha.dart';
 import '../telas/salas/tela_salas.dart';
 import '../telas/selecao_unidade.dart';
@@ -31,6 +32,7 @@ final _telaDaRota = <String, WidgetBuilder>{
   'materiais': (_) => const TelaMateriais(),
   'salas': (_) => const TelaSalas(),
   'turmas': (_) => const TelaTurmas(),
+  'pendencias': (_) => const TelaPendencias(),
   'administracao': (_) => const TelaAdministracao(),
 };
 
@@ -56,7 +58,6 @@ const _cardDaRota = <String, String>{
   'dashboard': '5.9 / 8.7',
   'aluno_trilha': '6.6',
   'turmas_modular': '7.3',
-  'pendencias': '5.8',
   'compras': '6.8',
   'projecao': '8.5',
   'certificados': '8.6',
