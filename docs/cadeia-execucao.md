@@ -198,6 +198,36 @@ A estimativa dá pontos **por minuto** (janela ÷ minutos). A sobra dividida por
 | 85% | 7 pts | 8 min | 5 min | cabe até o reset |
 | 91% | 1 pt | 1 min | 15 min | espera |
 
+### As DUAS janelas decidem
+
+A conta corre para a janela de **5 horas** e para a **semanal**, e a que apertar primeiro manda.
+Medido em 04/09/2026, ao longo de dez sessões: **~25 pontos de 5 h e ~1,6 ponto de semanal por
+card** — a de 5 h aguenta ~3 cards, a semanal ~15.
+
+```
+  orçamento: card estimado em 25% da janela de 5 h e 1,6% da semanal / 34 min (10 cards medidos)
+             5 h      em   61% · sobra   27% até o teto · reset em 203 min
+             semanal  em   78% · sobra   10% até o teto · reset em 4.353 min
+  ✓ cabe nas duas janelas
+```
+
+⚠️ **`-MaxEsperaMin` (padrão 360) existe porque a semanal reinicia às segundas.** Trancando por ela,
+a espera seria de **três dias** — e script que dorme três dias não é espera, é travamento com cara de
+funcionamento. Passando do teto, a cadeia **para e diz qual janela travou e quando ela abre**; a
+decisão de esperar até segunda é de Irineu.
+
+**Três defeitos que produziram esta versão**, todos medidos em 04/09/2026 e todos silenciosos:
+
+1. `[Math]::Max(0, 0.60)` devolve **`1`** — o PowerShell escolhe a sobrecarga de inteiros e
+   arredonda. A sobra aparecia como 100% na tela e, como a autonomia só é consultada quando a sobra é
+   menor que a estimativa, ela arredondava para **zero**: a otimização inteira nunca disparava. O
+   `[double]0` é o conserto.
+2. O `resetsAt` **do topo** descreve a janela que estiver apertando, e virou `seven_day` assim que a
+   semanal passou a de 5 h. O driver casava a utilização de 5 h com o reset da semanal e anunciava
+   "reset em 4.405 min" — três dias. Cada janela traz o seu par dentro de `unifiedWindows`.
+3. Os dois juntos fariam a cadeia **dormir 73 horas** no primeiro card que não coubesse — o que só
+   não aconteceu porque "cabe inteiro" disparava antes.
+
 ⚠️ **A conta assume consumo linear, e não é.** Um card gasta mais escrevendo e testando do que lendo
 documento; gastando rápido no começo, pode encostar no teto antes dos minutos calculados. O teto de
 92% é a margem que cobre isso, e ela ficou mais magra do que era com a regra grosseira. A taxa,
