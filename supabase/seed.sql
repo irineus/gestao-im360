@@ -78,7 +78,7 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
 
   ('alunos', 40, '4.2',
    $$to_regclass('public.aluno') is not null$$, true,
-   'APLICADA no card 4.2: doze alunos por unidade, um por caso que alguma decisão criou — os quatro degraus da cascata da projeção, previsão vencida, STANDBY antigo, os dois terminais (FORMADO e CANCELADO), TRANCADO, ACELERAR e um sem combo. Datas SEMPRE relativas a fn_hoje(). O "em FIM" e o "com débito REP na borda" do card 2.8 §4.2 dependem de aluno_material e bloco_aluno: ficam com as camadas trilha_estoque (6.1) e turmas (5.1), e os alunos que os receberão já nascem aqui.'),
+   'APLICADA no card 4.2: doze alunos por unidade, um por caso que alguma decisão criou — os quatro degraus da cascata da projeção, previsão vencida, STANDBY antigo, os dois terminais (FORMADO e CANCELADO), TRANCADO, ACELERAR e um sem combo. Datas SEMPRE relativas a fn_hoje(). Desde o card 6.2 a camada roda em CONTEXTO DE ROTINA e a TRILHA dos doze nasce aqui, gerada por tg_aluno_trilha_inicial — a fixture deixou de ter uma cópia à mão da expansão do combo. O "com débito REP na borda" do card 2.8 §4.2 depende de bloco_aluno e fica com a camada turmas (5.1); o "em FIM" depende das entregas, que ficam com a trilha_estoque (6.1).'),
 
   ('infra_fisica', 50, '4.3',
    $$to_regclass('public.pc') is not null$$, true,
@@ -90,7 +90,7 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
 
   ('trilha_estoque', 70, '6.1',
    $$to_regclass('public.movimento_estoque') is not null$$, true,
-   'APLICADA no card 6.1: trilha dos doze alunos (menos Karina, que não tem combo) derivada do combo, três pedidos de compra — um por estado que muda alguma conta — e os movimentos que produzem os saldos 0/0/1/n/n/n do card 2.8 §4.2. Saldo 1 é o material que é o PRÓXIMO de dois alunos, que é o teste de concorrência do card 6.3; os dois saldos zero são diferentes de propósito (um com item pendente adiante = REORDENADA, um sem = BLOQUEADA_SEM_ESTOQUE). João Pedro fica em FIM, fechando a última marca do quadro §4.2 que ainda não tinha casa. Os quatro tipos de movimento aparecem, incluindo o único ESTORNO da fixture.'),
+   'APLICADA no card 6.1: três pedidos de compra — um por estado que muda alguma conta — e os movimentos que produzem os saldos 0/0/1/n/n/n do card 2.8 §4.2. Desde o card 6.2 a TRILHA não nasce mais aqui (vem de tg_aluno_trilha_inicial, nas camadas alunos e turmas); esta camada marca as ENTREGAS sobre ela. Saldo 1 é o material que é o PRÓXIMO de dois alunos, que é o teste de concorrência do card 6.3; os dois saldos zero são diferentes de propósito (um com item pendente adiante = REORDENADA, um sem = BLOQUEADA_SEM_ESTOQUE). João Pedro fica em FIM, fechando a última marca do quadro §4.2 que ainda não tinha casa. Os quatro tipos de movimento aparecem, incluindo o único ESTORNO da fixture.'),
 
   -- Declarada aqui e não no card 7.1 porque o portão do teste 001 precisa de uma
   -- camada AINDA NÃO aplicada para vigiar: com `trilha_estoque` aplicada, ele
@@ -578,12 +578,33 @@ select tests.seed_catalogo(tests.unidade('ESCOLA_B'));
 --       FORMADO). São a única entrada possível para fn_aluno_reverter_status, e
 --       sem eles o teste da reversão teria de criar o próprio aluno — que é o
 --       caminho para um teste que passa porque montou o cenário que queria.
+--
+-- ⚠️ ESTA CAMADA PASSOU A RODAR EM CONTEXTO DE ROTINA NO CARD 6.2, pelo mesmo
+--    motivo e com a mesma escolha das camadas `infra_fisica` (5.4) e `turmas`:
+--    o `insert` em `aluno` dispara `tg_aluno_trilha_inicial`, que chama
+--    `fn_trilha_gerar` — e ela exige permissão (`alunos.editar_trilha` ou
+--    `alunos.criar`) e escreve em tabelas com RLS forçada. O seed roda como
+--    `postgres`, sem `auth.uid()`: sem o contexto, `tem_permissao()` é falsa e o
+--    `supabase db reset` inteiro morre no primeiro aluno. A saída RECUSADA,
+--    de novo, foi afrouxar a função para acomodar um arquivo de teste.
+--
+--    CONSEQUÊNCIA QUE VALE ESCREVER: **a trilha dos doze alunos passa a nascer
+--    aqui**, gerada pelo trigger, e não mais na camada `trilha_estoque` — que
+--    tinha uma cópia da expansão combo → curso → material escrita à mão. A
+--    fixture deixou de duplicar a regra e passou a EXERCITÁ-LA, que é o mesmo
+--    argumento do `update` de entrega da seção 8.4. Com isso a `ordem` da trilha
+--    é a da função (10, 20, 30…) e não mais 1, 2, 3.
 create or replace function tests.seed_alunos(p_unidade uuid)
 returns void
 language plpgsql
 set search_path = public, pg_temp
 as $$
 begin
+  -- Contexto de rotina (ver a nota ⚠️ acima). `is_local => true`: morre no fim
+  -- da transação mesmo se o `insert` falhar no meio.
+  perform set_config('app.rotina', 'on', true);
+  perform set_config('app.rotina_unidade', p_unidade::text, true);
+
   insert into aluno (unidade_id, codigo_sgf, nome, metodo_id, combo_id, status,
                      status_desde, prev_conclusao_curso, data_inicio)
   select p_unidade, s.codigo_sgf, s.nome, me.id, cb.id, s.status,
@@ -972,9 +993,12 @@ select tests.seed_turmas(tests.unidade('ESCOLA_B'));
 -- 8. Escola-fixture — camada `trilha_estoque` (card 6.1)
 -- =============================================================================
 -- Fecha o quadro do card 2.8 §4.2: os seis materiais ganham os saldos
--- **0, 0, 1, n, n, n** e os doze alunos ganham trilha — inclusive o "1 em FIM",
--- que era a última marca do quadro ainda sem casa (as outras duas foram para as
--- camadas `alunos` e `turmas`).
+-- **0, 0, 1, n, n, n** e a trilha dos alunos ganha ENTREGAS — inclusive o
+-- "1 em FIM", que era a última marca do quadro ainda sem casa (as outras duas
+-- foram para as camadas `alunos` e `turmas`).
+--
+-- ⚠️ Desde o card 6.2 a trilha em si NÃO nasce mais nesta camada: ela vem de
+--    `tg_aluno_trilha_inicial` na matrícula (seção 8.3 abaixo diz por quê).
 --
 -- Cinco escolhas que valem explicação:
 --
@@ -1105,40 +1129,28 @@ begin
                         and mv.tipo = 'AJUSTE');
 
   -- -------------------------------------------------------------------------
-  -- 8.3 A trilha inteira, derivada do combo
+  -- 8.3 A trilha — que desde o card 6.2 NÃO nasce aqui
   -- -------------------------------------------------------------------------
-  -- A `ordem` sai de combo_curso.ordem × curso_material.ordem, que é a mesma
-  -- cadeia que a função do card 6.2 vai percorrer — e é por isso que ela é
-  -- calculada e não digitada: uma trilha escrita à mão aqui deixaria o 6.2 sem
-  -- nada contra o que comparar o resultado dele.
+  -- Até o card 6.1 esta seção tinha uma cópia da expansão combo → curso →
+  -- material, escrita à mão porque a função ainda não existia. Ela existe desde o
+  -- card 6.2 (`fn_trilha_gerar`), disparada por `tg_aluno_trilha_inicial` na
+  -- matrícula: a trilha dos doze alunos nasce na camada `alunos` e a dos treze
+  -- `Aluno de Lotação` nasce na camada `turmas`, as duas pelo caminho REAL.
   --
-  -- ⚠️ O `row_number()` sobre as DUAS ordens é a parte que não pode simplificar:
-  --    `curso_material.ordem` é a posição dentro do CURSO, então o combo de
-  --    Informática (dois cursos) tem duas apostilas com `cm.ordem = 1`, e usá-la
-  --    direto derrubaria a inserção em `aluno_material_ordem_uk` — ou, pior num
-  --    combo de um curso só, passaria e deixaria a fixture com a ordem errada
-  --    sem nada acusando.
+  -- Manter a cópia aqui seria pior do que redundância: uma trilha escrita à mão
+  -- deixaria o 6.2 sem nada contra o que comparar, e o dia em que a função e a
+  -- cópia divergissem a suíte continuaria verde medindo a cópia. É o mesmo
+  -- argumento do `update` de entrega da seção 8.4 — a fixture percorre o caminho
+  -- que o sistema real tem.
   --
-  -- Karina Bastos NÃO ganha trilha, e é a decisão: ela é a aluna sem combo da
-  -- camada `alunos`, e aluno ATIVO sem trilha é exatamente o que a pendência do
-  -- card 6.2 existe para acusar.
+  -- Karina Bastos continua SEM trilha, e agora por construção: ela é a aluna sem
+  -- combo, e o `when (new.combo_id is not null)` do trigger a deixa de fora.
   --
   -- Os treze `Aluno de Lotação` da camada `turmas` GANHAM trilha, e isso não é
   -- efeito colateral aceito de má vontade: eles são ATIVO e têm combo, então um
-  -- deles sem trilha seria uma pendência FALSA na fixture — a mesma que a
-  -- pendência do card 6.2 vai abrir. O preço é conhecido e está escrito: a
-  -- demanda imediata de `INTERATIVO 01` (card 6.4) conta treze alunos a mais do
-  -- que a leitura ingênua "doze alunos na fixture" sugere.
-  insert into aluno_material (unidade_id, aluno_id, material_id, ordem, origem)
-  select p_unidade, a.id, cm.material_id,
-         row_number() over (partition by a.id order by cc.ordem, cm.ordem),
-         'COMBO'
-    from aluno a
-    join combo_curso cc on cc.combo_id = a.combo_id and cc.unidade_id = p_unidade
-    join curso_material cm on cm.curso_id = cc.curso_id and cm.unidade_id = p_unidade
-   where a.unidade_id = p_unidade
-     and not exists (select 1 from aluno_material am
-                      where am.aluno_id = a.id and am.material_id = cm.material_id);
+  -- deles sem trilha seria um caso falso na fixture. O preço é conhecido e está
+  -- escrito: a demanda imediata de `INTERATIVO 01` (card 6.4) conta treze alunos
+  -- a mais do que a leitura ingênua "doze alunos na fixture" sugere.
 
   -- -------------------------------------------------------------------------
   -- 8.4 As entregas: uma SAIDA por item entregue, e o vínculo na trilha

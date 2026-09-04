@@ -213,12 +213,16 @@ select throws_ok(
 --    quem tem a permissão continua reordenando.
 select tests.autenticar(tests.uid('secretaria@escola-a.test'));
 
+--
+-- ⚠️ As ordens são 10 e 20, e não 1 e 2, desde o card 6.2: a trilha da fixture
+--    passou a nascer de `fn_trilha_gerar`, que numera de 10 em 10 (§5.1, passo 4)
+--    para deixar espaço à inserção manual.
 select lives_ok(
-  $$update public.aluno_material set ordem = 3 - ordem
+  $$update public.aluno_material set ordem = 30 - ordem
      where aluno_id = (select id from public.aluno
                         where nome = 'Carla Menezes'
                           and unidade_id = public.fn_unidade_atual())
-       and ordem in (1, 2)$$,
+       and ordem in (10, 20)$$,
   'trocar duas posicoes da trilha e UM update, sem valor temporario');
 
 reset role;
@@ -341,7 +345,7 @@ select is(
        where aluno_id = (select id from public.aluno
                           where nome = 'Carla Menezes'
                             and unidade_id = public.fn_unidade_atual())
-         and ordem = 3$$,
+         and ordem = 30$$,
     tests.uid('monitor@escola-a.test')),
   'SEM_PERMISSAO',
   'nem troca a apostila devida por outra, inclusive de outro metodo');
@@ -375,7 +379,7 @@ select lives_ok(
      where aluno_id = (select id from public.aluno
                         where nome = 'Carla Menezes'
                           and unidade_id = public.fn_unidade_atual())
-       and ordem = 3$$,
+       and ordem = 30$$,
   'e continua registrando a ENTREGA — que e o que o `or` da politica existe para permitir');
 
 reset role;

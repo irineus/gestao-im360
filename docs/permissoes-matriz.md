@@ -195,7 +195,7 @@ Todas as políticas trazem, além do que está na coluna, o filtro `unidade_id =
 | `aluno` | `alunos.ler` | `alunos.criar` | **`alunos.editar` ∨ `alunos.alterar_status` ∨ `alunos.reverter_status`** | — |
 | **`aluno_status_hist`** | `alunos.ler` | `alunos.alterar_status` ∨ `alunos.reverter_status` | — | — |
 | **`aluno_material`** | `alunos.ler` | `alunos.editar_trilha` ∨ `alunos.criar` | `alunos.editar_trilha` ∨ `estoque.lancar_saida` ∨ `estoque.estornar` | `alunos.editar_trilha` |
-| **`aluno_material_hist`** | `alunos.ler` | `alunos.editar_trilha` ∨ `estoque.lancar_saida` | — | — |
+| **`aluno_material_hist`** | `alunos.ler` | `alunos.editar_trilha` ∨ **`alunos.criar`** ∨ `estoque.lancar_saida` | — | — |
 | `sala`, `pc` | `salas.ler` | `salas.criar` | `salas.editar` | `salas.excluir` |
 | **`pc_manutencao`** | `salas.ler` | `salas.registrar_manutencao` | `salas.registrar_manutencao` | — |
 | `professor` | `professores.ler` | `professores.criar` | `professores.editar` | — |
@@ -390,6 +390,7 @@ está a caminho.
 | 10 | `permissao` sem política de escrita — catálogo só muda por migração | 2.1 §4 | 3.3 | baixa |
 | 11 | `permissao.dominio` no plural, comentário do DDL corrigido — fecha o ajuste #7 do card 2.3 | 2.1 §5 | 3.3 | baixa (resolvido) |
 | 12 | `v_demanda_imediata_aluno`/`v_demanda_imediata` declaram `materiais.ler` sem ler tabela de material; a view só precisa de `alunos.ler` (a tela precisa do nome do material, a view não) | 2.3 §11 | 6.4 | baixa |
+| 13 | O `insert` de `aluno_material_hist` não aceitava `alunos.criar`, e o da tabela-mãe `aluno_material` aceitava — assimetria sem consequência enquanto ninguém escrevia histórico na geração. A partir do card 6.2, `fn_trilha_gerar` grava uma linha `GERACAO_COMBO` por item: um perfil com `alunos.criar` e **sem** `alunos.editar_trilha` criaria o aluno e a trilha e falharia no histórico, com erro opaco de RLS numa tela de cadastro que não fala de histórico | §4 (esta tabela) | 6.2 | alta — ✅ **corrigido em 04/09/2026 (card 6.2)**: a política passou a aceitar `alunos.criar`, a mesma condição da tabela-mãe. Nenhum perfil da matriz inicial é assim, e o card 4.2 já deixou escrito que isso não é argumento |
 
 Os itens 1, 3, 5, 6, 7 e 9 são **bloqueantes** no sentido do card 2.2: com eles errados, o sistema
 compila, sobe e falha em produção na mão do usuário — vazio, opaco ou aberto demais.
