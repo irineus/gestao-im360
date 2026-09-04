@@ -486,6 +486,13 @@ e não some da lotação.
 
 ## 8. Dashboard — cards 5.9 (v1) e 8.7 (completo)
 
+⚠️ **As três views desta seção são do card 8.7, e o 5.9 não tocou em nenhuma (04/09/2026).** A v1 do
+dashboard é **vaga**: totais por método e grade dia × horário, tudo lido de `v_bloco_vagas_semana`
+(§7) e somado na tela a partir de parcelas que já vieram prontas. Ela saiu **sem migração** — o §12
+já dizia "o 5.9 já cria as de vaga", e a leitura certa daquela linha é que as de vaga nasceram no
+5.6. Alunos por método, conclusões por semestre e tipos por bloco continuam integralmente no 8.7, e
+a tela do 5.9 **diz isso em rodapé** em vez de deixar o espaço vazio parecendo defeito.
+
 ### 8.1 `v_dashboard_alunos_metodo`
 
 ```sql
@@ -641,12 +648,24 @@ o número certo se o leitor tiver **todo** o conjunto (§3.4), e é esse conjunt
 | `v_demanda_imediata_aluno` / `v_demanda_imediata` | `alunos.ler`, `materiais.ler` |
 | `v_demanda_projetada` | `materiais.ler`, `estoque.ler` |
 | `v_pedido_sugerido` | `materiais.ler`, `estoque.ler`, `alunos.ler`, `compras.ler` |
-| `v_bloco_vagas_semana` | `turmas.ler`, `salas.ler` |
-| `v_turma_modular_lotacao` | `turmas.ler`, `salas.ler` |
-| `v_dashboard_alunos_metodo` | `alunos.ler` |
-| `v_dashboard_conclusoes_semestre` | `alunos.ler` |
-| `v_dashboard_tipos_bloco` | `turmas.ler` |
+| `v_bloco_vagas_semana` | `turmas.ler`, `salas.ler`, **`materiais.ler`**, `professores.ler` |
+| `v_turma_modular_lotacao` | `turmas.ler`, `salas.ler`, **`materiais.ler`** |
+| `v_dashboard_alunos_metodo` | `alunos.ler`, **`materiais.ler`** |
+| `v_dashboard_conclusoes_semestre` | `alunos.ler`, **`materiais.ler`** |
+| `v_dashboard_tipos_bloco` | `turmas.ler`, **`materiais.ler`** |
 | `v_pendencias_abertas` | `pendencias.ler` (as referências degradam para nulo sem as demais) |
+
+⚠️ **Correção de 04/09/2026 (card 5.9), fechando o bloqueante nº 1 de `docs/permissoes-matriz.md` §7
+para a primeira das cinco views.** As cinco linhas em negrito acima omitiam `materiais.ler`, e as
+cinco fazem `join` **interno** em `metodo`/`curso`/`modulo`: sem a permissão a view não vem errada,
+vem **vazia** — grade sem uma turma, dashboard sem uma vaga, e nada em tela dizendo que a causa é
+permissão. `professores.ler` entrou por outro motivo, o achado nº 2 do mesmo §7: ali o `left join`
+não esvazia, **mente** (a grade vem cheia e sem professor nenhum). As rotas do app já exigiam os dois
+desde os cards 5.6 e 3.7 (`docs/permissoes-matriz.md` §6 e `app/lib/rotas/rotas.dart`) — o que estava
+errado era só esta tabela, que é o contrato declarado. ✅ Para `v_bloco_vagas_semana` isto deixou de
+ser parágrafo em 04/09/2026: `supabase/tests/095_views_paridade.sql` ganhou o perfil `SEM_MATERI`, que
+vê a grade **vazia** e a recebe **inteira** de volta assim que `materiais.ler` é concedida. As outras
+quatro continuam com os cards 7.4 e 8.7.
 
 Nove códigos novos, todos no padrão `<dominio>.ler`: `alunos.ler`, `materiais.ler`, `estoque.ler`,
 `compras.ler`, `turmas.ler`, `salas.ler`, `certificados.ler`, `pendencias.ler`, `admin.ler`.
@@ -661,7 +680,7 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 |---|---|---|
 | `fn_hoje()` | 3.4 | 3 |
 | `v_pendencias_abertas` | **5.5** ✅ — a primeira view do projeto, e com ela nasceu o C5 (toda view `security_invoker`, zero matview) | 5 |
-| `v_bloco_vagas_semana`, `fn_grade_semana` | 5.6 (grade) / 5.9 (dashboard) | 5 |
+| `v_bloco_vagas_semana`, `fn_grade_semana` | **5.6** ✅ (grade) — o **5.9** (dashboard) ✅ é consumidor da view e **não criou objeto nenhum de banco** | 5 |
 | `v_bloco_alunos`, `fn_bloco_alunos` | **5.7** ✅ — ver §12.1 | 5 |
 | `v_estoque_atual`, `v_demanda_imediata_aluno`, `v_demanda_imediata`, `v_pedido_sugerido` | 6.4 | 6 |
 | `v_turma_modular_lotacao` | 7.4 | 7 |

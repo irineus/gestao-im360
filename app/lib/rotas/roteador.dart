@@ -9,6 +9,7 @@ import '../telas/acesso_bloqueado.dart';
 import '../telas/administracao/tela_administracao.dart';
 import '../telas/alunos/ficha_aluno.dart';
 import '../telas/alunos/tela_alunos.dart';
+import '../telas/dashboard/tela_dashboard.dart';
 import '../telas/em_construcao.dart';
 import '../telas/login.dart';
 import '../telas/materiais/tela_materiais.dart';
@@ -28,6 +29,7 @@ const _caminhoAcesso = '/acesso';
 /// As telas já entregues, por id de rota. O que não está aqui abre o
 /// placeholder que diz qual card entrega.
 final _telaDaRota = <String, WidgetBuilder>{
+  'dashboard': (_) => const TelaDashboard(),
   'alunos': (_) => const TelaAlunos(),
   'materiais': (_) => const TelaMateriais(),
   'salas': (_) => const TelaSalas(),
@@ -55,7 +57,9 @@ List<RouteBase> _subRotas(Rota rota) => switch (rota.id) {
 /// Cards que entregam cada tela — o placeholder diz o seu, para não virar
 /// destino permanente (docs/wireframes.md §18).
 const _cardDaRota = <String, String>{
-  'dashboard': '5.9 / 8.7',
+  // O dashboard saiu daqui no card 5.9: a tela existe, e é **parcial** — quem
+  // nomeia o card do que falta é a própria tela, em rodapé, e não um
+  // placeholder que esconderia a metade já entregue.
   'aluno_trilha': '6.6',
   'turmas_modular': '7.3',
   'compras': '6.8',

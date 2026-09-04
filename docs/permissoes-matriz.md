@@ -378,8 +378,8 @@ está a caminho.
 
 | # | Achado | Onde corrigir | Card | Gravidade |
 |---|---|---|---|---|
-| 1 | `materiais.ler` falta no conjunto declarado de `v_bloco_vagas_semana`, `v_turma_modular_lotacao`, `v_dashboard_alunos_metodo`, `v_dashboard_conclusoes_semestre` e `v_dashboard_tipos_bloco` — `join` interno em `metodo`/`curso`/`modulo` zera a view | 2.3 §11 | 5.6 / 5.9 / 7.4 / 8.7 | **bloqueante** |
-| 2 | `professores.ler` falta no conjunto de `v_bloco_vagas_semana` (`left join` → professor nulo) | 2.3 §11 | 5.6 / 5.9 | média |
+| 1 | `materiais.ler` falta no conjunto declarado de `v_bloco_vagas_semana`, `v_turma_modular_lotacao`, `v_dashboard_alunos_metodo`, `v_dashboard_conclusoes_semestre` e `v_dashboard_tipos_bloco` — `join` interno em `metodo`/`curso`/`modulo` zera a view | 2.3 §11 | 5.6 / 5.9 / 7.4 / 8.7 | **bloqueante** — ✅ **tabela corrigida e `v_bloco_vagas_semana` ASSERIDA em 04/09/2026 (card 5.9)**: perfil `SEM_MATERI` no teste 095 vê a grade vazia e a recebe inteira de volta com a permissão. Restam as quatro views dos cards 7.4 e 8.7 |
+| 2 | `professores.ler` falta no conjunto de `v_bloco_vagas_semana` (`left join` → professor nulo) | 2.3 §11 | 5.6 / 5.9 | média — ✅ **corrigido em 04/09/2026 (card 5.9)**; a asserção já existia no teste 095 desde o 5.6 |
 | 3 | `fn_certificado_abrir` insere `certificado_checklist` dentro da transação da entrega → quem tem `estoque.lancar_saida` precisa de `certificados.criar` | matriz (§5) e política de insert | 8.3 | **bloqueante** |
 | 4 | `fn_param_int`/`fn_param_txt` são `security invoker` e leem `parametro`: `fn_rep_situacao` (invoker, chamada pela tela) devolve `PARAMETRO_AUSENTE` para quem não tem `parametros.ler`. Passar as duas a `security definer` com `search_path` fixo — mesmo argumento do achado #3 do card 2.3 | 2.2 §2.3 | 3.4 | alta |
 | 5 | `aluno_material` e `aluno_material_hist` são escritos por `fn_registrar_entrega`: política de `update`/`insert` por `alunos.editar` bloquearia o monitor | 2.1 §4 | 6.1 / 6.3 | **bloqueante** |
