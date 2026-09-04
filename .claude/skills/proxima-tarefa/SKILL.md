@@ -11,7 +11,8 @@ Este projeto é rastreado no Notion. Este repositório contém o código e os do
 
 - Board (data source): `e50abe7f-1688-402a-96b5-c6049b24ce82`
 - Database (página): `f3bd0f112cde4ed699d616fc7fc30dff`
-- Decisões vigentes (página): `3cd2f3f4-b9b2-8106-95cd-fc8d937bd953`
+- Decisões vigentes (página): `3cd2f3f4-b9b2-8106-95cd-fc8d937bd953` — ler as **seções 1 a 6**
+- Histórico de decisões (subpágina da anterior, onde entra a linha nova de cada card): `3d12f3f4-b9b2-815e-9643-edc69db65f5c`
 - Repositório: `github.com/irineus/gestao-im360` — branches `main` (prod) e `develop` (dev)
 - Propriedades do card: `Tarefa` (título — **não existe coluna `Nome`**), `Fase` (select, prefixo numérico e acentos exatos), `Ordem` (número, aceita decimal), `Status` ("A fazer" / "Em andamento" / "Concluído"), `Prioridade` ("Alta" / "Média" / "Baixa"), `Notas` (texto), e as três da estimativa (card 3.13, 02/09/2026): `Concluído em` (data — na query use `date:Concluído em:start`), `Tamanho` ("P"/"M"/"G"/"GG" = 1/3/5/8 pontos) e `Tipo` ("Documento/decisão" / "Schema/migração" / "Função/regra" / "View" / "Tela" / "Infra/CI" / "Marco/validação" / "Externo").
 - NÃO confundir com o board do Desmalha (`d50a2925-fb74-4f67-b0db-af03ef41d1b4`) — projeto diferente. Se o pedido citar carnê-leão/Desmalha, esta skill não se aplica.
@@ -23,7 +24,8 @@ MCP do Notion conectado na sessão. Se não estiver, parar e avisar Irineu (sem 
 ## Passos obrigatórios no início
 
 1. Ler `docs/README-continuidade.md` e `CLAUDE.md` do repositório.
-2. Buscar a página Decisões vigentes no Notion e ler por completo. Em conflito com os documentos do repo, ela vence.
+2. Buscar a página Decisões vigentes no Notion e ler as **seções 1 a 6**, que são as vigentes. Em conflito com os documentos do repo, ela vence.
+3. **Não ler o log cronológico na partida** (card 6.1,5, 04/09/2026): ele mora em `docs/historico-marcos.md` e na subpágina **📜 Histórico de decisões**, e se consulta quando a tarefa pedir — rastrear um card, um documento ou um defeito antigo. Ao encerrar a tarefa, é **lá** que entra a linha nova (`insert_content`, `position: start`), não na página-mãe.
 
 ## Consultar o board
 
@@ -76,7 +78,7 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 
 1. **Resultado extenso** (especificação, DDL, relatório): criar como **subpágina do card** (`parent: {page_id: <card-id>}`), nunca solta na raiz.
 2. **Notas do card**: `update_properties` **sobrescreve** o campo — buscar o valor atual primeiro e reenviar o texto completo, preservando a linha "Origem:". Prefixar o que foi feito com `CONCLUÍDO <data>:`.
-3. **Decisões vigentes**, se a tarefa gerou decisão (arquitetura, schema, regra, parâmetro, risco): `update_content` na seção correspondente (**nunca** `replace_content`) + linha no Histórico com data e card de origem. Decisão revogada vai para "Decisões superadas" com o motivo.
+3. **Decisões vigentes**, se a tarefa gerou decisão (arquitetura, schema, regra, parâmetro, risco): `update_content` na seção correspondente (**nunca** `replace_content`) + linha na subpágina **📜 Histórico de decisões** (`3d12f3f4-b9b2-815e-9643-edc69db65f5c`), com `insert_content` e `position: start`, com data e card de origem. **O log não volta para a página-mãe** — ela é lida em toda sessão e foi enxugada de propósito no card 6.1,5 (04/09/2026). Decisão revogada vai para "Decisões superadas" com o motivo, essa sim na página-mãe.
 4. **Continuidade**: atualizar `docs/README-continuidade.md` (tabela de documentos, marcos) quando a tarefa criar documento novo ou mudar o estado do projeto.
 5. **Status = Concluído** e **`Concluído em` = a data de hoje**. As duas coisas, sempre — a data alimenta a estimativa de entrega (`docs/estimativa-entrega.md`), e card concluído sem data é um buraco na série. Se o card ainda não tiver `Tamanho` e `Tipo`, preencher também.
 6. **Fechar o ciclo do Git — faz parte da tarefa, não é extra.** São duas perguntas clicáveis a Irineu, na ordem: PR + merge em `develop`, depois promoção para `main`.
