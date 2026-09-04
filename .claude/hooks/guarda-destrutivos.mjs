@@ -38,7 +38,7 @@ process.stdin.on('end', () => {
 const ALVO_REMOTO = /(^|\s)(--linked|--db-url(=|\s)|--project-ref(=|\s)|-p\s+[a-z]{20})/;
 
 /** Subcomandos do CLI do Supabase que escrevem no banco de destino. */
-const SUPABASE_ESCRITA = /(^|\s)supabase\s+db\s+(reset|push|dump)(\s|$)/;
+const SUPABASE_ESCRITA = /^supabase\s+db\s+(reset|push|dump)(\s|$)/;
 
 function avaliar(evento) {
   if (evento?.tool_name !== 'Bash') process.exit(0);
@@ -62,10 +62,31 @@ function avaliar(evento) {
  * exatamente essa a brecha.
  */
 function fatiar(comando) {
-  return comando
+  return semHeredoc(comando)
     .split(/&&|\|\||;|\||\n/)
-    .map((t) => t.trim())
+    .map((t) => semPrefixoEnv(t.trim()))
     .filter(Boolean);
+}
+
+/**
+ * Apaga o corpo de `<<EOF … EOF`, preservando a linha do comando.
+ *
+ * Achado na ESTREIA do hook (03/09/2026): o corpo do PR que documentava este
+ * guarda continha a forma remota do `db reset`, viajava dentro de
+ * `gh pr create <<EOF`, e o guarda leu prosa como se fosse ordem. Comando não é
+ * o texto que ele carrega — sem isto, escrever documentação sobre migração
+ * vira ação proibida, e as sessões deste projeto escrevem isso o tempo todo.
+ */
+function semHeredoc(comando) {
+  return comando.replace(
+    /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n[\s\S]*?^\s*\2\s*$/gm,
+    ' <heredoc> '
+  );
+}
+
+/** Tira `VAR=valor ` da frente, senão a âncora do §1 seria contornável. */
+function semPrefixoEnv(trecho) {
+  return trecho.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, '');
 }
 
 /** Devolve o motivo da recusa, ou `null` para deixar passar. */
@@ -81,7 +102,7 @@ function recusar(trecho) {
     );
   }
 
-  if (/(^|\s)git\s+push\b/.test(trecho) && /(^|\s|:)main(\s|$)/.test(trecho)) {
+  if (/^git\s+push\b/.test(trecho) && /(^|\s|:)main(\s|$)/.test(trecho)) {
     return (
       'BLOQUEADO pelo guarda-destrutivos: `git push` mirando `main`.\n' +
       'A promoção develop → main é manual e de Irineu (aplica migração em PRODUÇÃO). ' +
@@ -89,7 +110,7 @@ function recusar(trecho) {
     );
   }
 
-  if (/(^|\s)gh\s+pr\s+create\b/.test(trecho) && /--base(=|\s+)main(\s|$)/.test(trecho)) {
+  if (/^gh\s+pr\s+create\b/.test(trecho) && /--base(=|\s+)main(\s|$)/.test(trecho)) {
     return (
       'BLOQUEADO pelo guarda-destrutivos: `gh pr create --base main`.\n' +
       'PR de promoção para produção é aberto por Irineu, não por sessão automática.'
