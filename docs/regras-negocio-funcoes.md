@@ -278,7 +278,7 @@ $$;
 > marcado `MANUTENCAO` à mão, sem linha em `pc_manutencao`, não conta. As duas junto tornam a fórmula
 > correta antes e depois do card 5.4, que é o requisito de verdade.
 >
-> ⚠️ **CORREÇÃO DE FATO (04/09/2026, card 5.4) — o intervalo é `[data_inicio, data_fim)`.** O corpo
+> ⚠️ **CORREÇÃO DE FATO (03/09/2026, card 5.4) — o intervalo é `[data_inicio, data_fim)`.** O corpo
 > entregue pelo card 5.2 usava `p_data between data_inicio and coalesce(data_fim, 'infinity')`,
 > intervalo fechado, e este §4.6 dizia "ao fechar (`data_fim` preenchida e **passada**)". O app lê o
 > contrário desde o card 4.5 (c): *`data_fim` é previsão; manutenção aberta = sem fim ou fim à frente
@@ -455,7 +455,7 @@ Para cada `bloco_horario` ativo da sala: se `fn_ocupacao_bloco > fn_capacidade_e
 pendência, e novas admissões ficam bloqueadas pelo `tg_bloco_aluno_admissao` até normalizar —
 o que já acontece naturalmente, já que a capacidade caiu abaixo da ocupação.
 
-> ✅ **Fechado em 04/09/2026 pelo card 5.4**, em
+> ✅ **Fechado em 03/09/2026 pelo card 5.4**, em
 > `supabase/migrations/20260904010000_manutencao_pc_capacidade.sql`, com os dois triggers, a função
 > e mais três coisas que o quadro acima não previa.
 >

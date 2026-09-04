@@ -146,7 +146,7 @@ select is(
 -- O PC em manutenção COM substituto conta mesmo com `status` em MANUTENCAO — que
 -- era "o mundo que o tg_pc_manutencao_status do card 5.4 vai criar" quando isto
 -- foi escrito, no card 5.2, e **é o mundo de agora**: o trigger existe desde
--- 04/09/2026 e o `update` abaixo virou redundante (o trigger já pôs o PC em
+-- 03/09/2026 e o `update` abaixo virou redundante (o trigger já pôs o PC em
 -- MANUTENCAO ao gravar a manutenção). Ficou de propósito, porque é ele que torna
 -- o estado explícito para quem lê — e a asserção continua sendo a única coisa
 -- entre "substituto mantém a capacidade" e a regra deixar de valer em silêncio.
