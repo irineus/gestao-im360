@@ -21,7 +21,7 @@ voz alta no log e no resumo da execução, em vez de passar calado.
 | Script | Card | O que trava |
 |---|---|---|
 | `admissao_ultima_vaga.sh` ✅ | **5.3** (03/09/2026) | `fn_bloco_admitir` — duas admissões simultâneas no último lugar |
-| entrega com a última unidade em estoque | **6.3** | `fn_registrar_entrega` — duas saídas simultâneas do mesmo material |
+| `entrega_ultimo_exemplar.sh` ✅ | **6.3** (04/09/2026) | `fn_registrar_entrega` — duas saídas simultâneas do mesmo material |
 
 ## O que o primeiro script ensinou (card 5.3)
 
@@ -42,6 +42,30 @@ voz alta no log e no resumo da execução, em vez de passar calado.
   causa escrita: num bloco com folga as duas admissões passariam e o teste ficaria verde sem medir
   nada. E o script **limpa o que criou** — é a única suíte do projeto que não roda dentro de uma
   transação com `rollback`, por definição.
+
+## O que o segundo script ensinou (card 6.3, 04/09/2026)
+
+- **A contraprova saiu na segunda casa decimal do que se esperava, e é a que importa.** Com
+  `fn_registrar_entrega` reaplicada **sem** os `pg_advisory_xact_lock`, as duas sessões devolveram
+  `ENTREGUE`, gravaram **duas** SAIDAS do mesmo exemplar e o material fechou com **saldo −1** — e com
+  o lock no lugar, `A=ENTREGUE`, `B=BLOQUEADA_SEM_ESTOQUE`, saldo 0. Nenhuma `constraint` acusa a
+  primeira: `movimento_sinal_ck` continua satisfeito nas duas linhas (SAIDA < 0) e os alunos são
+  diferentes, então a `aluno_material_uk` também. Saldo é regra de **agregado**.
+- **⚠️ Ao medir o saldo, esperar as DUAS sessões.** A primeira leitura da contraprova deu `0` e uma
+  saída só — a sessão que segurava o lock ainda estava dentro do `pg_sleep`, e `read committed` não
+  enxerga a linha não commitada. Um script que lesse o saldo antes do `wait` daria **verde na
+  sabotagem**, que é o pior desfecho possível para um teste de concorrência.
+- **A limpeza deste é mais cara que a do irmão, e o motivo é o assunto do card.**
+  `movimento_estoque` é imutável: `tg_movimento_imutavel` recusa `DELETE` inclusive para quem tem
+  `BYPASSRLS`, que é justamente o ponto dele. Um `delete` direto morreria em
+  `PT409 / MOVIMENTO_IMUTAVEL` e — com `ON_ERROR_STOP=0` — a limpeza falharia **em silêncio**,
+  deixando a fixture com o saldo errado para a próxima execução da suíte pgTAP na mesma máquina.
+  Estornar em vez de apagar não serve: o estorno é o comportamento em teste no `052` e deixaria duas
+  linhas onde a fixture espera zero. O script desliga o trigger pelo tempo do `delete`, no banco local
+  descartável, e diz em voz alta que é isso que está fazendo.
+- **As sessões passam o marcador por `p_observacao`**, que é parâmetro de `fn_registrar_entrega`:
+  nada aqui escreve em `movimento_estoque` por fora da função, e a limpeza acha o que criou sem
+  depender de `criado_em` nem de `limit`.
 
 Os dois são **pré-condição do marco 2** (card 2.8 §15).
 

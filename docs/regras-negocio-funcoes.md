@@ -575,6 +575,10 @@ escritas na migração porque são reais:
 fn_trilha_inserir(p_aluno_id uuid, p_material_id uuid, p_apos_material_id uuid default null) → uuid
 fn_trilha_remover(p_aluno_id uuid, p_material_id uuid, p_motivo text) → void
 fn_trilha_reordenar(p_aluno_id uuid, p_material_id uuid, p_nova_ordem integer) → void
+
+-- card 6.3: a mecânica da reposição, extraída de fn_trilha_reordenar e compartilhada com a entrega
+fn_trilha_reposicionar(p_aluno_id uuid, p_material_id uuid, p_posicao integer,
+                       p_motivo text, p_marcar_manual boolean default false) → void
 ```
 
 Todas exigem `alunos.editar_trilha`, marcam `origem = 'MANUAL'`, recusam mexer em item já
@@ -606,6 +610,17 @@ não fixava e que a tela do card 6.6 precisa conhecer:
   `commit`. Um `lives_ok` sozinho passa verde com o ramo sabotado; quem acusa é a asserção que **lê a
   trilha de volta**. Erro novo: **`MATERIAL_JA_NA_TRILHA`** (409), sem o qual a segunda inclusão da
   mesma apostila chega à tela como um `23505` cru.
+
+✅ **`fn_trilha_reposicionar` acrescentada em 04/09/2026 (card 6.3).** `fn_trilha_reordenar` passou a
+ser a permissão mais uma chamada a ela; o contrato externo não mudou em nada (mesma assinatura,
+mesmos códigos, mesma posição como parâmetro, mesmo `origem = 'MANUAL'` na linha movida). Ela **não
+tem `fn_exige_permissao` própria** — quem a protege é `tg_aluno_material_colunas_permitidas`, que
+alcança qualquer caminho até a coluna `ordem`, inclusive uma chamada RPC direta. As duas coisas que
+ela garante sozinha, e por isso vivem nela e não nos chamadores, são as que uma chamada direta não
+poderia pular: **item entregue não se move** e **toda reposição deixa linha em
+`aluno_material_hist`**. O `p_motivo` é restrito a `MANUAL` e `SEM_ESTOQUE`: `GERACAO_COMBO` e
+`REMOCAO` são de outros caminhos, e aceitá-los aqui deixaria o histórico contar uma história que não
+aconteceu.
 
 ---
 
@@ -668,20 +683,51 @@ fn_registrar_entrega(p_aluno_id uuid, p_material_id uuid default null,
 Os passos 7 a 9 são **um ato só**, na mesma transação: é a "ação única" do plano. Ou os três
 acontecem, ou nenhum.
 
-> ⚠️ **DECISÃO QUE O CARD 6.3 TEM DE TOMAR, encontrada em 04/09/2026 ao implementar o card 6.2.**
-> O passo 6 manda o caminho `REORDENADA` chamar `fn_trilha_reordenar`, e ela exige
-> `alunos.editar_trilha` (§5.3). Mas `fn_registrar_entrega` roda na transação do **monitor**, que
-> **não tem** essa permissão (card 2.4 §5) — e o `tg_aluno_material_colunas_permitidas` do card 6.1
-> §9 recusa qualquer escrita em `ordem` sem ela. Os três documentos estão certos separadamente e
-> incompatíveis juntos: escrito assim, a entrega do monitor com estoque zero morre em
-> `PT403 / SEM_PERMISSAO` numa tela que não fala de trilha.
->
-> O card 6.2 **não** afrouxou nem a permissão daqui nem a guarda do 6.1 para acomodar um card que
-> ainda não começou — afrouxar ali esconderia a decisão dentro de uma função de outro assunto. As
-> saídas visíveis são duas: `fn_registrar_entrega` como `security definer` (entrando na lista fechada
-> do C8, com filtro de unidade no corpo, como `fn_pendencia_abrir`), ou uma exceção **explícita e
-> nomeada** na guarda para a reordenação por falta de estoque. A escolha é do card 6.3, e o teste
-> `051_trilha_geracao` §9 já deixa a incompatibilidade medida em voz alta.
+✅ **Implementada em 04/09/2026 (card 6.3)**, com quatro coisas que a especificação acima não podia
+saber e que o código teve de fechar:
+
+- **A incompatibilidade `REORDENADA` × permissão do monitor foi resolvida por EXCEÇÃO NOMEADA, e a
+  outra saída não existia.** ~~As saídas visíveis são duas: `fn_registrar_entrega` como `security
+  definer`, ou uma exceção explícita e nomeada na guarda.~~ ⚠️ `security definer` **não resolveria**:
+  ele troca o papel do banco (e com ele a RLS, porque o dono tem `BYPASSRLS`), mas **não troca
+  `auth.uid()`** — e `tem_permissao` (card 3.4) é escrita sobre `auth.uid()`, não sobre
+  `current_user`. `fn_exige_permissao('alunos.editar_trilha')` continuaria levantando `PT403` dentro
+  de uma função definer, exatamente como levanta fora dela. A barreira aqui é de **permissão de
+  aplicação**, não de RLS, e não se atravessa mudando de dono. Escolher a saída errada teria custado
+  caro e em silêncio: `fn_registrar_entrega` entraria na lista fechada do C8, deixaria de passar pela
+  política `insert` **por tipo** de `movimento_estoque` (achado 9 do card 2.4) e o defeito continuaria
+  lá.
+
+  A exceção é a GUC de transação **`app.entrega_reordenacao`**, lida por `fn_contexto_entrega()` —
+  mesma forma do contexto de rotina do card 2.2 §2.2 — e ela é estreita nas quatro dimensões: vale só
+  para a coluna `ordem` (aluno, material e `origem` continuam exigindo a permissão **sempre**), só
+  dentro do contexto, que `fn_registrar_entrega` liga e desliga em volta da única escrita que precisa
+  dele; não se forja de fora, porque `set_config` mora em `pg_catalog` e o PostgREST não a expõe; e a
+  reposição continua **gravando histórico** (`motivo = 'SEM_ESTOQUE'`), que é o que a guarda existe
+  para proteger — o mal que ela impede não é "a ordem mudou", é "a ordem mudou e nada explica por
+  quê". Afrouxar a guarda para `estoque.lancar_saida` — a terceira saída, que ninguém listou — daria
+  ao monitor um `PATCH` livre em `ordem` pelo PostgREST, sem histórico nenhum.
+
+- ~~**Passo 2: `select … from aluno … for update`.**~~ **Não dá, e o motivo é o mesmo perfil.** Sob
+  RLS, `SELECT … FOR UPDATE` exige que a linha passe **também** pela `using` da política de UPDATE, e
+  `aluno_upd` (card 4.2) pede `alunos.editar` ∨ `alunos.alterar_status` ∨ `alunos.reverter_status` —
+  o monitor não tem nenhuma das três, e a entrega morreria com um erro de RLS numa tela que não fala
+  de cadastro. A serialização por aluno passou a ser `pg_advisory_xact_lock(aluno)`, a **mesma**
+  ferramenta do §4.5, tomada sempre **antes** do lock do material (ordem fixa nas duas sessões, que é
+  o que impede o abraço mortal).
+
+- **A mecânica da reposição virou `fn_trilha_reposicionar` (§5.3), com um dono só.** O passo 6 manda
+  chamar `fn_trilha_reordenar`, e ela faz três coisas que a entrega não quer: exige
+  `alunos.editar_trilha`, marca `origem = 'MANUAL'` e grava `motivo = 'MANUAL'`. Copiar o `UPDATE`
+  para dentro da entrega daria duas implementações da mesma renumeração, e o dia em que uma mudasse a
+  outra ficaria errada em silêncio.
+
+- **Passo 9 pela metade, de propósito:** a pendência `ALUNO_ULTIMO_LIVRO` existe; `fn_certificado_abrir`
+  é do card 8.3, porque `certificado_checklist` não existe. O teste `052_trilha_entrega` §11 é o
+  portão que reprova a suíte no dia em que a tabela nascer sem `fn_registrar_entrega` e
+  `fn_estornar_entrega` a citarem — mesma forma do gate de FORMADO (card 4.2). E `data_entrega` é
+  `fn_hoje()`, não a data do servidor: o Postgres do Supabase roda em UTC, e depois das 21h a entrega
+  cairia no dia seguinte, falseando o intervalo que a projeção do card 8.1 mede.
 
 ### 6.3 Estorno
 
@@ -704,6 +750,22 @@ fn_estornar_entrega(p_movimento_id uuid, p_motivo text) → uuid   -- id do movi
 6. Um estorno **não reverte** o reordenamento da trilha por falta de estoque: o histórico em
    `aluno_material_hist` continua contando o que aconteceu.
 
+✅ **Implementada em 04/09/2026 (card 6.3)**, com três acréscimos ao que está escrito acima:
+
+- **`MOVIMENTO_INEXISTENTE` (404) é o único código novo do card** (§12; contrato de 41 → 42). Vale
+  também para movimento de outra unidade — a leitura é `invoker`, então quem não pode ver não
+  descobre que existe (precedente de `PC_INEXISTENTE`, `ALUNO_INEXISTENTE`, `BLOCO_INEXISTENTE` e
+  `PENDENCIA_INEXISTENTE`). Reaproveitar `MOVIMENTO_NAO_ESTORNAVEL` diria "este movimento não pode
+  ser estornado" sobre algo que o usuário não tem, mandando procurar o problema no lugar errado.
+- **O estorno fecha `ALUNO_ULTIMO_LIVRO`** quando o aluno sai do FIM. O catálogo do §10.1 já dizia
+  "fechada por … estorno que tira do FIM"; sem a chamada, a linha do catálogo seria só uma promessa.
+- **`pg_advisory_xact_lock` no movimento**, além da unique parcial `movimento_estorno_uk`. A unique
+  já garante que um movimento só se estorna uma vez, mas sozinha ela entrega a corrida à tela como um
+  `23505` cru — o que o §1.2 proíbe. Com o lock, a segunda sessão espera e sai com
+  `MOVIMENTO_JA_ESTORNADO`.
+- **O passo 5 (checklist do certificado) fica com o card 8.3**, pelo mesmo motivo do passo 9 do §6.2,
+  e com o mesmo portão no teste `052_trilha_entrega` §11.
+
 ---
 
 ## 7. Estoque e compras
@@ -717,6 +779,11 @@ fn_ajustar_estoque(p_material_id uuid, p_quantidade integer, p_motivo text) → 
 `fn_saldo_material` é a mesma conta de `v_estoque_atual` (card 2.3); a view serve listagem, a
 função serve decisão dentro de outra função. **Nenhuma das duas cacheia** — estoque é sempre
 `sum(quantidade)`, jamais uma coluna.
+
+✅ **`fn_saldo_material` implementada em 04/09/2026 (card 6.3)**, `stable` e `security invoker`, com
+`coalesce(sum(…), 0)`: soma de conjunto vazio é **nula**, não zero (card 2.3 §3.1), e material
+recém-cadastrado tem de valer 0 — senão `0 <= 0` vira nulo e o passo 6 da entrega não entra em ramo
+nenhum. `fn_ajustar_estoque` e `fn_pedido_receber` continuam sendo do card 6.5.
 
 ### 7.1 Recebimento de pedido
 
@@ -907,6 +974,7 @@ lista nunca acumula item que já deixou de ser verdade.
 | `TRILHA_EM_FIM` | 409 | `fn_registrar_entrega` |
 | `MATERIAL_FORA_DA_TRILHA` | 422 | `fn_registrar_entrega` |
 | `MOVIMENTO_JA_ESTORNADO` / `MOVIMENTO_NAO_ESTORNAVEL` | 409 | `fn_estornar_entrega` |
+| `MOVIMENTO_INEXISTENTE` | 404 | `fn_estornar_entrega` (card 6.3) — vale também para movimento de outra unidade, pelo precedente de `PC_INEXISTENTE`; sem ele, "não existe" chegaria à tela como "não pode ser estornado" |
 | `PEDIDO_NAO_RECEBIVEL` | 409 | `fn_pedido_receber` |
 | `RECEBIMENTO_EXCEDE_PEDIDO` | 422 | `fn_pedido_receber` |
 | `PARAMETRO_AUSENTE` | 422 | `fn_param_int` / `fn_param_txt` |
@@ -942,7 +1010,7 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | `fn_revalidar_blocos_sala` | 5.4 |
 | `fn_pendencia_abrir/resolver/resolver_id`, `fn_pendencias_fechar_ausentes`, `rt_pendencias_diaria`, `rt_diaria` e o job `pg_cron` | 5.5 ✅ |
 | `fn_trilha_gerar`, `fn_trilha_proximo_material`, edição da trilha, `tg_aluno_trilha_inicial`, `tg_aluno_combo_alterado` | 6.2 ✅ |
-| `tp_entrega_resultado`, `fn_registrar_entrega`, `fn_estornar_entrega`, `fn_saldo_material` | 6.3 |
+| `tp_entrega_resultado`, `fn_registrar_entrega`, `fn_estornar_entrega`, `fn_saldo_material`, mais `fn_contexto_entrega` e `fn_trilha_reposicionar` (as duas nasceram da decisão do card — ver §6.2) | 6.3 ✅ |
 | `fn_pedido_receber`, `fn_ajustar_estoque`, `tg_movimento_valida_sinal`, `tg_movimento_resolve_pendencia` | 6.5 |
 | Funções Modular | 7.2 |
 | `rt_projecao_demanda` | 8.1 |

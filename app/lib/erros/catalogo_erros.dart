@@ -3,8 +3,8 @@
 /// Fonte dos textos: docs/design-system.md §7.1 (card 2.7), mais `PC_INEXISTENTE`
 /// (card 2.9), os três do card 3.5, `ALUNO_INEXISTENTE` (card 4.2),
 /// `PC_COM_HISTORICO` (card 4.3), `BLOCO_COM_ALOCACAO` (card 5.1), os três do
-/// card 6.1 (trilha e estoque) e `MATERIAL_JA_NA_TRILHA` (card 6.2). O contrato
-/// do conjunto é
+/// card 6.1 (trilha e estoque), `MATERIAL_JA_NA_TRILHA` (card 6.2) e
+/// `MOVIMENTO_INEXISTENTE` (card 6.3). O contrato do conjunto é
 /// `test/fixtures/codigos_erro.txt`, na raiz do repositório.
 ///
 /// O app trata SEMPRE pelo código, nunca pelo texto do banco (card 2.2 §1.2):
@@ -140,6 +140,12 @@ abstract final class CatalogoErros {
     'MATERIAL_JA_NA_TRILHA':
         'Esta apostila já está na trilha do aluno. Para mudá-la de lugar, use a '
         'reordenação.',
+
+    // --- card 6.3 (entrega e estorno)
+    // Vale também para movimento de outra unidade, pela mesma razão do
+    // PC_INEXISTENTE. Não se confunde com MOVIMENTO_NAO_ESTORNAVEL: aquele fala
+    // de um movimento que existe e é do tipo errado (ENTRADA, AJUSTE, ESTORNO).
+    'MOVIMENTO_INEXISTENTE': 'Este movimento de estoque não foi encontrado.',
 
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':

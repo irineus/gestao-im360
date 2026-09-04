@@ -67,3 +67,9 @@ MOVIMENTO_IMUTAVEL
 # Sem ele, a segunda inclusao da mesma apostila chega a tela como um 23505 cru
 # da aluno_material_uk — que e o que o card 2.2 §1.2 proibe.
 MATERIAL_JA_NA_TRILHA
+# 1 do card 6.3 (estorno de entrega)
+# Mesma familia de PC_INEXISTENTE, ALUNO_INEXISTENTE, BLOCO_INEXISTENTE e
+# PENDENCIA_INEXISTENTE: vale tambem para movimento de OUTRA unidade, porque a
+# leitura e invoker — quem nao pode ver nao descobre que existe. Reaproveitar
+# MOVIMENTO_NAO_ESTORNAVEL mandaria procurar o problema no lugar errado.
+MOVIMENTO_INEXISTENTE
