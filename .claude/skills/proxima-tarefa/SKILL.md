@@ -26,6 +26,23 @@ MCP do Notion conectado na sessão. Se não estiver, parar e avisar Irineu (sem 
 1. Ler `docs/README-continuidade.md` e `CLAUDE.md` do repositório.
 2. Buscar a página Decisões vigentes no Notion e ler as **seções 1 a 6**, que são as vigentes. Em conflito com os documentos do repo, ela vence.
 3. **Não ler o log cronológico na partida** (card 6.1,5, 04/09/2026): ele mora em `docs/historico-marcos.md` e na subpágina **📜 Histórico de decisões**, e se consulta quando a tarefa pedir — rastrear um card, um documento ou um defeito antigo. Ao encerrar a tarefa, é **lá** que entra a linha nova (`insert_content`, `position: start`), não na página-mãe.
+4. **Nem o detalhe das decisões** (card 6.2,5, 04/09/2026). A §2 guarda o **enunciado** de cada regra — o que vale hoje, onde ela mora no código — mais a **armadilha concreta** que aquela regra já custou, com teto de **6 linhas por regra** escrito na própria seção. O raciocínio, as medições e as contraprovas moram em **nove subpáginas por domínio** da própria página Decisões vigentes:
+
+   | Subpágina | Quando abrir |
+   |---|---|
+   | Modelagem, views e projeção | view nova, contrato de leitura, projeção de demanda |
+   | Acesso, permissões e RLS | política, `tem_permissao`, matriz de perfis |
+   | Alunos | status, histórico, matrícula, combo do aluno |
+   | Currículo e catálogo | material, curso, módulo, combo, método |
+   | Trilha e estoque | `aluno_material`, entrega, estorno, pedido |
+   | Alocação, blocos, grade e REP | `bloco_aluno`, admissão, reposição, virada REP |
+   | Capacidade, salas, PCs e credenciais | capacidade efetiva, manutenção, substituto |
+   | Pendências, rotinas e testes | `pendencia`, `rt_*`, pgTAP, concorrência |
+   | App, telas e design system | Flutter, rotas, estados, tipografia, a11y |
+
+   Abre-se **a do domínio da tarefa**, e só ela: mexendo em estoque, a de estoque. Ler as nove na partida desfaz o que o card 6.2,5 pagou US$ 34 para conseguir.
+
+   ⚠️ **Ao encerrar tarefa que gere decisão**, o enunciado curto vai para a §2 (respeitando o teto de 6 linhas) e o raciocínio vai para a **subpágina do domínio** — nunca tudo na página-mãe, que foi como ela chegou a 146 KB.
 
 ## Consultar o board
 
@@ -78,7 +95,12 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 
 1. **Resultado extenso** (especificação, DDL, relatório): criar como **subpágina do card** (`parent: {page_id: <card-id>}`), nunca solta na raiz.
 2. **Notas do card**: `update_properties` **sobrescreve** o campo — buscar o valor atual primeiro e reenviar o texto completo, preservando a linha "Origem:". Prefixar o que foi feito com `CONCLUÍDO <data>:`.
-3. **Decisões vigentes**, se a tarefa gerou decisão (arquitetura, schema, regra, parâmetro, risco): `update_content` na seção correspondente (**nunca** `replace_content`) + linha na subpágina **📜 Histórico de decisões** (`3d12f3f4-b9b2-815e-9643-edc69db65f5c`), com `insert_content` e `position: start`, com data e card de origem. **O log não volta para a página-mãe** — ela é lida em toda sessão e foi enxugada de propósito no card 6.1,5 (04/09/2026). Decisão revogada vai para "Decisões superadas" com o motivo, essa sim na página-mãe.
+3. **Decisões vigentes**, se a tarefa gerou decisão (arquitetura, schema, regra, parâmetro, risco). A decisão se escreve em **três lugares diferentes**, e misturá-los é como a página chegou a 146 KB:
+   - **o enunciado** vai para a seção correspondente da página-mãe, com `update_content` (**nunca** `replace_content`) — o que a regra manda hoje e onde ela mora no código, dentro do **teto de 6 linhas por regra** (card 6.2,5);
+   - **o raciocínio, as medições e as contraprovas** vão para a **subpágina de detalhe do domínio** (a tabela está nos "Passos obrigatórios no início"), com `insert_content`;
+   - **a linha do log** vai para a subpágina **📜 Histórico de decisões** (`3d12f3f4-b9b2-815e-9643-edc69db65f5c`), com `insert_content` e `position: start`, com data e card de origem.
+
+   **Nada disso volta para a página-mãe além do enunciado.** Ela é lida em toda sessão, e enxugá-la custou dois cards (6.1,5 e 6.2,5) e ~US$ 60. Decisão revogada é a única exceção: vai para "Decisões superadas", na página-mãe mesmo, com o motivo.
 4. **Continuidade**: atualizar `docs/README-continuidade.md` (tabela de documentos, marcos) quando a tarefa criar documento novo ou mudar o estado do projeto.
 5. **Status = Concluído** e **`Concluído em` = a data de hoje**. As duas coisas, sempre — a data alimenta a estimativa de entrega (`docs/estimativa-entrega.md`), e card concluído sem data é um buraco na série. Se o card ainda não tiver `Tamanho` e `Tipo`, preencher também.
 6. **Fechar o ciclo do Git — faz parte da tarefa, não é extra.** São duas perguntas clicáveis a Irineu, na ordem: PR + merge em `develop`, depois promoção para `main`.
