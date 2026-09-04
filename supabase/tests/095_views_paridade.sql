@@ -25,13 +25,16 @@
 --     OPOSTAS quando falta permissão: sem `salas.ler` a grade vem VAZIA, sem
 --     `professores.ler` ela vem CHEIA e sem professor nenhum. As duas são o
 --     motivo escrito de o card 2.4 ter aberto as duas permissões para os quatro
---     perfis, e aqui isso deixa de ser parágrafo e vira asserção.
+--     perfis, e aqui isso deixa de ser parágrafo e vira asserção. O card 5.9
+--     acrescentou o terceiro `join` interno, `metodo`/`materiais.ler`, que é o
+--     bloqueante nº 1 de docs/permissoes-matriz.md §7 — escrito em 01/09/2026 e
+--     nunca executado até aqui.
 --
 -- Roda com begin/rollback: nada daqui sobrevive para o próximo arquivo.
 -- =============================================================================
 
 begin;
-select plan(27);
+select plan(29);
 
 -- ===========================================================================
 -- 1. As premissas da fixture, que são o que dá sentido aos números abaixo
@@ -324,6 +327,46 @@ select cmp_ok(
                    'select 1 from public.v_bloco_vagas_semana where professor_nome is not null'),
   '>', 0::bigint,
   'contraprova: para quem tem professores.ler o nome VEM — senao a assercao acima passaria de graca');
+
+-- O terceiro `join` interno é em `metodo`, e ele tem a MESMA consequência do de
+-- `sala`. É o bloqueante nº 1 de docs/permissoes-matriz.md §7, aberto desde
+-- 01/09/2026 e até aqui só escrito: o dashboard do card 5.9 é o segundo
+-- consumidor desta view, a rota dele já exige `materiais.ler`, e o que faltava
+-- era a prova de que exigir é obrigatório — sem ela, alguém enxuga a matriz e o
+-- dashboard abre VAZIO, sem erro nenhum, com cara de escola sem turma.
+insert into public.perfil (unidade_id, codigo, nome)
+values (tests.unidade('ESCOLA_A'), 'SEM_MATERI', 'Turmas sem materiais (teste 095)');
+
+insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
+select tests.unidade('ESCOLA_A'), pe.id, pm.id
+  from public.perfil pe, public.permissao pm
+ where pe.unidade_id = tests.unidade('ESCOLA_A')
+   and pm.unidade_id = tests.unidade('ESCOLA_A')
+   and pe.codigo = 'SEM_MATERI'
+   and pm.codigo in ('turmas.ler', 'salas.ler', 'professores.ler');
+
+select tests.criar_usuario('semmateriais@escola-a.test', 'SEM_MATERI');
+
+select is(
+  tests.conta_como(tests.uid('semmateriais@escola-a.test'),
+                   'select 1 from public.v_bloco_vagas_semana'),
+  0::bigint,
+  'sem materiais.ler a grade vem VAZIA — o join interno em metodo (bloqueante 1 do card 2.4 §7)');
+
+insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
+select tests.unidade('ESCOLA_A'), pe.id, pm.id
+  from public.perfil pe, public.permissao pm
+ where pe.unidade_id = tests.unidade('ESCOLA_A')
+   and pm.unidade_id = tests.unidade('ESCOLA_A')
+   and pe.codigo = 'SEM_MATERI'
+   and pm.codigo = 'materiais.ler';
+
+select is(
+  tests.conta_como(tests.uid('semmateriais@escola-a.test'),
+                   'select 1 from public.v_bloco_vagas_semana'),
+  tests.conta_como(tests.uid('direcao@escola-a.test'),
+                   'select 1 from public.v_bloco_vagas_semana'),
+  'e volta INTEIRA com materiais.ler: a causa e a permissao, e nao outra coisa do perfil');
 
 -- ===========================================================================
 -- 8. Bloco inativo sai da grade (e continua na tabela)
