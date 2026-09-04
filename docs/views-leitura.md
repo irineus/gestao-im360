@@ -732,6 +732,7 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | `v_bloco_vagas_semana`, `fn_grade_semana` | **5.6** ✅ (grade) — o **5.9** (dashboard) ✅ é consumidor da view e **não criou objeto nenhum de banco** | 5 |
 | `v_bloco_alunos`, `fn_bloco_alunos` | **5.7** ✅ — ver §12.1 | 5 |
 | `v_estoque_atual`, `v_demanda_imediata_aluno`, `v_demanda_imediata`, `v_pedido_sugerido` | **6.4** ✅ — `20260904180000_views_estoque_demanda.sql`, as quatro sem uma linha de dado; o teste `095` cresceu de 29 para 86 asserções | 6 |
+| `v_aluno_trilha` | **6.6** ✅ — `20260904233000_view_aluno_trilha.sql`, view de listagem (§12.1); o teste nasceu em `053_aluno_trilha`, com 23 asserções | 6 |
 | `v_turma_modular_lotacao` | 7.4 | 7 |
 | `demanda_projetada`, `v_demanda_projetada` | 8.1 | 8 |
 | `v_pedido_sugerido` — troca do literal `0` pela parcela projetada | 8.2 | 8 |
@@ -739,9 +740,22 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 
 ### 12.1 Views de tela, que pertencem aos seus próprios cards
 
-Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6),
-`v_bloco_alunos` (5.7), `v_material_movimento` (6.7), `v_certificado_fila` (8.6). São views de
+Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6) ✅,
+`v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7), `v_certificado_fila` (8.6). São views de
 listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+
+⚠️ **`v_aluno_trilha` nasceu em 04/09/2026** (`20260904233000_view_aluno_trilha.sql`, card 6.6), e
+duas coisas dela valem para as duas que faltam. **(a) Ela não recopia número nenhum:** `proximo`
+repete o critério de `fn_trilha_proximo_material` como janela (a função responde por um aluno; a
+view, por todos de uma vez) e `saldo` **chama** `fn_saldo_material` em vez de somar de novo — a
+segunda implementação da soma já existe e é aquela, e uma terceira é o que o §4.1 proíbe. O teste
+`053` asserta que view e função concordam aluno a aluno, e essa asserção foi **vista vermelha** com
+o `filter (where not entregue)` removido. **(b) O `join` em `material` é interno de propósito:** sem
+`materiais.ler` a trilha vem VAZIA, e não "cheia sem o nome". Das duas reduções silenciosas do §3.4,
+esta é a menos pior — uma trilha com o nome em branco pareceria uma trilha curta, e a pessoa
+entregaria a apostila errada. Sem `estoque.ler` a redução é a **oposta**: vem cheia com saldo 0 em
+tudo, que é o motivo escrito de a rota 3b exigir a permissão. As duas estão asseridas no `053` §5,
+cada uma com contraprova.
 
 ~~`v_aluno_lista` (4.6)~~ — **não existe, e não vai existir.** A lista de alunos lê a tabela `aluno`
 e junta método, combo e turmas em memória: a view juntaria os três num objeto de banco a mais sem

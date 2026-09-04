@@ -44,6 +44,13 @@ final _telaDaRota = <String, Widget Function(GoRouterState)>{
       TelaTurmas(blocoId: estado.uri.queryParameters['bloco']),
   'pendencias': (_) => const TelaPendencias(),
   'administracao': (_) => const TelaAdministracao(),
+  // A rota 3b (card 2.4 §6) desde o card 6.6: `/alunos/:id/trilha` é o
+  // deep-link para a aba Trilha, e não uma tela separada. Ele existe como rota
+  // própria porque o conjunto mínimo dele tem `estoque.ler` a mais que o da
+  // ficha — quem chega aqui sem a permissão vê a tela "sem acesso" com o
+  // diagnóstico, em vez de a ficha abrir e a aba mentir com saldo 0.
+  'aluno_trilha': (estado) =>
+      FichaAluno(alunoId: estado.pathParameters['id']!, aba: 'trilha'),
 };
 
 /// Rotas filhas de uma tela — hoje só a ficha do aluno (`/alunos/:id`, card
@@ -75,7 +82,6 @@ const _cardDaRota = <String, String>{
   // O dashboard saiu daqui no card 5.9: a tela existe, e é **parcial** — quem
   // nomeia o card do que falta é a própria tela, em rodapé, e não um
   // placeholder que esconderia a metade já entregue.
-  'aluno_trilha': '6.6',
   'turmas_modular': '7.3',
   'compras': '6.8',
   'projecao': '8.5',

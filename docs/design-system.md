@@ -435,8 +435,10 @@ Regras: mensagens de **validação de campo** aparecem no campo; as demais em ba
   continua pendente e volta a ser a próxima quando houver estoque." + link "Ver pendência".
 - **Entrega `BLOQUEADA_SEM_ESTOQUE`:** "Nenhuma apostila da trilha tem estoque. A entrega não foi
   registrada; foi aberta uma pendência de compra." + link.
-- **Trilha fechada na entrega:** "Trilha concluída 🎓 — o checklist de certificado foi aberto."
-  + link para a aba Certificado.
+- **Trilha fechada na entrega:** "Trilha concluída — o checklist de certificado foi aberto."
+  + link para a aba Certificado. *(O 🎓 saiu em 04/09/2026, card 6.6 — divergência 13 do §11: o
+  glifo não existe em Inter/Roboto e a CSP não deixa baixar fonte de emoji, então ele viraria uma
+  caixa vazia. O portão que o pegou é o `texto_de_tela_test`.)*
 - **Virada REP sugerida (após lançar reposição):** "Com essa falta, a reposição não cabe mais no
   prazo — foi sugerida a virada para REP contínuo. Quem decide é você, na pendência." + link
   "Executar agora".
@@ -813,6 +815,12 @@ dizer com mais precisão:
 | 10 | **`Semantics` da célula sem dia e hora**: numa matriz, "Interativo, 8 de 10" não diz *quando*, e quem lê por leitor de tela não tem a coluna à vista | §8.5 |
 | 11 | **Jargão interno em texto de usuário** — referência a card do board e código de permissão entre crases. Virou portão automático em `app/test/texto_de_tela_test.dart`, junto com o de glifo fora de Inter/Roboto | §7 |
 | 12 | **Vocabulário**: o mesmo objeto era "turma" no cartão e "bloco" no rodapé da mesma tela. O nome é **bloco de horário** | §7 |
+
+### Divergência do card 6.6 (04/09/2026)
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 13 | **O 🎓 do §7.3** ("Trilha concluída 🎓 — o checklist de certificado foi aberto") | **Sai o emoji, fica a frase.** O app carrega Inter/Roboto, que não têm o glifo, e a CSP do card 3.8 impede o download de uma fonte de emoji: o que apareceria é uma **caixa vazia** no meio da única frase comemorativa do sistema. Quem reprovou foi o portão do próprio projeto — `app/test/texto_de_tela_test.dart`, criado pela correção 11 acima —, e ele reprovou **antes** de a frase chegar a alguém. O texto em vigor é "…foi entregue. Trilha concluída — o checklist de certificado foi aberto.". Quem quiser o ícone de volta usa um `Icon` do Material ao lado do texto, que é o que a correção 11 já mandava; o caractere não volta |
 
 ---
 
