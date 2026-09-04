@@ -10,7 +10,14 @@ Sistema web/mobile que substitui a planilha "Gestão Interativo" na gestão de a
 2. Ler a página Notion **"Gestão Interativo — Decisões vigentes"** (id `3cd2f3f4-b9b2-8106-95cd-fc8d937bd953`) via MCP do Notion — as **seções 1 a 6**, que são as vigentes. Em conflito com qualquer documento deste repositório, **a página do Notion vence** — ela é escrita no momento de cada decisão.
 3. Só então executar a tarefa. Para "próxima tarefa" / "concluí" / "status do board", usar a skill `proxima-tarefa` (`.claude/skills/proxima-tarefa/SKILL.md`).
 
-**O que NÃO é leitura de partida** (decidido em 04/09/2026, card 6.1,5, e é o que mantém esses dois passos baratos): o **log cronológico** mora em `docs/historico-marcos.md` e na subpágina **📜 Histórico de decisões** da página do Notion. Os dois se consultam **quando a tarefa pedir** — rastrear um card, um documento ou um defeito antigo —, e não no início da sessão. Antes desta separação os dois documentos de partida somavam cerca de 430 mil caracteres, e a maior parte era log: as sessões batiam no limite de leitura e fatiavam arquivo só para obedecer a esta regra. Nenhuma linha foi resumida ou apagada; o histórico mudou de lugar.
+**O que NÃO é leitura de partida** (decidido em 04/09/2026, cards 6.1,5 e 6.2,5, e é o que mantém esses dois passos baratos):
+
+- o **log cronológico**, que mora em `docs/historico-marcos.md` e na subpágina **📜 Histórico de decisões** da página do Notion;
+- o **detalhe das decisões** — raciocínio, medições e contraprovas —, que mora nas **subpáginas de detalhe por domínio** da própria página Decisões vigentes (Modelagem/views/projeção; Acesso, permissões e RLS; Alunos; Currículo e catálogo; Trilha e estoque; Alocação, blocos, grade e REP; Capacidade, salas, PCs e credenciais; Pendências, rotinas e testes; App, telas e design system).
+
+Os dois se consultam **quando a tarefa pedir** — mexendo em estoque, abre-se a subpágina de estoque; rastreando um card ou um defeito antigo, abre-se o histórico —, e não no início da sessão. O que a §2 da página guarda é o **enunciado** de cada regra (o que vale hoje e onde ela mora no código) mais a **armadilha concreta** que aquela regra já custou, com teto de **6 linhas por regra** escrito na própria seção.
+
+Por que a regra existe: antes desta separação os dois documentos de partida somavam cerca de 430 mil caracteres, e a maior parte era log — as sessões batiam no limite de leitura e fatiavam arquivo só para obedecer a esta regra. O card 6.1,5 tirou o log; a §2 continuava com 146 KB e ainda obrigava a fatiar, e o 6.2,5 desceu o raciocínio para as subpáginas. **Nenhuma linha foi resumida ou apagada em nenhum dos dois — mudou de lugar.**
 
 Se o MCP do Notion não estiver disponível na sessão, avisar Irineu antes de prosseguir — o board e as decisões vivem lá.
 
