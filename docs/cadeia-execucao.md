@@ -147,6 +147,47 @@ defeito de conteúdo: `$OutputEncoding` (o que se ESCREVE ao canalizar para um p
 **BOM**, que entrava na primeira linha entregue ao filtro, quebrava só o `JSON.parse` dela e a
 repassava crua no meio da narração. Daí o `New-Object System.Text.UTF8Encoding $false`.
 
+## 7.2 Orçamento da janela de 5 horas
+
+O limite não é de dinheiro, é de **utilização da janela**, e a CLI informa as duas pontas em todo
+evento: `utilization` (0 a 1) e `resetsAt`. Antes de **cada** card — inclusive o primeiro — o driver
+anuncia a conta:
+
+```
+  orçamento: janela em 41%, sobra 59%, reset em 238 min; card estimado em 11% / 31 min (4 cards medidos)
+  ✓ cabe: projeção 52% contra teto de 92%
+```
+
+A estimativa sai do **histórico próprio** (`cadeia.jsonl` guarda `janelaGasta` e `minutos` por card);
+enquanto não houver duas medidas, usa o padrão da corrida de 04/09/2026 (~11% e ~31 min).
+
+Não cabendo, o driver **espera em passos de 10 minutos** e recalcula. A conta é feita **antes** de
+abrir o card, nunca no meio: sessão que morre pela metade deixa branch criada, arquivos escritos e
+talvez PR aberto, e retomar isso automaticamente é adivinhação — parar antes de começar é
+determinístico.
+
+⚠️ **O caminho "a CLI recusou" não foi exercitado.** As três leituras observadas trouxeram o mesmo
+`resetsAt`, o que indica janela **fixa**; nesse caso o laço de 10 minutos apenas dorme até o reset. Se
+a janela for deslizante em algum plano, o mesmo laço aproveita a folga que for surgindo. As duas
+leituras são compatíveis com o código, mas nenhuma corrida chegou a bater no limite.
+
+## 7.3 Revisão de fase
+
+```powershell
+.\automacao\cadeia.ps1 -RevisarFase
+```
+
+Uma sessão que **não implementa nada**: lê as especificações vinculantes, compara com o que a fase
+entregou e deixa um **card de correções** no board, no molde do card 5.11. Encerra com `CADEIA_FIM`.
+
+Existe por um motivo medido: as quatro telas da fase 05 foram construídas por sessões que **não
+abriram o `design-system.md`** (nenhuma das quatro), e a de pendências não abriu especificação alguma.
+O CI ficou verde nas seis e sete grupos de defeitos passaram — `flutter test` não desenha glifo,
+`analyze` não lê português, e nenhum dos dois compara o entregue com o que foi pedido.
+
+O prompt manda **não procurar** o que já é portão automático (glifo fora de Inter/Roboto, jargão em
+texto de tela, portão de migrações, suítes): repetir a máquina custa turno e não acha nada.
+
 ## 8. O que a cadeia não faz
 
 - **Não promove para produção.** Continua sendo você, com o clique e o disparo manual do workflow.
