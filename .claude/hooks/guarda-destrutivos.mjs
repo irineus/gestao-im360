@@ -23,6 +23,28 @@
 // Qualquer erro interno sai com 0: um hook quebrado não pode virar um portão
 // que reprova tudo (falha aberta é ruim; falha que trava o projeto é pior, e
 // aqui o resto das proteções — allow/deny do settings — continua de pé).
+//
+// O QUE MUDOU EM 04/09/2026 (card 5.11)
+// -------------------------------------
+// Três buracos, os três achados ao usar o guarda de verdade:
+//
+//   1. `gh pr create -B main` passava — a checagem só olhava `--base`, e `-B` é
+//      a forma curta do mesmo argumento.
+//   2. `git push origin refs/heads/develop:refs/heads/main` passava — `main`
+//      vinha depois de `/`, e a classe só tinha espaço e `:`.
+//   3. **`gh pr merge <n>` de um PR cuja base é `main` passava**, e este era o
+//      buraco que importava: barrar só a ABERTURA do PR é meia proteção, já que
+//      o clique que aplica migração em produção é o MERGE. É também o único
+//      caso em que o comando não carrega a informação — `gh pr merge 110` não
+//      diz para onde vai —, então aqui o hook PERGUNTA ao `gh`. Ver [baseDoPr]
+//      para por que essa consulta falha aberta.
+//
+// E uma correção de documento, no mesmo dia e pela mesma causa: o `CLAUDE.md` e
+// a skill `proxima-tarefa` mandavam a sessão PERGUNTAR "promover agora?" com
+// `AskUserQuestion` — pergunta sem resposta possível, porque este arquivo
+// recusa a promoção em qualquer sessão. As duas passaram a mandar **avisar**.
+
+import { execFileSync } from 'node:child_process';
 
 let bruto = '';
 process.stdin.on('data', (p) => (bruto += p));
@@ -102,7 +124,10 @@ function recusar(trecho) {
     );
   }
 
-  if (/^git\s+push\b/.test(trecho) && /(^|\s|:)main(\s|$)/.test(trecho)) {
+  // ⚠️ A `/` entra na classe por causa de `git push origin
+  // refs/heads/develop:refs/heads/main`, que a forma anterior deixava passar:
+  // `main` vinha depois de `/`, e não de espaço ou `:`.
+  if (/^git\s+push\b/.test(trecho) && /(^|\s|:|\/)main(\s|$)/.test(trecho)) {
     return (
       'BLOQUEADO pelo guarda-destrutivos: `git push` mirando `main`.\n' +
       'A promoção develop → main é manual e de Irineu (aplica migração em PRODUÇÃO). ' +
@@ -110,12 +135,71 @@ function recusar(trecho) {
     );
   }
 
-  if (/^gh\s+pr\s+create\b/.test(trecho) && /--base(=|\s+)main(\s|$)/.test(trecho)) {
+  // `-B` é a forma curta de `--base` no `gh`, e a checagem anterior só olhava a
+  // longa (achado de 04/09/2026, card 5.11).
+  if (
+    /^gh\s+pr\s+create\b/.test(trecho) &&
+    /(--base(=|\s+)|-B\s+)main(\s|$)/.test(trecho)
+  ) {
     return (
-      'BLOQUEADO pelo guarda-destrutivos: `gh pr create --base main`.\n' +
+      'BLOQUEADO pelo guarda-destrutivos: `gh pr create` com base `main`.\n' +
       'PR de promoção para produção é aberto por Irineu, não por sessão automática.'
     );
   }
 
+  const numero = prDeMerge(trecho);
+  if (numero !== null && baseDoPr(numero) === 'main') {
+    return (
+      `BLOQUEADO pelo guarda-destrutivos: \`gh pr merge ${numero}\` — a base deste PR é \`main\`.\n` +
+      'Barrar só a ABERTURA do PR era meia proteção: o buraco é o PR que Irineu abriu e uma sessão ' +
+      'mergeia por conta própria, que é justamente o clique que aplica migração em PRODUÇÃO ' +
+      '(achado de 04/09/2026, card 5.11).\n' +
+      'PR contra `develop` continua liberado, e é o caminho normal de toda tarefa.'
+    );
+  }
+
   return null;
+}
+
+/**
+ * O número do PR de um `gh pr merge`, ou `null` quando o trecho não é isso.
+ *
+ * Sem o número não há como perguntar a base — `gh pr merge` sem argumento usa o
+ * PR da branch atual, e aí a consulta é feita sem número, que é o que
+ * [baseDoPr] faz quando recebe string vazia.
+ */
+function prDeMerge(trecho) {
+  const casa = /^gh\s+pr\s+merge\b\s*(\d+)?/.exec(trecho);
+  return casa ? (casa[1] ?? '') : null;
+}
+
+/**
+ * A base do PR, perguntada ao `gh`.
+ *
+ * ⚠️ **Falha aberta, de propósito.** O comando não carrega a base — `gh pr
+ * merge 110` não diz para onde vai —, então a única forma de saber é
+ * perguntar, e perguntar depende de rede. Se o `gh` falhar (offline, sem
+ * autenticação, GitHub lento), esta função devolve `null` e o merge passa.
+ *
+ * É a mesma escolha do cabeçalho deste arquivo, e pela mesma razão: um hook que
+ * reprova tudo quando a rede oscila mata a cadeia do card 5.5,5 no primeiro
+ * card, e o merge em `develop` — que é o caso comum, dezenas por semana — não
+ * pode depender de uma consulta de rede dar certo. O que fica protegido é o
+ * caso real: a sessão que sabe o número do PR de promoção e tenta mergeá-lo com
+ * a rede funcionando. Quem promove continua sendo Irineu; isto é a rede de
+ * segurança, não a regra.
+ */
+function baseDoPr(numero) {
+  try {
+    const args = ['pr', 'view'];
+    if (numero) args.push(numero);
+    args.push('--json', 'baseRefName', '--jq', '.baseRefName');
+    return execFileSync('gh', args, {
+      encoding: 'utf8',
+      timeout: 10_000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
+  }
 }
