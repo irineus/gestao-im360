@@ -220,5 +220,5 @@ class _NotaDoQueFalta extends StatelessWidget {
 }
 
 const textoRestanteDoDashboard =
-    'Alunos por método, conclusões por semestre e tipos por bloco entram no '
-    'card 8.7; a lotação das turmas Modular, no card 7.4.';
+    'Alunos por método, conclusões por semestre e tipos por bloco chegam numa '
+    'próxima versão, junto com a lotação das turmas Modular.';

@@ -326,7 +326,7 @@ String situacaoUsuario(UsuarioAdmin usuario) => !usuario.ativo
 String apoioUsuario(UsuarioAdmin usuario, Map<String, Perfil> perfisPorId) {
   if (!usuario.ativo) return 'Desativado';
   final perfis = usuario.semPerfil
-      ? '⚠ sem perfil'
+      ? 'sem perfil'
       : rotuloPerfis(usuario, perfisPorId);
   return usuario.convitePendente ? '$perfis · convite pendente' : perfis;
 }

@@ -280,7 +280,7 @@ class _BlocoVirada extends ConsumerWidget {
         const TituloSecao(
           texto: 'Situação de reposição',
           apoio:
-              'O critério do card 2.5: o débito cabe no prazo, ou a reposição '
+              'O débito de aulas cabe no prazo, ou a reposição '
               'vira contínua? A decisão é sua — o sistema só sugere.',
         ),
         if (situacao == null)
@@ -325,13 +325,13 @@ class _BlocoVirada extends ConsumerWidget {
 }
 
 const avisoVereditoManter =
-    'A reposição foi registrada. O critério do card 2.5 continua como estava — '
+    'A reposição foi registrada. A situação do débito continua como estava — '
     'a sugestão desta pendência não mudou.';
 
 const avisoSemTurmasLer =
     'Esta pendência é sobre reposição, e o seu perfil não lê turmas. Os números '
-    'do débito e as reposições previstas só aparecem para quem tem '
-    '`turmas.ler`.';
+    'do débito e as reposições previstas só aparecem para quem pode ver '
+    'turmas. Peça essa permissão a quem administra o acesso.';
 
 const semReposicaoPrevista =
     'Nenhuma reposição prevista para este aluno. As aulas em aberto continuam '

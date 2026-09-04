@@ -140,7 +140,7 @@ class TelaPendencias extends ConsumerWidget {
 /// texto diz isso: sem ele, uma tela sem linhas seria indistinguível de uma
 /// rotina que não rodou — e é justamente essa confusão que a pendência
 /// `ROTINA_FALHOU` existe para desfazer (card 5.5 (d)).
-const vazioPendencias = 'Nenhuma pendência aberta. 🎉';
+const vazioPendencias = 'Nenhuma pendência aberta.';
 const vazioPendenciasFiltro = 'Nenhuma pendência com esses filtros.';
 
 /// Uma linha de rótulo e valor do painel de detalhe — o par que a central

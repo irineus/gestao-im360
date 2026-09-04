@@ -228,7 +228,7 @@ class _SituacaoRep extends ConsumerWidget {
         const TituloSecao(
           texto: 'Situação de reposição',
           apoio:
-              'O critério do card 2.5: o débito cabe no prazo, ou a reposição '
+              'O débito de aulas cabe no prazo, ou a reposição '
               'vira contínua? Quem decide é uma pessoa, pela central de '
               'pendências.',
         ),

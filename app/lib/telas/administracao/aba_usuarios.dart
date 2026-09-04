@@ -105,7 +105,7 @@ class AbaUsuarios extends ConsumerWidget {
         ColunaIm360(
           titulo: 'Perfis',
           texto: (u) => u.ativo && u.semPerfil
-              ? '⚠ sem perfil'
+              ? 'sem perfil'
               : rotuloPerfis(u, perfisPorId),
           flex: 3,
           larguraMin: 160,

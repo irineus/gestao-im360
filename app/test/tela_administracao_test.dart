@@ -73,7 +73,7 @@ void main() {
       await montar(tester, repositorio: AdministracaoFalso.fixture());
       expect(find.text('Débora Lima'), findsOneWidget);
       expect(find.text('SECRETARIA'), findsOneWidget);
-      expect(find.text('⚠ sem perfil'), findsOneWidget);
+      expect(find.text('sem perfil'), findsOneWidget);
       expect(find.text(avisoSemPerfil(1)), findsOneWidget);
       expect(find.text('Sem perfil (1)'), findsOneWidget);
       // Desativado fica fora por padrão ("Só ativos").
