@@ -62,7 +62,20 @@ param(
     # `.claude/settings.json`, de propósito: assim ela vale só para a cadeia, e
     # a sessão interativa continua perguntando como sempre. Menos privilégio, e
     # no arquivo de quem usa.
-    [string[]]$FerramentasPermitidas = @('mcp__claude_ai_Notion')
+    [string[]]$FerramentasPermitidas = @('mcp__claude_ai_Notion'),
+
+    # Modelo das sessões. Vazio = o padrão da CLI (hoje Opus 5, que foi o que
+    # rodou a primeira corrida). Aceita alias ('opus', 'fable', 'sonnet').
+    [string]$Modelo,
+
+    # Em vez de executar cards, abre UMA sessão de revisão da fase inteira.
+    # Ver `automacao/prompt-revisao-fase.md` e o §7.2 de docs/cadeia-execucao.md.
+    [switch]$RevisarFase,
+
+    # Teto de utilização da janela de 5 h. Acima disto o driver não começa card
+    # novo — espera. 0.92 deixa folga para a estimativa errar para menos sem
+    # matar a sessão no meio, que é o desfecho caro.
+    [double]$TetoJanela = 0.92
 )
 
 $ErrorActionPreference = 'Stop'
@@ -83,7 +96,15 @@ $ErrorActionPreference = 'Stop'
 $RaizRepo   = Split-Path -Parent $PSScriptRoot
 $DirLogs    = Join-Path $PSScriptRoot 'logs'
 $ArqHistoria= Join-Path $DirLogs 'cadeia.jsonl'
-$ArqPrompt  = if ($Prompt) { $Prompt } else { Join-Path $PSScriptRoot 'prompt-card.md' }
+$ArqLimite  = Join-Path $DirLogs 'limite.json'   # último rate_limit_info visto
+$ArqPrompt  = if ($Prompt) { $Prompt }
+              elseif ($RevisarFase) { Join-Path $PSScriptRoot 'prompt-revisao-fase.md' }
+              else { Join-Path $PSScriptRoot 'prompt-card.md' }
+
+# A revisão é UMA sessão que olha a fase inteira, não uma por card. Ela não
+# mergeia nada: encerra com `CADEIA_FIM` depois de criar o card de correções,
+# e por isso reusa o caminho de parada que já existe, sem laço.
+if ($RevisarFase) { $MaxCards = 1 }
 $ExecutorSessao = Join-Path $PSScriptRoot 'executar-sessao.mjs'
 
 # O `claude` do PATH é um atalho `.ps1`/`.cmd` do npm. O executor prefere o
@@ -303,8 +324,17 @@ function ExecutarCard($indice) {
         # PowerShell só CONSOME a saída — o lado que ele sempre transmitiu linha
         # a linha. O executor devolve o código do `claude`, ou 3 quando a sessão
         # termina sem evento `result`.
-        & node $ExecutorSessao $exeClaude $ArqPrompt $arqSaida $arqBruto @FerramentasPermitidas |
-            ForEach-Object { Write-Host ([string]$_) }
+        $extras = @()
+        if ($Modelo) { $extras += @('--model', $Modelo) }
+        & node $ExecutorSessao $exeClaude $ArqPrompt $arqSaida $arqBruto $ArqLimite `
+               @extras @FerramentasPermitidas |
+            ForEach-Object {
+                # O executor emite `Cor<TAB>texto`. Ver o comentário do `COR` em
+                # executar-sessao.mjs: ANSI sairia cru por esta pipeline.
+                $partes = ([string]$_) -split "`t", 2
+                if ($partes.Count -eq 2) { Write-Host $partes[1] -ForegroundColor $partes[0] }
+                else { Write-Host ([string]$_) }
+            }
         $codigo = $LASTEXITCODE
     } finally {
         Pop-Location
@@ -327,6 +357,113 @@ function ExecutarCard($indice) {
 
     $veredito = ([regex]::Match($linha, '>>>\s+(\w+)')).Groups[1].Value
     return @{ veredito = $veredito; linha = $linha.Trim(); saida = $arqSaida }
+}
+
+# ---------------------------------------------------------------------------
+# Orçamento da janela de 5 horas
+#
+# O limite não é de dinheiro, é de UTILIZAÇÃO da janela — e a CLI informa as
+# duas pontas em todo evento: `utilization` (0 a 1) e `resetsAt`. Medido na
+# corrida de 04/09/2026, subindo 0,40 → 0,51 → 0,72 conforme os cards passavam.
+#
+# A conta é feita ANTES de abrir o card, nunca depois: sessão que morre no meio
+# deixa branch criada, arquivos escritos e talvez PR aberto, e retomar isso
+# automaticamente é adivinhação. Parar antes de começar é determinístico.
+#
+# ⚠️ As três leituras observadas trouxeram o MESMO `resetsAt`, o que indica
+# janela FIXA e não deslizante — esperar até o reset é exato. Ainda assim a
+# reavaliação é de 10 em 10 minutos, como Irineu pediu: se a janela for
+# deslizante em algum plano, o laço aproveita a folga que for surgindo; se for
+# fixa, ele apenas dorme até o reset em passos. Custa nada nos dois casos.
+# ---------------------------------------------------------------------------
+
+# Consumo médio de janela e duração por card, a partir do histórico.
+function MediaPorCard {
+    $medidos = @()
+    if (Test-Path $ArqHistoria) {
+        foreach ($l in Get-Content $ArqHistoria -Encoding UTF8) {
+            if (-not $l.Trim()) { continue }
+            try { $r = $l.TrimStart([char]0xFEFF) | ConvertFrom-Json } catch { continue }
+            if ($r.veredito -eq 'CARD_OK' -and $r.janelaGasta -gt 0) {
+                $medidos += [pscustomobject]@{ janela = [double]$r.janelaGasta; minutos = [double]$r.minutos }
+            }
+        }
+    }
+
+    if ($medidos.Count -ge 2) {
+        return @{
+            janela  = ($medidos | Measure-Object janela  -Average).Average
+            minutos = ($medidos | Measure-Object minutos -Average).Average
+            base    = "$($medidos.Count) card(s) medido(s)"
+        }
+    }
+
+    # Padrão até haver medida própria: o que a corrida de 04/09/2026 mostrou —
+    # ~0,11 de janela e ~31 min por card, seis cards de 5.6 a 6.1.
+    return @{ janela = 0.11; minutos = 31.0; base = 'padrão da corrida de 04/09 (sem medida local ainda)' }
+}
+
+# Lê o último estado da janela. Devolve $null quando ainda não há leitura.
+function EstadoJanela {
+    if (-not (Test-Path $ArqLimite)) { return $null }
+    try {
+        $j = Get-Content $ArqLimite -Raw -Encoding UTF8 | ConvertFrom-Json
+        $uso = $j.unifiedWindows.five_hour.utilization
+        if ($null -eq $uso) { $uso = 0 }
+        $reset = if ($j.resetsAt) { [DateTimeOffset]::FromUnixTimeSeconds([long]$j.resetsAt).LocalDateTime } else { $null }
+        return @{ uso = [double]$uso; reset = $reset; status = $j.status }
+    } catch { return $null }
+}
+
+# Anuncia a conta e devolve $true quando o card pode começar agora.
+function CabeNaJanela($indice) {
+    $m = MediaPorCard
+    $e = EstadoJanela
+
+    if ($null -eq $e) {
+        Escrever ("  orçamento: sem leitura da janela ainda — estimativa {0:P0} e {1:N0} min por card ({2})" -f $m.janela, $m.minutos, $m.base) 'DarkGray'
+        return $true
+    }
+
+    $sobra = 1.0 - $e.uso
+    $ateReset = if ($e.reset) { [int]([Math]::Max(0, ($e.reset - (Get-Date)).TotalMinutes)) } else { $null }
+    $projetado = $e.uso + $m.janela
+
+    $txtReset = if ($null -ne $ateReset) { "reset em {0} min" -f $ateReset } else { 'reset desconhecido' }
+    Escrever ("  orçamento: janela em {0:P0}, sobra {1:P0}, {2}; card estimado em {3:P0} / {4:N0} min ({5})" -f `
+              $e.uso, $sobra, $txtReset, $m.janela, $m.minutos, $m.base) 'DarkGray'
+
+    if ($projetado -le $TetoJanela) {
+        Escrever ("  ✓ cabe: projeção {0:P0} contra teto de {1:P0}" -f $projetado, $TetoJanela) 'DarkGray'
+        return $true
+    }
+
+    Escrever ("  ⏸ não cabe: projeção {0:P0} passaria do teto de {1:P0}." -f $projetado, $TetoJanela) 'Yellow'
+    return $false
+}
+
+# Espera em passos de 10 min até o card caber (ou até o reset chegar).
+function EsperarJanela($indice) {
+    while ($true) {
+        $e = EstadoJanela
+        if ($null -eq $e) { return }   # sem leitura, não há o que esperar
+
+        $ateReset = if ($e.reset) { ($e.reset - (Get-Date)).TotalMinutes } else { 0 }
+        if ($ateReset -le 0) {
+            # A janela virou. A utilização real vem no primeiro evento da
+            # sessão seguinte; aqui só se registra que a espera acabou.
+            Escrever '  ▶ janela reiniciada — retomando.' 'Green'
+            try { Remove-Item $ArqLimite -Force } catch { }
+            return
+        }
+
+        $passo = [Math]::Min(10, [Math]::Ceiling($ateReset))
+        Escrever ("  ⏳ aguardando {0} min (faltam {1:N0} min para o reset) — reavaliação às {2:HH:mm}" -f `
+                  $passo, $ateReset, (Get-Date).AddMinutes($passo)) 'Yellow'
+        Start-Sleep -Seconds ([int]($passo * 60))
+
+        if (CabeNaJanela $indice) { return }
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -378,8 +515,24 @@ for ($i = 1; $i -le $MaxCards; $i++) {
     $shaAntes = ShaDevelop
     Titulo "Card $i de no máximo $MaxCards"
 
+    # A conta sai ANTES de todo card, inclusive o primeiro — quem acompanha
+    # precisa saber o que vai acontecer, não descobrir depois.
+    if (-not (CabeNaJanela $i)) { EsperarJanela $i }
+
+    $eAntes = EstadoJanela
+    $t0 = Get-Date
     $r = ExecutarCard $i
-    $registro = @{ indice = $i; veredito = $r.veredito; linha = $r.linha; saida = $r.saida }
+    $minutos = [Math]::Round(((Get-Date) - $t0).TotalMinutes, 1)
+    $eDepois = EstadoJanela
+
+    $registro = @{ indice = $i; veredito = $r.veredito; linha = $r.linha; saida = $r.saida; minutos = $minutos }
+
+    # Delta negativo = a janela virou no meio do card. Não é medida útil e
+    # entraria na média puxando-a para baixo, então fica de fora.
+    if ($eAntes -and $eDepois) {
+        $gasto = $eDepois.uso - $eAntes.uso
+        if ($gasto -gt 0) { $registro['janelaGasta'] = [Math]::Round($gasto, 4) }
+    }
 
     switch ($r.veredito) {
         'CARD_OK' {
