@@ -43,7 +43,12 @@ param(
     [switch]$Verificar,
 
     # Mostra o que faria, sem abrir sessão nenhuma.
-    [switch]$Simular
+    [switch]$Simular,
+
+    # Arquivo com o texto que cada sessão recebe. Existe para rodar um card
+    # específico e para exercitar a mecânica do driver (invocação, captura,
+    # leitura do veredito, conferência do SHA) sem gastar um card de verdade.
+    [string]$Prompt
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,7 +57,7 @@ $ErrorActionPreference = 'Stop'
 $RaizRepo   = Split-Path -Parent $PSScriptRoot
 $DirLogs    = Join-Path $PSScriptRoot 'logs'
 $ArqHistoria= Join-Path $DirLogs 'cadeia.jsonl'
-$ArqPrompt  = Join-Path $PSScriptRoot 'prompt-card.md'
+$ArqPrompt  = if ($Prompt) { $Prompt } else { Join-Path $PSScriptRoot 'prompt-card.md' }
 
 function Escrever($texto, $cor = 'Gray') { Write-Host $texto -ForegroundColor $cor }
 function Titulo($texto) { Write-Host ''; Write-Host "── $texto" -ForegroundColor Cyan }
@@ -97,6 +102,52 @@ function PreVoo {
 
     if (-not (Test-Path $ArqPrompt)) { $problemas += "Falta $ArqPrompt (o texto que cada sessão recebe)." }
 
+    # ⚠️ Enquanto o diretório não for CONFIADO, o CLI IGNORA as entradas de
+    # `permissions.allow` do `.claude/settings.json` inteiras — e sessão headless
+    # não tem a quem pedir aprovação. O card falharia por permissão parecendo
+    # defeito de código. Medido em 03/09/2026, na primeira corrida com a CLI
+    # recém-instalada: "Ignoring 22 permissions.allow entries".
+    $arqCli = Join-Path $HOME '.claude.json'
+    if (Test-Path $arqCli) {
+        try {
+            $cfg = Get-Content $arqCli -Raw -Encoding UTF8 | ConvertFrom-Json
+            $chave = ($RaizRepo -replace '\\', '/')
+            $proj = $cfg.projects.PSObject.Properties[$chave]
+            if (-not $proj -or -not $proj.Value.hasTrustDialogAccepted) {
+                $problemas += "Diretorio nao confiado pela CLI: o allow do .claude/settings.json seria IGNORADO e a sessao headless travaria pedindo permissao. Rode 'claude' interativamente aqui uma vez e aceite o dialogo de confianca."
+            }
+        } catch {
+            $problemas += "Nao foi possivel ler $arqCli para conferir a confianca do diretorio: $($_.Exception.Message)"
+        }
+    }
+
+    # ⚠️ SONDA DE VERDADE, e ela existe por um motivo medido: `claude -p` sem
+    # login imprime "Not logged in · Please run /login" e **sai com código 0**
+    # (03/09/2026). Sem esta sonda a cadeia abriria a sessão do card, receberia
+    # isso, não acharia veredito e reportaria SEM_VEREDITO — diagnóstico
+    # indireto para um problema de um minuto. Custa uma chamada mínima por
+    # corrida, contra até 30 cards; e de quebra prova que a CLI responde, não só
+    # que existe no PATH.
+    $eap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $sonda = (& claude -p 'Responda apenas com a palavra PRONTO, sem mais nada.' 2>&1 | Out-String)
+    } catch {
+        $sonda = "falhou: $($_.Exception.Message)"
+    } finally { $ErrorActionPreference = $eap }
+
+    if ($sonda -notmatch 'PRONTO') {
+        # O aviso de confiança e o rastro do PowerShell vêm ANTES do motivo real
+        # e o empurrariam para fora do resumo — a confiança já tem linha própria
+        # acima, e o que falta descobrir aqui é a outra causa.
+        $ruido = 'Ignoring \d+ permissions|Run Claude Code interactively|hasTrustDialogAccepted|^\s*\+|CategoryInfo|FullyQualifiedErrorId|^\S+\.ps1:\d+|^No .*:\d+ caractere'
+        $resumo = (($sonda -split "`r?`n" |
+                    Where-Object { $_.Trim() -and $_ -notmatch $ruido } |
+                    Select-Object -First 2) -join ' | ')
+        if (-not $resumo) { $resumo = '(sem saida legivel)' }
+        $problemas += "A CLI nao respondeu a sonda (login? sessao expirada?). Devolveu: $resumo"
+    }
+
     return $problemas
 }
 
@@ -106,21 +157,44 @@ function PreVoo {
 function ExecutarCard($indice) {
     $prompt = Get-Content -Path $ArqPrompt -Raw -Encoding UTF8
     $carimbo = Get-Date -Format 'yyyyMMdd-HHmmss'
+    if (-not (Test-Path $DirLogs)) { New-Item -ItemType Directory -Path $DirLogs -Force | Out-Null }
     $arqSaida = Join-Path $DirLogs "card-$carimbo.log"
 
     Escrever "  sessão $indice — saída em $arqSaida"
     if ($Simular) { return @{ veredito = 'SIMULADO'; linha = '(simulação)'; saida = $arqSaida } }
+
+    # ⚠️ `$ErrorActionPreference = 'Stop'` (o padrão deste script) transforma
+    # QUALQUER linha que o `claude` escreva em stderr num erro TERMINANTE, e o
+    # driver morre antes de gravar uma linha do log. Medido em 03/09/2026: o CLI
+    # avisou sobre a confiança do diretório, o `2>&1` transformou o aviso em
+    # NativeCommandError e a corrida acabou ali, com o log vazio. Um CLI escreve
+    # aviso em stderr o tempo todo — parar por causa disso seria trocar toda a
+    # cadeia por um diagnóstico que nem é do card.
+    $eapAnterior = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
 
     Push-Location $RaizRepo
     try {
         # `--permission-mode acceptEdits` aceita edição de arquivo; o que a
         # sessão pode RODAR continua vindo do allow/deny do .claude/settings.json
         # e do hook guarda-destrutivos.mjs. Nada aqui afrouxa isso.
-        & claude -p $prompt --permission-mode acceptEdits 2>&1 |
-            Tee-Object -FilePath $arqSaida -Encoding UTF8 |
-            Out-Host
+        #
+        # ⚠️ NÃO usar `Tee-Object -Encoding`: o parâmetro só existe no PowerShell
+        # 6+, e no 5.1 (o que vem no Windows) o bind falha com
+        # NamedParameterNotFound ANTES de a sessão abrir. Medido em 03/09/2026,
+        # na primeira tentativa de rodar a cadeia. O ForEach abaixo faz as duas
+        # coisas que o Tee faria — mostrar e gravar — e grava em UTF-8 de
+        # verdade, que é o que o Get-Content da leitura do veredito espera.
+        & claude -p $prompt --permission-mode acceptEdits 2>&1 | ForEach-Object {
+            $linha = [string]$_
+            Write-Host $linha
+            Add-Content -Path $arqSaida -Value $linha -Encoding UTF8
+        }
         $codigo = $LASTEXITCODE
-    } finally { Pop-Location }
+    } finally {
+        Pop-Location
+        $ErrorActionPreference = $eapAnterior
+    }
 
     if ($codigo -ne 0) {
         return @{ veredito = 'ERRO_PROCESSO'; linha = "claude saiu com código $codigo"; saida = $arqSaida }
@@ -166,7 +240,7 @@ function ShaDevelop {
 
 # ---------------------------------------------------------------------------
 Titulo 'Pré-voo'
-$problemas = PreVoo
+$problemas = @(PreVoo)
 if ($problemas.Count -gt 0) {
     foreach ($p in $problemas) { Escrever "  ✗ $p" 'Red' }
     Escrever ''
