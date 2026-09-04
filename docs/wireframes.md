@@ -315,7 +315,10 @@ Rota: `alunos.ler + materiais.ler` (aba Trilha soma `estoque.ler`). Perfis: todo
 ```
 
 - Fonte: `v_aluno_trilha` (card 6.6) + saldo do próximo via `v_estoque_atual` (por isso a aba exige
-  `estoque.ler`). O ritmo vem de `fn_ritmo_aluno` (ajuste não bloqueante do card de Ordem 5).
+  `estoque.ler`). *(Implementada em 04/09/2026: a view traz o saldo por `fn_saldo_material`, que é a
+  mesma soma de `v_estoque_atual` — a tela lê um objeto só, e não dois.)* O ritmo vem de
+  `fn_ritmo_aluno` (ajuste não bloqueante do card de Ordem 5) — **e ela ainda não existe**: é do
+  card 8.1, e a linha "ritmo: 1 apostila/23 dias" está fora da aba até lá (divergência 15 do §17).
 - **[Registrar entrega]** (`estoque.lancar_saida`) chama `fn_registrar_entrega` e reage aos três
   status de `tp_entrega_resultado` (card 2.2 §6.1):
   - `ENTREGUE` → confirmação com o próximo material já recalculado;
@@ -880,6 +883,15 @@ que se resolve em silêncio volta como defeito na revisão seguinte.
 | # | Divergência | Como ficou |
 |---|---|---|
 | 14 | **`[Criar pedido…]` (§10.1) é guardado por `compras.criar`** | `fn_pedido_criar` exige **`compras.criar` E `compras.ler`**. O número do pedido é derivado da leitura dos pedidos da unidade: sob RLS, quem não lê conta zero e repete um número já usado — a redução silenciosa do `views-leitura.md` §3.4 chegando à tela como `23505` cru. Exigir explicitamente troca isso por `SEM_PERMISSAO`, que é uma frase que se entende. Na matriz inicial ninguém tem `compras.criar` sem `compras.ler`, então **a tela não muda**; muda o modo de falha. É a mesma regra que o card 2.4 (g) já aplica às rotas: guardar pelo conjunto mínimo que faz a tela mostrar número certo, não pela permissão óbvia |
+
+### Divergências do card 6.6 (04/09/2026) — a aba Trilha
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 15 | **A linha "ritmo: 1 apostila/23 dias"** (§6.3) depende de `fn_ritmo_aluno` | **Fora da aba até o card 8.1.** A função é dele (`docs/projecao-demanda.md` §4.3, item 9 do mapa de ajustes, marcado "não bloqueante"), e este card não a antecipa: implementá-la aqui seria trazer meia cascata da projeção para dentro de uma tela, e o número sairia diferente do que o 8.1 vai publicar. Quando ela nascer, entra uma linha no cabeçalho — a aba já tem o lugar |
+| 16 | **`[Editar trilha]` "entra em modo de reordenação (arrastar)"** (§6.3) | O modo de edição existe; a reordenação é por **setas** (subir/descer) mais um "Mover para…" com a posição de destino. Arrastar dentro de um `TabBarView` que já rola disputa o gesto vertical com a rolagem numa lista de 14 a 17 itens, o alvo de arraste ficaria abaixo dos 44 px do design-system §8.4, e **arrastar não tem equivalente por teclado**, que o §8.3 exige no desktop. `fn_trilha_reordenar` recebe uma POSIÇÃO (card 6.2 §5.3) — é exatamente o que a seta produz, e o arraste teria de traduzir pixels para ela |
+| 17 | **`[Estornar]` "oferecido nas entregas recentes"** (§6.3) | Aparece em **toda** entrega com movimento vinculado. "Recente" não tem definição no modelo — não há coluna, parâmetro nem regra que a fixe —, e escondê-lo nas antigas deixaria uma correção **sem tela nenhuma**, que é o mesmo buraco que o card 5.7 fechou no bloco desativado. Estornar duas vezes continua impossível (`movimento_estorno_uk` + `MOVIMENTO_JA_ESTORNADO`, card 6.3). Entrega **sem** movimento vinculado — a fixture do 6.1 e a importação do 9.1 produzem essas linhas — mantém o botão **visível e desabilitado com o motivo**, pela decisão 1 |
+| 18 | **`/alunos/:id/trilha`** era a rota 3b sem tela | Virou o **deep-link da aba**: abre a ficha já em Trilha, guardada pelo conjunto da 3b (`alunos.ler` + `materiais.ler` + `estoque.ler`). Ela existe como rota própria porque exige `estoque.ler` a mais que a ficha — quem chega sem a permissão vê o diagnóstico em vez de a aba abrir mentindo com saldo 0. O placeholder "card 6.6" saiu do roteador |
 
 Nenhum ajuste bloqueante em documento anterior: este card consome os contratos fechados e não
 precisou corrigi-los.
