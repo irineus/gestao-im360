@@ -519,9 +519,15 @@ select is(
   'a trilha do aluno Modular e a sequencia de livros do curso da turma dele');
 
 -- E a junta de onde a projeção Modular sai (card 8.1, docs/projecao-demanda.md
--- §5.4): o cronograma da turma aponta para o MESMO material da trilha. São três
--- módulos sobre um livro só — a forma do Modular —, e é por isso que a
--- necessidade do livro nasce no PRIMEIRO módulo dele, não em cada um.
+-- §5.4): o cronograma da turma aponta para os MESMOS materiais da trilha. São
+-- três módulos sobre DOIS livros — um livro dura mais de um módulo, que é a
+-- forma do Modular —, e é por isso que a necessidade do livro nasce no PRIMEIRO
+-- módulo dele, não em cada um.
+--
+-- ⚠️ Eram "3 sobre 1" até o card 8.1, e a mudança é o que torna o degrau MODULAR
+--    alcançável: com um livro só, todo aluno Modular tinha exatamente um item
+--    pendente, ficava em k = 1 e nunca chegava a v_projecao_aluno, que só conta
+--    do SEGUNDO item em diante (a disjunção com a demanda imediata).
 select is(
   (select format('%s modulo(s) sobre %s livro(s)',
                  count(*), count(distinct m.material_id))
@@ -530,8 +536,8 @@ select is(
     where tm.turma_id = (select turma_a from t_ids)
       and m.material_id in (select am.material_id from public.aluno_material am
                              where am.aluno_id = (select eduarda from t_ids))),
-  '3 modulo(s) sobre 1 livro(s)',
-  'o cronograma da turma aponta para o mesmo livro da trilha — a junta da projecao');
+  '3 modulo(s) sobre 2 livro(s)',
+  'o cronograma da turma aponta para os mesmos livros da trilha — a junta da projecao');
 
 reset role;
 

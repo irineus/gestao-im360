@@ -30,10 +30,16 @@ select plan(37);
 -- ===========================================================================
 -- 1. A fixture chegou (camada `trilha_estoque` do card 3.4.5)
 -- ===========================================================================
--- O quadro do card 2.8 §4.2 pede seis materiais com saldos "0, 0, 1, n, n, n", e
--- os saldos são DERIVADOS: cada um é a soma dos movimentos que o produziram.
--- Asserir a soma, e não uma coluna, é o que faz este teste medir a decisão do
--- projeto (estoque atual nunca é coluna) em vez de medir o seed.
+-- O quadro do card 2.8 §4.2 pede saldos "0, 0, 1, n, n, n", e os saldos são
+-- DERIVADOS: cada um é a soma dos movimentos que o produziram. Asserir a soma, e
+-- não uma coluna, é o que faz este teste medir a decisão do projeto (estoque
+-- atual nunca é coluna) em vez de medir o seed.
+--
+-- ⚠️ SÃO OITO MATERIAIS DESDE O CARD 8.1 (INTERATIVO 04 e MODULAR 02, os dois
+--    com entrada positiva no seed). O que o quadro fixa continua valendo e é o
+--    que esta linha vigia: DOIS zeros — e os dois escolhidos, INTERATIVO 02
+--    (caso REORDENADA) e INGLES 02 (caso BLOQUEADA_SEM_ESTOQUE) — e UM saldo 1,
+--    o do último exemplar disputado pela corrida do card 6.3.
 select is(
   (select string_agg(saldo::text, ',' order by metodo, codigo) from (
      select me.codigo as metodo, m.codigo,
@@ -43,8 +49,8 @@ select is(
        left join public.movimento_estoque mv on mv.material_id = m.id
       where m.unidade_id = tests.unidade('ESCOLA_A')
       group by me.codigo, m.codigo) s),
-  '10,0,20,0,1,10',
-  'os seis materiais tem os saldos 0/0/1/n/n/n do card 2.8 §4.2, somados dos movimentos');
+  '10,0,20,0,1,3,10,6',
+  'os oito materiais tem os saldos 0/0/1/n/n/n/n/n do card 2.8 §4.2, somados dos movimentos');
 
 -- O saldo 1 só é o teste de concorrência do card 6.3 se o último exemplar for o
 -- PRÓXIMO de mais de uma pessoa. Com um aluno só, as duas sessões da corrida

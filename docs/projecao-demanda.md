@@ -852,14 +852,44 @@ perfis que o card 2.4 autorizou a ver a tela.
 | 1 | `fn_param_int`/`fn_param_txt` como `security definer` com `search_path` fixo | infraestrutura | 3.4 | **sim** (era "alta" no card 2.4) |
 | 2 | Nove parâmetros novos no seed (§3) | seed | 3.6 | **sim** — sem eles a projeção roda pelos defaults do código, não pelo que a escola decidiu |
 | 3 ✅ | `TURMA_MODULAR_SEM_CRONOGRAMA` no `check` de `pendencia.tipo` | migração de pendências | ~~5.5~~ → **7.2** ✅ (05/09/2026) | **sim** — sem o tipo, o `insert` da rotina falha e vira `ROTINA_FALHOU` |
-| 4 | Políticas de RLS de `demanda_projetada` por `fn_contexto_rotina()` (§7.1) | migração da projeção | 8.1 | **sim** — sem elas a rotina não escreve (`force` RLS) |
-| 5 | Tabela `demanda_projetada_hist` + políticas (§7.2) | migração da projeção | 8.1 | não (mas sem ela o card 11.2 vira opinião) |
-| 6 | Card 2.2 §2.2 diz que "cada `rt_*` itera unidades"; §11 diz que `rt_diaria` itera e chama as sub-rotinas. Adotado o §11: as `rt_*` operam na unidade do contexto | redação da especificação | 2.2 / 8.1 | não |
-| 7 | Índice `demanda_projetada (unidade_id, mes)` — a leitura do pedido sugerido filtra por mês | migração da projeção | 8.1 | não |
+| 4 ✅ | Políticas de RLS de `demanda_projetada` por `fn_contexto_rotina()` (§7.1) | migração da projeção | **8.1** ✅ (05/09/2026) | **sim** — sem elas a rotina não escreve (`force` RLS) |
+| 5 ✅ | Tabela `demanda_projetada_hist` + políticas (§7.2) | migração da projeção | **8.1** ✅ (05/09/2026) | não (mas sem ela o card 11.2 vira opinião) |
+| 6 ✅ | Card 2.2 §2.2 diz que "cada `rt_*` itera unidades"; §11 diz que `rt_diaria` itera e chama as sub-rotinas. Adotado o §11: as `rt_*` operam na unidade do contexto | redação da especificação | 2.2 / **8.1** ✅ | não |
+| 7 ✅ | Índice `demanda_projetada (unidade_id, mes)` — a leitura do pedido sugerido filtra por mês | migração da projeção | **8.1** ✅ (05/09/2026) | não |
 | 8 | Conjunto declarado da tela 8 ganha `turmas.ler` (§10) | matriz/rota | 2.4 / 8.5 | não |
 | 9 | `v_ritmo_aluno` e `fn_ritmo_aluno` expostos na aba Trilha da ficha do aluno | tela | 6.6 | não |
 | 10 | Card 9.5 passa a ter procedimento objetivo: `fn_ritmo_metodo_observado` por método, `update` em `parametro` (§9.1) | nota do card | 9.5 | não |
 | 11 | Card 11.2 passa a ter critério objetivo: `v_projecao_acuracia` + gatilhos de §9.2 | nota do card | 11.2 | não |
+
+### 11.1 O que a implementação (card 8.1, 05/09/2026) mudou neste documento
+
+Três correções de fato, nenhuma de opinião. O algoritmo de §5 e §6 foi implementado como está escrito.
+
+1. **O SQL de §6 não se cria como publicado**, e o erro é de tipo: `row_number()` e `count(*) over ()`
+   devolvem **bigint**, e `date + bigint` não existe no Postgres — `greatest(…) + pe.k * re.ritmo`
+   morre com *operator does not exist*. A migração faz o cast na origem
+   (`(row_number() over (…))::integer as k`, idem em `pendentes`), que é o menor conserto e não muda
+   expressão nenhuma abaixo dele.
+2. **A fixture não alcançava três dos quatro degraus, e o motivo é o próprio §2.4.** Com o combo de
+   Informática em três materiais, "duas entregas" (que é o que dá ritmo) e "dois itens pendentes"
+   (que é o que `k >= 2` exige) eram mutuamente exclusivos: `RITMO_ALUNO` era **estruturalmente**
+   inalcançável, e o teste dele passaria medindo conjunto vazio. No Modular era pior — o curso tinha
+   um livro só, então todo aluno Modular parava em `k = 1`. A escola-fixture cresceu em dois
+   materiais (`INTERATIVO 04` e `MODULAR 02`, o segundo assumindo o módulo 3 do cronograma) e uma
+   previsão de conclusão (Carla Menezes), e passou a ter **um aluno nomeado por degrau**, que é o que
+   o §6.4 de `docs/estrategia-testes.md` pede. O detalhe está nas notas do `supabase/seed.sql`.
+3. **`update` e `delete` em `demanda_projetada` não levantam erro**, e a asserção da decisão (g) tinha
+   de ser escrita sobre o efeito. Sem política para o comando, a RLS não devolve 42501: ela
+   simplesmente não encontra linha, e o comando afeta **zero**. Só o `insert` dá erro, porque lá o
+   `with check` é violado. O teste `080` §8 mede as duas formas separadamente, e a diferença está
+   escrita no arquivo — quatro `throws_ok` seriam dois testes impossíveis de passar.
+
+As quatro contraprovas foram vistas **vermelhas** antes de o card fechar: sem `where k >= 2` a
+disjunção reprova (e a previsão de Carla passa a começar em `hoje + 30`); sem o limite de um ritmo na
+âncora, Ana Paula salta de `hoje + 60` para `hoje + 30`; sem o piso e o teto do ritmo, João Pedro sai
+de `90/2` para `60/3` (entrega em lote) e `117/3` (volta de parada) — as duas falhas opostas do §4.2,
+na mesma medida; e com a política de `insert` escrita por `tem_permissao('estoque.ler')` em vez de
+`fn_contexto_rotina()`, a direção grava projeção pelo PostgREST.
 
 > ⚠️ **O ajuste 3 estava dado como feito por três documentos e não estava** — achado do card 7.2, em
 > 05/09/2026. O `check` de `pendencia.tipo` da migração do card 5.5 tem quinze tipos e nenhum é
@@ -880,10 +910,10 @@ perfis que o card 2.4 autorizou a ver a tela.
 | Nove parâmetros de §3 no seed | 3.6 | 3 |
 | `fn_param_int`/`fn_param_txt` como `security definer` | 3.4 | 3 |
 | `TURMA_MODULAR_SEM_CRONOGRAMA` no `check` | ~~5.5~~ → **7.2** ✅ | 7 |
-| `v_ritmo_aluno`, `fn_ritmo_aluno` | 8.1 | 8 |
-| `v_projecao_aluno` | 8.1 | 8 |
-| `demanda_projetada` (RLS), `demanda_projetada_hist`, `v_demanda_projetada` | 8.1 | 8 |
-| `rt_projecao_demanda()` | 8.1 | 8 |
+| `v_ritmo_aluno`, `fn_ritmo_aluno` | **8.1** ✅ | 8 |
+| `v_projecao_aluno` | **8.1** ✅ | 8 |
+| `demanda_projetada` (RLS), `demanda_projetada_hist`, `v_demanda_projetada` | **8.1** ✅ | 8 |
+| `rt_projecao_demanda()` | **8.1** ✅ | 8 |
 | Parcela projetada em `v_pedido_sugerido` + coluna na tela de Compras | 8.2 | 8 |
 | Tela de Projeção (material × mês) e *drill-down* por `v_projecao_aluno` | 8.5 | 8 |
 | Ritmo médio na aba Trilha da ficha | 6.6 | 6 |

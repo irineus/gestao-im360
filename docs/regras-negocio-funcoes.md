@@ -1028,7 +1028,9 @@ rt_diaria() → void          -- security definer; itera unidades ativas (§2.2)
   rt_pendencias_diaria()    -- abre/fecha as pendências de tempo do catálogo §10.1
   rt_rep_avaliar()          -- fn_rep_avaliar_virada por aluno com reposição aberta ou alocação REP;
                             -- abre E fecha as pendências REP_VIRADA (card 2.5)
-  rt_projecao_demanda()     -- refresh da projeção (card 8.1)
+  rt_projecao_demanda()     -- ✅ 8.1 — apaga e regrava demanda_projetada da unidade na janela
+                            --    do horizonte, tira a foto mensal e abre/fecha
+                            --    TURMA_MODULAR_SEM_CRONOGRAMA
 ```
 
 Cada `rt_*` é isolada num bloco `begin … exception when others then` que registra a falha em
@@ -1108,7 +1110,7 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | `tp_entrega_resultado`, `fn_registrar_entrega`, `fn_estornar_entrega`, `fn_saldo_material`, mais `fn_contexto_entrega` e `fn_trilha_reposicionar` (as duas nasceram da decisão do card — ver §6.2) | 6.3 ✅ |
 | `fn_pedido_criar`, `fn_pedido_enviar`, `fn_pedido_cancelar`, `fn_pedido_receber`, `fn_ajustar_estoque`, `tg_movimento_valida_sinal`, `tg_movimento_resolve_pendencia`, `tg_pedido_item_recebimento` | 6.5 ✅ |
 | Funções Modular | 7.2 |
-| `rt_projecao_demanda` | 8.1 |
+| `rt_projecao_demanda` | 8.1 ✅ |
 | `fn_certificado_*`, `tg_certificado_*` | 8.3 |
 | `tp_rep_situacao`, `fn_rep_situacao`, `fn_rep_avaliar_virada`, `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (critério fechado no card 2.5) | 5.3 ✅ |
 | `rt_rep_avaliar` | 5.5 ✅ |
