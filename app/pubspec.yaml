@@ -46,6 +46,15 @@ dependencies:
   # Card 3.12. Sem `SENTRY_DSN` no build o SDK nem inicializa — ver
   # lib/observabilidade/observabilidade.dart e docs/observabilidade.md.
   sentry_flutter: ^9.28.0
+  # Card 9.1, e só para o `<input type="file">` da tela 13 — ver
+  # lib/util/seletor_arquivo_web.dart. Já estava na árvore como dependência
+  # TRANSITIVA (o `supabase_flutter` a usa), então promovê-la a direta não muda
+  # resolução nem versão: muda a permissão de importá-la, que o `analyze` cobra.
+  #
+  # A alternativa era `file_picker`, e foi recusada: ele traz plugin para seis
+  # plataformas e código nativo para uma tela que só a direção abre, no
+  # navegador, uma vez na vida do sistema. `web` é Dart puro, sem plugin.
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

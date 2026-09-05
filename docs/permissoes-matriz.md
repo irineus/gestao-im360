@@ -361,7 +361,7 @@ aberta com permissão parcial não dá erro — dá um número menor.
 | 10 | Salas e PCs | `salas.ler` + `professores.ler` | todos |
 | 11 | Pendências | `pendencias.ler` | todos |
 | 12 | Administração | `admin.ler` | direção |
-| 13 | Importação | `admin.ler` + os domínios do que se importa | direção |
+| 13 | Importação | `admin.ler` + **os quatorze de escrita** (ver abaixo) | direção |
 
 ⚠️ **A linha 8 ganhou `turmas.ler` em 05/09/2026 (card 8.5), e nenhum perfil perdeu a tela** — os
 quatro já o têm. A correção não é formal: `v_projecao_aluno` (card 8.1) faz `join` **interno** em
@@ -470,5 +470,17 @@ card 3.6, e mudam com um clique na tela de Administração depois.
    deixa rastro.
 3. **Perfil por unidade.** `perfil` tem `unidade_id`, então a segunda unidade da Fase 11 terá
    perfis próprios. Se a direção quiser um perfil global, é decisão da Fase 11, não desta.
-4. **Importação (tela 13)** entra com `admin.ler` mais os domínios do que importa; o conjunto exato
-   é do card 9.1, que sabe o que o arquivo traz.
+4. ~~**Importação (tela 13)** entra com `admin.ler` mais os domínios do que importa; o conjunto exato
+   é do card 9.1, que sabe o que o arquivo traz.~~ ✅ **FECHADO em 06/09/2026 pelo card 9.1.** São
+   **quinze**: `admin.ler`, `materiais.criar`, `materiais.editar`, `alunos.criar`, `alunos.editar`,
+   `alunos.editar_trilha`, `salas.criar`, `salas.editar`, `salas.registrar_manutencao`,
+   `professores.criar`, `turmas.criar`, `turmas.alocar`, `estoque.lancar_saida`, `estoque.ajustar`,
+   `compras.receber`. Moram em **uma** função, `fn_importacao_conjunto()`, lida pelas políticas das
+   três tabelas de importação, pelo guarda das duas funções e copiada em `rotas.dart` (a cópia é
+   conferida pelo `guardas_rota_test`). Duas coisas a saber: (a) os quatorze de escrita existem
+   porque as funções são **`invoker`** — quem importa escreve sob a própria RLS, e cada política
+   cobra o seu código; (b) **`admin.ler` é o que mantém a tela na direção**, porque os quatorze de
+   escrita a secretaria também tem (§5) — sem ele, a tela que carrega a escola inteira abriria para
+   ela. **Nenhum código novo foi criado**: um `admin.importar` levaria o catálogo a 51 e reprovaria o
+   critério 1 do marco 4.8, que está aguardando gente com o número 50 escrito nele. Detalhe em
+   `docs/importacao.md` §2.3.

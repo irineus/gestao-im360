@@ -13,6 +13,7 @@ import '../telas/certificados/tela_certificados.dart';
 import '../telas/compras/tela_compras.dart';
 import '../telas/dashboard/tela_dashboard.dart';
 import '../telas/em_construcao.dart';
+import '../telas/importacao/tela_importacao.dart';
 import '../telas/login.dart';
 import '../telas/materiais/tela_materiais.dart';
 import '../telas/pendencias/tela_pendencias.dart';
@@ -68,6 +69,7 @@ final _telaDaRota = <String, Widget Function(GoRouterState)>{
   'certificados': (estado) =>
       TelaCertificados(alunoId: estado.uri.queryParameters['aluno']),
   'administracao': (_) => const TelaAdministracao(),
+  'importacao': (_) => const TelaImportacao(),
   // A rota 3b (card 2.4 §6) desde o card 6.6: `/alunos/:id/trilha` é o
   // deep-link para a aba Trilha, e não uma tela separada. Ele existe como rota
   // própria porque o conjunto mínimo dele tem `estoque.ler` a mais que o da

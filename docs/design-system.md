@@ -432,6 +432,7 @@ Regras: mensagens de **validação de campo** aparecem no campo; as demais em ba
 | Salas e PCs | "Nenhuma sala cadastrada. **+ Nova sala**." Professores (2ª aba, card 4.5): "Nenhum professor cadastrado. **+ Novo professor**." | idem filtros (card 4.5) |
 | Pendências | "Nenhuma pendência aberta." | "Nenhuma pendência com esses filtros — **Limpar filtros**." |
 | Administração → usuários | "Só você por aqui. **+ Convidar usuário**." | — |
+| Importação (card 9.1) | Quatro vazios distintos, um por passo — sem arquivo, sem validação, relatório limpo ("Nenhum erro e nenhum aviso — o arquivo pode ser aplicado.") e sem histórico ("Nenhuma importação ainda. A primeira será a carga da planilha."). Fora do navegador, o passo 1 diz **onde** se importa em vez de oferecer um botão que não abriria nada | — |
 | Dashboard (região sem dado) | região mostra zero real, nunca some — número que desaparece parece erro | — |
 | Dashboard (região que **falhou**) | o erro e o carregamento moram **dentro** do slot da região, nunca no lugar da tela: as pendências abertas e o rodapé não dependem da consulta de vagas (corrigido em 04/09/2026) | — |
 
@@ -908,6 +909,14 @@ dizer com mais precisão:
 | 36 | **O §7.2 diz "região mostra zero real, nunca some" e o card 5.11 diz que `AsyncValue` que decide texto precisa dos três estados** | As duas regras se encontram e a segunda vence onde o número **não foi medido**: a linha REM/PRE/REP/NOVO some quando a leitura de tipos não voltou (ou falhou), e a linha do "sem previsão" some quando a de alunos não voltou. Zero real continua na tela — "0 em standby" fica. A diferença é entre *medi e deu zero* e *não deu para medir*, e é ela que o §7.2 não separava |
 | 37 | **O §6 reserva o vermelho para "acima da capacidade" e o §7.2 não diz que cor tem uma previsão vencida** | **Âmbar** (`Cores.atencao` / `atencaoEscuro`), com ícone e texto — a mesma escolha do "módulo atrasado" do card 7.4, na mesma tela e pela mesma razão: a previsão passou e o aluno continua em curso, o que é atenção e não dado inconsistente. O vermelho desta tela fica com a turma acima da capacidade, que é o único caso em que o número em si está errado |
 
+### Divergências do card 9.1 (06/09/2026) — a tela de Importação
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 38 | **O §7.2 não tem linha para a tela 13, e ela tem QUATRO vazios diferentes** | Entraram todos, em `app/lib/telas/importacao/textos_importacao.dart`: sem arquivo escolhido ("Escolha um arquivo no passo 1 para ver o que ele traz."), sem validação ("Valide o arquivo no passo 2 para ver o relatório."), relatório sem ocorrência ("Nenhum erro e nenhum aviso — o arquivo pode ser aplicado.") e sem histórico ("Nenhuma importação ainda. A primeira será a carga da planilha."). Um vazio genérico aqui seria o pior caso do §7.2: a pessoa não saberia se o passo não rodou ou se rodou e não achou nada |
+| 39 | **O §5.7 manda "sem estado → desabilitado com o motivo", e esta tela tem TRÊS motivos diferentes no mesmo botão** | "Aplicar" fica desabilitado por *aguarde a operação em andamento*, por *simule primeiro* — e "Validar", por *informe a data do snapshot*. Os três são `DesabilitadoCom`, com tooltip no desktop e legenda no mobile; nenhum é `onPressed: null` solto, que é o que o §5.7 proíbe |
+| 40 | **O §5.6 não previa estado "esta plataforma não faz isto"** | O passo 1 no Android/iOS não é vazio nem erro: é uma frase dizendo **onde** se importa. Não usa `EstadoVazio` (que oferece uma ação) nem `EstadoSemAcesso` (que fala de permissão) — as duas mentiriam sobre a causa |
+| 41 | **O par tonal de ERRO para uma faixa informativa** | A faixa do ambiente em **produção** usa `errorContainer`, não o âmbar de atenção. É a única vez no sistema em que o vermelho não marca erro, e sim consequência: aplicar no ambiente errado grava a escola inteira no banco errado, e não há desfazer. Em homologação e local ela é `tertiaryContainer`, o âmbar normal |
 
 ---
 
