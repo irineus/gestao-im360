@@ -10,6 +10,7 @@ import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/telas/compras/tela_compras.dart';
 import 'package:gestao_im360/theme/tema.dart';
 import 'package:gestao_im360/widgets/formulario.dart';
+import 'package:go_router/go_router.dart';
 
 import 'apoio/carregar.dart';
 import 'apoio/catalogo_falso.dart';
@@ -59,9 +60,26 @@ void main() {
           permissoesProvider.overrideWithValue(permissoes),
           unidadeAtualProvider.overrideWithValue('unidade-teste'),
         ],
-        child: MaterialApp(
+        // ⚠️ `GoRouter` de verdade, e não um `MaterialApp` com `home`: desde a
+        // correção A7 criar um rascunho NAVEGA para `?pedido=<id>`, e é essa
+        // navegação que o teste precisa poder exercitar.
+        child: MaterialApp.router(
           theme: temaClaro(),
-          home: Scaffold(body: TelaCompras(pedidoId: pedidoId)),
+          routerConfig: GoRouter(
+            initialLocation: pedidoId == null
+                ? '/compras'
+                : '/compras?pedido=$pedidoId',
+            routes: [
+              GoRoute(
+                path: '/compras',
+                builder: (_, estado) => Scaffold(
+                  body: TelaCompras(
+                    pedidoId: estado.uri.queryParameters['pedido'],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -227,7 +245,7 @@ void main() {
       expect(find.text('Enviado'), findsWidgets);
       // Rascunho e cancelado não falam de recebimento: um não foi pedido a
       // ninguém, o outro não vem.
-      expect(find.text('0/15'), findsOneWidget);
+      expect(find.text('0 de 15'), findsOneWidget);
       expect(find.text('—'), findsWidgets);
     });
 
@@ -521,5 +539,78 @@ void main() {
       expect(find.text(semPedidoSelecionado), findsNothing);
       expect(find.textContaining('Pedido 2026-'), findsNothing);
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Revisão das telas 06/07 (card 8.1,5)
+  // ---------------------------------------------------------------------------
+
+  testWidgets('criar o rascunho ABRE o rascunho no painel (item A7)', (
+    tester,
+  ) async {
+    // ⚠️ Vermelho antes da correção: o `FormularioNovoPedido` devolvia o **id**
+    // do pedido criado e a aba jogava fora — a pessoa caía na lista e tinha de
+    // achar o rascunho —, enquanto o `?pedido=` da rota, escrito para
+    // exatamente isto, não era chamado por ninguém.
+    await montar(tester);
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Criar pedido com os sugeridos'),
+    );
+    await carregar(tester);
+    await tester.tap(find.byKey(chaveBotaoSalvar));
+    await carregar(tester);
+
+    await tester.pumpAndSettle();
+    // O painel do pedido NOVO, aberto — e é o painel dele, não o de outro:
+    // `2026-904` é o número que o falso dá ao rascunho recém-criado.
+    expect(find.textContaining('Pedido 2026-904'), findsOneWidget);
+    expect(find.text('Acrescentar item'), findsOneWidget);
+  });
+
+  testWidgets('o formulário de RECEBER com os itens em erro (item B1)', (
+    tester,
+  ) async {
+    // ⚠️ Vermelho antes da correção: `itens.value ?? []` abria o formulário
+    // VAZIO e "Confirmar recebimento" respondia "Informe quanto chegou de ao
+    // menos um item" — a mensagem errada para "a lista não carregou".
+    compras.falhaAoLerItens = ComprasFalso.erro('500', 'QUALQUER');
+    await montar(tester, permissoes: direcao);
+    await abrirPedidos(tester);
+    await abrirPedido(tester, '2026-002');
+    await tester.tap(find.widgetWithText(FilledButton, 'Receber'));
+    await carregar(tester);
+
+    expect(find.text(erroItensDoPedido), findsOneWidget);
+    expect(
+      find.text('Informe quanto chegou de ao menos um item.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('"Editar item" existe para o leitor de tela (item A5)', (
+    tester,
+  ) async {
+    // ⚠️ Vermelho antes da correção: o `Semantics(excludeSemantics: true)` da
+    // linha do item descartava a semântica de TODOS os descendentes, e o
+    // "Editar item" deixava de existir para leitor de tela e para o foco. O
+    // botão é um `IconButton` com tooltip, então o que se assere é o **nó
+    // semântico de botão**, não um rótulo de texto.
+    final handle = tester.ensureSemantics();
+    await montar(tester);
+    await abrirPedidos(tester);
+    await abrirPedido(tester, '2026-003');
+    final semantica = tester.getSemantics(find.byTooltip('Editar item'));
+    expect(semantica.flagsCollection.isButton, isTrue);
+    expect(semantica.tooltip, 'Editar item');
+    handle.dispose();
+  });
+
+  testWidgets('em 390 px a tela monta sem overflow (item H6)', (tester) async {
+    await montar(tester, tamanho: const Size(390, 800));
+    expect(tester.takeException(), isNull);
+    // A ação primária continua alcançável, na segunda linha da barra.
+    expect(find.text('Criar pedido com os sugeridos'), findsOneWidget);
+    await abrirPedidos(tester);
+    expect(tester.takeException(), isNull);
   });
 }

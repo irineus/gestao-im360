@@ -23,6 +23,8 @@ import 'apoio/estoque_falso.dart';
 void main() {
   const leitura = {'materiais.ler', 'estoque.ler'};
   const comAjuste = {...leitura, 'estoque.ajustar'};
+  // Quem edita o cadastro do material, para o painel do mobile ter o que abrir.
+  const comEdicao = {...comAjuste, 'materiais.criar', 'materiais.editar'};
 
   late CatalogoFalso catalogo;
   late EstoqueFalso estoque;
@@ -399,5 +401,67 @@ void main() {
     expect(find.text('Lançar entrada'), findsNothing);
     expect(find.text('Nova entrada'), findsNothing);
     expect(find.text('Registrar entrada'), findsNothing);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Revisão das telas 06/07 (card 8.1,5)
+  // ---------------------------------------------------------------------------
+
+  testWidgets('o TEXTO da linha em alerta acompanha o fundo tonal (item A1)', (
+    tester,
+  ) async {
+    // ⚠️ Vermelho antes da correção: o fundo vinha de `tertiaryContainer` e o
+    // texto ficava com o `onSurface` da tabela — o par de contraste verificado
+    // é (container, onContainer), e metade dele não estava sendo usada. Com o
+    // `tertiary` também ausente do esquema, o fundo saía GRAFITE e a linha
+    // "abaixo do mínimo" ficava ilegível no tema claro.
+    await montar(tester);
+    final estilo = DefaultTextStyle.of(
+      tester.element(find.text('Informática Essencial 2')),
+    ).style;
+    expect(estilo.color, temaClaro().colorScheme.onTertiaryContainer);
+  });
+
+  group('o painel do MOBILE passa pelos mesmos callbacks da aba (item A6)', () {
+    testWidgets('editar pelo painel recarrega a lista e confirma', (
+      tester,
+    ) async {
+      // ⚠️ Vermelho antes da correção: `_PainelMobile` chamava
+      // `mostrarFormulario` direto, sem passar por `_editar` — que é quem
+      // incrementa `versaoEstoqueProvider` (o cadastro muda `estoque_minimo` e
+      // `ativo`, colunas de `v_estoque_atual`) e mostra a confirmação. No
+      // celular, salvar o mínimo novo deixava lista e cabeçalho no valor
+      // antigo.
+      await montar(
+        tester,
+        permissoes: comEdicao,
+        tamanho: const Size(390, 800),
+      );
+      // No mobile a lista é de cartões, e o cartão é aberto pelo NOME.
+      await abrirPainel(tester, 'English Book 1');
+      await tester.tap(find.text('Editar material'));
+      await carregar(tester);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Estoque mínimo *'),
+        '9',
+      );
+      await tester.tap(find.byKey(chaveBotaoSalvar));
+      await carregar(tester);
+
+      expect(catalogo.chamadas, contains(startsWith('salvarMaterial')));
+      expect(find.text('Material salvo.'), findsOneWidget);
+    });
+  });
+
+  testWidgets('em 390 px a tela monta sem overflow (item H6)', (tester) async {
+    await montar(tester, permissoes: comEdicao, tamanho: const Size(390, 800));
+    expect(tester.takeException(), isNull);
+    // A ação primária e a folha de filtros continuam alcançáveis — é o que a
+    // barra em `Wrap` garante (item H3).
+    expect(find.text('Novo material'), findsOneWidget);
+    expect(find.text('Filtrar (1)'), findsOneWidget);
+    // E as linhas viraram cartões, com o alerta em ícone e palavra.
+    expect(find.text('English Book 1'), findsOneWidget);
+    expect(find.text('abaixo do mínimo'), findsOneWidget);
   });
 }

@@ -11,6 +11,7 @@ import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../turmas/turmas.dart';
 import '../../turmas/turmas_provider.dart';
+import '../../widgets/barra_filtros.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/abertura_por_url.dart';
@@ -129,32 +130,41 @@ class _TelaTurmasState extends ConsumerState<TelaTurmas>
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(Dim.e16, Dim.e16, Dim.e16, Dim.e8),
-          child: Wrap(
-            spacing: Dim.e16,
-            runSpacing: Dim.e12,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // A MESMA barra da `TabelaIm360` (item H4): no celular os filtros vão
+          // para a folha "Filtrar (n)" e as ações descem para a segunda linha,
+          // em vez de empilharem à esquerda com larguras diferentes. A
+          // navegação de semana **não** é filtro e fica acima, em largura
+          // total: é o controle mais tocado da tela.
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _NavegacaoSemana(
                 semana: semana,
                 incluiDomingo: montada.dias.contains(7),
               ),
-              const FiltrosGrade(),
-              if (inativos.isNotEmpty)
-                BotaoAcao(
-                  rotulo: 'Inativos (${inativos.length})',
-                  icone: Icons.visibility_off_outlined,
-                  nivel: NivelBotao.terciario,
-                  exigePermissao: 'turmas.editar',
-                  aoTocar: () => mostrarFormulario<String>(
-                    context,
-                    construtor: (_) => const DialogoBlocosInativos(),
+              const SizedBox(height: Dim.e8),
+              BarraFiltrosIm360(
+                filtros: const FiltrosGrade(),
+                filtrosAtivos: filtro.ativos,
+                acoes: [
+                  if (inativos.isNotEmpty)
+                    BotaoAcao(
+                      rotulo: 'Inativos (${inativos.length})',
+                      icone: Icons.visibility_off_outlined,
+                      nivel: NivelBotao.terciario,
+                      exigePermissao: 'turmas.editar',
+                      aoTocar: () => mostrarFormulario<String>(
+                        context,
+                        construtor: (_) => const DialogoBlocosInativos(),
+                      ),
+                    ),
+                  BotaoAcao(
+                    rotulo: 'Novo bloco',
+                    icone: Icons.add,
+                    exigePermissao: 'turmas.criar',
+                    aoTocar: () => _novoBloco(context),
                   ),
-                ),
-              BotaoAcao(
-                rotulo: 'Novo bloco',
-                icone: Icons.add,
-                exigePermissao: 'turmas.criar',
-                aoTocar: () => _novoBloco(context),
+                ],
               ),
             ],
           ),
@@ -296,35 +306,33 @@ class FiltrosGrade extends ConsumerWidget {
       runSpacing: Dim.e8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        DropdownMenu<String>(
+        FiltroSuspenso<String>(
           key: ValueKey('metodo-${filtro.metodoId}'),
-          width: 180,
-          label: const Text('Método'),
-          textStyle: Tipografia.corpo,
-          initialSelection: filtro.metodoId ?? '',
-          dropdownMenuEntries: [
+          rotulo: 'Método',
+          largura: 180,
+          selecao: filtro.metodoId ?? '',
+          entradas: [
             const DropdownMenuEntry(value: '', label: 'Todos'),
             for (final m in metodos)
               DropdownMenuEntry(value: m.id, label: m.nome),
           ],
-          onSelected: (valor) => controlador.definir(
+          aoSelecionar: (valor) => controlador.definir(
             filtro.copiar(
               metodoId: () => (valor == null || valor.isEmpty) ? null : valor,
             ),
           ),
         ),
-        DropdownMenu<String>(
+        FiltroSuspenso<String>(
           key: ValueKey('sala-${filtro.salaId}'),
-          width: 200,
-          label: const Text('Sala'),
-          textStyle: Tipografia.corpo,
-          initialSelection: filtro.salaId ?? '',
-          dropdownMenuEntries: [
+          rotulo: 'Sala',
+          largura: 200,
+          selecao: filtro.salaId ?? '',
+          entradas: [
             const DropdownMenuEntry(value: '', label: 'Todas'),
             for (final s in salas)
               if (s.id != null) DropdownMenuEntry(value: s.id!, label: s.nome),
           ],
-          onSelected: (valor) => controlador.definir(
+          aoSelecionar: (valor) => controlador.definir(
             filtro.copiar(
               salaId: () => (valor == null || valor.isEmpty) ? null : valor,
             ),

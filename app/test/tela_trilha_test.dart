@@ -4,12 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/alunos/alunos.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
+import 'package:gestao_im360/pendencias/pendencias_provider.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/telas/alunos/aba_trilha.dart';
 import 'package:gestao_im360/theme/tema.dart';
 import 'package:gestao_im360/trilha/trilha.dart';
 import 'package:gestao_im360/trilha/trilha_provider.dart';
 import 'package:gestao_im360/widgets/formulario.dart';
+import 'package:go_router/go_router.dart';
 
 import 'apoio/carregar.dart';
 import 'apoio/catalogo_falso.dart';
@@ -408,6 +410,211 @@ void main() {
       await tester.tap(find.byKey(chaveBotaoSalvar));
       await tester.pumpAndSettle();
       expect(trilha.chamadas, contains('estornarEntrega'));
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Revisão das telas 06/07 (card 8.1,5)
+  // ---------------------------------------------------------------------------
+
+  group('no DESKTOP a linha diz o mesmo que o rodapé do mobile (item A4)', () {
+    testWidgets('aluno STANDBY: botão presente, desabilitado e com o motivo', (
+      tester,
+    ) async {
+      // ⚠️ Vermelho antes da correção: `aoEntregar` olhava só `item.proximo`,
+      // e o `BotaoAcao` da linha nascia SEM `desabilitado`. Medido no stack
+      // local: Gabriela Souza (STANDBY) → aba Trilha no desktop → "Registrar
+      // entrega" habilitado → clique → diálogo "A entrega não foi registrada".
+      // A tela não deve oferecer o que vai falhar (wireframe §2.2).
+      await montar(
+        tester,
+        paraAluno: aluno('al-3001', status: 'STANDBY'),
+        permissoes: monitor,
+      );
+
+      final botao = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Registrar entrega'),
+      );
+      expect(botao.onPressed, isNull, reason: 'desabilitado, não escondido');
+      expect(find.byTooltip(motivoAlunoInativo), findsOneWidget);
+    });
+
+    testWidgets('trilha em FIM: o mesmo, com o outro motivo', (tester) async {
+      await montar(tester, paraAluno: aluno('al-3010'), permissoes: monitor);
+      // Em fim não há próxima, então a linha não oferece a ação nenhuma: o
+      // rodapé do mobile é quem diz o motivo. O que não pode existir é botão
+      // HABILITADO — e é isso que se assere.
+      for (final b in tester.widgetList<FilledButton>(
+        find.widgetWithText(FilledButton, 'Registrar entrega'),
+      )) {
+        expect(b.onPressed, isNull);
+      }
+    });
+
+    testWidgets('aluno ATIVO com próxima: a linha oferece a entrega', (
+      tester,
+    ) async {
+      await montar(tester, paraAluno: aluno('al-3001'), permissoes: monitor);
+      final botao = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Registrar entrega'),
+      );
+      expect(botao.onPressed, isNotNull);
+    });
+  });
+
+  testWidgets('os botões da linha existem para o leitor de tela (item A5)', (
+    tester,
+  ) async {
+    // ⚠️ Vermelho antes da correção: o `Semantics(excludeSemantics: true)`
+    // cobria a linha inteira, e `excludeSemantics` descarta a semântica de
+    // TODOS os descendentes — os botões deixavam de existir para leitor de
+    // tela e para a navegação por foco, na jornada nº 1 do monitor
+    // (design-system §8.3/§8.5).
+    final handle = tester.ensureSemantics();
+    await montar(tester, paraAluno: aluno('al-3001'), permissoes: secretaria);
+
+    expect(find.bySemanticsLabel('Registrar entrega'), findsWidgets);
+    expect(find.bySemanticsLabel('Estornar'), findsWidgets);
+    handle.dispose();
+  });
+
+  group('a linha do ritmo (item A8, divergência 15 do §17)', () {
+    testWidgets('com ritmo: o número vem da view, com a última entrega', (
+      tester,
+    ) async {
+      final trilha = TrilhaFalso.fixture()
+        ..ritmos['al-3001'] = RitmoAluno(
+          ritmoDias: 21,
+          ultimaEntrega: DateTime(2026, 8, 30),
+          entregas: 3,
+          intervalosConsiderados: 2,
+        );
+      await montar(tester, paraAluno: aluno('al-3001'), repositorio: trilha);
+      expect(
+        find.text(
+          'ritmo: 1 apostila a cada 21 dias · última entrega '
+          '30/08/2026',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('sem intervalo válido: NUNCA "0 dias"', (tester) async {
+      final trilha = TrilhaFalso.fixture()
+        ..ritmos['al-3001'] = const RitmoAluno(
+          ritmoDias: null,
+          ultimaEntrega: null,
+          entregas: 1,
+          intervalosConsiderados: 0,
+        );
+      await montar(tester, paraAluno: aluno('al-3001'), repositorio: trilha);
+      expect(find.text(semRitmoAinda), findsOneWidget);
+      expect(find.textContaining('0 dias'), findsNothing);
+    });
+
+    testWidgets('erro na leitura do ritmo NÃO vira "sem ritmo ainda"', (
+      tester,
+    ) async {
+      // Região com os três estados: erro que vira "sem ritmo" afirmaria sobre
+      // o aluno o que só se sabe da leitura (design-system §5.6).
+      final trilha = TrilhaFalso.fixture()
+        ..falhaAoLerRitmo = TrilhaFalso.erro('500', 'FALHA');
+      await montar(tester, paraAluno: aluno('al-3001'), repositorio: trilha);
+      expect(find.text(semRitmoAinda), findsNothing);
+      expect(find.text('ritmo indisponível'), findsOneWidget);
+      // O resto da aba continua de pé.
+      expect(find.text('01 Informática Essencial 1'), findsWidgets);
+    });
+  });
+
+  group('"Ver pendência" leva o filtro por tipo (item D3)', () {
+    /// A aba dentro de um `GoRouter` de verdade — o link navega, e é a
+    /// navegação que precisa chegar à central **já filtrada**.
+    Future<ProviderContainer> montarComRota(
+      WidgetTester tester,
+      Aluno paraAluno,
+      TrilhaFalso trilha,
+    ) async {
+      tester.view.physicalSize = desktop;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        ProviderScope(
+          retry: semRetryAutomatico,
+          overrides: [
+            trilhaRepositorioProvider.overrideWithValue(trilha),
+            catalogoRepositorioProvider.overrideWithValue(
+              CatalogoFalso.fixture(),
+            ),
+            permissoesProvider.overrideWithValue(secretaria),
+            unidadeAtualProvider.overrideWithValue('unidade-teste'),
+          ],
+          child: MaterialApp.router(
+            theme: temaClaro(),
+            routerConfig: GoRouter(
+              initialLocation: '/alunos/${paraAluno.id}',
+              routes: [
+                GoRoute(
+                  path: '/alunos/:id',
+                  builder: (_, _) =>
+                      Scaffold(body: AbaTrilha(aluno: paraAluno)),
+                ),
+                GoRoute(
+                  path: '/pendencias',
+                  builder: (_, _) =>
+                      const Scaffold(body: Text('CENTRAL DE PENDÊNCIAS')),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await carregar(tester);
+      return ProviderScope.containerOf(tester.element(find.byType(AbaTrilha)));
+    }
+
+    testWidgets('BLOQUEADA filtra por COMPRA_SEM_ESTOQUE', (tester) async {
+      // ⚠️ Vermelho antes da correção: o link navegava para a central INTEIRA,
+      // e a pessoa procurava de novo a pendência que a entrega acabou de
+      // abrir — o mesmo defeito que o card 5.8 pagou com o `?bloco=`.
+      final container = await montarComRota(
+        tester,
+        aluno('al-3006'),
+        TrilhaFalso.fixture(),
+      );
+      await tester.tap(find.text('Registrar entrega'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ver pendência'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('CENTRAL DE PENDÊNCIAS'), findsOneWidget);
+      expect(
+        container.read(filtroPendenciasProvider).tipo,
+        'COMPRA_SEM_ESTOQUE',
+      );
+    });
+
+    testWidgets('REORDENADA filtra por ESTOQUE_ZERO', (tester) async {
+      final container = await montarComRota(
+        tester,
+        aluno('al-3004'),
+        TrilhaFalso.fixture(),
+      );
+      await tester.tap(find.text('Registrar entrega'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ver pendência'));
+      await tester.pumpAndSettle();
+
+      expect(container.read(filtroPendenciasProvider).tipo, 'ESTOQUE_ZERO');
+    });
+
+    test('a função pura: ENTREGUE não abre pendência nenhuma', () {
+      expect(tipoDaPendencia(StatusEntrega.entregue), isNull);
+      expect(tipoDaPendencia(StatusEntrega.reordenada), 'ESTOQUE_ZERO');
+      expect(
+        tipoDaPendencia(StatusEntrega.bloqueadaSemEstoque),
+        'COMPRA_SEM_ESTOQUE',
+      );
     });
   });
 }

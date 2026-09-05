@@ -578,13 +578,21 @@ limpa. `db push` incremental nunca descobre que a migração 12 depende de algo 
 
 O portão que substitui a meta de cobertura (§2). Um card não é "Concluído" com a sua linha em aberto.
 
+⚠️ **A linha de Tela ganhou o teste em 390 px em 05/09/2026 (card 8.1,5).** Nenhuma das telas das
+fases 06 e 07 tinha um, e é por aí que passaram, por **todo** o CI, dois defeitos que tornavam o app
+inutilizável no celular: o `Scaffold.of()` com o contexto errado, que impedia a gaveta do "Mais" de
+abrir — nove telas inalcançáveis —, e a barra de ações da `TabelaIm360`, que estourava até 537 px à
+direita. `flutter analyze` não vê overflow e `flutter test` só o vê se **algum** teste renderizar
+aquela tela naquela largura. É a mesma família dos dois portões do card 5.5,5 (glifo fora da fonte,
+jargão em texto de tela): passa por tudo e só aparece quando alguém abre a tela.
+
 | Tipo de card | Testes obrigatórios |
 |---|---|
 | **Migração de schema** | Suíte de catálogo (§5) verde com as tabelas novas incluídas; um teste por `check`/`unique` que expresse regra de negócio (camada 1) |
 | **Função de aplicação** | Caminho feliz com efeito conferido; **um `throws_ok` por `codigo` que a função pode levantar**; um teste negativo de permissão (perfil sem o código → `PT403`); teste de camada 2 se houver trigger-garantia |
 | **View** | Paridade de linhas por perfil + zero para quem não pode + isolamento de unidade (§6.3); as quatro armadilhas do card 2.3 §3 quando aplicáveis (soma de conjunto vazio, `count` sobre `left join`, `fn_hoje`, RLS silenciosa) |
 | **Rotina `rt_*`** | Idempotência (rodar duas vezes) + isolamento de falha + contexto de rotina (§8) |
-| **Tela** | Guarda de rota tabelada; ocultação por permissão; estado vazio renderizado com o texto do card 2.7 |
+| **Tela** | Guarda de rota tabelada; ocultação por permissão; estado vazio renderizado com o texto do card 2.7; **e o teste mobile mínimo — monta em 390×800, `takeException()` nulo, painel/detalhe em `Dialog.fullscreen`, ação primária alcançável** (card 8.1,5, item H6, 05/09/2026) |
 | **Migração de dados (Fase 9)** | Reexecutabilidade: importar duas vezes o mesmo snapshot produz os mesmos totais, sem duplicar |
 | **Correção de bug** | O teste que reproduz o defeito entra **no mesmo commit** da correção, e falha sem ela |
 

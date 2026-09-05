@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../catalogo/catalogo.dart';
 import '../../catalogo/catalogo_provider.dart';
@@ -9,11 +10,15 @@ import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../util/datas.dart';
+import '../../rotas/rotas.dart';
+import '../../widgets/abertura_por_url.dart';
+import '../../widgets/barra_filtros.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
 import '../../widgets/painel_detalhe.dart';
+import '../../widgets/painel_mobile.dart';
 import '../../widgets/tabela_im360.dart';
 import 'formularios.dart';
 import 'painel_pedido.dart';
@@ -26,39 +31,70 @@ import 'painel_pedido.dart';
 /// (docs/permissoes-matriz.md §6, linha 7). É a única tela com perfil de fora
 /// por decisão explícita: sem `compras.ler` a parcela pendente zeraria e o
 /// sistema mandaria comprar de novo o que já está a caminho.
-class TelaCompras extends StatelessWidget {
+class TelaCompras extends StatefulWidget {
   const TelaCompras({super.key, this.pedidoId});
 
   /// `?pedido=<id>` — o mesmo desenho de `?material=` na tela 6: a lista abre
-  /// já no pedido pedido. Hoje quem o usa é o próprio app, ao criar um rascunho
-  /// a partir do sugerido.
+  /// já no pedido pedido. Quem o usa é o próprio app, ao criar um rascunho a
+  /// partir do sugerido (item A7).
   final String? pedidoId;
 
   @override
-  Widget build(BuildContext context) => DefaultTabController(
+  State<TelaCompras> createState() => _TelaComprasState();
+}
+
+class _TelaComprasState extends State<TelaCompras>
+    with SingleTickerProviderStateMixin {
+  /// ⚠️ `TabController` próprio, e não `DefaultTabController`: o `initialIndex`
+  /// vale só na **criação**, então chegar depois com `?pedido=` — que é
+  /// exatamente o que criar um rascunho faz — deixava a pessoa na aba do
+  /// sugerido, com o painel aberto numa aba que ela não está vendo (item A7).
+  late final _abas = TabController(
     length: 2,
+    vsync: this,
     // A aba Pedidos vira a inicial quando se chega com um pedido na URL: cair
     // no sugerido e ter de trocar de aba para ver o que se acabou de criar é o
     // atalho que não atalha.
-    initialIndex: pedidoId == null ? 0 : 1,
-    child: Column(
-      children: [
-        const TabBar(
-          tabs: [
-            Tab(text: 'Pedido sugerido'),
-            Tab(text: 'Pedidos'),
+    initialIndex: widget.pedidoId == null ? 0 : 1,
+  );
+
+  @override
+  void didUpdateWidget(TelaCompras anterior) {
+    super.didUpdateWidget(anterior);
+    if (widget.pedidoId != null && widget.pedidoId != anterior.pedidoId) {
+      _abas.index = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _abas.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      TabBar(
+        controller: _abas,
+        tabs: const [
+          Tab(text: 'Pedido sugerido'),
+          Tab(text: 'Pedidos'),
+        ],
+      ),
+      Expanded(
+        child: TabBarView(
+          controller: _abas,
+          children: [
+            const AbaSugerido(),
+            AbaPedidos(
+              pedidoId: widget.pedidoId,
+              aoIrAoSugerido: () => _abas.index = 0,
+            ),
           ],
         ),
-        Expanded(
-          child: TabBarView(
-            children: [
-              const AbaSugerido(),
-              AbaPedidos(pedidoId: pedidoId),
-            ],
-          ),
-        ),
-      ],
-    ),
+      ),
+    ],
   );
 }
 
@@ -92,7 +128,10 @@ class _AbaSugeridoState extends ConsumerState<AbaSugerido> {
     // lista de pedidos mudou, e é para lá que a confirmação manda a pessoa.
     ref.read(versaoComprasProvider.notifier).incrementar();
     confirmarEfemero(context, 'Rascunho criado. Confira antes de enviar.');
-    DefaultTabController.of(context).animateTo(1);
+    // ⚠️ O id do pedido criado era JOGADO FORA e a pessoa caía na lista tendo
+    // de achar o rascunho — enquanto o `?pedido=` da rota, escrito para
+    // exatamente isto, não era chamado por ninguém (item A7).
+    context.go(caminhoDeRota('compras', parametro: 'pedido', valor: criado));
   }
 
   @override
@@ -115,19 +154,27 @@ class _AbaSugeridoState extends ConsumerState<AbaSugerido> {
       ),
       filtrosAtivos: filtro.ativos,
       acoes: [
-        BotaoAcao(
-          rotulo: 'Criar pedido com os sugeridos',
-          icone: Icons.add_shopping_cart,
-          exigePermissao: 'compras.criar',
-          // Sem estado → visível e desabilitado COM o motivo
-          // (design-system §5.7). Escondê-lo aqui esconderia também a razão.
-          desabilitado: itensSugeridos(exibidas).isEmpty
-              ? const DesabilitadoCom(
-                  'Nenhum material com sugestão maior que zero na lista atual.',
-                )
-              : null,
-          aoTocar: () => _criar(context, exibidas),
-        ),
+        if (!sugerido.hasError)
+          BotaoAcao(
+            rotulo: 'Criar pedido com os sugeridos',
+            icone: Icons.add_shopping_cart,
+            exigePermissao: 'compras.criar',
+            // Sem estado → visível e desabilitado COM o motivo
+            // (design-system §5.7). Escondê-lo aqui esconderia também a razão.
+            //
+            // ⚠️ O motivo é POR ESTADO: durante o carregamento `exibidas` é
+            // vazia, e o tooltip dizia "nenhum material com sugestão" sobre uma
+            // lista que ninguém leu ainda (item B5). Em erro o botão some — a
+            // tabela já mostra o `EstadoErro` com a saída.
+            desabilitado: sugerido.isLoading && !sugerido.hasValue
+                ? const DesabilitadoCom('A lista ainda está carregando.')
+                : itensSugeridos(exibidas).isEmpty
+                ? const DesabilitadoCom(
+                    'Nenhum material com sugestão maior que zero na lista atual.',
+                  )
+                : null,
+            aoTocar: () => _criar(context, exibidas),
+          ),
       ],
       colunas: [
         ColunaIm360(
@@ -310,35 +357,33 @@ class _FiltrosSugeridoState extends ConsumerState<_FiltrosSugerido> {
                 controlador.definir(filtro.copiar(busca: valor)),
           ),
         ),
-        DropdownMenu<String>(
+        FiltroSuspenso<String>(
           key: ValueKey('metodo-${filtro.metodoId}'),
-          width: 180,
-          label: const Text('Método'),
-          textStyle: Tipografia.corpo,
-          initialSelection: filtro.metodoId ?? '',
-          dropdownMenuEntries: [
+          rotulo: 'Método',
+          largura: 180,
+          selecao: filtro.metodoId ?? '',
+          entradas: [
             const DropdownMenuEntry(value: '', label: 'Todos'),
             for (final metodo in widget.metodos)
               DropdownMenuEntry(value: metodo.id, label: metodo.nome),
           ],
-          onSelected: (valor) => controlador.definir(
+          aoSelecionar: (valor) => controlador.definir(
             filtro.copiar(
               metodoId: () => (valor == null || valor.isEmpty) ? null : valor,
             ),
           ),
         ),
-        DropdownMenu<String>(
+        FiltroSuspenso<String>(
           key: ValueKey('categoria-${filtro.categoria}'),
-          width: 180,
-          label: const Text('Categoria'),
-          textStyle: Tipografia.corpo,
-          initialSelection: filtro.categoria ?? '',
-          dropdownMenuEntries: [
+          rotulo: 'Categoria',
+          largura: 180,
+          selecao: filtro.categoria ?? '',
+          entradas: [
             const DropdownMenuEntry(value: '', label: 'Todas'),
             for (final categoria in widget.categorias)
               DropdownMenuEntry(value: categoria, label: categoria),
           ],
-          onSelected: (valor) => controlador.definir(
+          aoSelecionar: (valor) => controlador.definir(
             filtro.copiar(
               categoria: () => (valor == null || valor.isEmpty) ? null : valor,
             ),
@@ -387,26 +432,29 @@ class _CelulaSugerida extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class AbaPedidos extends ConsumerStatefulWidget {
-  const AbaPedidos({super.key, this.pedidoId});
+  const AbaPedidos({super.key, this.pedidoId, this.aoIrAoSugerido});
 
   final String? pedidoId;
+
+  /// Leva à aba do pedido sugerido — a saída do estado vazio. Vem de fora
+  /// porque as abas têm `TabController` próprio desde o item A7.
+  final VoidCallback? aoIrAoSugerido;
 
   @override
   ConsumerState<AbaPedidos> createState() => _AbaPedidosState();
 }
 
-class _AbaPedidosState extends ConsumerState<AbaPedidos> {
+class _AbaPedidosState extends ConsumerState<AbaPedidos>
+    with AberturaPorUrl<AbaPedidos> {
   /// O pedido do painel. Guarda o **id**, não a linha: a lista recarrega a cada
   /// recebimento, e segurar o objeto deixaria o cabeçalho mostrando o total de
   /// antes da chegada — o mesmo defeito do card 6.7.
   String? _selecionado;
 
-  bool _abriuPeloUrl = false;
-
   @override
   void didUpdateWidget(AbaPedidos anterior) {
     super.didUpdateWidget(anterior);
-    if (anterior.pedidoId != widget.pedidoId) _abriuPeloUrl = false;
+    if (anterior.pedidoId != widget.pedidoId) reabrirNaProxima();
   }
 
   void _selecionar(BuildContext context, PedidoCompra pedido) {
@@ -427,16 +475,15 @@ class _AbaPedidosState extends ConsumerState<AbaPedidos> {
     final pedidos = ref.watch(pedidosProvider);
     final filtro = ref.watch(filtroPedidosProvider);
 
+    // O mixin que `AbaMateriais`, `TelaTurmasModular` e `TelaSalas` já usam —
+    // aqui havia uma segunda implementação da mesma coisa (item F1).
     final pedido = widget.pedidoId;
-    if (pedido != null && !_abriuPeloUrl && pedidos.hasValue) {
+    if (pedido != null && pedidos.hasValue) {
+      PedidoCompra? alvo;
       for (final p in pedidos.requireValue) {
-        if (p.pedidoId == pedido) {
-          _abriuPeloUrl = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _selecionar(context, p);
-          });
-        }
+        if (p.pedidoId == pedido) alvo ??= p;
       }
+      abrirUmaVez(alvo, (p) => _selecionar(context, p));
     }
 
     final todos = pedidos.value ?? const <PedidoCompra>[];
@@ -507,7 +554,11 @@ class _AbaPedidosState extends ConsumerState<AbaPedidos> {
               mensagem: vazioPedidos,
               icone: Icons.receipt_long_outlined,
               rotuloAcao: 'Ir ao pedido sugerido',
-              aoAgir: () => DefaultTabController.of(context).animateTo(0),
+              // ⚠️ Callback, e não `DefaultTabController.of`: desde o item A7 as
+              // abas têm `TabController` próprio, e a busca pelo default
+              // lançaria em runtime — num estado vazio que nenhum teste
+              // exercitava.
+              aoAgir: widget.aoIrAoSugerido,
             ),
       aoTocarLinha: (p) => _selecionar(context, p),
       aoRepetir: ref.read(versaoComprasProvider.notifier).incrementar,
@@ -544,10 +595,15 @@ class _AbaPedidosState extends ConsumerState<AbaPedidos> {
   }
 }
 
-/// "12/15" na coluna, "—" onde recebimento não é assunto (rascunho, cancelado).
+/// "12 de 15" na coluna, "—" onde recebimento não é assunto (rascunho,
+/// cancelado).
+///
+/// ⚠️ **Por extenso, e não `12/15`** — a correção C do card 5.11: na mesma
+/// tela a grade escreve `n/m` com `n` sendo VAGA, a leitura oposta. O
+/// `resumoPedido` já dizia "0 de 15 recebidos" (item C2).
 String resumoRecebido(PedidoCompra pedido) => switch (pedido.situacao) {
   StatusPedido.rascunho || StatusPedido.cancelado || null => '—',
-  _ => '${pedido.qtdRecebidaTotal}/${pedido.qtdPedidaTotal}',
+  _ => '${pedido.qtdRecebidaTotal} de ${pedido.qtdPedidaTotal}',
 };
 
 class _FiltrosPedidos extends ConsumerStatefulWidget {
@@ -610,18 +666,17 @@ class _FiltrosPedidosState extends ConsumerState<_FiltrosPedidos> {
                 controlador.definir(filtro.copiar(busca: valor)),
           ),
         ),
-        DropdownMenu<String>(
+        FiltroSuspenso<String>(
           key: ValueKey('status-${filtro.status}'),
-          width: 180,
-          label: const Text('Situação'),
-          textStyle: Tipografia.corpo,
-          initialSelection: filtro.status ?? '',
-          dropdownMenuEntries: [
+          rotulo: 'Situação',
+          largura: 180,
+          selecao: filtro.status ?? '',
+          entradas: [
             const DropdownMenuEntry(value: '', label: 'Todas'),
             for (final s in _status)
               DropdownMenuEntry(value: s, label: rotuloStatusPedido(s)),
           ],
-          onSelected: (valor) => controlador.definir(
+          aoSelecionar: (valor) => controlador.definir(
             filtro.copiar(
               status: () => (valor == null || valor.isEmpty) ? null : valor,
             ),
@@ -632,20 +687,18 @@ class _FiltrosPedidosState extends ConsumerState<_FiltrosPedidos> {
   }
 }
 
-/// O painel do mobile: mesma coisa do desktop, em tela cheia.
-class _PainelMobile extends ConsumerWidget {
+/// O painel do mobile: mesma coisa do desktop, em tela cheia — pelo componente
+/// comum, que fecha o diálogo quando o pedido some da lista (item F2).
+class _PainelMobile extends StatelessWidget {
   const _PainelMobile({required this.pedidoId});
 
   final String pedidoId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final lista = ref.watch(pedidosProvider).value ?? const <PedidoCompra>[];
-    PedidoCompra? pedido;
-    for (final p in lista) {
-      if (p.pedidoId == pedidoId) pedido = p;
-    }
-    if (pedido == null) return const SizedBox.shrink();
-    return PainelPedido(pedido: pedido);
-  }
+  Widget build(BuildContext context) => PainelMobileDe<PedidoCompra>(
+    itens: (ref) => ref.watch(pedidosProvider),
+    id: pedidoId,
+    idDe: (p) => p.pedidoId,
+    construtor: (context, pedido) => PainelPedido(pedido: pedido),
+  );
 }

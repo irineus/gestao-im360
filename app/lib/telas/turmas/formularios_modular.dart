@@ -12,6 +12,7 @@ import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../turmas/modular.dart';
 import '../../turmas/modular_provider.dart';
+import '../../util/texto.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
@@ -136,7 +137,8 @@ class _FormularioTurmaModularState
       chave: _chave,
       somenteLeitura: somenteLeitura,
       aviso: (!_ativo && (turma?.alocados ?? 0) > 0)
-          ? 'Esta turma tem ${turma!.alocados} aluno(s). Desativá-la a tira da '
+          ? 'Esta turma tem ${plural(turma!.alocados, 'aluno', 'alunos')}. '
+                'Desativá-la a tira da '
                 'lista, mas não realoca ninguém — e na próxima execução da '
                 'rotina diária (03:10) eles viram pendência "aluno sem turma". '
                 'Realoque antes.'
@@ -200,6 +202,9 @@ class _FormularioTurmaModularState
           ),
           validator: validarInteiroPositivo,
         ),
+        // Só na criação: a data de início não é editável na tela, e o
+        // repositório NÃO envia a coluna no `update` (item A2). Registrado
+        // como divergência no §17 — expô-la exige view nova.
         if (!editando)
           TextFormField(
             controller: _dataInicio,
@@ -239,10 +244,12 @@ class _FormularioTurmaModularState
               cursoId: _cursoId!,
               salaId: _salaId!,
               capacidade: int.parse(_capacidade.text.trim()),
-              // Na edição a data de início não é oferecida (ela não muda depois
-              // que a turma começou); o banco exige a coluna, então reenviamos a
-              // de hoje só quando é turma nova.
-              dataInicio: lerData(_dataInicio.text) ?? hojeSaoPaulo(),
+              // ⚠️ Na edição o campo não é oferecido e a data vai NULA — o
+              // repositório então não envia a coluna. O comentário anterior
+              // dizia "só quando é turma nova" e o código fazia o contrário:
+              // com o campo vazio, `?? hojeSaoPaulo()` reescrevia o início
+              // real da turma em toda edição (item A2).
+              dataInicio: editando ? null : lerData(_dataInicio.text),
               ativo: _ativo,
             );
         recarregarModular(ref);
@@ -732,6 +739,7 @@ class FormularioAvancarModulo extends ConsumerStatefulWidget {
     super.key,
     required this.turma,
     required this.cronograma,
+    this.faltantes = 0,
   });
 
   final TurmaModular turma;
@@ -739,6 +747,11 @@ class FormularioAvancarModulo extends ConsumerStatefulWidget {
   /// O cronograma da turma, na ordem do catálogo — é dele que saem o módulo que
   /// fecha e o que abre, para o diálogo dizer os dois antes do clique.
   final List<ModuloDaTurma> cronograma;
+
+  /// Quantos módulos do curso ainda estão FORA do cronograma (item B2): sem
+  /// isso o diálogo anunciava o fim da turma com "Acrescentar 2 módulo(s)"
+  /// visível na mesma tela.
+  final int faltantes;
 
   @override
   ConsumerState<FormularioAvancarModulo> createState() =>
@@ -784,6 +797,7 @@ class _FormularioAvancarModuloState
           corrente: corrente,
           proximo: proximo,
           dataConclusao: data,
+          faltantes: widget.faltantes,
         ))
           Padding(
             padding: const EdgeInsets.only(top: Dim.e4),

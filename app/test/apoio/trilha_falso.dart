@@ -193,6 +193,24 @@ class TrilhaFalso implements TrilhaRepositorio {
   Future<List<ItemTrilha>> trilha(String alunoId) =>
       _ler('trilha', List.of(trilhas[alunoId] ?? const <ItemTrilha>[]));
 
+  /// O ritmo por aluno (item A8). Ausente = a view não devolve linha, que é o
+  /// caso do aluno sem entrega nenhuma; presente com `ritmoDias` nulo é o
+  /// aluno que entregou mas não tem intervalo válido — os dois casos existem no
+  /// banco e a tela os diz de formas diferentes.
+  final Map<String, RitmoAluno> ritmos = {};
+
+  /// Falha só a leitura do ritmo, sem derrubar a trilha ao lado — é o que
+  /// prova que a região tem os três estados.
+  Object? falhaAoLerRitmo;
+
+  @override
+  Future<RitmoAluno?> ritmo(String alunoId) async {
+    chamadas.add('ritmo');
+    final falha = falhaAoLerRitmo ?? falhaAoLer;
+    if (falha != null) throw falha;
+    return ritmos[alunoId];
+  }
+
   @override
   Future<ResultadoEntrega> registrarEntrega(
     String alunoId, {

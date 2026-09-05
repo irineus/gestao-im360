@@ -216,7 +216,8 @@ class _Ficha extends ConsumerWidget {
                 AbaTrilha(aluno: aluno),
                 AbaTurmas(aluno: aluno),
                 AbaHistorico(aluno: aluno),
-                const _AbaFutura(nome: 'Certificado', card: '8.6'),
+                // A aba Certificado é entregue pelo card 8.6 do board.
+                const _AbaFutura(nome: 'Certificado'),
               ],
             ),
           ),
@@ -404,18 +405,23 @@ class AbaHistorico extends ConsumerWidget {
 
 const vazioHistorico = 'Nenhuma mudança de status registrada.';
 
-/// Aba cujo card ainda não chegou — diz qual, para não virar destino
-/// permanente (mesmo papel da `TelaEmConstrucao`).
+/// Aba que ainda não foi escrita — diz isso, e nada mais.
+///
+/// ⚠️ O texto dizia "aba do card 8.6": **jargão do board na tela**, que a
+/// secretaria não tem como entender e que envelhece junto com o board. O
+/// portão `texto_de_tela_test` varria `card \d` e a interpolação passava por
+/// baixo dele — agora ele varre a interpolação também (item C1). O destino
+/// continua o da divergência 13 do §17; o que muda é a frase, que passa a ser
+/// a mesma do rodapé do dashboard.
 class _AbaFutura extends StatelessWidget {
-  const _AbaFutura({required this.nome, required this.card});
+  const _AbaFutura({required this.nome});
 
   final String nome;
-  final String card;
 
   @override
   Widget build(BuildContext context) => Center(
     child: Text(
-      '$nome — aba do card $card.',
+      '$nome — chega numa próxima versão.',
       style: Tipografia.apoio.copyWith(
         color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),

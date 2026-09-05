@@ -441,6 +441,11 @@ const avisoEnviarPedido =
     'quantidades não podem mais ser alteradas.';
 
 /// Aviso do recebimento parcial (wireframe §10.2: parcial é a regra).
+/// O erro da leitura dos itens no formulário de recebimento (item B1).
+const erroItensDoPedido =
+    'Não foi possível ler os itens deste pedido. Sem eles não há o que '
+    'receber — tente de novo.';
+
 const avisoReceber =
     'Informe o que chegou de cada item — pode ser menos que o pedido, e o '
     'restante continua a caminho. Cada linha vira uma entrada no estoque, e '

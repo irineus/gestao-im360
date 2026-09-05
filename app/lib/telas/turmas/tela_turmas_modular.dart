@@ -12,7 +12,9 @@ import '../../theme/tipografia.dart';
 import '../../turmas/modular.dart';
 import '../../turmas/modular_provider.dart';
 import '../../turmas/turmas_widgets.dart';
+import '../../util/texto.dart';
 import '../../widgets/abertura_por_url.dart';
+import '../../widgets/barra_filtros.dart';
 import '../../widgets/badge_status.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
@@ -92,12 +94,13 @@ class _TelaTurmasModularState extends ConsumerState<TelaTurmasModular>
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(Dim.e16, Dim.e16, Dim.e16, Dim.e8),
-          child: Wrap(
-            spacing: Dim.e16,
-            runSpacing: Dim.e12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              const _FiltrosTurmasModular(),
+          // A MESMA barra da `TabelaIm360` (item H4): no celular os filtros
+          // vão para a folha "Filtrar (n)" e as ações descem para a segunda
+          // linha, em vez de empilharem à esquerda com larguras diferentes.
+          child: BarraFiltrosIm360(
+            filtros: const _FiltrosTurmasModular(),
+            filtrosAtivos: filtro.ativos,
+            acoes: [
               if (inativas.isNotEmpty)
                 BotaoAcao(
                   rotulo: 'Inativas (${inativas.length})',
@@ -164,7 +167,7 @@ class _TelaTurmasModularState extends ConsumerState<TelaTurmasModular>
 }
 
 /// Estado vazio da tela — texto do design-system §7.2, que pede a ação junto.
-const vazioTurmasModular = 'Nenhuma turma Modular cadastrada.';
+const vazioTurmasModular = 'Nenhuma turma Modular.';
 const vazioTurmasModularFiltro = 'Nenhuma turma Modular com esses filtros.';
 
 class _Vazio extends StatelessWidget {
@@ -197,11 +200,36 @@ class _Vazio extends StatelessWidget {
 }
 
 /// Filtros da lista (design-system §5.3): curso e busca. Estado no provider.
-class _FiltrosTurmasModular extends ConsumerWidget {
+///
+/// ⚠️ A busca usa **controller**, e não `initialValue`: sem ele "Limpar
+/// filtros" (que vem de fora, do estado vazio) e o filtro por curso vindo do
+/// dashboard limpavam o provider e deixavam o texto na tela — a lista voltava
+/// cheia com o campo dizendo o contrário. É o padrão que `_FiltrosSugerido` de
+/// Compras já usava (item B4).
+class _FiltrosTurmasModular extends ConsumerStatefulWidget {
   const _FiltrosTurmasModular();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FiltrosTurmasModular> createState() =>
+      _FiltrosTurmasModularState();
+}
+
+class _FiltrosTurmasModularState extends ConsumerState<_FiltrosTurmasModular> {
+  late final _busca = TextEditingController(
+    text: ref.read(filtroTurmasModularProvider).busca,
+  );
+
+  @override
+  void dispose() {
+    _busca.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(filtroTurmasModularProvider, (_, novo) {
+      if (_busca.text != novo.busca) _busca.text = novo.busca;
+    });
     final filtro = ref.watch(filtroTurmasModularProvider);
     final controlador = ref.read(filtroTurmasModularProvider.notifier);
     // Só os cursos que têm turma: um dropdown com o catálogo inteiro ofereceria
@@ -218,32 +246,24 @@ class _FiltrosTurmasModular extends ConsumerWidget {
       runSpacing: Dim.e8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        SizedBox(
-          width: 240,
-          child: TextFormField(
-            initialValue: filtro.busca,
-            key: const Key('busca_turma_modular'),
-            decoration: const InputDecoration(
-              labelText: 'Buscar turma',
-              prefixIcon: Icon(Icons.search),
-              isDense: true,
-            ),
-            onChanged: (valor) =>
-                controlador.definir(filtro.copiar(busca: valor)),
-          ),
+        CampoBusca(
+          key: const Key('busca_turma_modular'),
+          controlador: _busca,
+          rotulo: 'Buscar turma',
+          largura: 240,
+          aoMudar: (valor) => controlador.definir(filtro.copiar(busca: valor)),
         ),
-        DropdownMenu<String>(
+        FiltroSuspenso<String>(
           key: ValueKey('curso-${filtro.cursoId}'),
-          width: 240,
-          label: const Text('Curso'),
-          textStyle: Tipografia.corpo,
-          initialSelection: filtro.cursoId ?? '',
-          dropdownMenuEntries: [
+          rotulo: 'Curso',
+          largura: 240,
+          selecao: filtro.cursoId ?? '',
+          entradas: [
             const DropdownMenuEntry(value: '', label: 'Todos'),
             for (final entrada in cursos.entries)
               DropdownMenuEntry(value: entrada.key, label: entrada.value),
           ],
-          onSelected: (valor) => controlador.definir(
+          aoSelecionar: (valor) => controlador.definir(
             filtro.copiar(
               cursoId: () => (valor == null || valor.isEmpty) ? null : valor,
             ),
@@ -257,6 +277,29 @@ class _FiltrosTurmasModular extends ConsumerWidget {
 // ---------------------------------------------------------------------------
 // O cartão da turma
 // ---------------------------------------------------------------------------
+
+/// Em que pé está a leitura do cronograma daquela turma — os **três** estados
+/// do `AsyncValue`, e não só o valor (item A3).
+enum _EstadoCronograma { carregando, erro, pronto }
+
+/// O estado combinado de várias leituras: erro vence, depois carregamento.
+///
+/// ⚠️ `hasError` **antes** de `hasValue`: sob o Riverpod 3 o provider que falha
+/// passa por `AsyncError` e volta a `AsyncLoading` guardando o erro, e casar
+/// pela classe faz a mensagem piscar (design-system §5.6, card 5.11).
+_EstadoCronograma _estadoDe(List<AsyncValue<Object?>> leituras) {
+  for (final leitura in leituras) {
+    if (leitura.hasError) return _EstadoCronograma.erro;
+  }
+  for (final leitura in leituras) {
+    if (!leitura.hasValue) return _EstadoCronograma.carregando;
+  }
+  return _EstadoCronograma.pronto;
+}
+
+const erroCronogramaModular =
+    'Não foi possível ler o cronograma desta turma. O resto do cartão continua '
+    'visível.';
 
 /// `⠿ Massagem — Turma A · Sala 2 · 8/10 ▼` e, aberto, as três regiões do §8.
 ///
@@ -274,10 +317,11 @@ class CartaoTurmaModular extends ConsumerStatefulWidget {
 }
 
 class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
-  /// Erro das escritas que **não** passam por um `FormularioIm360` — hoje
-  /// nenhuma, mas o banner existe porque o avanço devolve resultado e a tela
-  /// precisa de onde falhar sem derrubar o cartão (design-system §5.4).
-  String? _erro;
+  // ⚠️ Havia aqui um `String? _erro` e um `AvisoTonal` que o mostrava — e
+  // **nada nunca o atribuía**: estado morto com um banner que não aparecia
+  // nunca (item B6). Toda escrita desta tela passa por um `FormularioIm360`,
+  // que já tem o próprio banner de erro; quando nascer uma que não passe, o
+  // banner volta com quem o preenche, e não antes.
 
   Future<void> _editar() async {
     final resultado = await mostrarFormulario<String>(
@@ -301,11 +345,20 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
     }
   }
 
-  Future<void> _avancar(List<ModuloDaTurma> cronograma) async {
+  Future<void> _avancar(
+    List<ModuloDaTurma> cronograma,
+    List<Modulo> faltantes,
+  ) async {
     final resultado = await mostrarFormulario<String>(
       context,
-      construtor: (_) =>
-          FormularioAvancarModulo(turma: widget.turma, cronograma: cronograma),
+      construtor: (_) => FormularioAvancarModulo(
+        turma: widget.turma,
+        cronograma: cronograma,
+        // Sem isto o diálogo anunciava o fim da turma tendo módulos do curso
+        // ainda fora do cronograma, ao lado de um botão "Acrescentar 2
+        // módulo(s)" (item B2).
+        faltantes: faltantes.length,
+      ),
     );
     if (!mounted || resultado == null) return;
     // Resultado que muda o que a pessoa fará em seguida é **diálogo**, nunca
@@ -334,11 +387,23 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
     final cores = Theme.of(context).colorScheme;
     final turma = widget.turma;
     final aberta = ref.watch(turmaAbertaProvider) == turma.id;
-    final cronograma =
-        ref.watch(cronogramaPorTurmaProvider)[turma.id] ??
-        const <ModuloDaTurma>[];
-    final modulosDoCurso =
-        ref.watch(modulosProvider(turma.cursoId)).value ?? const <Modulo>[];
+    // ⚠️ As DUAS leituras precisam dos três estados do `AsyncValue`, e não do
+    // `.value ?? []`: em `loading` e em `error` o cronograma sairia vazio, e a
+    // tela dizia "Sem cronograma de módulos" e oferecia "Montar cronograma"
+    // para uma turma que tem cronograma e módulo atrasado — com a leitura
+    // falhando, para sempre. É o B1 do card 5.11 nesta tela (item A3).
+    final asyncCronograma = ref.watch(cronogramaModularProvider);
+    final asyncModulos = ref.watch(modulosProvider(turma.cursoId));
+    final estadoCronograma = _estadoDe([asyncCronograma, asyncModulos]);
+    final pronto = estadoCronograma == _EstadoCronograma.pronto;
+
+    final cronograma = pronto
+        ? (ref.watch(cronogramaPorTurmaProvider)[turma.id] ??
+              const <ModuloDaTurma>[])
+        : const <ModuloDaTurma>[];
+    final modulosDoCurso = pronto
+        ? (asyncModulos.value ?? const <Modulo>[])
+        : const <Modulo>[];
     final noCronograma = modulosNoCronograma(cronograma);
     final faltantes = [
       for (final m in modulosDoCurso)
@@ -408,7 +473,11 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
                               Padding(
                                 padding: const EdgeInsets.only(top: Dim.e4),
                                 child: Text(
-                                  _resumoModulo(turma, cronograma.isEmpty),
+                                  _resumoModulo(
+                                    turma,
+                                    estadoCronograma,
+                                    cronograma.isEmpty,
+                                  ),
                                   style: Tipografia.apoio,
                                 ),
                               ),
@@ -433,10 +502,6 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (_erro != null) ...[
-                    AvisoTonal(mensagem: _erro!, erro: true),
-                    const SizedBox(height: Dim.e12),
-                  ],
                   if (turma.acimaCapacidade) ...[
                     AvisoTonal(
                       mensagem: avisoAcimaCapacidadeTurma(
@@ -447,21 +512,29 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
                     ),
                     const SizedBox(height: Dim.e12),
                   ],
-                  if (cronograma.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: Dim.e12),
-                      child: AvisoTonal(mensagem: avisoSemCronograma),
-                    )
-                  else if (turma.semModuloCorrente)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: Dim.e12),
-                      child: AvisoTonal(mensagem: avisoTurmaTerminou),
-                    ),
+                  // Os avisos só existem com o cronograma NA MÃO: dizer "sem
+                  // cronograma" enquanto ele carrega é afirmar o que ninguém
+                  // sabe ainda (item A3).
+                  if (pronto)
+                    if (cronograma.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: Dim.e12),
+                        child: AvisoTonal(mensagem: avisoSemCronograma),
+                      )
+                    else if (turma.semModuloCorrente)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: Dim.e12),
+                        child: AvisoTonal(mensagem: avisoTurmaTerminou),
+                      ),
                   _Cronograma(
                     turma: turma,
+                    estado: estadoCronograma,
                     linhas: cronograma,
                     faltantes: faltantes,
                     aoMontar: () => _montarCronograma(faltantes),
+                    aoRepetir: ref
+                        .read(versaoModularProvider.notifier)
+                        .incrementar,
                   ),
                   const SizedBox(height: Dim.e16),
                   _AlunosDaTurma(turma: turma, aoAdicionar: _adicionar),
@@ -470,27 +543,31 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
                     spacing: Dim.e8,
                     runSpacing: Dim.e8,
                     children: [
-                      BotaoAcao(
-                        rotulo: 'Avançar módulo',
-                        icone: Icons.arrow_forward,
-                        exigePermissao: 'turmas.editar',
-                        // Sem **estado** o botão fica visível e desabilitado com
-                        // o motivo (design-system §5.7): esconder aqui ensinaria
-                        // que a ação não existe, quando o que falta é o
-                        // cronograma — que a própria tela oferece montar.
-                        desabilitado: cronograma.isEmpty
-                            ? const DesabilitadoCom(
-                                'Monte o cronograma da turma antes de avançar '
-                                'o módulo.',
-                              )
-                            : turma.semModuloCorrente
-                            ? const DesabilitadoCom(
-                                'Todos os módulos do cronograma já foram '
-                                'concluídos.',
-                              )
-                            : null,
-                        aoTocar: () => _avancar(cronograma),
-                      ),
+                      // ⚠️ Enquanto o cronograma não chegou o botão fica
+                      // AUSENTE, e não desabilitado: o motivo seria falso, e
+                      // motivo falso é pior que motivo nenhum (item A3).
+                      if (pronto)
+                        BotaoAcao(
+                          rotulo: 'Avançar módulo',
+                          icone: Icons.arrow_forward,
+                          exigePermissao: 'turmas.editar',
+                          // Sem **estado** o botão fica visível e desabilitado
+                          // com o motivo (design-system §5.7): esconder aqui
+                          // ensinaria que a ação não existe, quando o que falta
+                          // é o cronograma — que a própria tela oferece montar.
+                          desabilitado: cronograma.isEmpty
+                              ? const DesabilitadoCom(
+                                  'Monte o cronograma da turma antes de avançar '
+                                  'o módulo.',
+                                )
+                              : turma.semModuloCorrente
+                              ? const DesabilitadoCom(
+                                  'Todos os módulos do cronograma já foram '
+                                  'concluídos.',
+                                )
+                              : null,
+                          aoTocar: () => _avancar(cronograma, faltantes),
+                        ),
                       BotaoAcao(
                         rotulo: 'Adicionar aluno',
                         icone: Icons.person_add_alt_1_outlined,
@@ -518,7 +595,21 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
 
 /// A linha "módulo corrente: 3. Massoterapia (até 20/09) ⚠ atraso" do §8, com os
 /// dois estados que ela também precisa dizer.
-String _resumoModulo(TurmaModular turma, bool semCronograma) {
+String _resumoModulo(
+  TurmaModular turma,
+  _EstadoCronograma estado,
+  bool semCronograma,
+) {
+  // Enquanto a leitura não chega, o cabeçalho DIZ que está carregando — não
+  // afirma que a turma não tem cronograma (item A3).
+  switch (estado) {
+    case _EstadoCronograma.carregando:
+      return 'Carregando cronograma…';
+    case _EstadoCronograma.erro:
+      return 'O cronograma não carregou';
+    case _EstadoCronograma.pronto:
+      break;
+  }
   if (semCronograma) return 'Sem cronograma de módulos';
   final rotulo = turma.moduloCorrenteRotulo;
   if (rotulo == null) return 'Turma terminou — todos os módulos concluídos';
@@ -530,7 +621,8 @@ String _resumoModulo(TurmaModular turma, bool semCronograma) {
 }
 
 String avisoAcimaCapacidadeTurma(int alocados, int capacidade) =>
-    'Esta turma tem $alocados aluno(s) para uma capacidade de $capacidade. '
+    'Esta turma tem ${plural(alocados, 'aluno', 'alunos')} para uma '
+    'capacidade de $capacidade. '
     'Novas admissões estão bloqueadas até normalizar — remova alguém ou '
     'aumente a capacidade da turma.';
 
@@ -572,20 +664,39 @@ class _Selo extends StatelessWidget {
 class _Cronograma extends ConsumerWidget {
   const _Cronograma({
     required this.turma,
+    required this.estado,
     required this.linhas,
     required this.faltantes,
     required this.aoMontar,
+    required this.aoRepetir,
   });
 
   final TurmaModular turma;
+  final _EstadoCronograma estado;
   final List<ModuloDaTurma> linhas;
   final List<Modulo> faltantes;
   final VoidCallback aoMontar;
+  final VoidCallback aoRepetir;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cores = Theme.of(context).colorScheme;
     final podeEditar = ref.watch(permissoesProvider).contains('turmas.editar');
+
+    // Carregamento e erro moram DENTRO da região, e o resto do cartão continua
+    // de pé — design-system §7.2, a mesma forma da região de alunos (item A3).
+    if (estado != _EstadoCronograma.pronto) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const TituloSecao(texto: 'Cronograma'),
+          if (estado == _EstadoCronograma.carregando)
+            const EstadoCarregando(linhas: 2)
+          else
+            EstadoErro(mensagem: erroCronogramaModular, aoRepetir: aoRepetir),
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -594,7 +705,7 @@ class _Cronograma extends ConsumerWidget {
           texto: 'Cronograma',
           apoio: linhas.isEmpty
               ? 'nenhum módulo'
-              : '${linhas.length} módulo(s)',
+              : plural(linhas.length, 'módulo', 'módulos'),
         ),
         if (linhas.isEmpty)
           Padding(
@@ -615,7 +726,7 @@ class _Cronograma extends ConsumerWidget {
             child: BotaoAcao(
               rotulo: linhas.isEmpty
                   ? 'Montar cronograma'
-                  : 'Acrescentar ${faltantes.length} módulo(s)',
+                  : 'Acrescentar ${plural(faltantes.length, 'módulo', 'módulos')}',
               icone: Icons.playlist_add,
               nivel: NivelBotao.secundario,
               exigePermissao: 'turmas.editar',
@@ -694,7 +805,17 @@ class _LinhaModulo extends StatelessWidget {
             ),
           ),
           if (podeEditar)
-            Icon(Icons.edit_outlined, size: 16, color: cores.onSurfaceVariant),
+            // O ícone é decorativo (o `Semantics` da linha já a anuncia), mas
+            // no desktop nada dizia o que o clique faz — o `Tooltip` é a
+            // metade que faltava (item D4).
+            Tooltip(
+              message: 'Editar datas',
+              child: Icon(
+                Icons.edit_outlined,
+                size: 16,
+                color: cores.onSurfaceVariant,
+              ),
+            ),
         ],
       ),
     );
@@ -753,9 +874,12 @@ class _AlunosDaTurma extends ConsumerWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TituloSecao(texto: 'Alunos', apoio: '${turma.alocados} na turma'),
-          const SizedBox(
-            height: _alturaRegiao,
+          TituloSecao(
+            texto: 'Alunos',
+            apoio: plural(turma.alocados, 'aluno na turma', 'alunos na turma'),
+          ),
+          ConstrainedBox(
+            constraints: BoxConstraints(minHeight: _alturaRegiao),
             child: EstadoSemAcesso(
               faltando: {'alunos.ler'},
               texto: semAcessoAlunos,
@@ -798,8 +922,8 @@ class _AlunosDaTurma extends ConsumerWidget {
             aoRepetir: ref.read(versaoModularProvider.notifier).incrementar,
           )
         else if (ativos.isEmpty && saidas.isEmpty)
-          SizedBox(
-            height: _alturaRegiao,
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: _alturaRegiao),
             child: EstadoVazio(
               mensagem: vazioAlunosTurmaModular,
               icone: Icons.person_outline,
@@ -832,6 +956,10 @@ const semAcessoAlunos =
 
 /// O estado da região vive dentro de uma coluna rolável: sem altura ele tentaria
 /// ocupar o infinito.
+///
+/// **Mínimo, e não fixo** (item F4): desde a correção 16 do §11 os estados
+/// rolam dentro do painel, então grampear 200 px só reservava espaço em branco
+/// abaixo de um estado curto.
 const _alturaRegiao = 200.0;
 
 class _LinhaAlunoModular extends ConsumerWidget {

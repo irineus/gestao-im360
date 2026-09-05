@@ -404,6 +404,27 @@ class _FormularioReceberState extends ConsumerState<FormularioReceber> {
         .watch(permissoesProvider)
         .contains('compras.receber_excedente');
 
+    // ⚠️ `hasError` ANTES de tudo (design-system §5.6, card 5.11). Com o
+    // `itens.value ?? []` de antes, a leitura que falhava abria o formulário
+    // VAZIO e "Confirmar recebimento" respondia "Informe quanto chegou de ao
+    // menos um item" — que é a mensagem errada para "a lista não carregou"
+    // (item B1).
+    if (itens.hasError) {
+      return FormularioIm360(
+        titulo: 'Receber o pedido ${widget.pedido.numero}',
+        rotuloSalvar: 'Confirmar recebimento',
+        chave: _chave,
+        somenteLeitura: true,
+        legendaObrigatorio: false,
+        campos: [
+          EstadoErro(
+            mensagem: erroItensDoPedido,
+            aoRepetir: ref.read(versaoComprasProvider.notifier).incrementar,
+          ),
+        ],
+      );
+    }
+
     return FormularioIm360(
       titulo: 'Receber o pedido ${widget.pedido.numero}',
       rotuloSalvar: 'Confirmar recebimento',
@@ -411,7 +432,8 @@ class _FormularioReceberState extends ConsumerState<FormularioReceber> {
       aviso: avisoReceber,
       legendaObrigatorio: false,
       campos: [
-        if (itens.isLoading) const EstadoCarregando(linhas: 3),
+        if (itens.isLoading && !itens.hasValue)
+          const EstadoCarregando(linhas: 3),
         for (final item in lista)
           Padding(
             padding: const EdgeInsets.only(bottom: Dim.e8),

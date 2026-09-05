@@ -9,6 +9,7 @@ import '../../rotas/rotas.dart';
 import '../../theme/cores.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../widgets/estados.dart';
 
 /// A região "Pendências abertas" do wireframe §5: quantas há em cada severidade
 /// e o caminho para a central (card 5.8).
@@ -29,7 +30,6 @@ class PendenciasAbertas extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cores = Theme.of(context).colorScheme;
     final abertas = ref.watch(pendenciasProvider);
 
     return Column(
@@ -60,16 +60,17 @@ class PendenciasAbertas extends ConsumerWidget {
         // logo em seguida, guardando o erro anterior. Casar pela classe faria a
         // mensagem piscar e a região terminar em "Carregando…" para sempre —
         // medido na bancada deste card, com o teste vermelho antes da correção.
+        // ⚠️ Era texto: "Carregando…" no lugar do esqueleto que o §5.6 pede,
+        // e a mensagem de erro **sem "Tentar de novo"** — a região de vagas da
+        // mesma tela já fazia os dois. Sem a saída, a única forma de repetir a
+        // leitura era recarregar a página (item D1).
         if (abertas.hasError)
-          Text(
-            erroPendenciasDashboard,
-            style: Tipografia.apoio.copyWith(color: cores.error),
+          EstadoErro(
+            mensagem: erroPendenciasDashboard,
+            aoRepetir: ref.read(versaoPendenciasProvider.notifier).incrementar,
           )
         else if (!abertas.hasValue)
-          Text(
-            'Carregando…',
-            style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
-          )
+          const EstadoCarregando(linhas: 2)
         else
           _Contagens(
             totais: totaisPorSeveridade(abertas.requireValue),

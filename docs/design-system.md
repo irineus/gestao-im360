@@ -563,6 +563,9 @@ abstract final class Cores {
   // Fundo tonal de erro no escuro — o mesmo par do badge CANCELADO escuro,
   // contraste já verificado no §2.3 (acrescentado em 04/09/2026).
   static const erroFundoEscuro = Color(0xFF3D212B);
+  // Fundo tonal de ATENÇÃO no escuro — o mesmo par do badge STANDBY escuro,
+  // contraste já verificado no §2.3 (acrescentado em 05/09/2026, card 8.1,5).
+  static const atencaoFundoEscuro = Color(0xFF332E27);
 
   // FORMADO (violeta própria — card 1.9 §6)
   static const formado       = Color(0xFF4C3FA8);
@@ -691,6 +694,11 @@ const _esquemaClaro = ColorScheme.light(
   outline: Cores.grafite200,
   error: Cores.erro,              onError: Colors.white,
   errorContainer: Cores.erroFundo, onErrorContainer: Cores.erro,
+  // ⚠️ Sem estes o Flutter devolve `tertiary = secondary` (grafite) e
+  // `tertiaryContainer = tertiary`: toda superfície tonal de ATENÇÃO sai
+  // grafite escuro (card 8.1,5, item A1).
+  tertiary: Cores.atencao,        onTertiary: Colors.white,
+  tertiaryContainer: Cores.atencaoFundo, onTertiaryContainer: Cores.atencao,
 );
 
 const _esquemaEscuro = ColorScheme.dark(
@@ -705,6 +713,10 @@ const _esquemaEscuro = ColorScheme.dark(
   // toda superfície tonal de erro do tema escuro fica com fundo, borda e texto
   // na mesma cor (achado de 04/09/2026, revisão da fase 05).
   errorContainer: Cores.erroFundoEscuro, onErrorContainer: Cores.erroEscuro,
+  // O par de ATENÇÃO do escuro, pela mesma razão (card 8.1,5, item A1).
+  tertiary: Cores.atencaoEscuro,  onTertiary: Cores.grafite900,
+  tertiaryContainer: Cores.atencaoFundoEscuro,
+  onTertiaryContainer: Cores.atencaoEscuro,
 );
 
 ThemeData _tema(ColorScheme esquema, {required bool escuro, required bool compacto}) {
@@ -835,6 +847,21 @@ dizer com mais precisão:
 | # | Achado | Como ficou |
 |---|---|---|
 | 16 | **O §5.6 descreve os quatro estados como se eles sempre ocupassem a tela**, e `_Centro` os desenhava com um `Column(mainAxisSize.min)` dentro de um `Center` — sem rolagem | **`EstadoVazio`, `EstadoErro` e `EstadoSemAcesso` passaram a rolar quando não cabem.** Desde o card 6.7 os estados moram também em **painéis**, que ocupam 2/5 da altura ao lado da lista: ali o conjunto ícone (40 px) + frase + "Código: …" + botão não cabe, e o Flutter desenha as listras de overflow **por cima do "Tentar de novo"** — o estado de erro perde a saída exatamente onde a pessoa precisa dela. Medido no `tela_compras_test`, com o painel de itens falhando: `A RenderFlex overflowed by 40 pixels`. A correção é um `SingleChildScrollView` dentro do `Center`: continua centrado, e o scroll só entra quando falta altura. Vale para toda tela e todo painel, presentes e futuros — o defeito não era da tela 7, era do componente |
+
+### Correções e divergências do card 8.1,5 (05/09/2026) — revisão das telas 06 e 07
+
+| # | Achado | Como ficou |
+|---|---|---|
+| 17 | **`tertiary` e `tertiaryContainer` nunca foram declarados** nos dois esquemas do §10.4 | O `ColorScheme` do Flutter então devolve `tertiary = secondary` (grafite 700) e `tertiaryContainer = tertiary`: **toda superfície tonal de ATENÇÃO do sistema saía grafite escuro**, com o texto da linha em `onSurface` — também grafite. Medido no tema claro: a linha "abaixo do mínimo" de Materiais e a "sugerido > 0" de Compras **ilegíveis**, e o `AvisoTonal` de atenção como caixa grafite com texto branco. É a mesma família do `errorContainer` da correção do card 5.11, e igualmente invisível para `analyze` e para todo teste que não desenhe cor. Os quatro papéis passam a ser declarados nos dois esquemas, com o token novo `Cores.atencaoFundoEscuro` (o fundo do badge STANDBY escuro, contraste já verificado no §2.3), e **`test/tema_test.dart`** assere que nenhum par tonal é herdado por acidente |
+| 18 | **A linha em alerta pintava o fundo e deixava o texto na cor da tabela** | O par de contraste verificado é *(container, onContainer)*, e metade dele não estava sendo usada. O `TabelaIm360` passou a envolver a linha num `DefaultTextStyle` com `onTertiaryContainer`/`onErrorContainer` conforme o tom |
+| 19 | **Botão desabilitado com motivo estourava a barra de ações no mobile** | No celular o `BotaoAcao` desabilitado acrescenta a legenda embaixo (§5.7) e vira uma `Column` **sem largura** — dentro de uma `Row`, isso é infinito. Medido em 390 px: Compras, `RenderFlex overflowed by 295 px` (537 com mais permissões); Materiais, 135 px. Três correções, e as três valem para todo botão e toda tela: a barra de ações da tabela desceu para uma **segunda linha em `Wrap`**, o rótulo com ícone virou `Flexible` (para quebrar em vez de estourar) e a legenda do motivo só é desenhada quando o pai **dá largura** — onde não dá, o motivo continua no tooltip e na semântica |
+| 20 | **A barra de filtros morava dentro do `TabelaIm360`** | As telas 4 (grade) e 5 (acordeão) não usam a tabela e por isso empilhavam os próprios controles à esquerda, com larguras diferentes e **sem a folha "Filtrar (n)"** que todas as outras têm no celular. Ela saiu para `lib/widgets/barra_filtros.dart` (`BarraFiltrosIm360`), com `FiltroSuspenso` e `CampoBusca` ao lado: largura fixa fora do mobile, **largura total** dentro da folha |
+| 21 | **`TituloSecao` sem teto de linhas dentro de um painel** | O cabeçalho do painel tem *altura de painel* (2/5 da tela, correção 16): com um rótulo de botão mais largo ao lado, o apoio ganhou uma linha e o painel estourou 12 px, engolindo a lista. Ganhou `maxLinhasApoio` (nulo = sem limite, para quem mora em coluna rolável) e o `apoio` passou a ser **opcional** — enquanto a seção carrega não há contagem a afirmar |
+| 22 | **Cabeçalho de painel com título e ações lado a lado em 390 px** | Uma `Row` dá largura **infinita** ao filho não flexível: o `Wrap` das ações não tinha onde quebrar e estourava 80 px. Nasceu `CabecalhoDePainel`, que empilha no celular e mantém lado a lado onde há largura |
+| 23 | **Estado de região com altura FIXA** (`_alturaRegiao = 200`) | Virou altura **mínima**: desde a correção 16 os estados rolam, e grampear 200 px só reservava espaço em branco abaixo de um estado curto |
+| 24 | **O portão `texto_de_tela_test` varria `card \d` e deixava passar a interpolação** | `'$nome — aba do card $card.'` rendia "Certificado — aba do card 8.6." **na tela** e nada no portão. O padrão passou a `card (\d|\$)`, e os dois textos que ele então reprovou — a aba futura da ficha e o `TelaEmConstrucao` — passaram a dizer "chega numa próxima versão", a mesma frase do rodapé do dashboard. Qual card entrega cada tela continua registrado **no código** (`_cardDaRota`, no roteador), que é onde a informação serve |
+| 25 | **Nenhuma tela das fases 06 e 07 tinha teste em 390 px** | É por onde as correções 19 e o `Scaffold.of()` do shell passaram por todo o CI. Cada uma ganhou o teste mobile mínimo — monta em 390×800, `takeException()` nulo, ação primária alcançável —, e a obrigação entrou em `docs/estrategia-testes.md` §13 para todo card de Tela |
+
 
 ---
 

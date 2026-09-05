@@ -61,7 +61,7 @@ class ModularFalso implements ModularRepositorio {
       ),
       // Vazia e com o módulo corrente VENCIDO — é o `modulo_atrasado` com o
       // outro valor, a mesma escolha do seed. Cronograma PARCIAL (só o módulo
-      // 1): é a turma do "Acrescentar 2 módulo(s)".
+      // 1): é a turma do "Acrescentar 2 módulos".
       turmaModularFalsa(
         id: 't-2025',
         nome: 'Eletricista 2025.2',
@@ -251,12 +251,22 @@ class ModularFalso implements ModularRepositorio {
     required String cursoId,
     required String salaId,
     required int capacidade,
-    required DateTime dataInicio,
+    DateTime? dataInicio,
     required bool ativo,
   }) async {
     salvas.add('${id ?? 'nova'}|$nome|$capacidade|$ativo');
-    return id ?? 'turma-nova';
+    // ⚠️ Guarda a data COMO O BANCO guardaria: a criação grava, e a edição só
+    // grava se alguém mandar uma — que é justamente o que não pode acontecer
+    // (item A2). Sem reproduzir isso aqui, o teste mediria um mundo em que
+    // `update` nunca toca a coluna.
+    final chave = id ?? 'turma-nova';
+    if (dataInicio != null) datasInicio[chave] = dataInicio;
+    return chave;
   }
+
+  /// A `data_inicio` de cada turma como o falso a tem — é o que o teste da
+  /// edição relê para provar que salvar sem mudar nada não a moveu.
+  final Map<String, DateTime> datasInicio = {};
 
   @override
   Future<void> excluirTurma(String id) async => excluidas.add(id);

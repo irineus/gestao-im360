@@ -14,6 +14,31 @@ String formatarData(DateTime d) =>
 
 String formatarDataCurta(DateTime d) => '${_dois(d.day)}/${_dois(d.month)}';
 
+/// Um intervalo de datas, com o ano **quando ele importa**.
+///
+/// ⚠️ `dd/mm–dd/mm` lê-se ao contrário quando o intervalo atravessa o ano: o
+/// cronograma de "Eletricista 2025.2" mostrava `09/11–27/07 · atrasado` para
+/// 09/11/2025 → 27/07/2026, um período que parece começar depois de terminar
+/// (item B3). O ano entra quando o intervalo cruza anos ou quando alguma das
+/// pontas não é do ano corrente — e nos dois casos entra nas **duas** datas,
+/// porque `09/11/2025–27/07` seria uma terceira forma para aprender.
+String formatarPeriodo(DateTime? inicio, DateTime? fim, DateTime hoje) {
+  if (inicio == null && fim == null) return 'sem datas';
+  final anos = <int>{
+    if (inicio != null) inicio.year,
+    if (fim != null) fim.year,
+  };
+  final comAno = anos.length > 1 || anos.first != hoje.year;
+  String uma(DateTime? d) => d == null
+      ? '?'
+      : comAno
+      ? formatarData(d)
+      : formatarDataCurta(d);
+  if (inicio == null) return 'até ${uma(fim)}';
+  if (fim == null) return 'desde ${uma(inicio)}';
+  return '${uma(inicio)}–${uma(fim)}';
+}
+
 /// `dd/mm/aaaa hh:mm`, para carimbos de histórico.
 String formatarDataHora(DateTime d) =>
     '${formatarData(d)} ${_dois(d.hour)}:${_dois(d.minute)}';

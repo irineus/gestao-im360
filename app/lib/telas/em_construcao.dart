@@ -6,14 +6,17 @@ import '../theme/tipografia.dart';
 
 /// Placeholder das telas cujos cards ainda não chegaram.
 ///
-/// Existe para que o shell, o menu e os guards de rota deste card sejam
-/// exercitáveis de verdade — e diz **qual card** entrega cada tela, para o
-/// placeholder não virar um destino permanente.
+/// Existe para que o shell, o menu e os guards de rota sejam exercitáveis de
+/// verdade.
+///
+/// ⚠️ Dizia "Tela do card 8.5." — o número do card do board **na tela**, que é
+/// vocabulário de quem escreveu o sistema e não de quem o usa (item C1). Qual
+/// card entrega cada tela continua registrado em `_cardDaRota`, no roteador,
+/// que é onde a informação serve.
 class TelaEmConstrucao extends StatelessWidget {
-  const TelaEmConstrucao({super.key, required this.rota, required this.card});
+  const TelaEmConstrucao({super.key, required this.rota});
 
   final Rota rota;
-  final String card;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -25,7 +28,7 @@ class TelaEmConstrucao extends StatelessWidget {
           Text(rota.titulo, style: Tipografia.subtitulo),
           const SizedBox(height: Dim.e8),
           Text(
-            'Tela do card $card.',
+            'Esta tela chega numa próxima versão.',
             style: Tipografia.apoio.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),

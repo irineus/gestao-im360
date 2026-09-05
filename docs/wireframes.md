@@ -888,7 +888,7 @@ que se resolve em silêncio volta como defeito na revisão seguinte.
 
 | # | Divergência | Como ficou |
 |---|---|---|
-| 15 | **A linha "ritmo: 1 apostila/23 dias"** (§6.3) depende de `fn_ritmo_aluno` | **Fora da aba até o card 8.1.** A função é dele (`docs/projecao-demanda.md` §4.3, item 9 do mapa de ajustes, marcado "não bloqueante"), e este card não a antecipa: implementá-la aqui seria trazer meia cascata da projeção para dentro de uma tela, e o número sairia diferente do que o 8.1 vai publicar. Quando ela nascer, entra uma linha no cabeçalho — a aba já tem o lugar |
+| 15 | ✅ **FECHADA em 05/09/2026 (card 8.1,5).** O 8.1 entregou `v_ritmo_aluno` e `fn_ritmo_aluno`, e a linha entrou no cabeçalho da aba: *"ritmo: 1 apostila a cada N dias · última entrega dd/mm/aaaa"*, lida da **view** (o mesmo número que a projeção usou) e com os três estados — `ritmo_dias` nulo diz "sem ritmo ainda (menos de duas entregas com intervalo válido)", **nunca "0 dias"**, e erro de leitura não vira "sem ritmo". Enunciado original preservado: **A linha "ritmo: 1 apostila/23 dias"** (§6.3) depende de `fn_ritmo_aluno` | **Fora da aba até o card 8.1.** A função é dele (`docs/projecao-demanda.md` §4.3, item 9 do mapa de ajustes, marcado "não bloqueante"), e este card não a antecipa: implementá-la aqui seria trazer meia cascata da projeção para dentro de uma tela, e o número sairia diferente do que o 8.1 vai publicar. Quando ela nascer, entra uma linha no cabeçalho — a aba já tem o lugar |
 | 16 | **`[Editar trilha]` "entra em modo de reordenação (arrastar)"** (§6.3) | O modo de edição existe; a reordenação é por **setas** (subir/descer) mais um "Mover para…" com a posição de destino. Arrastar dentro de um `TabBarView` que já rola disputa o gesto vertical com a rolagem numa lista de 14 a 17 itens, o alvo de arraste ficaria abaixo dos 44 px do design-system §8.4, e **arrastar não tem equivalente por teclado**, que o §8.3 exige no desktop. `fn_trilha_reordenar` recebe uma POSIÇÃO (card 6.2 §5.3) — é exatamente o que a seta produz, e o arraste teria de traduzir pixels para ela |
 | 17 | **`[Estornar]` "oferecido nas entregas recentes"** (§6.3) | Aparece em **toda** entrega com movimento vinculado. "Recente" não tem definição no modelo — não há coluna, parâmetro nem regra que a fixe —, e escondê-lo nas antigas deixaria uma correção **sem tela nenhuma**, que é o mesmo buraco que o card 5.7 fechou no bloco desativado. Estornar duas vezes continua impossível (`movimento_estorno_uk` + `MOVIMENTO_JA_ESTORNADO`, card 6.3). Entrega **sem** movimento vinculado — a fixture do 6.1 e a importação do 9.1 produzem essas linhas — mantém o botão **visível e desabilitado com o motivo**, pela decisão 1 |
 | 18 | **`/alunos/:id/trilha`** era a rota 3b sem tela | Virou o **deep-link da aba**: abre a ficha já em Trilha, guardada pelo conjunto da 3b (`alunos.ler` + `materiais.ler` + `estoque.ler`). Ela existe como rota própria porque exige `estoque.ler` a mais que a ficha — quem chega sem a permissão vê o diagnóstico em vez de a aba abrir mentindo com saldo 0. O placeholder "card 6.6" saiu do roteador |
@@ -964,6 +964,17 @@ própria turma.
 | 11 Pendências | §14 | 5.8 |
 | 12 Administração | §15 | 4.7 (+ 4.7.5) |
 | 13 Importação | §16 | 9.1 |
+
+### Divergências e achados do card 8.1,5 (05/09/2026) — revisão das telas 06 e 07
+
+| # | Apontamento | Como ficou / card afetado |
+|---|---|---|
+| 41 | **A data de início da turma Modular não é editável na tela** (§8) | Consequência da correção do defeito que reescrevia `data_inicio` para hoje em **toda** edição: o `update` deixou de enviar a coluna. `v_turma_modular_lotacao` **não expõe** `data_inicio` e `TurmaModular` não a carrega, então a tela não pode nem mostrá-la nem editá-la sem view nova — o que é migração, e este card não tem nenhuma. Fica gravada só na criação. Expô-la (e editá-la) é do card que mexer nas views Modular; registrado também em `views-leitura.md` §7.2 |
+| 42 | **`[Ajustar]` do §9 fica na barra de ações da tela**, ao lado de `[+ Novo material]` | Na implementação ele existe **só no painel do material**, que é onde há contexto (qual material, qual saldo). Um "Ajustar" na barra teria de perguntar o material primeiro — um passo a mais para a mesma coisa. Registrado, não alterado |
+| 43 | **A navegação de semana da tela 4 não é filtro** | Com a barra de filtros comum (design-system §11, correção 20), ela ficou **acima** da barra e em largura total: é o controle mais tocado da tela e não pertence à folha "Filtrar (n)", que guarda método e sala |
+| 44 | **No celular o título da tela 11 aparecia duas vezes** | O app bar do shell já diz "Pendências", e o cabeçalho da fila dizia "Pendências (0 abertas)" logo abaixo — a palavra duas vezes em 100 px. No mobile o cabeçalho passou a mostrar **só a contagem** ("0 abertas"), que é a informação que o §14.1 quer no topo de uma fila de trabalho; fora do mobile nada muda |
+| 45 | **O §3.2 não dizia onde mora o menu do usuário no celular** | Ele estava num alvo de 24×24 px no app bar, e o nome e a unidade **não apareciam em faixa nenhuma** fora do desktop. Passaram para o **cabeçalho da gaveta do "Mais"**, junto com "Tema escuro/claro" e "Sair"; o ícone do app bar abre a mesma gaveta, e o trilho do tablet ganhou nome e iniciais no rodapé |
+
 
 ---
 

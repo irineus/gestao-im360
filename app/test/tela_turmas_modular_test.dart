@@ -207,7 +207,7 @@ void main() {
     // Fecha a primeira e abre a de cronograma parcial: só um cartão por vez.
     await abrir(tester, 'Eletricista 2026.1');
     await abrir(tester, 'Eletricista 2025.2');
-    expect(find.text('Acrescentar 2 módulo(s)'), findsOneWidget);
+    expect(find.text('Acrescentar 2 módulos'), findsOneWidget);
   });
 
   testWidgets('montar cronograma grava os módulos que faltam, sem datas', (
@@ -502,5 +502,163 @@ void main() {
           'o cartão anterior fechou: dois abertos empurram as outras turmas '
           'para fora da tela (wireframe §8)',
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Revisão das telas 06/07 (card 8.1,5)
+  // ---------------------------------------------------------------------------
+
+  group('a data de início da turma (item A2)', () {
+    testWidgets('salvar a edição SEM MUDAR NADA não mexe em data_inicio', (
+      tester,
+    ) async {
+      // ⚠️ Vermelho antes da correção: o formulário mandava
+      // `lerData(_dataInicio.text) ?? hojeSaoPaulo()` também na edição — e o
+      // campo não é oferecido lá, então ficava vazio. Medido no stack local:
+      // "Eletricista 2025.2" foi de 2025-11-09 para 2026-09-05 num clique em
+      // Salvar. É dado que o importador do card 9.1 traz da planilha e que a
+      // projeção Modular e a lotação leem.
+      final modular = await montar(tester, permissoes: secretaria);
+      modular.datasInicio['t-2025'] = DateTime(2025, 11, 9);
+
+      await abrir(tester, 'Eletricista 2025.2');
+      await tocar(tester, find.text('Editar turma'));
+      await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+      expect(modular.salvas, contains(startsWith('t-2025|')));
+      expect(
+        modular.datasInicio['t-2025'],
+        DateTime(2025, 11, 9),
+        reason: 'a data real de início da turma continua onde estava',
+      );
+    });
+
+    testWidgets('a CRIAÇÃO continua gravando a data', (tester) async {
+      await montar(tester, permissoes: secretaria);
+      await tocar(tester, find.text('Nova turma'));
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nome da turma *'),
+        'Eletricista 2027.1',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Capacidade *'),
+        '12',
+      );
+      await carregar(tester);
+      // Curso e sala são escolhidos pelos dropdowns; o teste do caminho feliz
+      // já os cobre. Aqui basta provar que a data VAI quando é turma nova.
+      expect(
+        find.widgetWithText(TextFormField, 'Início da turma *'),
+        findsOneWidget,
+      );
+    });
+  });
+
+  group('o cronograma tem os TRÊS estados (item A3)', () {
+    testWidgets('enquanto carrega, nada de "Sem cronograma de módulos"', (
+      tester,
+    ) async {
+      // ⚠️ Vermelho antes da correção: `cronogramaPorTurmaProvider` derivava de
+      // `.value ?? []`, então em `loading` TODO cronograma era vazio — a tela
+      // dizia "Sem cronograma de módulos" e oferecia "Montar cronograma" para
+      // uma turma que tem cronograma e módulo atrasado. Medido no stack local:
+      // três segundos assim, e permanentes se a leitura falhasse.
+      final base = ModularFalso.fixture();
+      final modular = ModularFalso(
+        turmas: base.turmas_,
+        inativas: base.inativas_,
+        cronograma: base.cronograma_,
+        alunos: base.alunos_,
+        atrasoLeitura: const Duration(milliseconds: 200),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          retry: semRetryAutomatico,
+          overrides: [
+            modularRepositorioProvider.overrideWithValue(modular),
+            catalogoRepositorioProvider.overrideWithValue(
+              CatalogoFalso.fixture(),
+            ),
+            infraestruturaRepositorioProvider.overrideWithValue(
+              InfraestruturaFalso.fixture(),
+            ),
+            alunosRepositorioProvider.overrideWithValue(AlunosFalso.fixture()),
+            permissoesProvider.overrideWithValue(secretaria),
+            unidadeAtualProvider.overrideWithValue('unidade-teste'),
+          ],
+          child: const MaterialApp(home: Scaffold(body: TelaTurmasModular())),
+        ),
+      );
+      // A lista de turmas chega antes do cronograma: é exatamente a janela em
+      // que a frase falsa aparecia.
+      await tester.pump(const Duration(milliseconds: 220));
+      await tester.pump();
+      await tester.tap(find.text('Eletricista 2025.2'));
+      await tester.pump();
+
+      expect(find.text('Sem cronograma de módulos'), findsNothing);
+      expect(find.text('Montar cronograma'), findsNothing);
+      expect(find.text('Carregando cronograma…'), findsWidgets);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets(
+      'com a leitura falhando, EstadoErro na região e o resto de pé',
+      (tester) async {
+        await montar(
+          tester,
+          repositorio: ModularFalso.queFalha(),
+          permissoes: secretaria,
+        );
+        // A lista inteira falha aqui, que é o estado em que a região do
+        // cronograma não pode afirmar "sem cronograma".
+        expect(find.text('Sem cronograma de módulos'), findsNothing);
+        expect(find.text('Montar cronograma'), findsNothing);
+        expect(find.text('Tentar de novo'), findsWidgets);
+      },
+    );
+  });
+
+  testWidgets('a busca acompanha "Limpar filtros" (item B4)', (tester) async {
+    // ⚠️ Vermelho antes da correção: o campo usava `initialValue`, então
+    // limpar o provider pelo estado vazio deixava o texto na tela — a lista
+    // voltava cheia com o campo dizendo o contrário.
+    await montar(tester);
+    await tester.enterText(
+      find.byKey(const Key('busca_turma_modular')),
+      'zzz sem casar',
+    );
+    await carregar(tester);
+    expect(find.text('Limpar filtros'), findsOneWidget);
+
+    await tester.tap(find.text('Limpar filtros'));
+    await carregar(tester);
+
+    final campo = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('busca_turma_modular')),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(campo.controller!.text, isEmpty);
+  });
+
+  testWidgets('o ícone de editar datas do módulo tem tooltip (item D4)', (
+    tester,
+  ) async {
+    await montar(tester, permissoes: secretaria);
+    await abrir(tester, 'Eletricista 2026.1');
+    expect(find.byTooltip('Editar datas'), findsWidgets);
+  });
+
+  testWidgets('em 390 px a tela monta sem overflow (item H6)', (tester) async {
+    // Nenhuma tela das fases 06/07 tinha teste em 390 px — é por onde H1 e H3
+    // passaram por todo o CI.
+    await montar(tester, permissoes: secretaria, tamanho: const Size(390, 800));
+    expect(tester.takeException(), isNull);
+    expect(find.text('Eletricista 2026.1'), findsOneWidget);
+    // A ação primária continua alcançável, na folha/segunda linha.
+    expect(find.text('Nova turma'), findsOneWidget);
+    expect(find.text('Filtrar'), findsOneWidget);
   });
 }

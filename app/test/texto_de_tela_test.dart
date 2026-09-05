@@ -53,7 +53,11 @@ void main() {
     // `turmas.ler`. Referência a card envelhece junto com o board; código de
     // permissão entre crases é vocabulário de quem escreveu o sistema, não de
     // quem o usa. Cinco textos assim chegaram às telas da fase 05.
-    final referenciaACard = RegExp(r'card \d', caseSensitive: false);
+    // ⚠️ `card \d` deixava passar a INTERPOLAÇÃO: `'$nome — aba do card
+    // $card.'` da ficha do aluno rendia "Certificado — aba do card 8.6." na
+    // tela e nada no portão (item C1). Agora `card` seguido de dígito **ou**
+    // de interpolação reprova.
+    final referenciaACard = RegExp(r'card (\d|\$)', caseSensitive: false);
     final codigoDePermissao = RegExp(r'`[a-z_]+\.[a-z_]+`');
 
     test('nenhum literal em lib/telas/ cita card do board ou permissão', () {
