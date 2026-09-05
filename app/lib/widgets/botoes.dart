@@ -64,24 +64,43 @@ class BotaoAcao extends ConsumerWidget {
     final comTooltip = Tooltip(message: motivo, child: botao);
     if (!mobile) return comTooltip;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        comTooltip,
-        const SizedBox(height: Dim.e4),
-        Text(
-          motivo,
-          style: Tipografia.apoio.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
+    // ⚠️ A legenda de apoio só cabe onde há largura para ela quebrar. Num pai
+    // que não dá largura — uma `Row`, que era o caso da barra de ações da
+    // `TabelaIm360` —, o `Text` fica com largura infinita e o Flutter desenha
+    // as listras de overflow: 295 px em Compras, medidos em 390 px (item H3).
+    // Ali o motivo continua existindo, no tooltip e na semântica, que é o que
+    // o card 2.6 (decisão 1) exige; o que não pode é ficar ilegível.
+    return LayoutBuilder(
+      builder: (context, restricoes) {
+        if (!restricoes.hasBoundedWidth) {
+          return Semantics(hint: motivo, child: comTooltip);
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            comTooltip,
+            const SizedBox(height: Dim.e4),
+            Text(
+              motivo,
+              softWrap: true,
+              style: Tipografia.apoio.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   Widget _botao(BuildContext context, {required bool habilitado}) {
     final aoPressionar = habilitado ? aoTocar : null;
+    // ⚠️ O rótulo é `Flexible`: sem isso a `Row` de ícone + texto pede a
+    // largura intrínseca do rótulo e estoura à direita em 390 px — "Criar
+    // pedido com os sugeridos" sozinho passava de 122 px do que cabia. Com a
+    // folga, o texto quebra em duas linhas e o botão continua inteiro
+    // (item H3).
     final filho = icone == null
         ? Text(rotulo)
         : Row(
@@ -89,7 +108,7 @@ class BotaoAcao extends ConsumerWidget {
             children: [
               Icon(icone, size: 18),
               const SizedBox(width: Dim.e8),
-              Text(rotulo),
+              Flexible(child: Text(rotulo)),
             ],
           );
 

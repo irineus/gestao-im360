@@ -293,6 +293,31 @@ void main() {
       expect(linhas.last, contains('turma terminou'));
     });
 
+    test('sem próximo MAS com módulos do curso fora do cronograma (item B2)', () {
+      // ⚠️ Vermelho antes da correção: `resumoAvanco` só olhava o cronograma e
+      // anunciava o fim da turma — medido em "Eletricista 2025.2", que tem 1
+      // módulo no cronograma e o botão "Acrescentar 2 módulos" ao lado, no
+      // mesmo cartão. A frase não pré-valida nada: o avanço continua permitido.
+      final linhas = resumoAvanco(
+        corrente: corrente,
+        proximo: null,
+        dataConclusao: DateTime(2026, 10, 10),
+        faltantes: 2,
+      );
+      expect(linhas.last, contains('2 módulos fora dele'));
+      expect(linhas.last, contains('acrescente-os antes de avançar'));
+    });
+
+    test('com um módulo só fora do cronograma, o singular', () {
+      final linhas = resumoAvanco(
+        corrente: corrente,
+        proximo: null,
+        dataConclusao: DateTime(2026, 10, 10),
+        faltantes: 1,
+      );
+      expect(linhas.last, contains('1 módulo fora dele'));
+    });
+
     test('a frase NÃO promete a data de início do próximo', () {
       // Quem a calcula é `fn_turma_modular_avancar`, com o passo médio da turma
       // e preservando o que já estiver informado: um número escrito aqui seria

@@ -19,6 +19,7 @@ library;
 import 'package:flutter/foundation.dart';
 
 import '../util/datas.dart';
+import '../util/texto.dart';
 
 export '../util/datas.dart';
 
@@ -180,15 +181,13 @@ class ModuloDaTurma {
 
   /// `01/08–20/09`, `desde 01/08`, `até 20/09` ou `sem datas` — o que a linha
   /// sabe, sem inventar a metade que falta.
+  ///
+  /// ⚠️ O ano entra quando o intervalo cruza anos ou sai do ano corrente: sem
+  /// ele, `09/11/2025 → 27/07/2026` saía como `09/11–27/07`, que se lê ao
+  /// contrário (item B3). Quem decide é [formatarPeriodo].
   String get periodo {
-    final inicio = dataInicio;
-    final fim = prevConclusao;
-    if (inicio != null && fim != null) {
-      return '${formatarDataCurta(inicio)}–${formatarDataCurta(fim)}';
-    }
-    if (inicio != null) return 'desde ${formatarDataCurta(inicio)}';
-    if (fim != null) return 'até ${formatarDataCurta(fim)}';
-    return semDatasTexto;
+    if (semDatas) return semDatasTexto;
+    return formatarPeriodo(dataInicio, prevConclusao, hojeSaoPaulo());
   }
 }
 
@@ -356,10 +355,16 @@ List<TurmaModular> ordenarTurmas(List<TurmaModular> turmas) => List.of(turmas)
 /// então aplica `data_conclusao + 1` com o passo médio da turma. Dizer aqui um
 /// número que o banco pode não usar seria a segunda conta que o card 2.3 §4.1
 /// proíbe.
+/// ⚠️ [faltantes] é o número de módulos do curso que **ainda não estão** no
+/// cronograma. Sem ele o diálogo anunciava o fim da turma olhando só o
+/// cronograma — e a tela mostrava, na mesma altura, um botão "Acrescentar 2
+/// módulo(s)" (item B2). A frase não pré-valida nada: o avanço continua
+/// permitido, e quem decide é `fn_turma_modular_avancar`.
 List<String> resumoAvanco({
   required ModuloDaTurma? corrente,
   required ModuloDaTurma? proximo,
   required DateTime dataConclusao,
+  int faltantes = 0,
 }) => [
   if (corrente != null)
     'Fecha ${rotuloModulo(corrente.moduloOrdem, corrente.moduloNome)} '
@@ -367,6 +372,10 @@ List<String> resumoAvanco({
   if (proximo != null)
     'Abre ${rotuloModulo(proximo.moduloOrdem, proximo.moduloNome)}'
         '${proximo.semDatas ? '' : ' (${proximo.periodo})'}.'
+  else if (faltantes > 0)
+    'Não há módulo seguinte no cronograma, mas o curso tem '
+        '${plural(faltantes, 'módulo fora dele', 'módulos fora dele')} — '
+        'acrescente-os antes de avançar, ou a turma passa a "turma terminou".'
   else
     'Não há módulo seguinte no cronograma: a turma passa ao estado '
         '"turma terminou".',

@@ -9,6 +9,7 @@ import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../util/datas.dart';
+import '../../widgets/barra_filtros.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
@@ -60,53 +61,51 @@ class PainelMovimentos extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(Dim.e16, Dim.e12, Dim.e16, Dim.e8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TituloSecao(
-                  texto: 'Movimentações ${material.codigo}',
-                  apoio:
-                      '${material.nome} · saldo ${material.saldo} · mínimo '
-                      '${material.estoqueMinimo}',
+          // ⚠️ Em 390 px o `Wrap` das ações não cabia ao lado do título e a
+          // `Row` estourava 80 px à direita: `Row` dá largura infinita ao filho
+          // não flexível, então o `Wrap` não tinha onde quebrar. No celular
+          // título e ações empilham (item H6).
+          child: CabecalhoDePainel(
+            titulo: TituloSecao(
+              texto: 'Movimentações ${material.codigo}',
+              apoio:
+                  '${material.nome} · saldo ${material.saldo} · mínimo '
+                  '${material.estoqueMinimo}',
+              maxLinhasApoio: 2,
+            ),
+            acoes: Wrap(
+              spacing: Dim.e8,
+              children: [
+                // ⚠️ **Sem guarda de permissão, e é a exceção da regra do
+                // §5.7 — de propósito.** O botão não escreve nada: ele abre o
+                // cadastro do material, que quem tem `materiais.ler` sempre
+                // pôde ver (card 4.4, tocando a linha). Guardá-lo por
+                // `materiais.editar` tiraria a leitura de quem já a tinha,
+                // porque desde este card a linha abre o PAINEL. Quem decide
+                // se há "Salvar" é o próprio `FormularioMaterial`, pela
+                // permissão — e o rótulo diz de antemão o que vai acontecer.
+                BotaoAcao(
+                  rotulo:
+                      ref.watch(permissoesProvider).contains('materiais.editar')
+                      ? 'Editar material'
+                      : 'Ver cadastro',
+                  nivel: NivelBotao.secundario,
+                  aoTocar: aoEditar,
                 ),
-              ),
-              Wrap(
-                spacing: Dim.e8,
-                children: [
-                  // ⚠️ **Sem guarda de permissão, e é a exceção da regra do
-                  // §5.7 — de propósito.** O botão não escreve nada: ele abre o
-                  // cadastro do material, que quem tem `materiais.ler` sempre
-                  // pôde ver (card 4.4, tocando a linha). Guardá-lo por
-                  // `materiais.editar` tiraria a leitura de quem já a tinha,
-                  // porque desde este card a linha abre o PAINEL. Quem decide
-                  // se há "Salvar" é o próprio `FormularioMaterial`, pela
-                  // permissão — e o rótulo diz de antemão o que vai acontecer.
-                  BotaoAcao(
-                    rotulo:
-                        ref
-                            .watch(permissoesProvider)
-                            .contains('materiais.editar')
-                        ? 'Editar material'
-                        : 'Ver cadastro',
-                    nivel: NivelBotao.secundario,
-                    aoTocar: aoEditar,
+                BotaoAcao(
+                  rotulo: 'Ajustar',
+                  icone: Icons.tune,
+                  exigePermissao: 'estoque.ajustar',
+                  aoTocar: aoAjustar,
+                ),
+                if (aoFechar != null)
+                  IconButton(
+                    tooltip: 'Fechar movimentações',
+                    icon: const Icon(Icons.close),
+                    onPressed: aoFechar,
                   ),
-                  BotaoAcao(
-                    rotulo: 'Ajustar',
-                    icone: Icons.tune,
-                    exigePermissao: 'estoque.ajustar',
-                    aoTocar: aoAjustar,
-                  ),
-                  if (aoFechar != null)
-                    IconButton(
-                      tooltip: 'Fechar movimentações',
-                      icon: const Icon(Icons.close),
-                      onPressed: aoFechar,
-                    ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         Padding(
@@ -186,31 +185,29 @@ class _FiltrosMovimento extends ConsumerWidget {
       runSpacing: Dim.e8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        DropdownMenu<PeriodoMovimento>(
+        FiltroSuspenso<PeriodoMovimento>(
           key: ValueKey('periodo-${filtro.periodo}'),
-          width: 200,
-          label: const Text('Período'),
-          textStyle: Tipografia.corpo,
-          initialSelection: filtro.periodo,
-          dropdownMenuEntries: [
+          rotulo: 'Período',
+          largura: 200,
+          selecao: filtro.periodo,
+          entradas: [
             for (final p in PeriodoMovimento.values)
               DropdownMenuEntry(value: p, label: rotuloPeriodo(p)),
           ],
-          onSelected: (valor) => controlador.definir(
+          aoSelecionar: (valor) => controlador.definir(
             filtro.copiar(periodo: valor ?? PeriodoMovimento.todos),
           ),
         ),
-        DropdownMenu<String>(
+        FiltroSuspenso<String>(
           key: ValueKey('tipo-${filtro.tipo}'),
-          width: 180,
-          label: const Text('Tipo'),
-          textStyle: Tipografia.corpo,
-          initialSelection: filtro.tipo ?? '',
-          dropdownMenuEntries: [
+          rotulo: 'Tipo',
+          largura: 180,
+          selecao: filtro.tipo ?? '',
+          entradas: [
             const DropdownMenuEntry(value: '', label: 'Todos'),
             for (final t in _tipos) DropdownMenuEntry(value: t, label: t),
           ],
-          onSelected: (valor) => controlador.definir(
+          aoSelecionar: (valor) => controlador.definir(
             filtro.copiar(
               tipo: () => (valor == null || valor.isEmpty) ? null : valor,
             ),

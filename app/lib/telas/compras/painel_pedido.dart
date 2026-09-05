@@ -105,66 +105,75 @@ class PainelPedido extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(Dim.e16, Dim.e12, Dim.e16, Dim.e8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TituloSecao(
-                  texto:
-                      'Pedido ${pedido.numero} · '
-                      '${rotuloStatusPedido(pedido.status)}',
-                  apoio: _apoio(pedido),
+          // Lado a lado onde há largura, empilhados no celular (item H6).
+          child: CabecalhoDePainel(
+            titulo: TituloSecao(
+              texto:
+                  'Pedido ${pedido.numero} · '
+                  '${rotuloStatusPedido(pedido.status)}',
+              apoio: _apoio(pedido),
+              // O cabeçalho do painel tem altura de painel: apoio sem teto
+              // rouba a lista de itens e estoura (ver `maxLinhasApoio`).
+              maxLinhasApoio: 2,
+            ),
+            acoes: Wrap(
+              spacing: Dim.e8,
+              runSpacing: Dim.e8,
+              children: [
+                BotaoAcao(
+                  // "Dados" é rótulo opaco ao lado de quatro ações; o verbo
+                  // diz o que acontece, como o "Editar material / Ver
+                  // cadastro" da tela 6 (item C4).
+                  //
+                  // ⚠️ Divergência do item C4, registrada: ele previa também
+                  // um "Ver dados" para o modo somente leitura, e este painel
+                  // NÃO tem esse estado — fora do rascunho o botão fica
+                  // desabilitado com o motivo, e não abre formulário nenhum.
+                  // Um "Ver dados" desabilitado prometeria uma leitura que
+                  // não existe.
+                  rotulo: 'Editar dados',
+                  nivel: NivelBotao.terciario,
+                  exigePermissao: 'compras.editar',
+                  desabilitado: _motivo(AcaoPedido.editar),
+                  aoTocar: () => _editarDados(context, ref),
                 ),
-              ),
-              Wrap(
-                spacing: Dim.e8,
-                runSpacing: Dim.e8,
-                children: [
-                  BotaoAcao(
-                    rotulo: 'Dados',
-                    nivel: NivelBotao.terciario,
-                    exigePermissao: 'compras.editar',
-                    desabilitado: _motivo(AcaoPedido.editar),
-                    aoTocar: () => _editarDados(context, ref),
+                BotaoAcao(
+                  rotulo: 'Acrescentar item',
+                  icone: Icons.add,
+                  nivel: NivelBotao.secundario,
+                  exigePermissao: 'compras.editar',
+                  desabilitado: _motivo(AcaoPedido.editar),
+                  aoTocar: () => _item(context, ref),
+                ),
+                BotaoAcao(
+                  rotulo: 'Cancelar pedido',
+                  nivel: NivelBotao.destrutivo,
+                  exigePermissao: 'compras.editar',
+                  desabilitado: _motivo(AcaoPedido.cancelar),
+                  aoTocar: () => _cancelar(context, ref),
+                ),
+                BotaoAcao(
+                  rotulo: 'Enviar',
+                  icone: Icons.outbox_outlined,
+                  exigePermissao: 'compras.editar',
+                  desabilitado: _motivo(AcaoPedido.enviar),
+                  aoTocar: () => _enviar(context, ref),
+                ),
+                BotaoAcao(
+                  rotulo: 'Receber',
+                  icone: Icons.inventory_outlined,
+                  exigePermissao: 'compras.receber',
+                  desabilitado: _motivo(AcaoPedido.receber),
+                  aoTocar: () => _receber(context, ref),
+                ),
+                if (aoFechar != null)
+                  IconButton(
+                    tooltip: 'Fechar pedido',
+                    icon: const Icon(Icons.close),
+                    onPressed: aoFechar,
                   ),
-                  BotaoAcao(
-                    rotulo: 'Acrescentar item',
-                    icone: Icons.add,
-                    nivel: NivelBotao.secundario,
-                    exigePermissao: 'compras.editar',
-                    desabilitado: _motivo(AcaoPedido.editar),
-                    aoTocar: () => _item(context, ref),
-                  ),
-                  BotaoAcao(
-                    rotulo: 'Cancelar pedido',
-                    nivel: NivelBotao.destrutivo,
-                    exigePermissao: 'compras.editar',
-                    desabilitado: _motivo(AcaoPedido.cancelar),
-                    aoTocar: () => _cancelar(context, ref),
-                  ),
-                  BotaoAcao(
-                    rotulo: 'Enviar',
-                    icone: Icons.outbox_outlined,
-                    exigePermissao: 'compras.editar',
-                    desabilitado: _motivo(AcaoPedido.enviar),
-                    aoTocar: () => _enviar(context, ref),
-                  ),
-                  BotaoAcao(
-                    rotulo: 'Receber',
-                    icone: Icons.inventory_outlined,
-                    exigePermissao: 'compras.receber',
-                    desabilitado: _motivo(AcaoPedido.receber),
-                    aoTocar: () => _receber(context, ref),
-                  ),
-                  if (aoFechar != null)
-                    IconButton(
-                      tooltip: 'Fechar pedido',
-                      icon: const Icon(Icons.close),
-                      onPressed: aoFechar,
-                    ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         if (pedido.observacao != null && pedido.observacao!.isNotEmpty)
@@ -257,12 +266,14 @@ class _LinhaItem extends StatelessWidget {
         : 'recebido ${item.qtdRecebida} de ${item.qtdPedida} · '
               'faltam ${item.qtdPendente}';
 
-    return Semantics(
-      label: '${item.rotulo}, $situacao',
-      excludeSemantics: true,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: Dim.alvoMobile),
-        padding: const EdgeInsets.symmetric(vertical: Dim.e8),
+    // ⚠️ O `excludeSemantics` cobria a linha inteira, e o "Editar item" que
+    // mora dentro dela deixava de existir para leitor de tela e para o foco
+    // (item A5, a mesma correção da linha da trilha). Agora ele cobre só o
+    // bloco de texto.
+    final descricao = MergeSemantics(
+      child: Semantics(
+        label: '${item.rotulo}, $situacao',
+        excludeSemantics: true,
         child: Row(
           children: [
             SizedBox(
@@ -285,19 +296,29 @@ class _LinhaItem extends StatelessWidget {
                 color: excedente ? Cores.atencao : cores.onSurfaceVariant,
               ),
             ),
-            if (rascunho) ...[
-              const SizedBox(width: Dim.e8),
-              // Sem guarda de permissão aqui, e é a mesma exceção do card 6.7:
-              // o formulário abre em leitura para quem não pode escrever, e é
-              // ele que decide se há "Salvar" e "Remover".
-              IconButton(
-                tooltip: 'Editar item',
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                onPressed: aoEditar,
-              ),
-            ],
           ],
         ),
+      ),
+    );
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: Dim.alvoMobile),
+      padding: const EdgeInsets.symmetric(vertical: Dim.e8),
+      child: Row(
+        children: [
+          Expanded(child: descricao),
+          if (rascunho) ...[
+            const SizedBox(width: Dim.e8),
+            // Sem guarda de permissão aqui, e é a mesma exceção do card 6.7:
+            // o formulário abre em leitura para quem não pode escrever, e é
+            // ele que decide se há "Salvar" e "Remover".
+            IconButton(
+              tooltip: 'Editar item',
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              onPressed: aoEditar,
+            ),
+          ],
+        ],
       ),
     );
   }

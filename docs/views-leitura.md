@@ -476,6 +476,15 @@ select b.unidade_id,
 
 ### 7.2 `v_turma_modular_lotacao` — ~~cards 7.4 e 5.9~~ **card 7.3** (05/09/2026)
 
+> ⚠️ **A view NÃO expõe `data_inicio` da turma, e é por isso que a tela 5 não deixa editá-la**
+> (card 8.1,5, 05/09/2026, item A2). O defeito corrigido lá era o oposto do que parece: o `update`
+> reenviava `data_inicio = hoje` e **toda** edição da turma — renomear, mudar capacidade,
+> desativar — apagava a data real de início. Medido: "Eletricista 2025.2" foi de 2025-11-09 para
+> 2026-09-05 num clique em Salvar sem mudar nada. A correção é o `update` **não** enviar a coluna;
+> a consequência é que o campo só existe na criação. Expor `data_inicio` aqui (e permitir editá-la)
+> é **view nova**, para o card que mexer nas views Modular — é dado que o importador do card 9.1
+> traz da planilha e que a projeção Modular do 8.1 lê.
+
 ⚠️ **Corrigido em 05/09/2026, pelo card 7.3.** A atribuição a "7.4 e 5.9" não podia valer ao mesmo
 tempo que o §8 do `wireframes.md`, que manda a **tela 5** (card 7.3) ler esta view — e o 7.4 vem
 depois dela na ordem do board. Vence o §12.1: view de tela pertence ao card da tela, como em 6.6,

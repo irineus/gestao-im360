@@ -16,6 +16,7 @@ import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
 import '../../widgets/painel_detalhe.dart';
+import '../../widgets/painel_mobile.dart';
 import '../../widgets/tabela_im360.dart';
 import 'detalhes.dart';
 import 'filtros_catalogo.dart';
@@ -141,7 +142,11 @@ class _AbaMateriaisState extends ConsumerState<AbaMateriais>
     mostrarFormulario<void>(
       context,
       largura: larguraDetalhe,
-      construtor: (contexto) => _PainelMobile(materialId: material.materialId),
+      construtor: (contexto) => _PainelMobile(
+        materialId: material.materialId,
+        aoEditar: (cadastro) => _editar(contexto, cadastro),
+        aoAjustar: (linha) => _ajustar(contexto, linha),
+      ),
     );
   }
 
@@ -252,14 +257,18 @@ class _AbaMateriaisState extends ConsumerState<AbaMateriais>
           larguraMin: 90,
         ),
         ColunaIm360(
+          // ⚠️ `dd/mm/aaaa` com `flex: 1` saía "28/05/…" na faixa tablet
+          // (medido em 800 px): data com elipse não é data — 28/05 de que ano?
+          // A coluna degrada ANTES de Mínimo (prioridade maior) e, enquanto
+          // fica, tem largura para a data inteira (item D2).
           titulo: 'Último',
           texto: (m) => m.ultimoMovimentoEm == null
               ? '—'
               : formatarData(m.ultimoMovimentoEm!),
           numerica: true,
-          prioridade: 2,
-          flex: 1,
-          larguraMin: 110,
+          prioridade: 3,
+          flex: 2,
+          larguraMin: 120,
         ),
         ColunaIm360(
           titulo: 'Situação',
@@ -365,37 +374,43 @@ class _AbaMateriaisState extends ConsumerState<AbaMateriais>
 }
 
 /// O painel do mobile: mesma coisa do desktop, em tela cheia.
+///
+/// ⚠️ **Editar e ajustar passam pelos MESMOS callbacks da aba** (item A6).
+/// Antes ele chamava `mostrarFormulario` direto, sem passar por `_editar` /
+/// `_ajustar` — que são quem incrementa `versaoEstoqueProvider` (o cadastro
+/// muda `estoque_minimo` e `ativo`, colunas de `v_estoque_atual`), mostra a
+/// confirmação e fecha o painel no `'excluido'`. No celular, salvar o mínimo
+/// deixava lista e cabeçalho no valor antigo, e excluir deixava um diálogo de
+/// tela cheia **vazio**.
 class _PainelMobile extends ConsumerWidget {
-  const _PainelMobile({required this.materialId});
+  const _PainelMobile({
+    required this.materialId,
+    required this.aoEditar,
+    required this.aoAjustar,
+  });
 
   final String materialId;
+  final void Function(MaterialDidatico? cadastro) aoEditar;
+  final void Function(MaterialEstoque material) aoAjustar;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final lista = ref.watch(estoqueProvider).value ?? const <MaterialEstoque>[];
-    MaterialEstoque? material;
-    for (final m in lista) {
-      if (m.materialId == materialId) material = m;
-    }
-    if (material == null) return const SizedBox.shrink();
-
-    MaterialDidatico? cadastro;
-    for (final m in ref.read(materiaisProvider).value ?? const []) {
-      if (m.id == materialId) cadastro = m;
-    }
-
-    return PainelMovimentos(
-      material: material,
-      aoEditar: () => mostrarFormulario<String>(
-        context,
-        construtor: (_) => FormularioMaterial(material: cadastro),
-      ),
-      aoAjustar: () => mostrarFormulario<String>(
-        context,
-        construtor: (_) => FormularioAjusteEstoque(material: material!),
-      ),
-    );
-  }
+  Widget build(BuildContext context, WidgetRef ref) =>
+      PainelMobileDe<MaterialEstoque>(
+        itens: (ref) => ref.watch(estoqueProvider),
+        id: materialId,
+        idDe: (m) => m.materialId,
+        construtor: (context, material) {
+          MaterialDidatico? cadastro;
+          for (final m in ref.watch(materiaisProvider).value ?? const []) {
+            if (m.id == materialId) cadastro = m;
+          }
+          return PainelMovimentos(
+            material: material,
+            aoEditar: () => aoEditar(cadastro),
+            aoAjustar: () => aoAjustar(material),
+          );
+        },
+      );
 }
 
 /// A célula de saldo: número, ícone e — para leitor de tela — a palavra.

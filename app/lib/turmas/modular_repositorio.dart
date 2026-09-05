@@ -28,13 +28,21 @@ abstract interface class ModularRepositorio {
   /// blocos inativos do card 5.6.
   Future<List<TurmaModular>> turmasInativas();
 
+  /// Grava a turma. **[dataInicio] só é aceita na criação** e é obrigatória
+  /// nela; na edição fica nula e a coluna **não é enviada**.
+  ///
+  /// ⚠️ Não é elegância: enquanto o `update` reenviava `data_inicio`, salvar a
+  /// turma sem mudar nada reescrevia a data real de início para hoje — medido,
+  /// "Eletricista 2025.2" foi de 2025-11-09 para 2026-09-05 num clique em
+  /// Salvar. É dado que o importador do card 9.1 traz da planilha e que a
+  /// projeção Modular (8.1) e a lotação leem (item A2).
   Future<String> salvarTurma({
     String? id,
     required String nome,
     required String cursoId,
     required String salaId,
     required int capacidade,
-    required DateTime dataInicio,
+    DateTime? dataInicio,
     required bool ativo,
   });
 
@@ -163,7 +171,7 @@ class ModularRepositorioSupabase implements ModularRepositorio {
     required String cursoId,
     required String salaId,
     required int capacidade,
-    required DateTime dataInicio,
+    DateTime? dataInicio,
     required bool ativo,
   }) async {
     final linha = {
@@ -172,8 +180,10 @@ class ModularRepositorioSupabase implements ModularRepositorio {
       'curso_id': cursoId,
       'sala_id': salaId,
       'capacidade': capacidade,
-      'data_inicio': dataIso(dataInicio),
       'ativo': ativo,
+      // A chave existe só quando há data — no `update` ela fica FORA do mapa,
+      // e é isso que preserva o início real da turma (item A2).
+      if (dataInicio != null) 'data_inicio': dataIso(dataInicio),
     };
     final gravada = id == null
         ? await _cliente

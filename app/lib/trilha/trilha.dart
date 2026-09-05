@@ -311,6 +311,19 @@ List<T> candidatosParaTrilha<T>(
 bool resultadoTemPendencia(ResultadoEntrega resultado) =>
     resultado.status != StatusEntrega.entregue;
 
+/// O tipo da pendência que cada status da entrega abre — é o que o link "Ver
+/// pendência" leva para a central como filtro (item D3).
+///
+/// `REORDENADA` marca o material pulado como zerado (`ESTOQUE_ZERO`);
+/// `BLOQUEADA_SEM_ESTOQUE` abre a pendência de compra do aluno
+/// (`COMPRA_SEM_ESTOQUE`, card 2.2 (b)). Nulo em `ENTREGUE`, que não abre
+/// pendência nenhuma.
+String? tipoDaPendencia(StatusEntrega status) => switch (status) {
+  StatusEntrega.entregue => null,
+  StatusEntrega.reordenada => 'ESTOQUE_ZERO',
+  StatusEntrega.bloqueadaSemEstoque => 'COMPRA_SEM_ESTOQUE',
+};
+
 // --- textos de tela ---------------------------------------------------------
 
 /// design-system §7.2, linha "Ficha → Trilha".
@@ -339,6 +352,83 @@ const motivoTrilhaEmFim =
 const motivoTrilhaVazia =
     'Este aluno ainda não tem trilha. Gere a trilha a partir do combo.';
 
+/// Uma linha de `v_ritmo_aluno` (card 8.1, `20260905150000_projecao_demanda.sql`).
+///
+/// O número **vem da view** — é o mesmo que entrou na projeção de demanda. Uma
+/// segunda média em Dart seria a terceira implementação que o card 2.3 §4.1
+/// proíbe, e divergiria em silêncio do que a compra usou.
+@immutable
+class RitmoAluno {
+  const RitmoAluno({
+    required this.ritmoDias,
+    required this.ultimaEntrega,
+    required this.entregas,
+    required this.intervalosConsiderados,
+  });
+
+  factory RitmoAluno.deLinha(Map<String, dynamic> linha) => RitmoAluno(
+    ritmoDias: (linha['ritmo_dias'] as num?)?.toInt(),
+    ultimaEntrega: linha['ultima_entrega'] == null
+        ? null
+        : DateTime.parse('${linha['ultima_entrega']}'),
+    entregas: (linha['entregas'] as num?)?.toInt() ?? 0,
+    intervalosConsiderados:
+        (linha['intervalos_considerados'] as num?)?.toInt() ?? 0,
+  );
+
+  /// **Nulo** quando nenhum intervalo sobrevive aos filtros de 7 e 120 dias —
+  /// e nulo não é zero: zero seria um ritmo instantâneo.
+  final int? ritmoDias;
+
+  final DateTime? ultimaEntrega;
+  final int entregas;
+  final int intervalosConsiderados;
+}
+
+/// A linha do ritmo no cabeçalho da aba Trilha (wireframe §17, divergência 15,
+/// que vencia quando `fn_ritmo_aluno` existisse — o card 8.1 a entregou).
+///
+/// ⚠️ Com `ritmoDias` nulo a frase diz que **ainda não há ritmo**, nunca
+/// "0 dias": zero levaria a ler que o aluno recebe uma apostila por dia.
+String textoRitmo(RitmoAluno? ritmo) {
+  if (ritmo == null || ritmo.ritmoDias == null) return semRitmoAinda;
+  final dias = ritmo.ritmoDias!;
+  final ultima = ritmo.ultimaEntrega;
+  final base =
+      'ritmo: 1 apostila a cada $dias '
+      '${dias == 1 ? 'dia' : 'dias'}';
+  return ultima == null
+      ? base
+      : '$base · última entrega ${formatarData(ultima)}';
+}
+
+const semRitmoAinda =
+    'sem ritmo ainda (menos de duas entregas com intervalo válido)';
+
 const motivoSemMovimento =
     'Esta entrega não tem movimento de estoque vinculado e não pode ser '
     'estornada.';
+
+/// Por que a entrega **não** pode ser registrada agora — nulo quando pode.
+///
+/// ⚠️ Existe porque o desktop e o mobile chegavam a respostas diferentes: o
+/// rodapé do celular calculava os três motivos e a linha da tabela não olhava
+/// nenhum, então Gabriela Souza (STANDBY) tinha "Registrar entrega"
+/// **habilitado** no desktop e o clique terminava num diálogo de erro. É a
+/// decisão 1 do card 2.6 ao contrário — sem estado, o botão fica visível e
+/// **desabilitado com o motivo**, e a tela não oferece o que vai falhar
+/// (wireframe §2.2, item A4).
+///
+/// Não é pré-validação: quem recusa continua sendo `fn_registrar_entrega`, com
+/// o advisory lock. Isto decide o que a tela **oferece**, não o que o banco
+/// aceita.
+String? motivoParaEntregar({
+  required bool alunoEmAula,
+  required bool emFim,
+  required ItemTrilha? proxima,
+}) {
+  if (!alunoEmAula) return motivoAlunoInativo;
+  if (emFim) return motivoTrilhaEmFim;
+  if (proxima == null) return motivoTrilhaVazia;
+  return null;
+}

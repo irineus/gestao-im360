@@ -73,6 +73,41 @@ class PainelDetalhe extends StatelessWidget {
   }
 }
 
+/// Título e ações de um painel: lado a lado onde há largura, **empilhados** no
+/// celular.
+///
+/// ⚠️ Uma `Row` dá largura infinita ao filho não flexível: o `Wrap` das ações
+/// não tinha onde quebrar e o cabeçalho estourava 80 px à direita em 390 px
+/// (item H6). Empilhar é o que o design-system §3 já manda para a faixa mobile.
+class CabecalhoDePainel extends StatelessWidget {
+  const CabecalhoDePainel({
+    super.key,
+    required this.titulo,
+    required this.acoes,
+  });
+
+  final Widget titulo;
+  final Widget acoes;
+
+  @override
+  Widget build(BuildContext context) {
+    final mobile = faixaDe(MediaQuery.sizeOf(context).width) == Faixa.mobile;
+    if (mobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [titulo, acoes],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: titulo),
+        acoes,
+      ],
+    );
+  }
+}
+
 /// Rótulo em cima, valor embaixo — o par que um painel de detalhe repete
 /// ("Descrição", "Referência", "Aberta desde").
 ///
@@ -106,22 +141,45 @@ class LinhaDetalhe extends StatelessWidget {
 /// Título de uma seção do painel, com a linha de apoio que diz o que a seção
 /// significa (a ordem é a da trilha; a capacidade conta os PCs operacionais).
 class TituloSecao extends StatelessWidget {
-  const TituloSecao({super.key, required this.texto, required this.apoio});
+  const TituloSecao({
+    super.key,
+    required this.texto,
+    this.apoio,
+    this.maxLinhasApoio,
+  });
+
+  /// Teto de linhas da linha de apoio, com elipse.
+  ///
+  /// ⚠️ Existe porque o cabeçalho do painel de pedido tem **altura de painel**
+  /// (2/5 da tela, card 6.8) e o apoio crescia sem limite: com um rótulo de
+  /// botão mais largo ao lado, o texto ganhou uma linha e o painel estourou em
+  /// 12 px, engolindo a lista de itens. Nulo = sem limite, que é o caso de quem
+  /// mora dentro de uma coluna rolável.
+  final int? maxLinhasApoio;
+
+  /// A linha de apoio. **Opcional** desde a revisão das telas 06/07: enquanto o
+  /// conteúdo da seção carrega ou falha não há contagem a dar, e um "0
+  /// módulos" ali seria um número afirmado sem leitura (item A3).
+  final String? apoio;
 
   final String texto;
-  final String apoio;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(texto, style: Tipografia.rotulo),
-      Text(
-        apoio,
-        style: Tipografia.apoio.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
+      if (apoio != null)
+        Text(
+          apoio!,
+          maxLines: maxLinhasApoio,
+          overflow: maxLinhasApoio == null
+              ? TextOverflow.clip
+              : TextOverflow.ellipsis,
+          style: Tipografia.apoio.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
-      ),
       const SizedBox(height: Dim.e8),
     ],
   );

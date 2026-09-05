@@ -109,6 +109,19 @@ class ShellIm360 extends ConsumerWidget {
             selectedIndex: atual == null ? null : itens.indexOf(atual),
             onDestinationSelected: (i) => context.go(itens[i].caminho),
             labelType: NavigationRailLabelType.none,
+            // O trilho ganhou o rodapé com nome e unidade (revisão mobile,
+            // item H2c): sem ele o tablet era a única faixa em que ninguém
+            // sabia quem estava logado — o `comNome` só existia no menu
+            // lateral do desktop.
+            trailing: const Expanded(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: Dim.e8),
+                  child: _RodapeTrilho(),
+                ),
+              ),
+            ),
             destinations: [
               for (final rota in itens)
                 NavigationRailDestination(
@@ -142,57 +155,56 @@ class ShellIm360 extends ConsumerWidget {
     final indice = atual == null ? null : fixos.indexOf(atual);
 
     return Scaffold(
-      appBar: _barra(context, atual?.titulo ?? 'Gestão IM360'),
-      endDrawer: naGaveta.isEmpty
-          ? null
-          : Drawer(
-              child: SafeArea(
-                child: ListView(
-                  children: [
-                    for (final rota in naGaveta)
-                      ListTile(
-                        leading: iconeComContador(rota, altas),
-                        title: Text(rota.titulo, style: Tipografia.corpo),
-                        minTileHeight: Dim.alvoMobile,
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          context.go(rota.caminho);
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ),
+      // No celular o menu do usuário mora na gaveta (item H2b), então ela
+      // existe mesmo quando nenhuma rota sobrou para o "Mais".
+      appBar: _barra(
+        context,
+        atual?.titulo ?? 'Gestão IM360',
+        acoes: const [_BotaoGaveta()],
+      ),
+      endDrawer: _GavetaMais(rotas: naGaveta, altas: altas),
       body: _conteudo(context),
       bottomNavigationBar: fixos.isEmpty && naGaveta.isEmpty
           ? null
-          : NavigationBar(
-              selectedIndex: (indice ?? -1) >= 0 ? indice! : fixos.length,
-              onDestinationSelected: (i) {
-                if (i < fixos.length) {
-                  context.go(fixos[i].caminho);
-                } else {
-                  Scaffold.of(context).openEndDrawer();
-                }
-              },
-              destinations: [
-                for (final rota in fixos)
-                  NavigationDestination(
-                    icon: iconeComContador(rota, altas),
-                    label: rota.titulo,
+          // ⚠️ O `Builder` não é enfeite: `Scaffold.of` procura o Scaffold
+          // ANCESTRAL, e o `context` do `build` de `ShellIm360` está ACIMA do
+          // Scaffold que este método devolve. Sem ele, tocar em "Mais" lançava
+          // `Scaffold.of() called with a context that does not contain a
+          // Scaffold` e a gaveta nunca abria — nove telas ficavam inalcançáveis
+          // no celular, e nada em `analyze` ou no CI acusava (item H1).
+          : Builder(
+              builder: (context) => NavigationBar(
+                selectedIndex: (indice ?? -1) >= 0 ? indice! : fixos.length,
+                onDestinationSelected: (i) {
+                  if (i < fixos.length) {
+                    context.go(fixos[i].caminho);
+                  } else {
+                    Scaffold.of(context).openEndDrawer();
+                  }
+                },
+                destinations: [
+                  for (final rota in fixos)
+                    NavigationDestination(
+                      icon: iconeComContador(rota, altas),
+                      label: rota.titulo,
+                    ),
+                  const NavigationDestination(
+                    icon: Icon(Icons.menu),
+                    label: 'Mais',
                   ),
-                const NavigationDestination(
-                  icon: Icon(Icons.menu),
-                  label: 'Mais',
-                ),
-              ],
+                ],
+              ),
             ),
     );
   }
 
-  PreferredSizeWidget _barra(BuildContext context, String titulo) => AppBar(
+  PreferredSizeWidget _barra(
+    BuildContext context,
+    String titulo, {
+    List<Widget> acoes = const [_MenuUsuario()],
+  }) => AppBar(
     title: Text(titulo, style: Tipografia.subtitulo),
-    actions: const [_MenuUsuario()],
+    actions: acoes,
   );
 }
 
@@ -311,7 +323,8 @@ class _MenuUsuario extends ConsumerWidget {
     final modo = ref.watch(preferenciaTemaProvider);
 
     return PopupMenuButton<String>(
-      tooltip: 'Menu do usuário',
+      key: comNome ? null : chaveGatilhoMenuUsuario,
+      tooltip: nome.isEmpty ? 'Menu do usuário' : 'Menu de $nome',
       onSelected: (opcao) async {
         switch (opcao) {
           case 'tema':
@@ -330,21 +343,216 @@ class _MenuUsuario extends ConsumerWidget {
         ),
         const PopupMenuItem(value: 'sair', child: Text('Sair')),
       ],
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.account_circle_outlined),
-          if (comNome) ...[
-            const SizedBox(width: Dim.e8),
-            Flexible(
+      // ⚠️ O alvo é do contrato, não do ícone: sem a restrição, o gatilho
+      // media 24×24 px — metade do mínimo do design-system §8.4, e o menu do
+      // usuário é a única saída do sistema (item H2a).
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: Dim.alvoMobile,
+          minHeight: Dim.alvoMobile,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.account_circle_outlined),
+            if (comNome) ...[
+              const SizedBox(width: Dim.e8),
+              Flexible(
+                child: Text(
+                  nome,
+                  style: Tipografia.rotulo,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// O ícone do usuário no app bar do celular: abre a **mesma** gaveta do "Mais",
+/// onde moram nome, unidade, tema e "Sair" (item H2).
+class _BotaoGaveta extends ConsumerWidget {
+  const _BotaoGaveta();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final nome = ref.watch(resumoUsuarioProvider)?.nome ?? '';
+    return IconButton(
+      key: chaveGatilhoMenuUsuario,
+      icon: const Icon(Icons.account_circle_outlined),
+      tooltip: nome.isEmpty ? 'Menu do usuário' : 'Menu de $nome',
+      // O alvo mínimo do card 2.6 (e) / design-system §8.4. O padrão do
+      // `IconButton` já é 48, mas escrevê-lo aqui é o que o teste mede.
+      constraints: const BoxConstraints(
+        minWidth: Dim.alvoMobile,
+        minHeight: Dim.alvoMobile,
+      ),
+      onPressed: () => Scaffold.of(context).openEndDrawer(),
+    );
+  }
+}
+
+/// A gaveta do "Mais": cabeçalho com quem está logado, as rotas que não coubemos
+/// na barra inferior, e no fim tema e saída.
+///
+/// Ela existe **sempre** no celular, mesmo sem rota sobrando: desde o item H2
+/// é aqui que o nome, a unidade e o "Sair" moram nessa faixa.
+class _GavetaMais extends ConsumerWidget {
+  const _GavetaMais({required this.rotas, required this.altas});
+
+  final List<Rota> rotas;
+  final int altas;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final resumo = ref.watch(resumoUsuarioProvider);
+    final modo = ref.watch(preferenciaTemaProvider);
+    final cores = Theme.of(context).colorScheme;
+
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(Dim.e16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: cores.surfaceContainerHighest,
+                    child: Text(
+                      iniciaisDe(resumo?.nome ?? ''),
+                      style: Tipografia.rotulo,
+                    ),
+                  ),
+                  const SizedBox(width: Dim.e12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          resumo?.nome ?? '',
+                          style: Tipografia.rotulo,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (resumo?.unidade != null)
+                          Text(
+                            resumo!.unidade!,
+                            style: Tipografia.apoio.copyWith(
+                              color: cores.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final rota in rotas)
+                    ListTile(
+                      leading: iconeComContador(rota, altas),
+                      title: Text(rota.titulo, style: Tipografia.corpo),
+                      minTileHeight: Dim.alvoMobile,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        context.go(rota.caminho);
+                      },
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: Icon(
+                modo == ThemeMode.dark
+                    ? Icons.light_mode_outlined
+                    : Icons.dark_mode_outlined,
+              ),
+              title: Text(
+                modo == ThemeMode.dark ? 'Tema claro' : 'Tema escuro',
+                style: Tipografia.corpo,
+              ),
+              minTileHeight: Dim.alvoMobile,
+              onTap: () =>
+                  ref.read(preferenciaTemaProvider.notifier).alternar(),
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('Sair', style: Tipografia.corpo),
+              minTileHeight: Dim.alvoMobile,
+              onTap: () => ref.read(sessaoProvider.notifier).sair(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Até duas iniciais do nome — o avatar da gaveta. Nome vazio devolve vazio, e
+/// o `CircleAvatar` fica só com o fundo, que é melhor que um "?" inventado.
+String iniciaisDe(String nome) {
+  final partes = nome
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList(growable: false);
+  if (partes.isEmpty) return '';
+  if (partes.length == 1) return partes.first.characters.first.toUpperCase();
+  return (partes.first.characters.first + partes.last.characters.first)
+      .toUpperCase();
+}
+
+/// Chave do gatilho do menu do usuário nas três faixas — é o que o teste de
+/// alvo de toque mede (item H2).
+const chaveGatilhoMenuUsuario = Key('gatilho-menu-usuario');
+
+/// O rodapé do trilho do tablet: iniciais e primeiro nome de quem está logado.
+///
+/// **Só a identidade, sem um segundo gatilho** — o menu do usuário já está no
+/// app bar desta faixa, e dois gatilhos idênticos a 60 px um do outro ensinam
+/// que um deles faz outra coisa (item H2c).
+class _RodapeTrilho extends ConsumerWidget {
+  const _RodapeTrilho();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final resumo = ref.watch(resumoUsuarioProvider);
+    if (resumo == null) return const SizedBox.shrink();
+    final cores = Theme.of(context).colorScheme;
+    return Semantics(
+      label: 'Conectado como ${resumo.nome}',
+      child: ExcludeSemantics(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: cores.surfaceContainerHighest,
+              child: Text(iniciaisDe(resumo.nome), style: Tipografia.apoio),
+            ),
+            const SizedBox(height: Dim.e4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Dim.e4),
               child: Text(
-                nome,
-                style: Tipografia.rotulo,
+                resumo.nome,
+                style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+                textAlign: TextAlign.center,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }

@@ -45,3 +45,10 @@ TrilhaRepositorio _repositorio(Ref ref) {
 final trilhaAlunoProvider = FutureProvider.family<List<ItemTrilha>, String>(
   (ref, alunoId) => _traduzindo(() => _repositorio(ref).trilha(alunoId)),
 );
+
+/// O ritmo do aluno (card 8.1, item A8). Provider próprio e não parte da
+/// trilha: a região tem os **três** estados, e um erro aqui não pode apagar a
+/// lista de apostilas ao lado.
+final ritmoAlunoProvider = FutureProvider.family<RitmoAluno?, String>(
+  (ref, alunoId) => _traduzindo(() => _repositorio(ref).ritmo(alunoId)),
+);

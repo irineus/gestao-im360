@@ -61,6 +61,13 @@ abstract final class Cores {
   /// fundo e texto.
   static const erroFundoEscuro = Color(0xFF3D212B);
 
+  /// Fundo tonal de ATENÇÃO no tema escuro — o mesmo do badge STANDBY escuro,
+  /// cujo contraste com [atencaoEscuro] já está verificado (§2.3: 7,4:1).
+  /// Existe pela mesma razão do [erroFundoEscuro]: sem ele o
+  /// `tertiaryContainer` do esquema cai no `secondary`, e toda superfície
+  /// tonal de atenção sai grafite (revisão das telas 06/07, item A1).
+  static const atencaoFundoEscuro = Color(0xFF332E27);
+
   // FORMADO (violeta própria — card 1.9 §6)
   static const formado = Color(0xFF4C3FA8);
   static const formadoEscuro = Color(0xFFB3A6F2);

@@ -54,12 +54,29 @@ abstract interface class TrilhaRepositorio {
     required String materialId,
     required int novaPosicao,
   });
+
+  /// O ritmo do aluno, de `v_ritmo_aluno` (card 8.1). **Nulo** quando o aluno
+  /// não tem entrega nenhuma — a view só devolve linha para quem entregou.
+  ///
+  /// A leitura exige `alunos.ler`, que a rota 3b já exige; o número é o MESMO
+  /// que a projeção de demanda usou.
+  Future<RitmoAluno?> ritmo(String alunoId);
 }
 
 class TrilhaRepositorioSupabase implements TrilhaRepositorio {
   TrilhaRepositorioSupabase(this._cliente);
 
   final SupabaseClient _cliente;
+
+  @override
+  Future<RitmoAluno?> ritmo(String alunoId) async {
+    final linhas = await _cliente
+        .from('v_ritmo_aluno')
+        .select()
+        .eq('aluno_id', alunoId)
+        .limit(1);
+    return linhas.isEmpty ? null : RitmoAluno.deLinha(linhas.first);
+  }
 
   @override
   Future<List<ItemTrilha>> trilha(String alunoId) async {

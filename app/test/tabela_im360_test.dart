@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/erros/erro_app.dart';
+import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/theme/tema.dart';
+import 'package:gestao_im360/widgets/botoes.dart';
 import 'package:gestao_im360/widgets/estados.dart';
 import 'package:gestao_im360/widgets/tabela_im360.dart';
 
@@ -47,12 +49,16 @@ void main() {
     CartaoIm360 Function(String)? cartao,
     Widget? filtros,
     VoidCallback? aoRepetir,
+    List<Widget> acoes = const [],
   }) async {
     tester.view.physicalSize = tamanho;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ProviderScope(
+        // `BotaoAcao` observa as permissões do usuário; sem a sobrescrita ele
+        // iria ao `Supabase.instance`, que não existe em widget test.
+        overrides: [permissoesProvider.overrideWithValue(const {})],
         child: MaterialApp(
           theme: temaClaro(),
           home: Scaffold(
@@ -61,6 +67,7 @@ void main() {
               linhas: linhas,
               filtros: filtros,
               filtrosAtivos: 2,
+              acoes: acoes,
               cartao: cartao,
               aoRepetir: aoRepetir,
               estadoVazio: const EstadoVazio(mensagem: 'Nada por aqui.'),
@@ -221,5 +228,42 @@ void main() {
       expect(find.text('Categoria'), findsNothing);
       expect(find.text('FILTROS AQUI'), findsOneWidget);
     });
+
+    testWidgets(
+      'em 390 px a barra cabe com duas ações e uma DESABILITADA com motivo '
+      'longo',
+      (tester) async {
+        // ⚠️ Vermelho antes da correção do item H3: a barra era
+        // `Row[Filtrar, Spacer, ...acoes]`, e o `BotaoAcao` desabilitado com
+        // motivo vira no mobile uma `Column` com a legenda embaixo — dentro de
+        // uma `Row`, sem largura para quebrar. Medido: Compras dava
+        // `RenderFlex overflowed by 295 px` (537 com mais permissões) e
+        // Materiais, 135 px. É o mesmo componente em nove telas.
+        await montar(
+          tester,
+          const AsyncValue.data(itens),
+          tamanho: const Size(390, 800),
+          cartao: (s) => CartaoIm360(titulo: s.split('|')[1]),
+          filtros: const Text('FILTROS AQUI'),
+          acoes: const [
+            BotaoAcao(
+              rotulo: 'Criar pedido com os sugeridos',
+              icone: Icons.add_shopping_cart,
+              desabilitado: DesabilitadoCom(
+                'Nenhum material com sugestão maior que zero na lista atual.',
+              ),
+            ),
+            BotaoAcao(rotulo: 'Novo material', icone: Icons.add),
+          ],
+        );
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        // Os dois continuam alcançáveis: a correção desce as ações para uma
+        // segunda linha, não as esconde.
+        expect(find.text('Criar pedido com os sugeridos'), findsOneWidget);
+        expect(find.text('Novo material'), findsOneWidget);
+        expect(find.text('Filtrar (2)'), findsOneWidget);
+      },
+    );
   });
 }

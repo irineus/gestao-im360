@@ -11,6 +11,7 @@ import '../../theme/tipografia.dart';
 import '../../turmas/modular.dart';
 import '../../turmas/modular_provider.dart';
 import '../../widgets/card_dashboard.dart';
+import '../../widgets/estados.dart';
 
 /// A região "Lotação Modular" do wireframe §5 — card 7.4.
 ///
@@ -62,16 +63,17 @@ class LotacaoModular extends ConsumerWidget {
         // `case AsyncError()`: é o contrato que o design-system §5.6 fixou
         // depois de a repetição automática do Riverpod 3 fazer a mensagem
         // piscar e a região terminar em "Carregando…" para sempre.
+        // ⚠️ Era texto: "Carregando…" no lugar do esqueleto que o §5.6 pede,
+        // e a mensagem de erro **sem "Tentar de novo"** — a região de vagas da
+        // mesma tela já fazia os dois. Sem a saída, a única forma de repetir a
+        // leitura era recarregar a página (item D1).
         if (turmas.hasError)
-          Text(
-            erroLotacaoModular,
-            style: Tipografia.apoio.copyWith(color: cores.error),
+          EstadoErro(
+            mensagem: erroLotacaoModular,
+            aoRepetir: ref.read(versaoModularProvider.notifier).incrementar,
           )
         else if (!turmas.hasValue)
-          Text(
-            'Carregando…',
-            style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
-          )
+          const EstadoCarregando(linhas: 2)
         else if (cursos.isEmpty)
           // A região **diz** por que não há número, em vez de sumir: espaço em
           // branco no dashboard parece defeito.

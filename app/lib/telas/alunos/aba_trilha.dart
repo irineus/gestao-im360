@@ -6,6 +6,7 @@ import '../../alunos/alunos.dart';
 import '../../catalogo/catalogo.dart';
 import '../../catalogo/catalogo_provider.dart';
 import '../../erros/erro_app.dart';
+import '../../pendencias/pendencias.dart';
 import '../../pendencias/pendencias_provider.dart';
 import '../../rotas/rotas.dart';
 import '../../sessao/sessao_provider.dart';
@@ -110,7 +111,19 @@ class _AbaTrilhaState extends ConsumerState<AbaTrilha> {
           if (resultadoTemPendencia(resultado))
             LinkResultado(
               rotulo: 'Ver pendência',
-              aoTocar: () => context.go(caminhoDeRota('pendencias')),
+              // ⚠️ Sem o filtro o link largava a pessoa na central INTEIRA,
+              // para procurar de novo a pendência que a entrega acabou de
+              // abrir — o mesmo defeito que o card 5.8 pagou com o `?bloco=`.
+              // O atalho por severidade do dashboard já define o filtro antes
+              // de navegar; aqui é por tipo (item D3).
+              aoTocar: () {
+                ref
+                    .read(filtroPendenciasProvider.notifier)
+                    .definir(
+                      FiltroPendencias(tipo: tipoDaPendencia(resultado.status)),
+                    );
+                context.go(caminhoDeRota('pendencias'));
+              },
             ),
           if (resultado.emFim)
             LinkResultado(
@@ -179,6 +192,13 @@ class _AbaTrilhaState extends ConsumerState<AbaTrilha> {
     final resumo = resumirTrilha(itens);
     final proxima = proximoDaTrilha(itens);
     final mobile = faixaDe(MediaQuery.sizeOf(context).width) == Faixa.mobile;
+    // Calculado UMA vez e usado nos dois lugares — a linha do desktop e o
+    // rodapé do mobile (item A4).
+    final motivoEntrega = motivoParaEntregar(
+      alunoEmAula: _aluno.emAula,
+      emFim: resumo.emFim,
+      proxima: proxima,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -193,6 +213,9 @@ class _AbaTrilhaState extends ConsumerState<AbaTrilha> {
                 editando: _editando,
                 aoAlternarEdicao: () => setState(() => _editando = !_editando),
               ),
+              // A divergência 15 do §17 vencia quando `fn_ritmo_aluno`
+              // existisse: o card 8.1 a entregou (item A8).
+              _LinhaRitmo(alunoId: _aluno.id!),
               if (_editando) ...[
                 const SizedBox(height: Dim.e8),
                 Align(
@@ -224,6 +247,10 @@ class _AbaTrilhaState extends ConsumerState<AbaTrilha> {
                   aoEntregar: mobile || !item.proximo
                       ? null
                       : _registrarEntrega,
+                  // ⚠️ O MESMO motivo do rodapé do mobile (item A4): sem ele a
+                  // linha do desktop oferecia a entrega a aluno STANDBY e o
+                  // clique terminava em diálogo de erro.
+                  motivoNaoEntregar: motivoEntrega,
                   aoEstornar: () => _abrirEConfirmar(
                     (_) => FormularioEstornarEntrega(item: item),
                   ),
@@ -252,9 +279,8 @@ class _AbaTrilhaState extends ConsumerState<AbaTrilha> {
         ),
         if (mobile)
           _RodapeEntrega(
-            aluno: _aluno,
             proxima: proxima,
-            emFim: resumo.emFim,
+            motivo: motivoEntrega,
             aoEntregar: _registrarEntrega,
           ),
       ],
@@ -310,6 +336,7 @@ class _LinhaItem extends StatelessWidget {
     required this.total,
     required this.editando,
     required this.aoEntregar,
+    required this.motivoNaoEntregar,
     required this.aoEstornar,
     required this.aoMover,
     required this.aoMoverPara,
@@ -320,6 +347,11 @@ class _LinhaItem extends StatelessWidget {
   final int total;
   final bool editando;
   final VoidCallback? aoEntregar;
+
+  /// Por que a entrega não pode ser registrada agora — nulo quando pode. Vem
+  /// de [motivoParaEntregar], a mesma função que o rodapé do mobile usa.
+  final String? motivoNaoEntregar;
+
   final VoidCallback aoEstornar;
   final void Function(int novaPosicao) aoMover;
   final VoidCallback aoMoverPara;
@@ -335,19 +367,19 @@ class _LinhaItem extends StatelessWidget {
       SituacaoItem.pendente => (Icons.circle_outlined, cores.onSurfaceVariant),
     };
 
-    return Semantics(
-      label:
-          'Apostila ${item.posicao} de $total, ${item.rotulo}, '
-          '${rotuloSituacao(item)}',
-      excludeSemantics: true,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: Dim.alvoMobile),
-        padding: const EdgeInsets.symmetric(vertical: Dim.e8),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: cores.outlineVariant, width: 1),
-          ),
-        ),
+    // ⚠️ O `Semantics(excludeSemantics: true)` cobria a linha INTEIRA, e
+    // `excludeSemantics` descarta a semântica de TODOS os descendentes: os
+    // botões — "Registrar entrega", "Estornar", as setas, "Mover para…" e
+    // "Remover" — deixavam de existir para leitor de tela e para a navegação
+    // por foco, na jornada nº 1 do monitor (design-system §8.3/§8.5, item A5).
+    // Agora ele cobre só o bloco de texto; os botões ficam FORA, com o próprio
+    // rótulo.
+    final descricao = MergeSemantics(
+      child: Semantics(
+        label:
+            'Apostila ${item.posicao} de $total, ${item.rotulo}, '
+            '${rotuloSituacao(item)}',
+        excludeSemantics: true,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -385,68 +417,119 @@ class _LinhaItem extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: Dim.e8),
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: Dim.e4,
-              runSpacing: Dim.e4,
-              children: [
-                if (aoEntregar != null)
-                  BotaoAcao(
-                    rotulo: 'Registrar entrega',
-                    exigePermissao: 'estoque.lancar_saida',
-                    aoTocar: aoEntregar,
-                  ),
-                // ⚠️ Divergência do wireframe §6.3, registrada no §17: o desenho
-                // oferece [Estornar] só nas "entregas recentes". Aqui ele
-                // aparece em TODA entrega com movimento vinculado — "recente"
-                // não tem definição no modelo, e esconder o botão nas antigas
-                // deixaria uma correção sem tela nenhuma (o mesmo buraco que o
-                // card 5.7 fechou no bloco desativado). Estornar duas vezes
-                // continua impossível: `movimento_estorno_uk` e o
-                // MOVIMENTO_JA_ESTORNADO do card 6.3.
-                if (item.entregue)
-                  BotaoAcao(
-                    rotulo: 'Estornar',
-                    nivel: NivelBotao.terciario,
-                    exigePermissao: 'estoque.estornar',
-                    desabilitado: item.estornavel
-                        ? null
-                        : const DesabilitadoCom(motivoSemMovimento),
-                    aoTocar: aoEstornar,
-                  ),
-                if (editando && !item.entregue) ...[
-                  _BotaoSeta(
-                    icone: Icons.arrow_upward,
-                    dica: 'Subir uma posição',
-                    aoTocar: item.posicao <= 1
-                        ? null
-                        : () => aoMover(item.posicao - 1),
-                  ),
-                  _BotaoSeta(
-                    icone: Icons.arrow_downward,
-                    dica: 'Descer uma posição',
-                    aoTocar: item.posicao >= total
-                        ? null
-                        : () => aoMover(item.posicao + 1),
-                  ),
-                  BotaoAcao(
-                    rotulo: 'Mover para…',
-                    nivel: NivelBotao.terciario,
-                    exigePermissao: 'alunos.editar_trilha',
-                    aoTocar: aoMoverPara,
-                  ),
-                  BotaoAcao(
-                    rotulo: 'Remover',
-                    nivel: NivelBotao.terciario,
-                    exigePermissao: 'alunos.editar_trilha',
-                    aoTocar: aoRemover,
-                  ),
-                ],
-              ],
-            ),
           ],
         ),
+      ),
+    );
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: Dim.alvoMobile),
+      padding: const EdgeInsets.symmetric(vertical: Dim.e8),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: cores.outlineVariant, width: 1),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: descricao),
+          const SizedBox(width: Dim.e8),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: Dim.e4,
+            runSpacing: Dim.e4,
+            children: [
+              if (aoEntregar != null)
+                BotaoAcao(
+                  rotulo: 'Registrar entrega',
+                  exigePermissao: 'estoque.lancar_saida',
+                  // Sem estado → visível e DESABILITADO com o motivo, o mesmo
+                  // do rodapé do mobile (item A4).
+                  desabilitado: motivoNaoEntregar == null
+                      ? null
+                      : DesabilitadoCom(motivoNaoEntregar!),
+                  aoTocar: aoEntregar,
+                ),
+              // ⚠️ Divergência do wireframe §6.3, registrada no §17: o desenho
+              // oferece [Estornar] só nas "entregas recentes". Aqui ele
+              // aparece em TODA entrega com movimento vinculado — "recente"
+              // não tem definição no modelo, e esconder o botão nas antigas
+              // deixaria uma correção sem tela nenhuma (o mesmo buraco que o
+              // card 5.7 fechou no bloco desativado). Estornar duas vezes
+              // continua impossível: `movimento_estorno_uk` e o
+              // MOVIMENTO_JA_ESTORNADO do card 6.3.
+              if (item.entregue)
+                BotaoAcao(
+                  rotulo: 'Estornar',
+                  nivel: NivelBotao.terciario,
+                  exigePermissao: 'estoque.estornar',
+                  desabilitado: item.estornavel
+                      ? null
+                      : const DesabilitadoCom(motivoSemMovimento),
+                  aoTocar: aoEstornar,
+                ),
+              if (editando && !item.entregue) ...[
+                _BotaoSeta(
+                  icone: Icons.arrow_upward,
+                  dica: 'Subir uma posição',
+                  aoTocar: item.posicao <= 1
+                      ? null
+                      : () => aoMover(item.posicao - 1),
+                ),
+                _BotaoSeta(
+                  icone: Icons.arrow_downward,
+                  dica: 'Descer uma posição',
+                  aoTocar: item.posicao >= total
+                      ? null
+                      : () => aoMover(item.posicao + 1),
+                ),
+                BotaoAcao(
+                  rotulo: 'Mover para…',
+                  nivel: NivelBotao.terciario,
+                  exigePermissao: 'alunos.editar_trilha',
+                  aoTocar: aoMoverPara,
+                ),
+                BotaoAcao(
+                  rotulo: 'Remover',
+                  nivel: NivelBotao.terciario,
+                  exigePermissao: 'alunos.editar_trilha',
+                  aoTocar: aoRemover,
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A linha do ritmo no cabeçalho (wireframe §17, divergência 15).
+///
+/// Região com os **três** estados: erro **não** vira "sem ritmo ainda", que
+/// seria afirmar sobre o aluno o que só se sabe da leitura (design-system §5.6).
+/// O número vem de `v_ritmo_aluno` — é o mesmo que a projeção do card 8.1 usou.
+class _LinhaRitmo extends ConsumerWidget {
+  const _LinhaRitmo({required this.alunoId});
+
+  final String alunoId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cores = Theme.of(context).colorScheme;
+    final async = ref.watch(ritmoAlunoProvider(alunoId));
+    final texto = async.hasError
+        ? 'ritmo indisponível'
+        : !async.hasValue
+        ? 'calculando o ritmo…'
+        : textoRitmo(async.value);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Dim.e8),
+      child: Text(
+        texto,
+        style: Tipografia.numero(Tipografia.apoio)
+            .copyWith(color: cores.onSurfaceVariant),
       ),
     );
   }
@@ -483,27 +566,22 @@ class _BotaoSeta extends StatelessWidget {
 /// permissão.
 class _RodapeEntrega extends StatelessWidget {
   const _RodapeEntrega({
-    required this.aluno,
     required this.proxima,
-    required this.emFim,
+    required this.motivo,
     required this.aoEntregar,
   });
 
-  final Aluno aluno;
   final ItemTrilha? proxima;
-  final bool emFim;
+
+  /// O motivo vem de fora, de [motivoParaEntregar]: era aqui que ele era
+  /// calculado, e por isso só o mobile o tinha (item A4).
+  final String? motivo;
+
   final VoidCallback aoEntregar;
 
   @override
   Widget build(BuildContext context) {
     final cores = Theme.of(context).colorScheme;
-    final motivo = !aluno.emAula
-        ? motivoAlunoInativo
-        : emFim
-        ? motivoTrilhaEmFim
-        : proxima == null
-        ? motivoTrilhaVazia
-        : null;
 
     return Container(
       padding: const EdgeInsets.all(Dim.e12),
@@ -539,7 +617,7 @@ class _RodapeEntrega extends StatelessWidget {
                 rotulo: 'Registrar entrega',
                 icone: Icons.local_library_outlined,
                 exigePermissao: 'estoque.lancar_saida',
-                desabilitado: motivo == null ? null : DesabilitadoCom(motivo),
+                desabilitado: motivo == null ? null : DesabilitadoCom(motivo!),
                 aoTocar: aoEntregar,
               ),
             ),

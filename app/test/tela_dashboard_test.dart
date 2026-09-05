@@ -572,6 +572,29 @@ void main() {
           'mesmo objeto com dois nomes na mesma tela',
     );
   });
+
+  // ---------------------------------------------------------------------------
+  // Revisão das telas 06/07 (card 8.1,5)
+  // ---------------------------------------------------------------------------
+
+  testWidgets(
+    'as regiões carregam com ESQUELETO e falham com saída (item D1)',
+    (tester) async {
+      // ⚠️ Vermelho antes da correção: as duas regiões de rodapé (lotação
+      // Modular e pendências abertas) escreviam "Carregando…" em texto e, no
+      // erro, uma mensagem SEM "Tentar de novo" — a região de vagas da mesma
+      // tela já fazia os dois. Sem a saída, repetir a leitura exigia recarregar
+      // a página inteira.
+      await montar(tester, pendencias: _PendenciasQueFalham());
+      expect(find.text('Carregando…'), findsNothing);
+      expect(find.text('Tentar de novo'), findsWidgets);
+    },
+  );
+
+  testWidgets('em 390 px a tela monta sem overflow (item H6)', (tester) async {
+    await montar(tester, tamanho: const Size(390, 800));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 /// Leitura de pendências que falha — o único jeito de exercitar a diferença
