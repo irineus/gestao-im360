@@ -88,6 +88,13 @@ medição, e desde 03/09/2026 ela pesa mais na data do que toda a velocidade de 
 do M2 começa em "matricular num combo", e o combo é entregável do roteiro do M1. A soma dos dois na
 tabela acima está certa; o que **não** se pode assumir é que atraso no 4.8 seja absorvido pelo 6.9.
 
+⚠️ **Serial tem consequência de contagem, e ela foi escrita em 05/09/2026 (card 7.5): dia corrido
+de bloco que não pode começar NÃO se abate do bloco.** O `6.9` está "aberto" desde 04/09, mas por
+suas próprias Notas ele não anda enquanto o roteiro do M1 não for aceito — os dias que passam nele
+não consomem os 4 declarados, consomem nada. Abater-os seria creditar progresso que não houve e
+encurtar a data por artefato de contagem. **Regra: o bloco de trás só começa a contar quando o da
+frente é aceito.** O `4.8`, esse sim, consumiu: 3 dos 4 dias em 05/09/2026.
+
 ### Como sair de P50 e P80
 
 - **P50** = velocidade central medida (líquida de escopo novo — ver §6b), latência parcialmente
@@ -144,6 +151,16 @@ caiu no **mesmo dia de calendário** da terceira, então o 4.8 segue em 2 de 4 d
 0 de 4. Nenhuma medição nova de latência — e é isso que a rodada tem a dizer sobre o assunto: **o
 número que mais pesa na data continua sendo o único que ninguém conseguiu medir ainda.** No P50 de
 hoje a latência responde por **79%** da data (18,6 dias corridos contra 4,9 de esforço).
+
+**Em 05/09/2026 (card 7.5) o relógio ANDOU pela primeira vez, e a primeira medição de verdade cai
+amanhã.** A quarta rodada e a terceira caíram no mesmo dia de calendário e por isso não mediram
+latência nenhuma; esta caiu um dia depois. O `4.8` está em **3 de 4 dias declarados** — e as três
+preparações que faltam (todas de Irineu, em homologação) não têm começo registrado. Ou seja: em
+**06/09/2026** o primeiro bloco de latência do projeto ou fecha exatamente no valor declarado, ou
+**estoura** — e nos dois casos o modelo ganha, pela primeira vez, um número medido no lugar de uma
+declaração. **Obrigação da rodada 8.9: abrir por esta seção, anotar quantos dias o `4.8` de fato
+consumiu e corrigir a tabela de blocos do §3 com esse número.** É a medição que o método persegue
+desde 03/09 e a única que reduz de verdade a incerteza da data.
 
 ⚠️ **A segunda maior incerteza mudou de lugar nesta rodada: é a taxa de descoberta de escopo.** O
 §7(c) a promoveu a parâmetro depois de duas medições próximas (4,2 e 4,6). A terceira deu **7,4** —
@@ -339,3 +356,57 @@ P80 **fica em 1,5** pelo mesmo teste do §7(b): o que ele precifica é a fase 09
 fase 10, e a fase 06 não encostou em nenhuma das duas — `View` não é o que ele cobre. Já
 `Marco/validação` é o tipo que mais pesa na data e **nunca teve um card fechado**: os três marcos
 (`4.8`, `6.9`, `8.8`) valem 12 dos 31 dias de latência e continuam sendo declaração.
+
+## 9. Quinta rodada (05/09/2026, card 7.5) — o que mudou no método
+
+Os **números** continuam morando na subpágina Notion "Estimativa de entrega" do card 3.13. Aqui, só
+o que mudou no método.
+
+**(a) A velocidade caiu de 39 para 37 e NENHUM dia foi mais lento — é o viés do dia parcial, agora
+medido e dimensionado.** Tirando o dia corrente (05/09) da série, esta rodada reproduz a anterior na
+primeira casa: bruta **46,6** contra 46,1, mediana **54** contra 54, líquida **39,1** contra 38,7. A
+queda inteira é o dia de hoje, ainda aberto, entrando como dia-pleno com 20 pontos. E o viés é
+**estrutural, não acidental**: toda rodada roda no meio de um dia de trabalho, então **toda rodada
+publica uma velocidade puxada para baixo por um dia parcial** — ~6% nesta.
+
+A convenção do §6(c) **fica como está**: o divisor continua sendo o dia de calendário em que houve
+entrega, contado como dia-pleno. Mexer na régua destrói a comparabilidade, que é o único ativo do
+método, e o viés aponta para o lado conservador. O que muda é a obrigação de relato: **publicar,
+junto da velocidade, a mesma conta sem o dia corrente**. Sem isso, a próxima rodada que caia num dia
+parcial vai ler "39 → 37" como desaceleração da equipe, e não há desaceleração nenhuma.
+
+**(b) O passo 2 cruzou o limiar da própria irrelevância, e o teste do §6(d) precisa de outra forma.**
+Restam **60 pontos de esforço** a ~37 pts/dia-pleno: todo o desenvolvimento que falta no projeto vale
+**1,6 dia-pleno**. Uma mudança de um degrau de tamanho (±3 pontos) move o P50 em **0,06 dia corrido**
+— menos de hora e meia. O teste do §6(d) ("desconfiar de saldo perto de zero") supunha que o saldo
+carregava informação sobre a data; ele não carrega mais.
+
+**Teste substituto, que carrega:** o passo 2 passa a ser julgado por **cada card restante ter sido
+avaliado contra um comparável NOMEADO, com a avaliação registrada** — o saldo deixa de ser evidência
+de coisa alguma. Esta rodada saiu com **saldo zero**, o primeiro da série, e as cinco avaliações
+estão nomeadas na subpágina. Saldo zero com cinco comparáveis escritos é passo 2 feito; saldo zero
+sem eles continua sendo passo 2 não feito.
+
+**(c) A candidatura a subida do `8.3` está encerrada — REFUTADA por medição direta.** O §8 da rodada
+anterior deixou o card marcado: subir *"se a fase 07 mostrar que a guarda por trigger custa mais do
+que o `5.1` sugeriu"*. A fase 07 mostrou o contrário. O `7.1` entregou
+`fn_turma_modular_aluno_colunas_permitidas` — **17 linhas** de plpgsql com um único
+`if ... perform fn_exige_permissao('turmas.alocar')` —, que é a **quarta** aplicação do mesmo padrão
+(`4.2`, `5.1`, `6.1`, `7.1`), e o próprio arquivo do `7.1` nomeia `certificado_checklist` (8.3) como
+o caso seguinte, com o desenho já feito. A "permissão por coluna" que o `docs/permissoes-matriz.md`
+§10 item 1 põe no `8.3` **deixou de ser desenho e virou código a copiar**. Risco marcado, medido, não
+apareceu: `8.3` fica em `G` e **sai da lista de vigilância**.
+
+**(d) Bloco de latência serial não consome dia enquanto não pode começar** — regra escrita no §3
+desta rodada, e ela é o que impediu a data de encurtar por artefato. O `6.9` está aberto desde 04/09
+mas não anda antes do aceite do M1; abater os dias corridos dele seria creditar progresso que não
+houve. Só o `4.8` consumiu (3 de 4). Latência restante até o go-live: **31 → 28 dias corridos**, e é
+a primeira vez na série que esse número cai por **medição** em vez de declaração.
+
+**(e) A pergunta certa para o dono do produto deixou de ser "qual a data" e passou a ser "quanto a
+latência pode estourar antes de a data sair de outubro".** É a consequência prática do §8(a) — o
+tempo da rodada vai para os blocos, não para a terceira casa da velocidade — e a resposta é
+aritmética: **os três marcos (`4.8`, `6.9`, `8.8`) teriam de rodar ~11 dias corridos cada, quase 3×
+os 4 declarados, para o P80 sair de outubro/2026.** A 2× (8 dias cada) o P80 vai a 21/10 e o alvo
+ainda cabe. Toda rodada daqui em diante publica essa margem, e não só as duas datas: margem é o que
+permite decidir, data é o que vira promessa.
