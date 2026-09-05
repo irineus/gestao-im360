@@ -515,6 +515,7 @@ function CabeNaJanela($indice) {
     }
 
     $idade = if ($e.lidoEm) { [int]((Get-Date) - $e.lidoEm).TotalMinutes } else { $null }
+    $script:leituraEm = $e.lidoEm
     $nota = if ($null -ne $idade -and $idade -gt 5) { " · leitura de $idade min atrás" } else { '' }
 
     Escrever ("  orçamento: card estimado em {0:P0} da janela de 5 h e {1:P1} da semanal / {2:N0} min ({3}){4}" -f `
@@ -618,8 +619,22 @@ function EsperarJanela($indice) {
         if ($faltam -le 0) { break }
 
         $passo = [Math]::Min(10, [Math]::Ceiling($faltam))
-        Escrever ("  ⏳ janela {0} cheia ({1:P0}); esperando o reset das {2:HH:mm} — faltam {3:N0} min" -f `
-                  $j.nome, $j.uso, $j.reset, $faltam) 'Yellow'
+
+        # ⚠️ O número NÃO é de agora, e a tela precisa dizer isso. `limite.json`
+        # só é escrito pelo executor, no fim de cada card; durante a espera nada
+        # roda e nada o atualiza — e não há como reler de graça: a utilização
+        # chega apenas nos eventos de uma sessão, e sondar gastaria justamente o
+        # que foi medir. Em 04/09/2026 a tela repetiu 71% por horas enquanto o
+        # real já era 75% — a diferença era a SESSÃO INTERATIVA, porque a janela
+        # é da conta, não do script. Defasagem inofensiva para a decisão (dentro
+        # de uma janela fixa o uso só sobe, então a medida velha é um piso), mas
+        # anunciá-la como se fosse leitura viva ensina a desconfiar do painel.
+        $idadeLeitura = if ($script:leituraEm) { [int]((Get-Date) - $script:leituraEm).TotalMinutes } else { $null }
+        $selo = if ($null -ne $idadeLeitura) { "{0:P0} há {1:N0} min, só sobe" -f $j.uso, $idadeLeitura }
+                else { "{0:P0} na última medida" -f $j.uso }
+
+        Escrever ("  ⏳ janela {0} sem espaço para um card ({1}); reset às {2:HH:mm} — faltam {3:N0} min" -f `
+                  $j.nome, $selo, $j.reset, $faltam) 'Yellow'
         Start-Sleep -Seconds ([int]($passo * 60))
     }
 
