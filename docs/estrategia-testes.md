@@ -787,19 +787,41 @@ não adiamento.
 **Quem valida:** Irineu + dono do produto (é ele quem decide se a compra sugerida é aceitável).
 
 **Pré-condições automatizadas:** suítes `010`–`095` verdes; recorte da planilha importado em dev
-pela ferramenta do card 9.1 (não por `insert` à mão — importar à mão testa a mão).
+pela ferramenta do card 9.1 (não por `insert` à mão — importar à mão testa a mão). ✅ **A primeira
+foi medida verde em 06/09/2026 (sessão do card 8.8): `supabase test db` = 1234/1234 em 33 arquivos,
+`Result: PASS`, mais o portão do CI inteiro** (`dart format` sem mudança, `flutter analyze
+--fatal-infos` sem achados, `flutter test` 820/820, portão de migrações `PORTAO_OK`).
 
-**Metade A — contagens, batem exatamente:**
+⚠️ **A segunda não é satisfazível na fase 08, e isto não é atraso: é a ordem real das dependências**
+(achado da sessão do card 8.8, 06/09/2026). O único caminho pelo qual dado da planilha entra no
+sistema é o **importador do card 9.1** (decisão de 02/09/2026), que ainda não existe; o recorte
+importado é o entregável do **dry-run do card 9.4**. Logo o M3 **roda depois do 9.4**, embora o card
+esteja numerado na fase 08 — a numeração é do assunto, não da precedência. É a mesma constatação do
+§15.2 (*"os dois marcos estão em fila, não em paralelo"*), um degrau adiante: **M1 → M2 → 9.1 → 9.2 →
+9.4 → M3**. O que a sessão do 8.8 entregou foi tudo o que não depende disso: a pré-condição de
+suíte, a **fonte no sistema de cada número da metade A** (coluna nova abaixo), os critérios 1, 2 e 4
+da metade B pré-verificados contra a escola-fixture, e a condição de reprovação do `fn_param_int`
+medida e **convertida em asserção** (`095` §9).
 
-| Número | Fonte de conferência |
-|---|---|
-| Alunos por método e status | Dashboard da planilha (161/71/33 no snapshot de 29/08) |
-| Alunos sem turma | 20 no snapshot, com os 2 códigos divergentes já tratados |
-| Ocupação e vagas por bloco | grade da planilha; capacidades 10 / 15 / 6 |
-| Estoque atual por material | aba `Ger. Apost` |
-| Demanda imediata | alunos ativos cujo próximo livro é o material |
-| Conclusões por semestre | Dashboard da planilha |
-| Alunos no último livro | conferindo a distinção do card 2.3: `em_ultimo_livro` (1 pendente) ≠ `em_fim` (nenhum) |
+**Metade A — contagens, batem exatamente.** A coluna "**onde se lê no sistema**" entrou em
+06/09/2026 (card 8.8): sem ela a tabela diz o que comparar e não diz **de onde sai o outro lado**, e
+no dia da conferência cada número é reinventado — a mesma classe de defeito do critério 1 do M1 e do
+roteiro sem ator do M2.
+
+| Número | Fonte de conferência | Onde se lê no sistema |
+|---|---|---|
+| Alunos por método e status | Dashboard da planilha (161/71/33 no snapshot de 29/08) | `v_dashboard_alunos_metodo` (`ativos`, `acelerar`, `standby`, `trancados`, `cancelados`, `formados`) |
+| Alunos sem turma | 20 no snapshot, com os 2 códigos divergentes já tratados | ⚠️ **não é cartão do Dashboard**: é a pendência `ALUNO_SEM_TURMA` em `v_pendencias_abertas`, que a rotina diária abre. O ⚠ da coluna Turmas da lista de Alunos (`wireframes.md` §6.1) é a mesma coisa vista de outro lugar |
+| Ocupação e vagas por bloco | grade da planilha; capacidades 10 / 15 / 6 | `v_bloco_vagas_semana` (`capacidade`, `ocupacao`, `vagas_livres`) |
+| Estoque atual por material | aba `Ger. Apost` | `v_estoque_atual` (`saldo`) |
+| Demanda imediata | alunos ativos cujo próximo livro é o material | `v_demanda_imediata` (`qtd_alunos`); o nominal em `v_demanda_imediata_aluno` |
+| Conclusões por semestre | Dashboard da planilha | `v_dashboard_conclusoes_semestre` (`qtd_alunos`), com `qtd_vencidas` ao lado |
+| Alunos no último livro | conferindo a distinção do card 2.3: `em_ultimo_livro` (1 pendente) ≠ `em_fim` (nenhum) | as duas colunas de `v_dashboard_alunos_metodo`, que são **números diferentes** e não se somam |
+
+⚠️ **A invariante que fecha a metade A por método**, e que o card 8.7 entregou junto com as views:
+`ativos + acelerar = sem_previsao + Σ(qtd_alunos por semestre)`. Ela pega o erro que a comparação
+com a planilha não pega — aluno que sumiu da conta por falta de previsão de conclusão. Medida verde
+nos três métodos da fixture em 06/09/2026.
 
 **Metade B — projeção, aceite por reprodução e plausibilidade:**
 
@@ -811,9 +833,41 @@ pela ferramenta do card 9.1 (não por `insert` à mão — importar à mão test
 | 4 | Nenhum material com projeção > 0 e nenhum aluno em `v_projecao_aluno` — projeção sem origem é bug, não estimativa |
 | 5 | O dono do produto olha o pedido sugerido e diz se compraria aquilo. Um "não" registrado vira card de calibração, não reprova o marco |
 
+✅ **Os critérios 1, 2 e 4 foram pré-verificados contra a escola-fixture em 06/09/2026 (card 8.8)** —
+não substituem a medição sobre o recorte real, mas provam que o **mecanismo** está de pé antes de
+haver dado: os quatro degraus da cascata aparecem com aluno em cada um (`MODULAR` 1, `RITMO_ALUNO` 2,
+`PREVISAO_CURSO` 1, `MEDIA_METODO` 15, pela coluna `regra` de `v_projecao_aluno`); a **disjunção** dá
+**0 violações** no `join` de `v_demanda_imediata_aluno` com `v_projecao_aluno` por (aluno, material);
+e **nenhum** material tem projeção > 0 sem aluno em `v_projecao_aluno`. O critério **3** não é
+pré-verificável — a banda compara com o **histórico migrado**, que não existe —, mas a conta ficou
+escrita e roda como está: horizonte por `fn_param_int('projecao_horizonte_dias')`, `Σ(imediata +
+projetada)` contra `Σ(-quantidade)` das `SAIDA` dos últimos 180 dias reescalada ao horizonte. Sobre a
+fixture ela dá 53 contra 4,33 e **não significa nada**, porque a fixture tem 13 saídas em seis meses:
+é a prova de que a banda só fala depois do dry-run, não de que a projeção está alta.
+
+⚠️ **Uma armadilha do critério 1 medida na fixture:** os dois alunos de `RITMO_ALUNO` têm **um item
+só** cada um (`k = 2`), então a propriedade "dois itens consecutivos distam `ritmo_dias`" — que é a
+contraprova do card 8.5 — **não é exercitável neles**. No recorte real ela é; quem conferir à mão
+precisa escolher um aluno com dois ou mais itens projetados, ou a verificação passa vazia.
+
 **Reprova se:** qualquer número da metade A divergir sem explicação registrada; a disjunção falhar
 (aluno contado duas vezes na compra); a tela de projeção não abrir para algum dos perfis que o card
-2.4 autorizou (é o `fn_param_int` invoker — bloqueante conhecido).
+2.4 autorizou.
+
+✅ **A terceira condição perdeu o "bloqueante conhecido" em 06/09/2026 (card 8.8), e por medição.**
+Este parágrafo dizia *"é o `fn_param_int` invoker — bloqueante conhecido"*, que é o achado 4 de
+`docs/permissoes-matriz.md` §7. Ele foi **atendido no card 3.4** — `fn_param_txt` e `fn_param_int`
+nasceram `security definer` com `search_path` fixo — e ninguém marcou a tabela nem este parágrafo.
+Medido contra a fixture: `parametros.ler` é **só da direção**, e ainda assim os quatro perfis leem
+as três fontes da tela 8 com o mesmo número (grade 7, drill-down 49, base 7) e leem
+`fn_param_int('projecao_horizonte_dias')` sem erro. A contraprova é um perfil com **exatamente** o
+conjunto da rota (`materiais.ler`, `estoque.ler`, `alunos.ler`, `turmas.ler`) e **sem**
+`parametros.ler`: abre igual. Quem de fato dependia disso não era a tela 8 e sim a **tela 7**, pela
+janela de `v_pedido_sugerido` (card 8.2), que chama `fn_param_int` **sem default** — como `invoker`,
+a secretaria receberia `PARAMETRO_AUSENTE` na tela de Compras, e ela é um dos dois perfis da rota.
+**Virou asserção** em `095` §9 (quatro asserções, incluindo a que prova que o perfil da contraprova
+não tem a permissão — sem ela o par mediria nada), e a sabotagem que devolve as duas funções a
+`invoker` foi vista **vermelha**: derruba `095` na asserção nova e mais quatro arquivos junto.
 
 ### 15.4 M4 — Go-live (card 9.7)
 
@@ -900,7 +954,7 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `085_rep_virada` | **5.3** ✅ (funções REP entram na mesma migração) — mede o VEREDITO; a seção 6 era o portão da pendência, **disparou em 03/09/2026 (card 5.5)** e virou a asserção estrutural de que as duas funções da virada fecham a pendência, cada uma com o seu sufixo. O comportamento ponta a ponta ficou no `090_rotinas`, que é o arquivo da pendência | 5 |
 | `090_rotinas` (a tabela `pendencia`, as três funções do §10, rt_pendencias_diaria/rt_rep_avaliar/rt_diaria, o job `pg_cron` e a view `v_pendencias_abertas`) | **5.5** ✅ (primeira rotina) → o portão do §13 **disparou pela segunda vez no 8.1** ✅ (05/09/2026): `rt_projecao_demanda` entrou em `rt_diaria` no mesmo commit em que nasceu, porque esta asserção reprovava enquanto não entrasse. Com a quinta sub-rotina a lista do §11 do card 2.2 fecha; o portão continua armado para a sexta → **cresceu no 8.4** ✅ (05/09/2026, 49 → **60** asserções): as §15 e §16, dos dois alertas de TEMPO do aluno. ⚠️ **Quem obrigou a passar por aqui foi a §2**, que lista TUDO o que a rotina abriu **sem filtrar por tipo** — acrescentar tipo à rotina sem tocar no teste é impossível; foi de três linhas para cinco no mesmo commit. As §15 e §16 ficam no **fim do arquivo** de propósito: as seções são numeradas pela história dele e outros documentos citam "090 §13" e "§2" pelo número. ⚠️ **Quatro contraprovas vistas vermelhas:** a borda `>` virando `>=` (a aluna de 45 dias volta a aparecer com o parâmetro em 45), o limiar virando o literal `30` (o parâmetro deixa de decidir), `PREVISAO_VENCIDA` sem o filtro de status (o aluno TRANCADO recebe pendência que ninguém pode fechar) e o `fn_pendencias_fechar_ausentes` da previsão removido (corrigir a data não fecha nada). ⚠️ **E um achado de método:** reabrir pendência **não reaproveita a linha fechada** (o `pendencia_aberta_uk` é parcial), então asserção sobre "a pendência de fulano" depois de um ciclo abre-fecha-reabre morre em *more than one row* — a da §15 é agregada, e diz isso → **cresceu de novo no 8.4,5** ✅ (05/09/2026, 60 → **67** asserções): a §17, do `ESTOQUE_ABAIXO_MINIMO`, mais a **asserção-espelho da §2**. ⚠️ **Correção de fato:** a §2 **não** lista tudo o que a rotina abre — ela faz `join public.aluno`, e portanto lista o que a rotina abre **para aluno**. A frase acima valia enquanto todo bloco da rotina falasse de aluno; o primeiro bloco de MATERIAL passaria por ela sem tocar em nada, e por isso o 8.4,5 acrescentou a metade que faltava, no mesmo formato, do outro lado da referência. ⚠️ **Quatro contraprovas, e a útil foi a que passou VERDE:** a borda `<` virando `<=` (o último exemplar, saldo 1 para mínimo 1, vira pendência), o filtro de material ATIVO removido (apostila aposentada abre pendência que ninguém pode fechar) e o `fn_pendencias_fechar_ausentes` removido ficaram vermelhas de primeira; a de `estoque_minimo > 0` **passou verde**, porque a asserção usava mínimo 0 com saldo 0 — e aí a própria view já devolve falso (`0 < 0`). O filtro só se separa da redundância com **saldo negativo**, que `fn_estoque_ajustar` recusa mas `movimento_estoque` aceita por outros caminhos (importação do 9.1, correção por fora). A asserção foi reescrita com o AJUSTE negativo, e só então a sabotagem ficou vermelha | 5+ |
 | `091_manutencao_capacidade` (o status derivado de `pc_manutencao`, a pendência por EVENTO, `rt_pcs_normaliza` e `rt_capacidades`) | **5.4** ✅ — mora ao lado do `090`, que é o arquivo das rotinas: aqui está o que só o caminho por evento prova | 5 |
-| `095_views_paridade` (a grade semanal: `fn_grade_semana` e `v_bloco_vagas_semana`; desde o **6.4** ✅ as quatro views de estoque, demanda e pedido sugerido; e desde o **7.4** ✅ o par vazia→inteira de `v_turma_modular_lotacao` sob `materiais.ler`, com a contraprova de que a direção vê turma Modular; e desde o **8.7** ✅ o mesmo par nas **três** `v_dashboard_*`, com o que o bloqueante nº 1 fecha — 29 → 86 → 89 → 90 → **97** asserções) | **5.6** ✅ → cresceu em **6.4** ✅, **7.4** ✅, **8.2** ✅ e **8.7** ✅. ⚠️ **O que o 8.7 acrescentou tem uma sutileza:** o perfil `SEM_MATERI` ganhou `alunos.ler`, que ele não tinha. Sem isso as duas views de aluno do dashboard viriam vazias **por falta de ****`alunos.ler`**, e o par vazia → inteira mediria a permissão errada — passaria verde provando outra coisa. `alunos.ler` não afrouxa nada acima: nem `v_bloco_vagas_semana` nem `v_turma_modular_lotacao` leem aluno. ⚠️ **O que o 8.2 mudou aqui não foi acrescentar, foi tirar a mentira de uma asserção:** a §12 asseria `qtd_projetada = 0` em toda linha "até o card 8.2 preencher a parcela", e depois do 8.2 ela continuaria **verde pelo motivo errado** — este arquivo nunca roda a projeção. Virou um par: a tabela `demanda_projetada` está vazia, e é **por isso** que a parcela é zero. Sozinha, a segunda voltaria a passar no dia em que alguém quebrasse o `left join`. A §13, que protegia a reserva da coluna, ficou: agora ela protege a **forma que o app lê** — o repositório pede as doze colunas pelo nome. ⚠️ **O 7.4 é card de Tela e não criou objeto de banco nenhum** (a view é do 7.3): o que ele acrescentou aqui foi a segunda das cinco views do bloqueante nº 1 de `permissoes-matriz.md` §7, com a contraprova vista **vermelha** trocando o `join` interno em `curso` por `left join` — e o `072`, que mede a mesma view, passou verde nessa sabotagem, porque ele mede aritmética e este mede permissão. ⚠️ **Divergência registrada:** esta linha atribuía o nascimento do arquivo ao **6.4** ("primeiras views"), e o 6.4 é da fase 06 — quem chegou primeiro foi o 5.6, e o arquivo nasceu lá. A obrigação de teste de card de View (§13) não mudou; mudou só quem a cumpre primeiro | 5+ |
+| `095_views_paridade` (a grade semanal: `fn_grade_semana` e `v_bloco_vagas_semana`; desde o **6.4** ✅ as quatro views de estoque, demanda e pedido sugerido; e desde o **7.4** ✅ o par vazia→inteira de `v_turma_modular_lotacao` sob `materiais.ler`, com a contraprova de que a direção vê turma Modular; e desde o **8.7** ✅ o mesmo par nas **três** `v_dashboard_*`, com o que o bloqueante nº 1 fecha; e desde o **8.8** ✅ a §9, que mede o achado 4 do card 2.4 §7 — quem não tem `parametros.ler` lê o horizonte e recebe o pedido sugerido inteiro, porque `fn_param_int`/`fn_param_txt` são `definer` — 29 → 86 → 89 → 90 → 97 → **101** asserções) | **5.6** ✅ → cresceu em **6.4** ✅, **7.4** ✅, **8.2** ✅, **8.7** ✅ e **8.8** ✅. ⚠️ **O que o 8.7 acrescentou tem uma sutileza:** o perfil `SEM_MATERI` ganhou `alunos.ler`, que ele não tinha. Sem isso as duas views de aluno do dashboard viriam vazias **por falta de ****`alunos.ler`**, e o par vazia → inteira mediria a permissão errada — passaria verde provando outra coisa. `alunos.ler` não afrouxa nada acima: nem `v_bloco_vagas_semana` nem `v_turma_modular_lotacao` leem aluno. ⚠️ **O que o 8.2 mudou aqui não foi acrescentar, foi tirar a mentira de uma asserção:** a §12 asseria `qtd_projetada = 0` em toda linha "até o card 8.2 preencher a parcela", e depois do 8.2 ela continuaria **verde pelo motivo errado** — este arquivo nunca roda a projeção. Virou um par: a tabela `demanda_projetada` está vazia, e é **por isso** que a parcela é zero. Sozinha, a segunda voltaria a passar no dia em que alguém quebrasse o `left join`. A §13, que protegia a reserva da coluna, ficou: agora ela protege a **forma que o app lê** — o repositório pede as doze colunas pelo nome. ⚠️ **O 7.4 é card de Tela e não criou objeto de banco nenhum** (a view é do 7.3): o que ele acrescentou aqui foi a segunda das cinco views do bloqueante nº 1 de `permissoes-matriz.md` §7, com a contraprova vista **vermelha** trocando o `join` interno em `curso` por `left join` — e o `072`, que mede a mesma view, passou verde nessa sabotagem, porque ele mede aritmética e este mede permissão. ⚠️ **Divergência registrada:** esta linha atribuía o nascimento do arquivo ao **6.4** ("primeiras views"), e o 6.4 é da fase 06 — quem chegou primeiro foi o 5.6, e o arquivo nasceu lá. A obrigação de teste de card de View (§13) não mudou; mudou só quem a cumpre primeiro | 5+ |
 | `catalogo_erros_test`, `guardas_rota_test`, `permissao_widget_test`, `faixa_test`, `tnum_test` | 3.7 | 3 |
 | `badge_status_test` / `badge_tipo_test` | 4.6 (status) e **5.7** ✅ (tipo). ⚠️ **Divergência registrada:** o §9.2 pede *golden* de badge; os dois arquivos asserem o **par de cores e a forma** lidos do tema, e o `badge_tipo_test` acrescenta a asserção que um golden não daria — preenchido × contorno lado a lado, que é a decisão do card 1.9 §6. Golden de 8 badges × 2 temas seriam 16 PNGs que reprovam por *antialiasing* de versão do engine, e o que se quer provar é a regra, não o pixel | 4–5 |
 | `053_aluno_trilha` (`v_aluno_trilha`: a view e `fn_trilha_proximo_material` concordam sobre o próximo em todo aluno, `posicao` é 1..n e não a `ordem` de 10 em 10, o saldo é o de `v_estoque_atual`, e as duas reduções silenciosas em formas opostas — sem `materiais.ler` vazia, sem `estoque.ler` cheia com saldo 0) | **6.6** ✅. ⚠️ **Divergência registrada:** este arquivo não estava previsto — a linha do 6.6 abaixo só cita o `dialogo_resultado_test`, porque a tela foi planejada sem objeto de banco. Ela tem um, e `docs/views-leitura.md` §12.1 sempre disse que `v_aluno_trilha` é deste card; card de View tem obrigação própria no §13, e ela é cumprida aqui. Mora no bloco `05x` da trilha (ao lado do 050, 051 e 052) e não no `095`, que é o arquivo das views nascidas com a grade | 6 |

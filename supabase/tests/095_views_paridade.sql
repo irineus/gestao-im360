@@ -60,7 +60,7 @@
 -- =============================================================================
 
 begin;
-select plan(97);
+select plan(101);
 
 -- ===========================================================================
 -- 1. As premissas da fixture, que são o que dá sentido aos números abaixo
@@ -1053,6 +1053,74 @@ select is(
                    quote_literal(tests.unidade('ESCOLA_A')::text) || '::uuid'),
   0::bigint,
   'e a direcao da Escola B nao ve o pedido sugerido da Escola A');
+
+-- ===========================================================================
+-- 9. O achado 4 do card 2.4 §7, medido: fn_param_txt/fn_param_int como DEFINER
+-- ===========================================================================
+-- O achado 4 de docs/permissoes-matriz.md §7 dizia: *"`fn_param_int`/`fn_param_txt`
+-- são `security invoker` e leem `parametro`: quem não tem `parametros.ler` recebe
+-- `PARAMETRO_AUSENTE`"*. Ele foi atendido no card 3.4 — as duas nasceram
+-- `security definer` com `search_path` fixo —, mas **nunca virou asserção**, e a
+-- tabela do §7 seguiu marcando-o aberto. O critério de REPROVA do Marco 3
+-- (docs/estrategia-testes.md §15.3) ainda o cita como *"bloqueante conhecido"*.
+--
+-- Isto importa porque `parametros.ler` é **só da direção** na matriz inicial, e a
+-- janela da parcela projetada de `v_pedido_sugerido` (card 8.2) sai de
+-- `fn_param_int('projecao_horizonte_dias')` **sem default**: como `invoker`, a
+-- leitura de `parametro` é filtrada pela RLS, `v_valor` fica nulo e a função
+-- levanta `PT422`/`PARAMETRO_AUSENTE`. A secretaria abriria a tela de Compras e
+-- receberia um erro de parâmetro — e ela é um dos dois perfis da rota.
+--
+-- Medido em 06/09/2026 (marco 8.8) contra a fixture; a asserção entra aqui para
+-- que voltar as funções a `invoker` reprove com o motivo escrito.
+insert into public.perfil (unidade_id, codigo, nome)
+values (tests.unidade('ESCOLA_A'), 'SEM_PARAM', 'Rota de Compras sem parametros.ler (teste 095)');
+
+insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
+select tests.unidade('ESCOLA_A'), pe.id, pm.id
+  from public.perfil pe, public.permissao pm
+ where pe.unidade_id = tests.unidade('ESCOLA_A')
+   and pm.unidade_id = tests.unidade('ESCOLA_A')
+   and pe.codigo = 'SEM_PARAM'
+   -- exatamente o conjunto da rota da tela 7 (docs/permissoes-matriz.md §6),
+   -- e `parametros.ler` fica de fora de propósito
+   and pm.codigo in ('materiais.ler', 'estoque.ler', 'alunos.ler', 'compras.ler');
+
+select tests.criar_usuario('semparam@escola-a.test', 'SEM_PARAM');
+
+-- Sem esta primeira asserção o par abaixo passaria de graça no dia em que
+-- alguém desse `parametros.ler` a mais um perfil: a medição perderia o sujeito.
+select is(
+  (select count(*)::bigint
+     from public.perfil pe
+     join public.perfil_permissao pp on pp.perfil_id = pe.id
+     join public.permissao pm on pm.id = pp.permissao_id
+    where pe.unidade_id = tests.unidade('ESCOLA_A')
+      and pe.codigo = 'SEM_PARAM' and pm.codigo = 'parametros.ler'),
+  0::bigint,
+  'o perfil da contraprova NAO tem parametros.ler — sem isso o par abaixo nao mede nada');
+
+select is(
+  tests.conta_como(tests.uid('semparam@escola-a.test'),
+                   'select public.fn_param_int(''projecao_horizonte_dias'')'),
+  1::bigint,
+  'quem nao tem parametros.ler LE o horizonte: fn_param_int e security definer (achado 4 do card 2.4 §7)');
+
+select is(
+  tests.conta_como(tests.uid('semparam@escola-a.test'),
+                   'select 1 from public.v_pedido_sugerido'),
+  tests.conta_como(tests.uid('direcao@escola-a.test'),
+                   'select 1 from public.v_pedido_sugerido'),
+  'e o pedido sugerido vem INTEIRO para ele — a janela do card 8.2 nao exige parametros.ler');
+
+select is(
+  (select count(*)::bigint from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in ('fn_param_int', 'fn_param_txt')
+      and p.prosecdef),
+  2::bigint,
+  'as DUAS continuam security definer: e o que faz as duas asseroes acima serem verdade');
 
 select * from finish();
 rollback;
