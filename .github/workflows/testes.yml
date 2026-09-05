@@ -140,6 +140,30 @@ jobs:
         run: node .claude/hooks/guarda-destrutivos.teste.mjs
 
   # ---------------------------------------------------------------------------
+  # Extração da planilha: o produtor do arquivo do importador (card 9.2)
+  #
+  # Roda com `node --test` puro e SEM instalar nada, como o vigia e o portão. Isso
+  # não é economia: a transformação é pura e a fixture monta a planilha em memória,
+  # porque `Gestão Interativo.xlsx` NÃO está no repositório (é upload do projeto) e
+  # um teste que dependesse dela nunca rodaria aqui. O leitor de `.xlsx` também é
+  # exercitado — a suíte constrói um arquivo de verdade, com ZIP e XML, em vez de
+  # deixar a camada que abre arquivo fora do CI.
+  # ---------------------------------------------------------------------------
+  extracao:
+    name: extração (planilha → JSON)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Fixa pelo mesmo motivo do CLI e do Flutter (§2 de docs/ci-cd.md).
+          node-version: '24.16.0'
+
+      - name: Suíte da extração
+        run: node --test "extracao/test/**/*.test.mjs"
+
+  # ---------------------------------------------------------------------------
   # Edge Functions: a lógica pura de cada função, sem Deno e sem rede (card 4.7)
   #
   # O que dá para decidir sem rede fica em `logica.ts`, ao lado do `index.ts`

@@ -34,3 +34,12 @@ node_modules/
 
 # Saída da cadeia de execução (card 5.5,5) — log de corrida, não é entregável
 automacao/logs/
+
+# Planilha e saída do extrator (card 9.2). ⚠️ Não é arrumação: o JSON traz NOME,
+# CÓDIGO SGF e trilha de cada aluno da escola, e o `--saida` padrão é o diretório
+# atual. Um `git add -A` depois de uma extração na raiz commitaria a escola inteira
+# num repositório PÚBLICO. A planilha original nunca esteve aqui e não deve estar.
+*.xlsx
+importacao-*.json
+inconsistencias-*.csv
+extracao/saida/

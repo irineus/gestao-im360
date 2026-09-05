@@ -593,7 +593,7 @@ jargão em texto de tela): passa por tudo e só aparece quando alguém abre a te
 | **View** | Paridade de linhas por perfil + zero para quem não pode + isolamento de unidade (§6.3); as quatro armadilhas do card 2.3 §3 quando aplicáveis (soma de conjunto vazio, `count` sobre `left join`, `fn_hoje`, RLS silenciosa) |
 | **Rotina `rt_*`** | Idempotência (rodar duas vezes) + isolamento de falha + contexto de rotina (§8) |
 | **Tela** | Guarda de rota tabelada; ocultação por permissão; estado vazio renderizado com o texto do card 2.7; **e o teste mobile mínimo — monta em 390×800, `takeException()` nulo, painel/detalhe em `Dialog.fullscreen`, ação primária alcançável** (card 8.1,5, item H6, 05/09/2026) |
-| **Migração de dados (Fase 9)** | Reexecutabilidade: importar duas vezes o mesmo snapshot produz os mesmos totais, sem duplicar |
+| **Migração de dados (Fase 9)** | Reexecutabilidade: importar duas vezes o mesmo snapshot produz os mesmos totais, sem duplicar. ⚠️ **São DUAS metades, e o card 9.2 acrescentou a segunda (06/09/2026):** a do consumidor, que é o importador (`100_importacao`), e a do **produtor** — o extrator tem de ser determinístico (mesma planilha → mesmos bytes, sem relógio) e a **chave de cada movimento tem de ser estável entre snapshots**. Sem a segunda a primeira não serve para nada: a reimportação chegaria com chaves novas e criaria tudo de novo, e `movimento_estoque` é imutável |
 | **Correção de bug** | O teste que reproduz o defeito entra **no mesmo commit** da correção, e falha sem ela |
 
 ---
