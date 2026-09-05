@@ -590,7 +590,12 @@ Ordem 5 — a parcela MODULAR lê o cronograma). Perfis: todos.
 
 ## 12. Tela 9 — Certificados
 
-Rota: `certificados.ler + alunos.ler`. Perfis: todos.
+Rota: `certificados.ler + alunos.ler + materiais.ler`. Perfis: todos.
+
+⚠️ **`materiais.ler` entrou em 06/09/2026 (card 8.6), e nenhum perfil perdeu a tela** — os quatro já
+o têm (`permissoes-matriz.md` §5.1, item 1). `v_certificado_fila` faz `join` **interno** em `metodo`:
+é o método que a linha mostra e o que o filtro `[método v]` oferece. Sem o código a fila não vem
+errada, vem **vazia** (card 2.3 §3.4). Mesma correção que a linha 8 recebeu no card 8.5.
 
 ### 12.1 Fila
 
@@ -863,7 +868,7 @@ Divergências e apontamentos para outros cards:
 | # | Apontamento | Card afetado |
 |---|---|---|
 | 1 | Cadastro de cursos/combos/módulos e professores desenhado nas telas 6 e 10 (junto do uso), e não na tela 12 como o plano §7 sugere — Administração fica com usuários, matriz e parâmetros. As permissões do card 2.4 já suportam isso (guardas por `materiais.*`/`professores.*`, independentes de `admin.*`) | 4.4 / 4.5 / 4.7 |
-| 2 | `v_certificado_fila` (card 8.6) precisa devolver **as duas situações** — `em_ultimo_livro` e `em_fim` — com rótulo distinto (§12.1); o plano fala só em "fila do último livro" | 8.6 |
+| 2 | ✅ **Fechado em 06/09/2026 (card 8.6).** `v_certificado_fila` devolve `situacao` com os dois valores — `ULTIMO_LIVRO` (um item pendente) e `FIM` (nenhum) —, rotulados na tela como "Último livro" e "Fim do curso", e o filtro `[situação v]` separa os dois. Enunciado original preservado: `v_certificado_fila` precisa devolver **as duas situações** com rótulo distinto (§12.1); o plano fala só em "fila do último livro" | 8.6 |
 | 3 | ✅ **Fechado em 03/09/2026 (card 5.7).** `v_bloco_alunos` precisava expor a origem da reposição pontual (bloco/data da falta) para o rótulo "reposição de Qua 27/08" (§7.2) — quem a expõe é **`fn_bloco_alunos`**, com `bloco_origem_dia`/`bloco_origem_hora`/`data_origem` e `left join` no bloco de origem, porque `bloco_origem_id` é nulo de propósito (card 2.5 §3.1) e aí a linha diz "reposição avulsa" em vez de inventar | 5.7 |
 | 4 | ✅ **Fechado em 03/09/2026 (card 5.7).** A ficha exibe a situação REP (`fn_rep_situacao`) na aba Turmas, **com os números e não só o veredito** — e só quando há o que dizer: débito, aluno já contínuo, ou veredito diferente de MANTER. Painel permanente dizendo "0 aulas a repor" em toda ficha treina a pessoa a não olhar para ele | 5.7 / 6.6 |
 | 5 | Tela de Administração reserva aba "Histórico" da matriz para o card 4.7.5 (§15) | 4.7.5 |
@@ -883,7 +888,7 @@ que se resolve em silêncio volta como defeito na revisão seguinte.
 | 10 | **Reposições na aba Turmas** (§6.4) fala em "reposições pontuais futuras" | A aba separa **Próximas** (PREVISTA, data ≥ hoje) de **Histórico**, e o histórico fica completo: é dele que o débito do card 2.5 se compõe, e escondê-lo tiraria a explicação do número que a seção de cima mostra |
 | 11 | **`professores.ler` para `v_bloco_vagas_semana`** (`views-leitura.md` §11) sem consumidor: a rota do dashboard não exige a permissão e a tela não mostra professor | Decisão de Irineu: o dashboard **deixou de ler** `professor_id`/`professor_nome` e a tabela §11 deixou de citar `professores.ler`. O professor aparece na tela de Turmas, onde a permissão é exigida |
 | 12 | **Compras (tela 7) ainda não existe**, e o §14.3 manda os três tipos de estoque para lá | Vão para **Materiais** com `?material=<id>`. Quando o card 6.8 nascer, muda uma linha em `rotaDaAcao` |
-| 13 | **Abas Trilha e Certificado** ainda não existem (cards 6.6 e 8.6), e o §14.3 manda pendências para elas | A ficha abre nelas assim mesmo: a aba está no lugar e diz qual card a entrega. Destino certo com conteúdo por vir é honesto; mandar para Dados seria mandar para o lugar errado |
+| 13 | ✅ **FECHADA em 06/09/2026 (card 8.6).** A Trilha nasceu no 6.6 e o Certificado neste card — as cinco abas do §6.2 estão de pé, e nenhuma mudou de posição no caminho, que era o motivo de a aba existir vazia. Enunciado original: **Abas Trilha e Certificado** ainda não existem (cards 6.6 e 8.6), e o §14.3 manda pendências para elas | A ficha abre nelas assim mesmo: a aba está no lugar e diz qual card a entrega. Destino certo com conteúdo por vir é honesto; mandar para Dados seria mandar para o lugar errado |
 
 ### Divergência do card 6.5 (04/09/2026)
 
@@ -991,6 +996,21 @@ própria turma.
 | 48 | **O §11 põe a regra "no detalhe e como filtro", e ela entrou também na GRADE** | `views-leitura.md` §5.3 é quem manda ("a tela precisa dizer por qual regra cada quantidade apareceu"), e sem coluna a proveniência do total ficaria escondida atrás de um clique. Linha atendida por mais de um degrau diz **"Várias"** — escolher o primeiro seria afirmar o que não se sabe —, e o filtro por regra é quem a separa. ⚠️ O filtro age **antes** do pivô: aplicado depois, um material de dois degraus continuaria somando os dois e a tela diria que 3 exemplares vêm de média do método quando 1 vem de ritmo próprio |
 | 49 | **O §11 manda o drill-down sair da célula, e no celular não há célula** | Na faixa mobile a `TabelaIm360` vira cartões e as colunas de mês somem. O cartão abre o material **inteiro** (todos os meses do horizonte), e o subtítulo do painel diz isso em palavras. No desktop valem os dois alvos: a célula com número abre `material × mês`, a linha abre o material. **Célula em traço não é alvo** — abrir um painel do mês vazio é a promessa que não se cumpre —, e o toque cai na linha |
 | 50 | **O §11 pede um vazio para "rotina falhou" que a tabela vazia não distingue** | `rt_projecao_demanda` faz `delete` + `insert` na mesma transação e o bloco de exceção de `rt_diaria` reverte os dois: **falha deixa a projeção anterior de pé**, com o carimbo velho. Logo tabela vazia é "nunca chegou a gravar", e ela é indistinguível de "rodou e não previu nada" — que é estado real numa escola sem aluno ativo. O discriminador é a pendência `ROTINA_FALHOU` aberta, consultada à parte. ⚠️ Ela exige `pendencias.ler`, que **não** está no conjunto da rota: sem a permissão a consulta degrada para "não falhou" e a tela cai no vazio neutro, que diz menos e não diz nada falso. Acrescentar `pendencias.ler` à rota fecharia a tela inteira para quem só quer ver a projeção |
+
+### Divergências do card 8.6 (06/09/2026) — a tela de Certificados
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 51 | **O §12.1 dá a fonte como `v_certificado_fila` sem dizer QUEM entra na fila**, e a definição óbvia — "nenhum item pendente" — inclui **aluno sem trilha nenhuma** | A view exige trilha existente. Não é zelo: `fn_trilha_em_fim` e a coluna `em_fim` do dashboard devolvem `true` para quem nunca teve trilha, e o card 6.2 escreveu que *"quem precisa distinguir 'acabou' de 'nunca começou' pergunta pela trilha, não por esta função"*. Esta view é quem precisa — sem o `exists`, a fixture entrega dois ATIVOS sem trilha como formandos prontos, e na escola real seria todo aluno recém-matriculado antes de a trilha ser gerada. Medido em `083_certificado_fila` §2, com a contraprova vermelha |
+| 52 | **O §12.1 desenha o resumo do checklist como `P ✓ F ✓ Fo ─`** | O `✓` (U+2713) **não vai para a tela**: está na faixa que o portão `texto_de_tela_test` proíbe desde o card 5.5,5 — o app empacota só Inter e Roboto, e a CSP impede baixar a fonte de emoji, então o glifo viraria caixa vazia. As marcas são **ícones do Material** com a sigla ao lado, e a forma legível (`P ok · F pendente · Fo pendente`) é o que o cartão do celular, a busca e o leitor de tela usam. Registrado também em `design-system.md` §11 |
+| 53 | **O §12.1 desenha a coluna Checklist já preenchida para quem está em "último livro"**, e nessa situação o checklist ainda **não existe** | Ele nasce no passo 9 da entrega que fecha a trilha (card 8.3). As cinco colunas vêm **nulas**, e nulo não é `false`: a fila diz "Sem checklist" e a coluna Certificado diz `—` em vez de "Não pedido", que afirmaria que alguém já olhou o caso. O painel oferece **"Abrir checklist"** (`certificados.criar`), que é `fn_certificado_abrir` — idempotente e com a data resolvida pelo banco, e é exatamente o caminho que o comentário dela previa ("checklist aberto à mão antes de qualquer entrega"). Sem esse botão, a metade da fila que existe para **dar tempo** não teria o que fazer com o tempo |
+| 54 | **O §12.2 manda cada caixa ser guardada pela permissão do item, e o design-system §5.7 manda o controle sem permissão NÃO ser renderizado** | As duas coisas valem, e a leitura que as concilia está no próprio §12.2: *"o monitor vê o checklist inteiro mas só a caixa Financeiro é interativa para ele"*. O item sem permissão vira **indicador de leitura** (ícone com forma própria + rótulo + quem/quando), e não some: esconder o Pedagógico deixaria o monitor sem saber se ele já foi assinado. O que a regra do §5.7 proíbe — controle desabilitado, que sugere que preencher algo o destrava — continua fora: o status também vira **texto** para quem não pode alterá-lo |
+| 55 | **A caixa Financeiro acionável na lista (§12.2) é da faixa MOBILE, e o cartão do design-system §5.2 não tem onde pô-la** | `CartaoIm360` ganhou um slot `acao`, e a marca do desktop ficou **de leitura**. Duas decisões: (a) sem o slot, a jornada nº 2 do monitor existiria só no desktop, que é onde o monitor não está; (b) no desktop a linha inteira abre o painel, e um controle clicável dentro dela transformaria o clique de "ver o checklist" num toggle por engano — lá se marca no painel, onde o "quem/quando" está à vista. A caixa só aparece com `certificados.marcar_financeiro` **e** com checklist aberto: oferecer o que o banco recusaria com `CERTIFICADO_INEXISTENTE` ensina a não confiar |
+| 56 | **O §12.1 não previa ordenação nem `?aluno=`** | A fila ordena por **situação** (fim do curso primeiro — quem terminou não tem mais prazo) e, dentro dela, pelo fim de curso **mais antigo**. Quem ainda não tem checklist não tem data e vai para o fim do próprio grupo: tratar nulo como "muito antigo" poria na frente exatamente quem ninguém começou a preparar. O `?aluno=<id>` segue `?material=`, `?turma=` e `?pedido=`: abre a tela já no checklist daquele aluno |
+
+Nenhum ajuste bloqueante em documento anterior. Os **três códigos do card 8.3**
+(`CERTIFICADO_INEXISTENTE`, `ITEM_CERTIFICADO_INVALIDO`, `STATUS_CERTIFICADO_INVALIDO`) já estavam
+no catálogo do app; esta é a primeira tela em que eles podem aparecer.
 
 ---
 

@@ -357,7 +357,7 @@ aberta com permissão parcial não dá erro — dá um número menor.
 | 6 | Materiais e estoque | `materiais.ler` + `estoque.ler` | todos |
 | 7 | Compras | `materiais.ler` + `estoque.ler` + `alunos.ler` + `compras.ler` | direção, secretaria |
 | 8 | Projeção de demanda | `materiais.ler` + `estoque.ler` + `alunos.ler` + **`turmas.ler`** | direção, pedagógico, secretaria, monitor |
-| 9 | Certificados | `certificados.ler` + `alunos.ler` | todos |
+| 9 | Certificados | `certificados.ler` + `alunos.ler` + **`materiais.ler`** | todos |
 | 10 | Salas e PCs | `salas.ler` + `professores.ler` | todos |
 | 11 | Pendências | `pendencias.ler` | todos |
 | 12 | Administração | `admin.ler` | direção |
@@ -371,6 +371,12 @@ não vem errada: vem **vazia**, com cara de escola que não vai precisar de apos
 do card 2.3 no pior lugar em que ele podia cair, e a nota do card de Ordem 5 da Fase 2 já o dizia
 desde 01/09/2026 — esta tabela é que tinha ficado com três. O `guardas_rota_test` percorre a tabela e
 foi corrigido no mesmo commit.
+
+⚠️ **A linha 9 ganhou `materiais.ler` em 06/09/2026 (card 8.6), pelo mesmo motivo e sem perda de
+perfil.** `v_certificado_fila` faz `join` **interno** em `metodo` — é o método que a linha da fila
+mostra e o que o filtro `[método v]` do `wireframes.md` §12.1 oferece. Faltando o código, a fila de
+formandos vem **vazia**, com cara de escola em que ninguém está terminando o curso. Os quatro perfis
+já têm `materiais.ler` pelo item 1 do §5.1, então "todos" continua verdadeiro.
 
 O botão dentro da tela é guardado pela permissão de ação (`turmas.alocar` no botão "adicionar
 aluno", `estoque.lancar_saida` no "Registrar entrega"), e a função no banco repete a checagem com

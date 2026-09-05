@@ -155,13 +155,19 @@ const rotasAplicacao = <Rota>[
     grupo: GrupoMenu.material,
     exige: {'materiais.ler', 'estoque.ler', 'alunos.ler', 'turmas.ler'},
   ),
+  // ⚠️ `materiais.ler` entrou no card 8.6, e a matriz do card 2.4 registrava só
+  // os dois primeiros. `v_certificado_fila` faz `join` **interno** em `metodo`
+  // — é o método que a linha exibe e o que o filtro do wireframe §12.1 oferece
+  // —, e sem a permissão a fila não vem errada: vem VAZIA (card 2.3 §3.4). Os
+  // quatro perfis já têm `materiais.ler`, então nenhum perfil perde a tela com
+  // esta correção. É a mesma forma da linha 8, corrigida no card 8.5.
   Rota(
     id: 'certificados',
     caminho: '/certificados',
     titulo: 'Certificados',
     icone: Icons.workspace_premium_outlined,
     grupo: GrupoMenu.material,
-    exige: {'certificados.ler', 'alunos.ler'},
+    exige: {'certificados.ler', 'alunos.ler', 'materiais.ler'},
   ),
   Rota(
     id: 'salas',

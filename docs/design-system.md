@@ -247,7 +247,9 @@ TabelaIm360<T>(
   `†` do wireframe — some primeiro na degradação (§3).
 - **Mobile**: a mesma `TabelaIm360` renderiza **cartões** (título, linha secundária, badge) quando
   a faixa é `mobile` e a tela declara o mapeamento linha→cartão; filtros migram para folha inferior
-  com botão "Filtrar (n)" mostrando quantos estão ativos.
+  com botão "Filtrar (n)" mostrando quantos estão ativos. Desde o card 8.6 o cartão aceita também um
+  slot **`acao`**, à direita: um controle acionável na própria lista (a caixa Financeiro da tela 9),
+  com alvo ≥ 44 px e sem abrir a linha — ver a divergência 30 do §11.
 - **Linha em alerta**: fundo tonal de atenção/erro **mais ícone** na primeira célula (cor nunca
   sozinha). Saldo negativo usa o par de erro e nunca é ocultado (card 2.3 §4.1).
 - **Ordenação** por coluna onde a view permite; indicador no cabeçalho; sem paginação até 500
@@ -423,7 +425,7 @@ Regras: mensagens de **validação de campo** aparecem no campo; as demais em ba
 | Compras → sugerido | "Nada a comprar agora: nenhum material com sugestão maior que zero." + filtro desligável | — |
 | Compras → pedidos | "Nenhum pedido. Crie a partir do **Pedido sugerido**." | — |
 | Projeção | Rotina ok e sem linhas: "Sem demanda projetada no horizonte atual." **Rotina falhou:** "A projeção não foi calculada — veja a pendência **ROTINA_FALHOU**." (nunca tabela zerada com cara de 'sem demanda' — card 2.6 §11) | — |
-| Certificados | "Ninguém chegando ao fim do curso agora." | idem filtros |
+| Certificados | "Ninguém chegando ao fim do curso agora." | "Nenhum aluno com esses filtros — **Limpar filtros**." (card 8.6). No painel, o aluno **sem checklist** não é vazio de lista: "O checklist é aberto sozinho quando o aluno recebe a última apostila da trilha. Dá para abrir antes, para adiantar o pedido do certificado." + **Abrir checklist** |
 | Salas e PCs | "Nenhuma sala cadastrada. **+ Nova sala**." Professores (2ª aba, card 4.5): "Nenhum professor cadastrado. **+ Novo professor**." | idem filtros (card 4.5) |
 | Pendências | "Nenhuma pendência aberta." | "Nenhuma pendência com esses filtros — **Limpar filtros**." |
 | Administração → usuários | "Só você por aqui. **+ Convidar usuário**." | — |
@@ -884,6 +886,15 @@ dizer com mais precisão:
 | 27 | **O §7.2 pede dois vazios que a tabela vazia não distingue** | "Rotina ok e sem linhas" e "rotina falhou" produzem, os dois, uma `demanda_projetada` sem linha e **sem carimbo**: a rotina faz `delete` + `insert` na mesma transação, e a falha reverte os dois deixando a projeção anterior de pé. O discriminador é a **pendência aberta**, consultada à parte — sem ela, o vazio honesto de uma escola sem aluno ativo viraria alarme falso, e o alarme viraria silêncio. Detalhe e o custo da permissão em `wireframes.md` §17, item 50 |
 | 28 | **O §7.3 fixa o cabeçalho da Projeção em "calculada em {calculado_em}" e não diz o que fazer sem carimbo** | São **três** estados, os mesmos que o card 8.2 fixou para Compras e pela mesma razão: calculada, **nunca calculada** ("A projeção ainda não foi calculada. Ela é atualizada pela rotina da madrugada.") e carimbo ilegível. Enquanto carrega, **nada** é desenhado — piscar "ainda não foi calculada" por meio segundo diz uma coisa falsa —, e o texto vai num `Flexible`, que é a correção 19 aplicada antes de doer |
 | 29 | **O §5.2 não previa célula clicável dentro da linha** | O drill-down do `wireframes.md` §11 é por **célula** (`INT-04 × out`), e a `TabelaIm360` só oferece `aoTocarLinha`. A célula do mês virou `ColunaIm360.celula` com `InkWell` + `Tooltip` + `Semantics(button:)` — o alvo interno vence o da linha, e a linha continua sendo o alvo do resto. **Célula em traço não recebe `InkWell`**: mês sem projeção não tem o que detalhar, e o toque cai na linha. Registrado como padrão reusável; não virou componente porque é a primeira tabela com dois níveis de alvo |
+
+### Divergências do card 8.6 (06/09/2026) — a tela de Certificados
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 30 | **O §5.2 descreve o cartão do mobile como "título, linha secundária, badge"**, e o `wireframes.md` §12.2 pede a caixa Financeiro **acionável na própria lista** do celular, alvo ≥ 44 px | `CartaoIm360` ganhou o slot `acao`, à direita, depois do destaque. É a jornada nº 2 do monitor, e sem o slot ela existiria só no desktop — que é onde o monitor não está. O gesto do controle é o mais interno e vence o `InkWell` do cartão, então marcar não abre o painel. A marca equivalente no **desktop é de leitura**: lá a linha inteira abre o painel, e um controle clicável dentro dela viraria toggle por engano |
+| 31 | **O §7.2 dá o vazio de Certificados ("Ninguém chegando ao fim do curso agora.") e não prevê o vazio POR FILTRO** | Ganhou o par de sempre — "Nenhum aluno com esses filtros." + **Limpar filtros** —, como as demais linhas da tabela já fazem. E ganhou um terceiro texto que não é vazio de tela: o aluno **sem checklist** dentro do painel, que é um passo que ainda não aconteceu e não uma lista sem itens; ali a frase explica **por que** é normal e oferece abrir |
+| 32 | **Nenhuma marca de "sim/não" do §5 tinha forma definida**, e o `wireframes.md` §12.1 desenha `✓` e `─` | `✓` é U+2713, dentro da faixa que o portão `texto_de_tela_test` proíbe desde o card 5.5,5: o app empacota só Inter e Roboto e a CSP bloqueia a fonte de emoji, então o glifo viraria caixa vazia. As marcas são **ícones do Material** (`check_box_outlined` / `check_box_outline_blank`) com a sigla ao lado e a leitura por extenso na semântica e no tooltip — cor não é portadora única (§8.2), e aqui nem cor sozinha há |
+| 33 | **O §5.7 manda o controle sem permissão NÃO ser renderizado**, e o checklist do `wireframes.md` §12.2 tem de ficar **inteiro** à vista do monitor | A regra vale para **botão**; o item do checklist é informação. Sem a permissão do item, a caixa vira **indicador de leitura** com o rótulo e o "quem/quando" ao lado — esconder o Pedagógico deixaria o monitor sem saber se ele já foi assinado. O que continua fora é o controle **desabilitado**, que sugere que preencher algo o destrava: o seletor de status também vira texto para quem não pode alterá-lo |
 
 
 ---
