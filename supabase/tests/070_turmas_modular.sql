@@ -134,11 +134,30 @@ select throws_ok(
 -- nasceria com o dia seguinte entre 21h e a meia-noite, porque o Postgres do
 -- Supabase roda em UTC. O C6 prova que `current_date` não está escrito; esta
 -- asserção prova que o valor gravado é o certo.
+--
+-- ⚠️ O ocupante desta turma era 'Aluno de Lotação 01' (INTERATIVO) até o card
+--    7.2, e a troca por Eduarda não é cosmética: o card 7.2 criou
+--    `tg_turma_modular_aluno_admissao`, que exige método MODULAR (§9 do card
+--    2.2 — «exige aluno ATIVO/ACELERAR do método MODULAR»). Este arquivo
+--    reprovou com ALUNO_NAO_MODULAR no primeiro `supabase test db` depois da
+--    migração, que é o desfecho certo: a escolha de aluno aqui era arbitrária
+--    porque em 7.1 nenhuma regra a olhava, e hoje uma olha.
+--
+-- ⚠️ E o CONTEXTO DE ROTINA, pela mesma razão que a camada `modular` do seed
+--    passou a tê-lo no card 7.2: daqui até o fim desta seção as escritas correm
+--    como `postgres`, sem `auth.uid()`, e `tg_turma_modular_aluno_admissao`
+--    chama `fn_turma_modular_ocupacao`, que é `security definer` filtrada por
+--    `fn_unidade_atual()`. Sem unidade no contexto a ocupação vem NULA e o
+--    trigger a lê como "turma de outra unidade" — PT404 numa turma que está bem
+--    ali. Como `postgres` já ignora a RLS, o contexto aqui só supre a unidade:
+--    nenhuma asserção desta seção mede permissão.
+select tests.como_rotina(tests.unidade('ESCOLA_A'));
+
 insert into public.turma_modular_aluno (unidade_id, turma_id, aluno_id)
 select t.unidade_id, t.id, a.id
   from public.turma_modular t, public.aluno a
  where t.nome = 'Eletricista TESTE' and t.unidade_id = tests.unidade('ESCOLA_A')
-   and a.nome = 'Aluno de Lotação 01' and a.unidade_id = t.unidade_id;
+   and a.nome = 'Eduarda Lima' and a.unidade_id = t.unidade_id;
 
 select is(
   (select ta.data_entrada from public.turma_modular_aluno ta
@@ -152,7 +171,7 @@ select throws_ok(
     select t.unidade_id, t.id, a.id
       from public.turma_modular t, public.aluno a
      where t.nome = 'Eletricista TESTE' and t.unidade_id = tests.unidade('ESCOLA_A')
-       and a.nome = 'Aluno de Lotação 01' and a.unidade_id = t.unidade_id$$,
+       and a.nome = 'Eduarda Lima' and a.unidade_id = t.unidade_id$$,
   '23505', null,
   'o mesmo aluno duas vezes ATIVO na mesma turma e recusado');
 
@@ -170,8 +189,10 @@ select lives_ok(
     select t.unidade_id, t.id, a.id
       from public.turma_modular t, public.aluno a
      where t.nome = 'Eletricista TESTE' and t.unidade_id = tests.unidade('ESCOLA_A')
-       and a.nome = 'Aluno de Lotação 01' and a.unidade_id = t.unidade_id$$,
+       and a.nome = 'Eduarda Lima' and a.unidade_id = t.unidade_id$$,
   'com a entrada anterior INATIVA a dupla volta a entrar — a unique e parcial');
+
+select tests.encerrar_sessao();
 
 -- ===========================================================================
 -- 3. Sem política de delete, o delete NÃO dá erro: devolve zero linhas
@@ -221,13 +242,18 @@ select is(
 -- O monitor lê e não aloca: `turmas.alocar` é dos outros três (card 2.4 §5).
 select tests.autenticar(tests.uid('monitor@escola-a.test'));
 
+-- ⚠️ A aluna aqui era 'Carla Menezes' (INTERATIVO) até o card 7.2, e a troca é
+--    obrigatória pela mesma razão da seção 2: `tg_turma_modular_aluno_admissao`
+--    é BEFORE e roda ANTES da `with check` da política, então o método errado
+--    respondia PT422 e a asserção de RLS media outra coisa. Com uma aluna
+--    MODULAR o insert chega até a política, que é o que este teste quer medir.
 select throws_ok(
   $$insert into public.turma_modular_aluno (unidade_id, turma_id, aluno_id)
     select public.fn_unidade_atual(),
            (select id from public.turma_modular
              where nome = 'Eletricista 2025.2' and unidade_id = public.fn_unidade_atual()),
            (select id from public.aluno
-             where nome = 'Carla Menezes' and unidade_id = public.fn_unidade_atual())$$,
+             where nome = 'Eduarda Lima' and unidade_id = public.fn_unidade_atual())$$,
   '42501', null,
   'o monitor tem turmas.ler e nao tem turmas.alocar');
 
@@ -247,6 +273,33 @@ delete from public.perfil_permissao pp
    and pe.unidade_id = tests.unidade('ESCOLA_A') and pe.codigo = 'PEDAGOGICO'
    and pm.codigo = 'turmas.alocar';
 
+-- ⚠️ Um SEGUNDO aluno MODULAR, criado aqui e não na fixture, e ele existe por
+--    causa do card 7.2: a asserção "nem põe outra pessoa na vaga" trocava o
+--    `aluno_id` por 'Carla Menezes' (INTERATIVO), e desde o 7.2 esse update
+--    morre em ALUNO_NAO_MODULAR no `tg_turma_modular_aluno_admissao` — que roda
+--    ANTES da guarda de coluna, como em `bloco_aluno` (o nome do trigger de
+--    admissão vem antes na ordem alfabética, e é ela que decide a ordem dos
+--    BEFORE do Postgres). A guarda continuaria certa e o teste deixaria de
+--    medi-la: o write seria barrado pelo motivo errado. Com um MODULAR de
+--    verdade o update chega à guarda, que é o que esta seção existe para medir.
+--
+--    Contexto de rotina para o `insert`: `tg_aluno_trilha_inicial` chama
+--    `fn_trilha_gerar`, que exige `alunos.criar` — como `postgres`, sem
+--    `auth.uid()`, `tem_permissao` é falsa e a matrícula morre em PT403.
+--    `codigo_sgf` nulo porque a faixa 90xx é dos alunos de lotação da fixture.
+select tests.como_rotina(tests.unidade('ESCOLA_A'));
+
+insert into public.aluno (unidade_id, codigo_sgf, nome, metodo_id, combo_id,
+                          status, data_inicio)
+select tests.unidade('ESCOLA_A'), null, 'Modular Suplente TESTE', me.id, cb.id,
+       'ATIVO', public.fn_hoje()
+  from public.metodo me
+  join public.combo  cb on cb.unidade_id = me.unidade_id
+                       and cb.nome = 'Eletricista Completo'
+ where me.unidade_id = tests.unidade('ESCOLA_A') and me.codigo = 'MODULAR';
+
+select tests.encerrar_sessao();
+
 select is(
   tests.codigo_do_erro(
     $$update public.turma_modular_aluno ta set turma_id =
@@ -262,7 +315,7 @@ select is(
   tests.codigo_do_erro(
     $$update public.turma_modular_aluno ta set aluno_id =
         (select id from public.aluno
-          where nome = 'Carla Menezes' and unidade_id = public.fn_unidade_atual())
+          where nome = 'Modular Suplente TESTE' and unidade_id = public.fn_unidade_atual())
        from public.turma_modular t
       where t.id = ta.turma_id and t.nome = 'Eletricista TESTE' and ta.ativo$$,
     tests.uid('pedagogico@escola-a.test')),
@@ -371,10 +424,31 @@ select is(
 -- função é reescrita SEM o `update` da turma Modular, dentro desta transação, e
 -- a mesma operação passa a deixar a aluna dentro da turma. A definição
 -- sabotada volta no rollback junto com o resto.
+--
+-- ⚠️ Duas mudanças que o card 7.2 obrigou nesta preparação, e as duas são o
+--    trigger novo funcionando:
+--    (a) a aluna volta a ATIVO antes de a linha ser reativada. Desde o 7.2,
+--        `tg_turma_modular_aluno_admissao` recusa com ALUNO_INATIVO reativar a
+--        vaga de quem não é ATIVO/ACELERAR — que é exatamente a regra, e não um
+--        obstáculo do teste;
+--    (b) a reativação é escopada à turma da fixture. Com Eduarda também na
+--        'Eletricista TESTE' (seção 2), um `update` sem escopo ressuscitaria
+--        aquela linha e a seção 8 mediria outra coisa.
+--    A transição ATIVO → TRANCADO não existe na tabela de decisão do card 2.2
+--    §3.1, então a contraprova usa STANDBY de novo: o que se mede é a linha da
+--    turma, não o nome do status.
+select tests.autenticar(tests.uid('pedagogico@escola-a.test'));
+select public.fn_aluno_alterar_status(
+  (select id from public.aluno
+    where nome = 'Eduarda Lima' and unidade_id = public.fn_unidade_atual()),
+  'ATIVO', 'voltou a frequentar');
+reset role;
+
 update public.turma_modular_aluno ta set ativo = true
-  from public.aluno a
+  from public.aluno a, public.turma_modular t
  where a.id = ta.aluno_id and a.nome = 'Eduarda Lima'
-   and a.unidade_id = tests.unidade('ESCOLA_A');
+   and a.unidade_id = tests.unidade('ESCOLA_A')
+   and t.id = ta.turma_id and t.nome = 'Eletricista 2026.1';
 
 create or replace function public.fn_aluno_status_desaloca()
 returns trigger
@@ -404,7 +478,7 @@ select tests.autenticar(tests.uid('pedagogico@escola-a.test'));
 select public.fn_aluno_alterar_status(
   (select id from public.aluno
     where nome = 'Eduarda Lima' and unidade_id = public.fn_unidade_atual()),
-  'TRANCADO', 'trancou de vez');
+  'STANDBY', 'parou de vir de novo');
 reset role;
 
 select is(
@@ -413,7 +487,7 @@ select is(
     where a.nome = 'Eduarda Lima' and a.unidade_id = tests.unidade('ESCOLA_A')
       and ta.ativo),
   1::bigint,
-  'SEM o update da turma Modular, a aluna TRANCADA continua na turma — o erro ERRADO, sem erro nenhum');
+  'SEM o update da turma Modular, a aluna que saiu de ATIVO continua na turma — o erro ERRADO, sem erro nenhum');
 
 -- ===========================================================================
 -- 8. A guarda de exclusão e os DOIS MUNDOS (o achado do card 4.3, aqui)

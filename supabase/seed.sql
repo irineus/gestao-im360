@@ -1309,11 +1309,21 @@ select tests.seed_trilha_estoque(tests.unidade('ESCOLA_B'));
 --    resolvido pelo `not exists` que este card acrescentou à rotina. A fixture é
 --    o que faz a correção ser MEDIDA em vez de declarada.
 --
--- Não roda em contexto de rotina, ao contrário das camadas `infra_fisica` e
--- `turmas`: nenhum trigger destas três tabelas chama função que exija unidade no
--- contexto — a auditoria e a guarda de colunas não leem `fn_unidade_atual()`, e
--- a guarda de exclusão só dispara em `delete`. Pôr o contexto aqui seria ruído
--- que a próxima sessão leria como necessidade.
+-- ⚠️ PASSOU A RODAR EM CONTEXTO DE ROTINA NO CARD 7.2, e o motivo é o mesmo das
+--    camadas `infra_fisica` (5.4) e `turmas` (5.3). O card 7.1 escreveu aqui,
+--    com razão PARA AQUELE DIA, que a camada não precisava de contexto: «nenhum
+--    trigger destas três tabelas chama função que exija unidade no contexto».
+--    O card 7.2 criou `tg_turma_modular_aluno_admissao`, que chama
+--    `fn_turma_modular_ocupacao` — `security definer` e filtrada por
+--    `fn_unidade_atual()`, como manda o C8. O seed roda como `postgres`, sem
+--    `auth.uid()`: sem o contexto a ocupação vem NULA, o trigger a lê como
+--    "turma de outra unidade" e o `supabase db reset` inteiro morre em PT404 na
+--    primeira aluna. Medido em 05/09/2026, no primeiro reset depois da migração.
+--
+--    A saída RECUSADA foi a mesma que o card 5.3 já tinha recusado: tratar
+--    unidade nula como "não faz nada" dentro da função. Isso seria um contorno
+--    permanente em produção — e, aqui, um contorno que abriria a admissão em
+--    turma de outra unidade — escrito para acomodar um arquivo de teste.
 create or replace function tests.seed_modular(p_unidade uuid)
 returns void
 language plpgsql
@@ -1325,6 +1335,11 @@ declare
   v_turma  uuid;
   v_vazia  uuid;
 begin
+  -- Contexto de rotina (ver a nota ⚠️ acima). `is_local => true`: morre no fim
+  -- da transação mesmo se o `insert` falhar no meio.
+  perform set_config('app.rotina', 'on', true);
+  perform set_config('app.rotina_unidade', p_unidade::text, true);
+
   select c.id into v_curso
     from curso c
     join metodo me on me.id = c.metodo_id
