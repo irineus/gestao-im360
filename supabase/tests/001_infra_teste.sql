@@ -224,27 +224,28 @@ select is(
 -- com o resto.
 --
 -- A sentinela era `public.material` até o card 4.1, `public.aluno` até o 4.2,
--- `public.pc` até o 4.3, `public.bloco_aluno` até o 5.1 e
--- `public.movimento_estoque` até o **6.1**; de lá em diante essas tabelas
--- EXISTEM, o `create table` morreria com "already exists" e a asserção deixaria
--- de dizer o que promete. A sentinela acompanha a fronteira: agora é
--- `public.turma_modular_aluno`, a tabela da camada `modular` (card 7.1), que é a
--- última declarada.
+-- `public.pc` até o 4.3, `public.bloco_aluno` até o 5.1, `public.movimento_estoque`
+-- até o 6.1 e `public.turma_modular_aluno` até o **7.1**; de lá em diante essas
+-- tabelas EXISTEM, o `create table` morreria com "already exists" e a asserção
+-- deixaria de dizer o que promete. A sentinela acompanha a fronteira: agora é
+-- `public.certificado_checklist`, a tabela da camada `certificados` (card 8.3),
+-- que é a última declarada.
 --
--- ⚠️ E a troca seguiu à risca a instrução que este comentário já trazia — «quando
---    ela for aplicada, esta asserção precisa de uma camada NOVA para vigiar, e
---    não de uma sentinela nova». O card 6.1 aplicou `trilha_estoque` e declarou
---    `modular` no mesmo commit; sem a camada nova, o portão ficaria sem sentinela
---    e esta prova por construção viraria decoração — que é a crítica que o card
---    2.8 faz à suíte que existe e não reprova nada.
-create table public.turma_modular_aluno (id uuid primary key);
+-- ⚠️ E cada troca seguiu à risca a instrução que este comentário já trazia —
+--    «quando ela for aplicada, esta asserção precisa de uma camada NOVA para
+--    vigiar, e não de uma sentinela nova». O card 6.1 aplicou `trilha_estoque` e
+--    declarou `modular` no mesmo commit; o **7.1** aplicou `modular` e declarou
+--    `certificados` no mesmo commit. Sem a camada nova, o portão ficaria sem
+--    sentinela e esta prova por construção viraria decoração — que é a crítica
+--    que o card 2.8 faz à suíte que existe e não reprova nada.
+create table public.certificado_checklist (id uuid primary key);
 
 select is(
   (select string_agg(camada, ',' order by camada) from tests.fixture_camadas_devidas()),
-  'modular',
+  'certificados',
   'criada a tabela que a camada povoa, o portao acusa a camada que ficou para tras');
 
-drop table public.turma_modular_aluno;
+drop table public.certificado_checklist;
 
 select * from finish();
 rollback;

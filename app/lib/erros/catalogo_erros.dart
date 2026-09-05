@@ -4,9 +4,9 @@
 /// (card 2.9), os três do card 3.5, `ALUNO_INEXISTENTE` (card 4.2),
 /// `PC_COM_HISTORICO` (card 4.3), `BLOCO_COM_ALOCACAO` (card 5.1), os três do
 /// card 6.1 (trilha e estoque), `MATERIAL_JA_NA_TRILHA` (card 6.2),
-/// `MOVIMENTO_INEXISTENTE` (card 6.3) e os dez do card 6.5 (pedidos de compra,
-/// recebimento e ajuste de estoque). O contrato do conjunto é
-/// `test/fixtures/codigos_erro.txt`, na raiz do repositório.
+/// `MOVIMENTO_INEXISTENTE` (card 6.3), os dez do card 6.5 (pedidos de compra,
+/// recebimento e ajuste de estoque) e `TURMA_COM_ALUNO` (card 7.1). O contrato
+/// do conjunto é `test/fixtures/codigos_erro.txt`, na raiz do repositório.
 ///
 /// O app trata SEMPRE pelo código, nunca pelo texto do banco (card 2.2 §1.2):
 /// o texto pode mudar numa migração; o código é estável.
@@ -177,6 +177,16 @@ abstract final class CatalogoErros {
         'movimentou.',
     'SALDO_INSUFICIENTE':
         'O ajuste deixaria o estoque negativo. Confira a contagem.',
+
+    // --- card 7.1 (guarda de exclusão de turma Modular)
+    // Mesma família do PC_COM_HISTORICO e do BLOCO_COM_ALOCACAO:
+    // `turma_modular_aluno.turma_id` é `on delete cascade` e a tabela não tem
+    // política de delete para ninguém, então apagar a turma levava junto, em
+    // silêncio, quem esteve nela. A mensagem diz a saída, que é a mesma que a
+    // tela de Turmas Modular do card 7.3 oferece.
+    'TURMA_COM_ALUNO':
+        'Esta turma tem histórico de alunos e não pode ser excluída. '
+        'Desative-a.',
 
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':

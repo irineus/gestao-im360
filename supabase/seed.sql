@@ -92,15 +92,19 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
    $$to_regclass('public.movimento_estoque') is not null$$, true,
    'APLICADA no card 6.1: três pedidos de compra — um por estado que muda alguma conta — e os movimentos que produzem os saldos 0/0/1/n/n/n do card 2.8 §4.2. Desde o card 6.2 a TRILHA não nasce mais aqui (vem de tg_aluno_trilha_inicial, nas camadas alunos e turmas); esta camada marca as ENTREGAS sobre ela. Saldo 1 é o material que é o PRÓXIMO de dois alunos, que é o teste de concorrência do card 6.3; os dois saldos zero são diferentes de propósito (um com item pendente adiante = REORDENADA, um sem = BLOQUEADA_SEM_ESTOQUE). João Pedro fica em FIM, fechando a última marca do quadro §4.2 que ainda não tinha casa. Os quatro tipos de movimento aparecem, incluindo o único ESTORNO da fixture.'),
 
-  -- Declarada aqui e não no card 7.1 porque o portão do teste 001 precisa de uma
-  -- camada AINDA NÃO aplicada para vigiar: com `trilha_estoque` aplicada, ele
-  -- ficaria sem sentinela e a prova por construção viraria decoração — que é
-  -- exatamente a crítica do card 2.8. A nota do 001 já escrevia isso: «quando ela
-  -- for aplicada, esta asserção precisa de uma camada NOVA para vigiar, e não de
-  -- uma sentinela nova».
   ('modular', 80, '7.1',
-   $$to_regclass('public.turma_modular_aluno') is not null$$, false,
-   'Turma Modular de Eletricista com o cronograma dos três módulos e Eduarda Lima dentro. A fixture já tem o método, o curso, os três módulos (card 4.1) e a aluna (4.2) — falta a turma, que é o que torna fn_aluno_status_desaloca capaz de citar turma_modular_aluno (portão do teste 040 §10).');
+   $$to_regclass('public.turma_modular_aluno') is not null$$, true,
+   'APLICADA no card 7.1: duas turmas Modular de Eletricista, a `2026.1` com o cronograma dos três módulos e Eduarda Lima dentro, e a `2025.2` VAZIA e com o módulo corrente vencido. A fixture já tinha o método, o curso, os três módulos (card 4.1), a aluna (4.2) e a Sala Eletricista (4.3). A segunda turma existe por duas razões medidas: dá à guarda tg_turma_modular_exclusao_valida os DOIS lados (uma turma que recusa ser apagada e uma que aceita), como os PCs do card 4.3, e dá ao card 7.4 um módulo atrasado sem que a turma com aluno precise nascer atrasada. Consequência para o teste 090: Eduarda deixa de receber ALUNO_SEM_TURMA, que é exatamente o que o portão do card 5.5 previa.'),
+
+  -- Declarada aqui e não no card 8.3 porque o portão do teste 001 precisa de uma
+  -- camada AINDA NÃO aplicada para vigiar: com `modular` aplicada, ele ficaria
+  -- sem sentinela e a prova por construção viraria decoração — que é exatamente
+  -- a crítica do card 2.8. A instrução que o 001 já trazia era esta, e foi
+  -- seguida à risca: «quando ela for aplicada, esta asserção precisa de uma
+  -- camada NOVA para vigiar, e não de uma sentinela nova».
+  ('certificados', 90, '8.3',
+   $$to_regclass('public.certificado_checklist') is not null$$, false,
+   'Checklist de certificado de João Pedro Martins, que é o aluno em FIM da fixture (camada trilha_estoque) e o único FORMADO — com os itens em estados diferentes, para que o gate de fn_aluno_pode_formar (card 4.2) tenha os dois lados em vez de só o que passa. A fixture já tem o aluno, a trilha inteira entregue e as permissões do domínio `certificados` no seed do card 3.6; falta a tabela, que nasce no card 8.3 — e é a mesma tabela que o portão do teste 030 §6 espera para cobrar a citação em fn_aluno_pode_formar.');
 
 -- Devolve as camadas cuja condição já vale e que ainda não foram escritas.
 -- Vazio = a fixture está em dia com o schema.
@@ -1265,7 +1269,144 @@ select tests.seed_trilha_estoque(tests.unidade('ESCOLA_A'));
 select tests.seed_trilha_estoque(tests.unidade('ESCOLA_B'));
 
 -- =============================================================================
--- 9. Fecho: nada em `tests` alcançável por quem não é `postgres`
+-- 9. Escola-fixture — camada `modular` (card 7.1)
+-- =============================================================================
+-- Duas turmas do curso Eletricista Instalador, e a segunda não é enfeite. Três
+-- escolhas que valem explicação:
+--
+--   (a) a `2026.1` tem UMA aluna, Eduarda Lima, que é a única MODULAR da camada
+--       `alunos` (card 4.2). Não há treze alunos de lotação como na camada
+--       `turmas`, e a diferença é de forma: a capacidade do bloco é DERIVADA dos
+--       PCs (card 5.2), então a borda 10/11 precisava de gente de verdade; a
+--       capacidade da turma Modular é COLUNA, e a borda dela é aritmética que o
+--       card 7.2 monta dentro da própria transação, sem custo de fixture.
+--
+--   (b) a `2025.2` está VAZIA de propósito, e é o que dá à guarda de exclusão os
+--       DOIS lados — uma turma que recusa ser apagada (a de Eduarda) e uma que
+--       aceita. É a mesma escolha que a camada `infra_fisica` fez com os PCs:
+--       fixture em que toda linha recusa não distingue a guarda de um `delete`
+--       simplesmente quebrado.
+--
+--   (c) o módulo corrente da `2025.2` está com `prev_conclusao` VENCIDA e o da
+--       `2026.1` não. A view `v_turma_modular_lotacao` do card 7.4 marca
+--       `modulo_atrasado` por essa comparação: com as duas turmas no mesmo
+--       estado, uma implementação que devolvesse sempre `true` (ou sempre
+--       `false`) passaria. E a turma atrasada é a SEM aluno de propósito — a
+--       com aluno serve à rotina de pendências, e uma turma que nasce atrasada
+--       misturaria os dois assuntos.
+--
+-- Cronograma da `2026.1`: módulo 1 concluído, módulo 2 corrente, módulo 3 ainda
+-- sem datas. É a forma que o card 7.2 vai avançar (`fn_turma_modular_avancar`) e
+-- a que o 7.4 lê — turma com todos os módulos concluídos, que é o estado "turma
+-- terminou", fica para o teste do 7.4 montar, porque na fixture ela seria uma
+-- turma ativa que não representa nada em curso.
+--
+-- ⚠️ CONSEQUÊNCIA QUE VALE ESCREVER, porque muda quatro asserções do teste 090:
+--    com Eduarda numa turma ATIVA, ela deixa de receber `ALUNO_SEM_TURMA`. Não é
+--    regressão — é literalmente o que o portão do card 5.5 previa por escrito
+--    («no dia em que a tabela nascer, um aluno MODULAR alocado numa turma
+--    modular passará a receber ALUNO_SEM_TURMA todo dia — pendência falsa»),
+--    resolvido pelo `not exists` que este card acrescentou à rotina. A fixture é
+--    o que faz a correção ser MEDIDA em vez de declarada.
+--
+-- Não roda em contexto de rotina, ao contrário das camadas `infra_fisica` e
+-- `turmas`: nenhum trigger destas três tabelas chama função que exija unidade no
+-- contexto — a auditoria e a guarda de colunas não leem `fn_unidade_atual()`, e
+-- a guarda de exclusão só dispara em `delete`. Pôr o contexto aqui seria ruído
+-- que a próxima sessão leria como necessidade.
+create or replace function tests.seed_modular(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_curso  uuid;
+  v_sala   uuid;
+  v_turma  uuid;
+  v_vazia  uuid;
+begin
+  select c.id into v_curso
+    from curso c
+    join metodo me on me.id = c.metodo_id
+   where c.unidade_id = p_unidade and me.codigo = 'MODULAR'
+     and c.nome = 'Eletricista Instalador';
+
+  select id into v_sala from sala
+   where unidade_id = p_unidade and nome = 'Sala Eletricista';
+
+  -- Capacidade 15: é a capacidade real da turma de Eletricista, confirmada em
+  -- 31/08/2026 (Decisões vigentes §2). Aqui ela é COLUNA e não conta de PC — a
+  -- sala modular não tem nenhum.
+  insert into turma_modular (unidade_id, curso_id, nome, sala_id, capacidade,
+                             data_inicio, ativo)
+  select p_unidade, v_curso, s.nome, v_sala, s.capacidade,
+         fn_hoje() - s.inicio_ha, true
+    from (values
+      ('Eletricista 2026.1', 15,  60),
+      ('Eletricista 2025.2', 15, 300)
+    ) as s(nome, capacidade, inicio_ha)
+   where not exists (select 1 from turma_modular x
+                      where x.unidade_id = p_unidade and x.nome = s.nome);
+
+  select id into v_turma from turma_modular
+   where unidade_id = p_unidade and nome = 'Eletricista 2026.1';
+  select id into v_vazia from turma_modular
+   where unidade_id = p_unidade and nome = 'Eletricista 2025.2';
+
+  -- Cronograma da turma com aluna. A ORDEM não é coluna daqui: o join é por
+  -- `modulo.ordem`, que é de onde o módulo corrente sai (card 2.2 §9).
+  insert into turma_modular_modulo (unidade_id, turma_id, modulo_id,
+                                    data_inicio, prev_conclusao, concluido)
+  select p_unidade, v_turma, m.id,
+         case when s.inicio_ha is null then null else fn_hoje() - s.inicio_ha end,
+         case when s.prev_em  is null then null else fn_hoje() + s.prev_em  end,
+         s.concluido
+    from (values
+      -- ordem do módulo, dias desde o início, previsão (dias a partir de hoje),
+      -- concluído
+      (1,   60, -25, true),
+      (2,   25,  35, false),
+      (3, null, null, false)
+    ) as s(ordem, inicio_ha, prev_em, concluido)
+    join modulo m on m.unidade_id = p_unidade and m.curso_id = v_curso
+                 and m.ordem = s.ordem
+   where not exists (select 1 from turma_modular_modulo x
+                      where x.turma_id = v_turma and x.modulo_id = m.id);
+
+  -- Cronograma da turma vazia: só o primeiro módulo, começado e com previsão
+  -- VENCIDA. É o `modulo_atrasado` do card 7.4 com o outro valor.
+  insert into turma_modular_modulo (unidade_id, turma_id, modulo_id,
+                                    data_inicio, prev_conclusao, concluido)
+  select p_unidade, v_vazia, m.id, fn_hoje() - 300, fn_hoje() - 40, false
+    from modulo m
+   where m.unidade_id = p_unidade and m.curso_id = v_curso and m.ordem = 1
+     and not exists (select 1 from turma_modular_modulo x
+                      where x.turma_id = v_vazia and x.modulo_id = m.id);
+
+  -- `data_entrada` explícita e não o default: a aluna está matriculada há 60
+  -- dias (camada `alunos`), e deixar o default de hoje faria a fixture dizer que
+  -- ela entrou na turma no dia em que alguém rodou o `db reset` — a mesma razão
+  -- pela qual o card 5.1 deixou `tipo_desde` valer no INSERT.
+  insert into turma_modular_aluno (unidade_id, turma_id, aluno_id, data_entrada, ativo)
+  select p_unidade, v_turma, a.id, fn_hoje() - 60, true
+    from aluno a
+   where a.unidade_id = p_unidade and a.nome = 'Eduarda Lima'
+     and not exists (select 1 from turma_modular_aluno x
+                      where x.turma_id = v_turma and x.aluno_id = a.id);
+end $$;
+
+comment on function tests.seed_modular(uuid) is
+  'Camada `modular` da escola-fixture (card 7.1): duas turmas Modular de Eletricista — a 2026.1 com cronograma de três módulos e Eduarda Lima dentro, a 2025.2 vazia e com o módulo corrente vencido.';
+
+-- As duas unidades recebem as mesmas turmas, pela mesma razão das camadas
+-- anteriores: `turma_modular_nome_uk` é única por UNIDADE, então repetir
+-- `Eletricista 2026.1` entre elas é exatamente o caso que a unique precisa
+-- aceitar — e recusaria se estivesse escrita sem o `unidade_id`.
+select tests.seed_modular(tests.unidade('ESCOLA_A'));
+select tests.seed_modular(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 10. Fecho: nada em `tests` alcançável por quem não é `postgres`
 -- =============================================================================
 -- `create function` concede EXECUTE a PUBLIC por padrão. A revogação do USAGE no
 -- schema já bastaria, mas as duas juntas sobrevivem a alguém conceder o schema

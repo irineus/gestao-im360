@@ -97,3 +97,10 @@ ESTORNO_SINAL_INVALIDO
 # "Sinal livre" no ajuste e sobre a direcao, nao sobre o saldo: saldo negativo
 # reprova o criterio (4) do marco 6.9 e e um numero que ninguem explica.
 SALDO_INSUFICIENTE
+# 1 do card 7.1 (guarda de exclusao de turma Modular)
+# Mesma familia de PC_COM_HISTORICO (4.3) e BLOCO_COM_ALOCACAO (5.1):
+# turma_modular_aluno e `on delete cascade` e nao tem politica de delete para
+# ninguem, entao apagar a turma levava junto, em silencio, quem esteve nela.
+# Codigo proprio e nao BLOCO_COM_ALOCACAO: a mensagem manda DESATIVAR A TURMA, e
+# turma Modular nao e bloco de horario — a saida de tela e outra.
+TURMA_COM_ALUNO

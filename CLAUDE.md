@@ -105,4 +105,4 @@ não interativa (uma sessão por card, em sequência) está em `docs/cadeia-exec
 
 ## Estado atual (04/09/2026)
 
-Concepção concluída; plano v1.1 aprovado com as 9 respostas do dono do produto; decisões técnicas fechadas. **Fases 0 a 05 concluídas; Fase 06 (Trilha e Estoque) em andamento.** Target de go-live: outubro/2026 (adoção provavelmente em fases). O estado corrente de verdade é o board do Notion — esta linha envelhece, ele não. Detalhes e pendências: Decisões vigentes no Notion.
+Concepção concluída; plano v1.1 aprovado com as 9 respostas do dono do produto; decisões técnicas fechadas. **Fases 0 a 06 entregues (a 06 só espera o marco 6.9, que depende de gente); Fase 07 (Modular) em andamento desde 05/09/2026.** Target de go-live: outubro/2026 (adoção provavelmente em fases). O estado corrente de verdade é o board do Notion — esta linha envelhece, ele não. Detalhes e pendências: Decisões vigentes no Notion.
