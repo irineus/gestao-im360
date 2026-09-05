@@ -144,7 +144,20 @@ create temporary view p_esperada (tabela, cmd) as values
   ('aluno_material_hist','r'), ('aluno_material_hist','a'),
   ('movimento_estoque','r'),   ('movimento_estoque','a'),
   ('pedido_compra','r'),       ('pedido_compra','a'),       ('pedido_compra','w'),
-  ('pedido_item','r'),         ('pedido_item','a'),         ('pedido_item','w'),    ('pedido_item','d');
+  ('pedido_item','r'),         ('pedido_item','a'),         ('pedido_item','w'),    ('pedido_item','d'),
+  -- card 7.1 — turmas Modular. `turma_modular` segue o padrão de quatro;
+  -- `turma_modular_modulo` também tem os quatro, mas o INSERT dele exige
+  -- `turmas.editar` e não `turmas.criar` (o cronograma é conteúdo da turma, como
+  -- curso_material é do curso no card 4.1) — a asserção por comando não vê essa
+  -- diferença, quem a vê é o C11 do par abaixo e o teste 070. E
+  -- `turma_modular_aluno` não tem DELETE, exatamente como `bloco_aluno`: saída
+  -- da turma é `ativo = false`, e apagar a linha tiraria da turma o registro de
+  -- quem esteve nela. O que a ausência de política NÃO alcançava era a cascata
+  -- de `turma_modular_aluno.turma_id`, e é o que tg_turma_modular_exclusao_valida
+  -- fecha.
+  ('turma_modular','r'),        ('turma_modular','a'),        ('turma_modular','w'),        ('turma_modular','d'),
+  ('turma_modular_modulo','r'), ('turma_modular_modulo','a'), ('turma_modular_modulo','w'), ('turma_modular_modulo','d'),
+  ('turma_modular_aluno','r'),  ('turma_modular_aluno','a'),  ('turma_modular_aluno','w');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text

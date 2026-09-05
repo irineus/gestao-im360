@@ -16,7 +16,7 @@ Abre-se a subpágina **quando a tarefa mexer naquilo** — "estou mexendo em est
 
 ## Contexto em uma frase
 
-O sistema **Gestão IM360** (Flutter + Supabase + Cloudflare) substituirá a planilha `Gestão Interativo.xlsx` na gestão de alunos, turmas, vagas e material didático de uma escola com três métodos de ensino (Interativo, Inglês e Modular). Concepção e plano aprovados; as Fases 0 a 05 estão concluídas e a **Fase 06 (Trilha e Estoque)** está em andamento, com target de go-live em outubro/2026. O estado corrente de verdade é o board do Notion — use a skill `proxima-tarefa`.
+O sistema **Gestão IM360** (Flutter + Supabase + Cloudflare) substituirá a planilha `Gestão Interativo.xlsx` na gestão de alunos, turmas, vagas e material didático de uma escola com três métodos de ensino (Interativo, Inglês e Modular). Concepção e plano aprovados; as Fases 0 a 06 estão entregues — a **Fase 06 (Trilha e Estoque)** só espera o marco 6.9, que depende de gente — e a **Fase 07 (Modular)** começou em 05/09/2026 com o card 7.1 (schema das turmas Modular). Target de go-live em outubro/2026. O estado corrente de verdade é o board do Notion — use a skill `proxima-tarefa`.
 
 ## Documentos deste diretório
 

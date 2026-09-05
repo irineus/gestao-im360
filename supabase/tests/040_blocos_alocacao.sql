@@ -20,7 +20,9 @@
 -- =============================================================================
 
 begin;
-select plan(43);
+-- 42 e não 43 desde 05/09/2026 (card 7.1): o portão condicional do §10 virou
+-- UMA asserção direta, porque a tabela que ele esperava passou a existir.
+select plan(42);
 
 -- ===========================================================================
 -- 1. A fixture chegou (camada `turmas` do card 3.4.5)
@@ -612,34 +614,40 @@ select is(
   'mas a passada nao — ela e o debito que o criterio do card 2.5 mede');
 
 -- ===========================================================================
--- 10. Portão da terceira tabela que o trigger ainda não pode citar
+-- 10. As TRÊS tabelas da desalocação (card 2.2 §3.2)
 -- ===========================================================================
--- O card 2.2 §3.2 manda desalocar de `bloco_aluno`, de `bloco_aluno_reposicao`
--- E de `turma_modular_aluno`, que só nasce no card 7.1. Esquecer de voltar lá
--- não daria erro nenhum: daria o erro errado, com o aluno Modular trancado
--- continuando na turma e a previsão do módulo contando com ele. Mesma forma que
--- o card 4.2 deu ao gate de FORMADO — e a prova de que o portão REPROVA é a
--- única maneira de saber que ele lê o que promete (lição do card 4.2: `prosrc`
--- inclui os comentários do corpo, então eles saem antes da busca).
+-- ⚠️ ESTE PORTÃO CUMPRIU O QUE PROMETIA E FOI COBRADO EM 05/09/2026 (card 7.1).
+--    Até aqui ele era condicional — `to_regclass('public.turma_modular_aluno')
+--    is null or (a função a cita)` — e provava que reprovava criando a tabela
+--    dentro da transação. Nascida a tabela DE VERDADE, o `create table` do
+--    contraprova morreria com "already exists" e a condição `is null` deixaria
+--    de ter dois mundos para separar: o que restava era a asserção direta.
+--
+--    O que ela mede continua sendo o mesmo, e continua sendo o que nenhum
+--    catálogo enxerga: esquecer uma das três não daria erro nenhum: daria o erro
+--    ERRADO, com o aluno trancado continuando na turma e a previsão do módulo
+--    contando com ele. A prova de COMPORTAMENTO — trancar o aluno e ver a linha
+--    da turma Modular cair — está no teste 070 §6, com a contraprova por
+--    construção (a função reescrita sem a citação, e o aluno ficando).
+--
+--    Lição do card 4.2 preservada: `prosrc` inclui os comentários do corpo — e o
+--    desta função os cita todos —, então eles saem antes da busca. Sem o
+--    `regexp_replace`, esta asserção passaria mesmo com os três `update`
+--    apagados.
 create temporary view corpo_desaloca as
   select regexp_replace(p.prosrc, '--[^\n]*', '', 'g') as fonte
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname = 'fn_aluno_status_desaloca';
 
-create temporary view portao_modular as
-  select to_regclass('public.turma_modular_aluno') is null
-      or (select fonte ~ 'turma_modular_aluno' from corpo_desaloca) as em_dia;
-
-select ok((select em_dia from portao_modular),
-  'portao em dia: enquanto turma_modular_aluno nao existe, nada e devido');
-
-create table public.turma_modular_aluno (id uuid primary key);
-
-select ok(not (select em_dia from portao_modular),
-  'nascida a tabela do card 7.1, o portao REPROVA enquanto fn_aluno_status_desaloca nao a citar');
-
-drop table public.turma_modular_aluno;
+select is(
+  (select coalesce(string_agg(t.tabela, ', ' order by t.tabela), '')
+     from (values ('bloco_aluno'), ('bloco_aluno_reposicao'), ('turma_modular_aluno'))
+            as t(tabela)
+    where not (select fonte ~ ('update public\.' || t.tabela || '\M')
+                 from corpo_desaloca)),
+  '',
+  'fn_aluno_status_desaloca escreve nas TRES tabelas do card 2.2 §3.2 — a mensagem diz qual faltou');
 
 select * from finish();
 rollback;
