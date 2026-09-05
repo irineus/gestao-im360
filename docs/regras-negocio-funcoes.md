@@ -1018,7 +1018,7 @@ corrida com a interface.
 | `PC_SEM_SUBSTITUTO` | `PC_SEM_SUBST:<pc_id>` | MEDIA | `fn_revalidar_blocos_sala` | fim da manutenção, ou substituto informado |
 | **novos — ver §14** | | | | |
 | `ESTOQUE_ZERO` | `ESTOQUE_ZERO:<material_id>` | MEDIA | `fn_registrar_entrega` (item pulado) | `tg_movimento_resolve_pendencia` |
-| `ESTOQUE_ABAIXO_MINIMO` | `MINIMO:<material_id>` | BAIXA | `rt_pendencias_diaria` ⚠️ **sem dono — card 8.4,5** | saldo ≥ mínimo |
+| `ESTOQUE_ABAIXO_MINIMO` | `MINIMO:<material_id>` | BAIXA | `rt_pendencias_diaria` ✅ **8.4,5** (`abaixo_minimo` de `v_estoque_atual`, só material ATIVO e com mínimo > 0) | saldo ≥ mínimo |
 | `SUGERIR_FORMADO` | `FORMADO:<aluno_id>` | BAIXA | `tg_certificado_sugere_formado` | aluno vira FORMADO |
 | `TRILHA_DIVERGENTE_COMBO` | `TRILHA_COMBO:<aluno_id>` | MEDIA | `tg_aluno_combo_alterado` | resolução manual |
 | `CERTIFICADO_INCONSISTENTE` | `CERT_INCONS:<aluno_id>` | MEDIA | `fn_estornar_entrega` | resolução manual |
@@ -1045,7 +1045,20 @@ consolidados em §14.
 > ⚠️ **Divergência registrada:** `ESTOQUE_ABAIXO_MINIMO` também tem `rt_pendencias_diaria` como dono
 > nesta tabela e **continua sem ser aberto por ninguém**. Ele não entrou no 8.4 porque a nota do card
 > nomeia dois tipos, os dois de aluno, e o de estoque é do domínio de compras — escrevê-lo de carona
-> seria escopo que ninguém pediu. Virou o card **8.4,5** do board.
+> seria escopo que ninguém pediu. Virou o card **8.4,5** do board. ✅ **Fechada em 05/09/2026 pelo
+> próprio 8.4,5** (`20260905235500_alerta_estoque_minimo.sql`).
+
+> **Card 8.4,5 (05/09/2026) — `ESTOQUE_ABAIXO_MINIMO` ganhou quem o abra, e com ele a rotina fica
+> completa:** não há mais tipo do catálogo com `rt_pendencias_diaria` como dono e sem produtor. É o
+> primeiro bloco da rotina que não fala de aluno (a referência vai em `material_id`, e é ela que faz a
+> central oferecer "Ver material"). Mora na rotina e não num trigger porque a condição depende de
+> **duas** fontes que mudam por caminhos diferentes — o saldo, por `movimento_estoque`, e o
+> `estoque_minimo`, pelo cadastro do material: um trigger em cada lado seria meia condição cada, e a
+> rotina vê as duas todo dia. A comparação **não se repete**: `abaixo_minimo` já é coluna de
+> `v_estoque_atual` (card 6.4), e é a que a tela mostra. Os dois filtros que a view não tem, e a
+> pendência precisa, são `ativo` (não se compra apostila aposentada — a exceção declarada do §2.3 do
+> card 2.3) e `estoque_minimo > 0` (mínimo zero é mínimo **não configurado**, e sem ele todo saldo
+> negativo viraria uma pendência mandando comprar quando o que se pede é conferir a prateleira).
 
 ---
 
