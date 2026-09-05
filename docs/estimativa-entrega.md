@@ -79,10 +79,14 @@ não medição. Vigente desde 02/09/2026: **fins de semana + algumas noites** = 
 No P50 assume-se que **60%** da latência não se sobrepõe ao desenvolvimento; no P80, **100%** (nada
 se sobrepõe) e a revisão das lojas vai a **duas** rodadas.
 
-⚠️ **Nenhum destes blocos foi medido até o fim.** O primeiro em curso é o do card 4.8, aberto em
-03/09/2026 — ver §4. **Ao fechar cada um, anotar aqui os dias corridos que ele de fato consumiu**,
-da abertura ao aceite; a coluna "Dias" acima é declaração, não medição, e desde 03/09/2026 ela pesa
-mais na data do que toda a velocidade de desenvolvimento junta.
+⚠️ **Nenhum destes blocos foi medido até o fim.** Dois estão abertos: o do card 4.8 desde
+03/09/2026 e o do card 6.9 desde 04/09/2026 — ver §4. **Ao fechar cada um, anotar aqui os dias
+corridos que ele de fato consumiu**, da abertura ao aceite; a coluna "Dias" acima é declaração, não
+medição, e desde 03/09/2026 ela pesa mais na data do que toda a velocidade de desenvolvimento junta.
+
+⚠️ **Os blocos 4.8 e 6.9 são seriais, não paralelos** (medido em 04/09/2026, card 6.10): o roteiro
+do M2 começa em "matricular num combo", e o combo é entregável do roteiro do M1. A soma dos dois na
+tabela acima está certa; o que **não** se pode assumir é que atraso no 4.8 seja absorvido pelo 6.9.
 
 ### Como sair de P50 e P80
 
@@ -95,7 +99,14 @@ mais na data do que toda a velocidade de desenvolvimento junta.
   09 e a fase 10, sem medição nenhuma. **Rever o divisor a cada rodada, para cima ou para baixo,
   conforme o que ainda estiver por medir** — divisor que não se mexe vira superstição. *Revisto e
   mantido em 1,5 em 04/09/2026 (card 5.10), com o motivo em §7(b): a fase 05 não encostou em nada do
-  que o divisor cobre.*
+  que o divisor cobre. Revisto e mantido de novo em 04/09/2026 (card 6.10), §8(f): a fase 06 mediu
+  `View` pela primeira vez, e `View` não é o que o divisor precifica.*
+
+⚠️ **A escolha entre mediana e líquida tem regra, e ela é `min` das duas** (explicitada em
+04/09/2026, card 6.10, §8(b)). As rodadas de 03/09 e 04/09 adotaram a mediana porque ela estava
+**abaixo** da líquida; quando a mediana fica acima, adotá-la contraria o §6(b), que manda publicar
+velocidade líquida de escopo novo. **P50 = min(mediana, líquida)** reproduz as duas escolhas
+anteriores sem redecidir nada.
 
 ⚠️ **Se a consulta ao board falhar por cota** ("usage limit for Query Data Source"), os mesmos
 números saem de uma visão agrupada do board na UI do Notion, por `Tipo` e por `Concluído em`.
@@ -127,6 +138,17 @@ pré-condições que faltam são de Irineu (convidar três usuários em homologa
 do roteiro antes dos quatro logins, pendência 9.14) e a terceira é a sessão com a secretaria.
 Ainda não é estouro: 2 dos 4 dias corridos. É cedo para corrigir o bloco, e cedo **não é** motivo
 para não anotar — o que esta rodada registra é o relógio ligado e o ponto em que ele parou.
+
+**Em 04/09/2026 (card 6.10) abriu o segundo, e o relógio do primeiro não andou.** A quarta rodada
+caiu no **mesmo dia de calendário** da terceira, então o 4.8 segue em 2 de 4 dias e o 6.9 nasceu em
+0 de 4. Nenhuma medição nova de latência — e é isso que a rodada tem a dizer sobre o assunto: **o
+número que mais pesa na data continua sendo o único que ninguém conseguiu medir ainda.** No P50 de
+hoje a latência responde por **79%** da data (18,6 dias corridos contra 4,9 de esforço).
+
+⚠️ **A segunda maior incerteza mudou de lugar nesta rodada: é a taxa de descoberta de escopo.** O
+§7(c) a promoveu a parâmetro depois de duas medições próximas (4,2 e 4,6). A terceira deu **7,4** —
+60% acima. Ela continua sendo o único mecanismo do modelo que precifica card que ainda não existe,
+mas deixou de ser um número estável, e a premissa que a chamava de "confirmada" caiu (§8(c)).
 
 O que a mesma medição já confirmou, e isso vale mais: **a latência do 4.8 correu em paralelo com o
 desenvolvimento**, que é exatamente o que a premissa dos 60% do §3 assume. Enquanto o marco esperava
@@ -259,3 +281,61 @@ argumento que levou `6.6` de `G` a `M` na rodada anterior). ⚠️ O viés do §
 as descidas seguem sendo julgadas por analogia, e analogia é gentil. A contraprova disponível é
 fraca de propósito e vale dizer qual é: a fase 05 inteira saiu **no tamanho atribuído**, incluindo o
 `5.7` que a rodada anterior tinha subido de `G` para `GG`.
+
+## 8. Quarta rodada (04/09/2026, card 6.10) — o que mudou no método
+
+Os **números** continuam morando na subpágina Notion "Estimativa de entrega" do card 3.13. Aqui, só
+o que mudou no método.
+
+**(a) A escolha da velocidade deixou de mover a data, e este é o resultado principal da rodada.**
+Três velocidades defensáveis saíram da mesma medição — bruta **46,1**, líquida **38,7**, mediana
+**54** — e as três dão o mesmo P50 de go-live com **um dia** de diferença (26 ou 27/09/2026). O
+motivo é aritmético e não vai se desfazer: restam **82 pontos de esforço**, que a qualquer dessas
+velocidades cabem em ~5 dias corridos, contra **18,6 dias de latência** no P50. **Consequência para
+as próximas rodadas: o tempo da sessão vai para os blocos de latência do §3, não para a terceira
+casa da velocidade.** A receita do §3 não muda; muda onde vale a pena gastar a rodada.
+
+**(b) A regra de desempate entre mediana e líquida fica explícita: adota-se a MENOR das duas.**
+Estava implícita e ia se perder. As rodadas de 03/09 e 04/09 adotaram a mediana dizendo "abaixo da
+líquida, pela mesma razão da rodada anterior" — o que funcionou porque a mediana estava **abaixo**.
+Nesta rodada a mediana (54) ficou **acima** da líquida (38,7), porque o dia 04/09 entrou parcial na
+rodada anterior (18 pontos) e fechado nesta (85). Adotá-la contrariaria o §6(b), que manda publicar
+velocidade **líquida de escopo novo**. `P50 = min(mediana, líquida)` reproduz as duas escolhas
+anteriores e resolve esta — não é método novo, é o método escrito.
+
+**(c) A taxa de descoberta de escopo NÃO é estável, e a premissa que a dava por confirmada cai.**
+Medida em 4,2 (03/09, janela de 6 dias) e 4,6 (04/09, 7 dias), o §7(c) a promoveu a parâmetro. A
+terceira medição, na mesma janela de 7 dias com o último dia fechado, deu **7,4** — 52 pontos
+cumulativos de escopo que não existia. A causa é legível e não é ruído: em 04/09 nasceram **20
+pontos** de cards novos (`5.11`, correções da revisão das telas da fase 05, `GG`; e os quatro cards
+de enxugamento `6.1,5`, `6.2,5`, `6.2,6`, `6.2,7`, `M` cada). Ela **continua** sendo descontada da
+velocidade — é o único lugar do modelo onde card inexistente tem preço —, mas passa a ser publicada
+com a faixa medida (4,2–7,4), e não como um número assentado.
+
+**(d) O viés do §6(d) deixou de ser suspeita: uma descida da rodada anterior foi REFUTADA por
+documento.** O `8.7` (Dashboard completo) foi baixado de `GG` para `G` em 04/09 com o argumento de
+que "o card `5.9` entregou o Dashboard v1 — a página, o shell, a grade". No **mesmo dia**, a sessão
+do `5.9` escreveu em `docs/views-leitura.md` §8: *"As três views desta seção são do card 8.7, e o
+5.9 não tocou em nenhuma"* — a v1 saiu **sem migração**, e alunos por método, conclusões por
+semestre e tipos por bloco "continuam integralmente no 8.7". A descida por analogia custou 3 pontos
+em um card, e esta rodada os devolve. **Regra que fica: descida por reúso só vale quando o card que
+"já construiu" tiver entregue também as views e as migrações, não só a página.** É o teste que o
+`6.7` passou (a tela de Materiais existia inteira desde o `4.4`) e que o `8.7` não passava.
+
+**(e) O passo 2 saiu com saldo +1 e, pela primeira vez, com as DUAS direções apoiadas em documento.**
+O §6(d) manda desconfiar de saldo perto de zero. Este está perto de zero por compensação — `8.7`
+`G` → `GG` (+3) pelo §8(d) acima, e `8.2` `M` → `P` (−2) —, mas a descida não é analogia: o card
+`6.4` fechou em 04/09 a reserva da coluna `qtd_projetada` com o **teste `095`**, que assere a posição
+da coluna pelo catálogo e foi visto vermelho recriando a view com a coluna no fim. Com isso o `8.2`
+deixa de ser "evoluir a view" e passa a ser um `create or replace` de duas expressões, com o SQL já
+escrito em `docs/views-leitura.md` §6.2, mais a coluna e o `calculado_em` numa tela de Compras que o
+`6.8` já entregou. Descida apoiada em asserção vermelha é de outra natureza que descida apoiada em
+semelhança.
+
+**(f) `View` foi medido pela primeira vez e sai do modelo; `Marco/validação` segue com zero
+medições.** O `6.4` era o único `View` já executado e saiu **no tamanho atribuído** (`G`); o único
+que resta, o `8.2`, acabou de cair para `P`. O tipo deixa de ser fonte de incerteza. O divisor do
+P80 **fica em 1,5** pelo mesmo teste do §7(b): o que ele precifica é a fase 09 (`9.1` e `9.2`) e a
+fase 10, e a fase 06 não encostou em nenhuma das duas — `View` não é o que ele cobre. Já
+`Marco/validação` é o tipo que mais pesa na data e **nunca teve um card fechado**: os três marcos
+(`4.8`, `6.9`, `8.8`) valem 12 dos 31 dias de latência e continuam sendo declaração.
