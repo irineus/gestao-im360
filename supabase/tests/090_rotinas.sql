@@ -56,8 +56,8 @@ select is(
       and a.status in ('ATIVO', 'ACELERAR')
       and not exists (select 1 from public.bloco_aluno ba
                        where ba.aluno_id = a.id and ba.ativo)),
-  'Eduarda Lima, Felipe Nunes',
-  'fixture: exatamente dois alunos ATIVO/ACELERAR sem bloco — Eduarda (MODULAR) e Felipe (ACELERAR)');
+  'Aluno Modular 01, Eduarda Lima, Felipe Nunes',
+  'fixture: exatamente tres alunos ATIVO/ACELERAR sem bloco — os dois MODULAR e Felipe (ACELERAR)');
 
 -- ⚠️ MUDOU NO CARD 5.4, e a mudança é o contrário de um relaxamento. Até aqui a
 --    fixture nascia sem pendência nenhuma. Com o trigger tg_pc_revalida_blocos,
@@ -93,7 +93,7 @@ select is(
      from public.pendencia p
      join public.aluno a on a.id = p.aluno_id
     where p.unidade_id = tests.unidade('ESCOLA_A') and p.resolvida_em is null),
-  'ACELERAR_SEM_2O_BLOCO:BAIXA:Felipe Nunes | ALUNO_SEM_TURMA:ALTA:Felipe Nunes',
+  'ACELERAR_SEM_2O_BLOCO:BAIXA:Felipe Nunes | ALUNO_SEM_TURMA:ALTA:Aluno Modular 01 | ALUNO_SEM_TURMA:ALTA:Felipe Nunes',
   'abre ALUNO_SEM_TURMA (ALTA) para quem nao tem turma nenhuma e ACELERAR_SEM_2O_BLOCO (BAIXA) para o de ACELERAR');
 
 -- ⚠️ EDUARDA LIMA SAIU DESTA LISTA EM 05/09/2026, e não é regressão: é o portão
@@ -104,6 +104,13 @@ select is(
 --    duas formas de turma. O par de asserções que mede isso dos dois lados
 --    (turma ativa → sem pendência; turma desativada → com pendência) está no
 --    teste 070 §6.
+--
+--    ⚠️ E DESDE O CARD 7.4,5 (05/09/2026) o lado POSITIVO é fixo: a camada
+--    `modular` passou a trazer `Aluno Modular 01` — MODULAR, ATIVO e sem turma
+--    nenhuma —, e a asserção de cima o mostra recebendo ALUNO_SEM_TURMA. Até
+--    aqui o `not exists` de turma Modular só era medido no negativo fora do 070;
+--    a fixture agora tem os dois alunos MODULAR lado a lado, um em cada lado da
+--    condição.
 select is(
   (select count(*)::bigint from public.pendencia p
      join public.aluno a on a.id = p.aluno_id
@@ -144,11 +151,14 @@ select public.rt_pendencias_diaria();
 
 -- `aluno_id is not null` desde o card 5.4: a PC_SEM_SUBSTITUTO da seção 1 é da
 -- fixture e não tem nada a ver com a idempotência que se está medindo aqui.
+-- Três linhas desde o card 7.4,5 e não duas: o `Aluno Modular 01` da camada
+-- `modular` traz uma ALUNO_SEM_TURMA própria. O que se mede continua sendo o
+-- mesmo — o número não muda com a terceira execução da rotina.
 select is(
   (select count(*)::bigint from public.pendencia
     where unidade_id = tests.unidade('ESCOLA_A') and aluno_id is not null),
-  2::bigint,
-  'tres execucoes, duas linhas: o indice parcial pendencia_aberta_uk faz a deduplicacao');
+  3::bigint,
+  'tres execucoes, tres linhas: o indice parcial pendencia_aberta_uk faz a deduplicacao');
 
 -- ===========================================================================
 -- 4. A condição aparece e some — e o fechamento é POR CHAVE

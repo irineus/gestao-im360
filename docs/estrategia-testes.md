@@ -190,6 +190,8 @@ determinismo.
 | Blocos | 3 (um vazio, um com 9 alunos, um com 10) | 9 → aceita o 10º; 10 → recusa o 11º, sem depender de ordem de execução |
 | Materiais | 6 (2 com saldo 0, 1 com saldo 1, 3 com saldo folgado) | saldo 1 é o teste de concorrência; saldo 0 é o `REORDENADA` e o `BLOQUEADA_SEM_ESTOQUE` |
 | Alunos | 12, cobrindo os 4 degraus da cascata da projeção, 1 em FIM, 1 em STANDBY antigo, 1 com débito REP na borda | um aluno por caso que alguma decisão criou |
+| Turmas Modular | 3 (uma com a aluna e cronograma de 3 módulos, uma vazia com o corrente vencido, uma **individual de capacidade 1 e vazia**) | a vazia dá à guarda de exclusão os dois lados e o `modulo_atrasado` os dois valores; a individual é a borda "existe UMA vaga" da concorrência (card 7.4,5) sem custar catorze alunos de fixture |
+| Alunos de cenário | 13 de lotação (blocos de 9 e de 10, card 5.1) + **1 MODULAR sem combo e sem turma** (card 7.4,5) | o segundo MODULAR é o que dá dois alunos DIFERENTES à corrida da última vaga da turma — e, sem turma, fixa o lado positivo de `ALUNO_SEM_TURMA` para o método Modular |
 
 A fixture é **datada em relativo** (`fn_hoje() - interval 'N days'`), nunca em datas absolutas: uma
 fixture com `'2026-09-01'` começa a falhar sozinha em janeiro.
@@ -407,15 +409,20 @@ tests_concorrencia/entrega_ultimo_exemplar.sh
 O irmão é `admissao_ultima_vaga.sh`: bloco com 9/10, duas admissões simultâneas → uma passa, a outra
 recebe `BLOCO_LOTADO`, e `count(*) = 10`, nunca 11.
 
-> ⚠️ **Falta um terceiro, e ele tem card: 7.4,5** (aberto pelo card 7.2 em 05/09/2026). A admissão em
-> turma Modular também serializa com `pg_advisory_xact_lock` (card 2.2 §4.5, que cita
-> `fn_turma_modular_admitir` nominalmente) e a capacidade da turma é a mesma regra de agregado: sem o
-> lock, duas secretarias põem `capacidade + 1` alunos na turma. O C13 do teste `071` é o guarda-chuva
-> barato — assere que a chamada não sumiu — e **não substitui** o teste de duas sessões. O motivo de
-> ele não ter saído junto com o 7.2 é de FIXTURE: a escola-fixture tem **um** aluno MODULAR e o
-> cenário exige dois, e estes scripts são a única suíte do projeto sem rollback — criar aluno neles
-> significa apagá-lo à mão depois. O caminho é acrescentar o segundo MODULAR à camada `modular` do
-> seed, como as outras duas suítes fazem.
+O terceiro é `admissao_turma_modular.sh` (card **7.4,5**, 05/09/2026): turma Modular de capacidade 1
+e vazia, duas admissões simultâneas de alunos diferentes → uma passa, a outra recebe `TURMA_LOTADA`,
+e `count(*) = 1`, nunca 2. A capacidade da turma é a mesma regra de agregado do bloco, com um
+agravante: aqui ela é **coluna** (`turma_modular.capacidade`) e não conta de PC, então não há nem o
+consolo de um recurso físico que acabe. O C13 do teste `071` continua sendo o guarda-chuva barato —
+assere que a chamada do lock não sumiu — e **não substitui** este.
+
+> ⚠️ **O que segurou o 7.4,5 fora do 7.2 foi FIXTURE, e a saída vale para o próximo caso.** A
+> escola-fixture tinha **um** aluno MODULAR e a corrida exige dois; estes scripts são a única suíte
+> do projeto sem `rollback`, então criar aluno dentro deles significaria apagá-lo à mão depois. O
+> 7.4,5 fez o contrário: acrescentou à camada `modular` o segundo MODULAR (`Aluno Modular 01`, sem
+> combo, sem turma) e a turma de **capacidade 1**. Capacidade 1 é a decisão que barateia tudo — a
+> borda que importa é ocupação = capacidade − 1, e numa turma de 15 ela custaria catorze alunos de
+> fixture para medir exatamente a mesma aritmética.
 
 Dois cuidados que decidem se o teste vale alguma coisa: os scripts **não podem** rodar dentro da
 transação de teste (por definição), então limpam o que criaram no fim (`delete` explícito num banco
@@ -874,6 +881,7 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `070_turmas_modular` (as três tabelas, os `check`/`unique` de camada 1 — inclusive a unique PARCIAL que permite ao 7.2 reativar em vez de duplicar —, o `default fn_hoje()` de `data_entrada`, a guarda de coluna do `or`, a guarda de exclusão nos dois mundos, a terceira tabela de `tg_aluno_status_desaloca` e as duas formas de turma em `ALUNO_SEM_TURMA`) | **7.1** ✅ | 7 |
 | `071_modular_regras` (as duas derivadas do §9, admitir/remover com reativação e motivo, a camada 2 atacada por POST direto — método, status, unidade e CAPACIDADE —, o avanço conjunto com o passo aprendido e a preservação das datas, o motivo na desalocação sem ator, a trilha Modular = livros do curso, e `TURMA_MODULAR_SEM_CRONOGRAMA` no `check`) | **7.2** ✅ — era `070` até o card 7.1 ocupar o número. ⚠️ **Divergência registrada:** o §17 previa um arquivo `070_modular` para o **7.2**, escrito quando se supunha que o 7.1 não teria teste próprio; card de Schema tem obrigação de teste no §13 e ela é cumprida no `070`. É o mesmo deslocamento que levou o `040` do card 5.3 a `042` e o `050` do 6.3 a `052`. `ALUNO_SEM_TURMA` do aluno Modular saiu do escopo deste arquivo porque o **card 7.1** já a entregou e a mede no `070` §6 | 7 |
 | `072_modular_views` (as três views da tela 5: a lotação com `vagas_livres` de piso zero e `alocados` sem piso, o `modulo_atrasado` medido nas DUAS turmas da fixture, a turma inativa que sai da lotação, a turma terminada que **fica** com o corrente nulo, e o cronograma com `corrente` comparado às outras DUAS expressões do mesmo fato, turma a turma) | **7.3** ✅. ⚠️ **Divergência registrada:** o §17 não previa arquivo para o 7.3 — é o mesmo caso do `053` (6.6), do `061` (6.7) e do `062` (6.8): a tela foi planejada sem objeto de banco e tem três views. Mora no bloco `07x`, ao lado do `070` e do `071`, não no `095`. ⚠️ **Segunda divergência:** `v_turma_modular_lotacao` estava atribuída aos cards **7.4 e 5.9** e nasceu aqui, porque o `wireframes.md` §8 manda a tela 5 lê-la e o `views-leitura.md` §12.1 é a regra geral. ⚠️ **Duas contraprovas vistas vermelhas:** `atrasado` sem o filtro `not concluido` (o módulo 1 da 2026.1, concluído e com a data REAL no passado, passa a `1=true`) e `corrente` sem a partição por `concluido` (a turma 2026.1 fica **sem** linha corrente e as três expressões divergem) | 7 |
+| `tests_concorrencia/admissao_turma_modular.sh` (duas sessões disputando a única vaga de uma turma Modular: uma admissão aceita, uma `TURMA_LOTADA`, e a turma fechando em 1/1) | **7.4,5** ✅ — o script que o 7.2 não pôde entregar por falta de fixture. ⚠️ **Contraprova vista vermelha:** com `fn_turma_modular_admitir` reaplicada **sem** o `pg_advisory_xact_lock`, as duas admissões passaram e a turma fechou em **2 de 1**, com o script saindo 1 pela CONTAGEM — não por *timeout*. Trouxe junto a mudança de fixture (turma individual de capacidade 1 e o segundo aluno MODULAR), que reescreveu cinco asserções de premissa nos arquivos `030`, `070` e `090` | 7 |
 | `080_projecao` | 8.1 | 8 |
 | `085_rep_virada` | **5.3** ✅ (funções REP entram na mesma migração) — mede o VEREDITO; a seção 6 era o portão da pendência, **disparou em 03/09/2026 (card 5.5)** e virou a asserção estrutural de que as duas funções da virada fecham a pendência, cada uma com o seu sufixo. O comportamento ponta a ponta ficou no `090_rotinas`, que é o arquivo da pendência | 5 |
 | `090_rotinas` (a tabela `pendencia`, as três funções do §10, rt_pendencias_diaria/rt_rep_avaliar/rt_diaria, o job `pg_cron` e a view `v_pendencias_abertas`) | **5.5** ✅ (primeira rotina) → cresce em 8.1 | 5+ |

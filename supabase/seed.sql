@@ -1295,6 +1295,18 @@ select tests.seed_trilha_estoque(tests.unidade('ESCOLA_B'));
 --       com aluno serve à rotina de pendências, e uma turma que nasce atrasada
 --       misturaria os dois assuntos.
 --
+--   (d) ⚠️ CARD 7.4,5: a TERCEIRA turma, `Eletricista Individual 2026`, tem
+--       `capacidade = 1` e nasce VAZIA, e é o cenário da suíte de concorrência
+--       (`supabase/tests_concorrencia/admissao_turma_modular.sh`). Capacidade 1
+--       não é número de teste disfarçado: turma individual é forma corrente no
+--       Modular, e é a única em que a borda que interessa — ocupação =
+--       capacidade − 1, o instante em que existe UMA vaga — custa ZERO linha de
+--       fixture. A alternativa era uma turma de 15 com catorze alunos dentro:
+--       treze alunos a mais para medir exatamente a mesma aritmética.
+--       Ela é o irmão Modular do bloco de 9/10 da camada `turmas` (card 5.3), e
+--       o segundo aluno MODULAR (`Aluno Modular 01`) é quem corre contra Eduarda
+--       Lima por essa vaga.
+--
 -- Cronograma da `2026.1`: módulo 1 concluído, módulo 2 corrente, módulo 3 ainda
 -- sem datas. É a forma que o card 7.2 vai avançar (`fn_turma_modular_avancar`) e
 -- a que o 7.4 lê — turma com todos os módulos concluídos, que é o estado "turma
@@ -1330,10 +1342,11 @@ language plpgsql
 set search_path = public, pg_temp
 as $$
 declare
-  v_curso  uuid;
-  v_sala   uuid;
-  v_turma  uuid;
-  v_vazia  uuid;
+  v_curso      uuid;
+  v_sala       uuid;
+  v_turma      uuid;
+  v_vazia      uuid;
+  v_individual uuid;
 begin
   -- Contexto de rotina (ver a nota ⚠️ acima). `is_local => true`: morre no fim
   -- da transação mesmo se o `insert` falhar no meio.
@@ -1357,8 +1370,9 @@ begin
   select p_unidade, v_curso, s.nome, v_sala, s.capacidade,
          fn_hoje() - s.inicio_ha, true
     from (values
-      ('Eletricista 2026.1', 15,  60),
-      ('Eletricista 2025.2', 15, 300)
+      ('Eletricista 2026.1',         15,  60),
+      ('Eletricista 2025.2',         15, 300),
+      ('Eletricista Individual 2026', 1,  30)
     ) as s(nome, capacidade, inicio_ha)
    where not exists (select 1 from turma_modular x
                       where x.unidade_id = p_unidade and x.nome = s.nome);
@@ -1367,6 +1381,8 @@ begin
    where unidade_id = p_unidade and nome = 'Eletricista 2026.1';
   select id into v_vazia from turma_modular
    where unidade_id = p_unidade and nome = 'Eletricista 2025.2';
+  select id into v_individual from turma_modular
+   where unidade_id = p_unidade and nome = 'Eletricista Individual 2026';
 
   -- Cronograma da turma com aluna. A ORDEM não é coluna daqui: o join é por
   -- `modulo.ordem`, que é de onde o módulo corrente sai (card 2.2 §9).
@@ -1398,6 +1414,45 @@ begin
      and not exists (select 1 from turma_modular_modulo x
                       where x.turma_id = v_vazia and x.modulo_id = m.id);
 
+  -- Cronograma da turma individual: primeiro módulo em curso e com previsão
+  -- FUTURA. Turma sem cronograma nenhum é o caso que abre
+  -- TURMA_MODULAR_SEM_CRONOGRAMA na rotina do card 8.1, e a turma da borda de
+  -- concorrência não deve carregar um segundo assunto junto; previsão futura
+  -- pela mesma razão, para não virar a terceira turma atrasada do card 7.4.
+  insert into turma_modular_modulo (unidade_id, turma_id, modulo_id,
+                                    data_inicio, prev_conclusao, concluido)
+  select p_unidade, v_individual, m.id, fn_hoje() - 30, fn_hoje() + 45, false
+    from modulo m
+   where m.unidade_id = p_unidade and m.curso_id = v_curso and m.ordem = 1
+     and not exists (select 1 from turma_modular_modulo x
+                      where x.turma_id = v_individual and x.modulo_id = m.id);
+
+  -- O SEGUNDO ALUNO MODULAR (card 7.4,5). Nasce aqui, e não na camada `alunos`,
+  -- porque ele não é um caso de negócio: existe para que a corrida da seção de
+  -- concorrência tenha DOIS alunos diferentes disputando a mesma vaga. É a mesma
+  -- escolha — e o mesmo padrão de nome e de código — dos treze "Aluno de
+  -- Lotação" da camada `turmas`, que o card 5.3 criou pela mesma necessidade.
+  --
+  --   • `combo_id` NULO de propósito: com combo, `tg_aluno_trilha_inicial`
+  --     geraria uma trilha e a apostila de Eletricista passaria a ter mais um
+  --     item pendente — o que deslocaria a demanda imediata que os testes 050 a
+  --     062 medem. Karina Bastos (camada `alunos`) já é o precedente de aluno
+  --     sem combo, e a admissão em turma Modular não olha o combo: olha o
+  --     MÉTODO, que é MODULAR.
+  --   • SEM turma, e a consequência é desejada: ele recebe `ALUNO_SEM_TURMA`
+  --     todo dia, o que dá à rotina do card 5.5 o lado POSITIVO permanente do
+  --     `not exists` que o card 7.1 lhe acrescentou. Até aqui só o lado negativo
+  --     era fixo (Eduarda, com turma, não recebe) e o positivo só existia dentro
+  --     do 070 §6, desativando a turma dela dentro da transação.
+  insert into aluno (unidade_id, codigo_sgf, nome, metodo_id, combo_id, status,
+                     status_desde, data_inicio)
+  select p_unidade, '9101', 'Aluno Modular 01',
+         me.id, null, 'ATIVO', fn_hoje() - 30, fn_hoje() - 30
+    from metodo me
+   where me.unidade_id = p_unidade and me.codigo = 'MODULAR'
+     and not exists (select 1 from aluno a
+                      where a.unidade_id = p_unidade and a.codigo_sgf = '9101');
+
   -- `data_entrada` explícita e não o default: a aluna está matriculada há 60
   -- dias (camada `alunos`), e deixar o default de hoje faria a fixture dizer que
   -- ela entrou na turma no dia em que alguém rodou o `db reset` — a mesma razão
@@ -1411,7 +1466,7 @@ begin
 end $$;
 
 comment on function tests.seed_modular(uuid) is
-  'Camada `modular` da escola-fixture (card 7.1): duas turmas Modular de Eletricista — a 2026.1 com cronograma de três módulos e Eduarda Lima dentro, a 2025.2 vazia e com o módulo corrente vencido.';
+  'Camada `modular` da escola-fixture (card 7.1): três turmas Modular de Eletricista — a 2026.1 com cronograma de três módulos e Eduarda Lima dentro, a 2025.2 vazia e com o módulo corrente vencido, e a Individual 2026 de capacidade 1 e vazia, cenário da suíte de concorrência do card 7.4,5, que traz junto o segundo aluno MODULAR (Aluno Modular 01, sem combo e sem turma).';
 
 -- As duas unidades recebem as mesmas turmas, pela mesma razão das camadas
 -- anteriores: `turma_modular_nome_uk` é única por UNIDADE, então repetir
