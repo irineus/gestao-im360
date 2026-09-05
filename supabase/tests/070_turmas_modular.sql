@@ -25,16 +25,34 @@
 -- =============================================================================
 
 begin;
-select plan(30);
+select plan(31);
 
 -- ===========================================================================
 -- 1. As premissas da fixture (camada `modular` do card 3.4.5)
 -- ===========================================================================
+-- A terceira turma é do card 7.4,5 (05/09/2026): `Eletricista Individual 2026`,
+-- capacidade 1 e vazia, é o cenário da suíte de concorrência
+-- (`supabase/tests_concorrencia/admissao_turma_modular.sh`). Ela entra aqui
+-- como premissa porque é a fixture que a sustenta: uma turma de capacidade 1
+-- vazia é o único jeito de a borda "existe UMA vaga" custar zero linha.
 select is(
   (select string_agg(t.nome, ', ' order by t.nome) from public.turma_modular t
     where t.unidade_id = tests.unidade('ESCOLA_A')),
-  'Eletricista 2025.2, Eletricista 2026.1',
-  'fixture: duas turmas Modular na unidade A — a com aluna e a vazia');
+  'Eletricista 2025.2, Eletricista 2026.1, Eletricista Individual 2026',
+  'fixture: tres turmas Modular na unidade A — a com aluna, a vazia e a individual da concorrencia');
+
+-- Contagem direta, e não `fn_turma_modular_ocupacao`: aqui ainda não há sessão
+-- autenticada, e a função é `security definer` filtrada por `fn_unidade_atual()`
+-- — devolveria NULO e a asserção mediria o contexto, não a fixture.
+select is(
+  (select format('%s/%s', t.capacidade,
+                 (select count(*) from public.turma_modular_aluno ta
+                   where ta.turma_id = t.id and ta.ativo))
+     from public.turma_modular t
+    where t.unidade_id = tests.unidade('ESCOLA_A')
+      and t.nome = 'Eletricista Individual 2026'),
+  '1/0',
+  'a turma da concorrencia nasce com UMA vaga livre — 0 de 1, o cenario do card 7.4,5');
 
 -- O módulo CORRENTE é o primeiro não concluído por `modulo.ordem`, e a ordem
 -- vem do catálogo (card 2.2 §9), não de coluna de turma_modular_modulo. A
