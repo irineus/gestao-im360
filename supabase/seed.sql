@@ -447,8 +447,22 @@ select tests.criar_usuario('direcao@escola-b.test',    'DIRECAO', tests.unidade(
 --   (b) o combo de Informática tem DOIS cursos, com ordens 1 e 2. Um combo de
 --       curso único não exercita `combo_curso_ordem_uk` nem a ordem da trilha
 --       que o card 6.2 gera a partir do combo — e a trilha resultante (01, 02,
---       03, sem repetição) é justamente o que o 6.2 precisa ter contra o que
+--       03, 04, sem repetição) é justamente o que o 6.2 precisa ter contra o que
 --       comparar.
+--
+-- ⚠️ ESTA CAMADA CRESCEU NO CARD 8.1, DE SEIS MATERIAIS PARA OITO, e o motivo é
+--    aritmético — vale escrever porque a leitura óbvia ("mais um material para
+--    ter mais um material") está errada. A projeção só conta o aluno a partir do
+--    SEGUNDO item pendente da trilha (§2.4 de docs/projecao-demanda.md): é a
+--    disjunção com a demanda imediata, sem a qual todo aluno ativo pesaria duas
+--    vezes no pedido sugerido. Com o combo de Informática em TRÊS materiais,
+--    "duas entregas" e "dois itens pendentes" eram mutuamente exclusivos — o
+--    aluno com ritmo mensurável (que precisa de duas entregas) tinha no máximo
+--    um item pendente e nunca chegava a k = 2. O degrau RITMO_ALUNO era
+--    estruturalmente inalcançável pela fixture, e o teste dele passaria medindo
+--    um conjunto vazio, que é o modo de falha que o card 2.8 §6.3 nomeia.
+--    `INTERATIVO 04` é o quarto item que desfaz isso; `MODULAR 02` faz o mesmo
+--    pelo degrau MODULAR (ver a nota do bloco de `modulo`, abaixo).
 --
 -- Saldos de estoque (0/0/1/n/n/n do card 2.8 §4.2) NÃO entram aqui: dependem de
 -- `movimento_estoque`, que nasce no card 6.1 com a camada `trilha_estoque`. O
@@ -479,9 +493,11 @@ begin
     (p_unidade, v_interativo, '01', 'Informática Essencial 1', 'APOSTILA', 2),
     (p_unidade, v_interativo, '02', 'Informática Essencial 2', 'APOSTILA', 1),
     (p_unidade, v_interativo, '03', 'Informática Avançada 1',  'APOSTILA', 1),
+    (p_unidade, v_interativo, '04', 'Informática Avançada 2',  'APOSTILA', 1),
     (p_unidade, v_ingles,     '01', 'English Book 1',          'APOSTILA', 1),
     (p_unidade, v_ingles,     '02', 'English Book 2',          'APOSTILA', 2),
-    (p_unidade, v_modular,    '01', 'Eletricista Instalador',  'LIVRO',    1)
+    (p_unidade, v_modular,    '01', 'Eletricista Instalador',  'LIVRO',    1),
+    (p_unidade, v_modular,    '02', 'Eletricista Projetos',    'LIVRO',    1)
   on conflict (unidade_id, metodo_id, codigo) do nothing;
 
   insert into curso (unidade_id, metodo_id, nome)
@@ -501,29 +517,47 @@ begin
       ('Informática Essencial',  'INTERATIVO', '01', 1),
       ('Informática Essencial',  'INTERATIVO', '02', 2),
       ('Informática Avançada',   'INTERATIVO', '03', 1),
+      ('Informática Avançada',   'INTERATIVO', '04', 2),
       ('Inglês Kids',            'INGLES',     '01', 1),
       ('Inglês Kids',            'INGLES',     '02', 2),
-      -- No Modular o curso tem UM livro; o que avança é o módulo (abaixo).
-      ('Eletricista Instalador', 'MODULAR',    '01', 1)
+      -- No Modular o livro dura vários módulos, mas o curso NÃO tem um livro só:
+      -- os três módulos abaixo se repartem em dois (1 e 2 no `01`, 3 no `02`).
+      -- ⚠️ Cresceu no card 8.1, e o motivo é aritmético, não decorativo — ver a
+      --    nota ⚠️ do cabeçalho desta seção.
+      ('Eletricista Instalador', 'MODULAR',    '01', 1),
+      ('Eletricista Instalador', 'MODULAR',    '02', 2)
     ) as s(curso, metodo, material, ordem)
     join metodo   me on me.unidade_id = p_unidade and me.codigo = s.metodo
     join curso    c  on c.unidade_id  = p_unidade and c.metodo_id = me.id and c.nome = s.curso
     join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id and m.codigo = s.material
   on conflict (curso_id, material_id) do nothing;
 
-  -- Três módulos sobre o MESMO livro: é a forma do Modular (card 7.2), e uma
-  -- fixture com um módulo por material não exercitaria isso.
+  -- DOIS módulos sobre o MESMO livro (o `01`) e o terceiro sobre o `02`: é a
+  -- forma do Modular (card 7.2) — um livro dura vários módulos —, e uma fixture
+  -- com um módulo por material não exercitaria isso.
+  --
+  -- ⚠️ O TERCEIRO MÓDULO MUDOU DE MATERIAL NO CARD 8.1, e a razão é aritmética:
+  --    a projeção só olha o SEGUNDO item pendente em diante (§2.4 de
+  --    docs/projecao-demanda.md — a disjunção com a demanda imediata), e a
+  --    trilha de um aluno Modular tem um item por MATERIAL do curso. Com um
+  --    livro só, todo aluno Modular tinha exatamente um item pendente, ficava em
+  --    k = 1 e NUNCA aparecia em v_projecao_aluno: o degrau MODULAR da cascata
+  --    era estruturalmente inalcançável pela fixture, e o teste dele passaria
+  --    medindo um conjunto vazio. A troca custa uma linha aqui e não mexe em
+  --    contagem de módulo nenhuma — continuam três, e continuam dois sobre o
+  --    mesmo livro, que é a propriedade que o card 7.1 escolheu exercitar.
   insert into modulo (unidade_id, curso_id, material_id, nome, ordem)
   select p_unidade, c.id, m.id, s.nome, s.ordem
     from (values
-      ('Módulo 1 — Comandos elétricos', 1),
-      ('Módulo 2 — Instalações prediais', 2),
-      ('Módulo 3 — Projetos', 3)
-    ) as s(nome, ordem)
+      ('Módulo 1 — Comandos elétricos',   '01', 1),
+      ('Módulo 2 — Instalações prediais', '01', 2),
+      ('Módulo 3 — Projetos',             '02', 3)
+    ) as s(nome, material, ordem)
     join metodo   me on me.unidade_id = p_unidade and me.codigo = 'MODULAR'
     join curso    c  on c.unidade_id  = p_unidade and c.metodo_id = me.id
                     and c.nome = 'Eletricista Instalador'
-    join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id and m.codigo = '01'
+    join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id
+                    and m.codigo = s.material
    where not exists (select 1 from modulo x where x.curso_id = c.id and x.ordem = s.ordem);
 
   insert into combo (unidade_id, metodo_id, nome)
@@ -620,7 +654,15 @@ begin
       -- prev_conclusao (dias a partir de hoje; negativo = vencida), dias de matrícula
       ('Ana Paula Ribeiro',  '3001', 'INTERATIVO', 'Informática Completo', 'ATIVO',     180, null, 180),
       ('Bruno Carvalho',     '3002', 'INTERATIVO', 'Informática Completo', 'ATIVO',      90,   90,  90),
-      ('Carla Menezes',      '3003', 'INTERATIVO', 'Informática Completo', 'ATIVO',      10, null,  10),
+      -- ⚠️ Carla ganhou `prev_conclusao_curso` FUTURA no card 8.1, e é a única
+      --    mudança de valor que aquele card fez nesta camada. Ela é a aluna
+      --    recém-matriculada e SEM entrega nenhuma — logo, sem ritmo mensurável
+      --    —, e com a previsão informada ela é o único caso do degrau
+      --    PREVISAO_CURSO da cascata: Bruno também tem previsão futura, mas tem
+      --    ritmo, e o ritmo vem antes (é ele quem prova a ORDEM da cascata).
+      --    Sem esta data o degrau 3 não teria nenhum aluno de fixture, e o teste
+      --    dele passaria medindo conjunto vazio.
+      ('Carla Menezes',      '3003', 'INTERATIVO', 'Informática Completo', 'ATIVO',      10,  120,  10),
       ('Diego Alves',        '3004', 'INTERATIVO', 'Informática Completo', 'ATIVO',     120,  -15, 120),
       ('Eduarda Lima',       '3005', 'MODULAR',    'Eletricista Completo', 'ATIVO',      60, null,  60),
       ('Felipe Nunes',       '3006', 'INGLES',     'Inglês Kids Completo', 'ACELERAR',   30,   60, 150),
@@ -1130,9 +1172,24 @@ begin
       ('INTERATIVO', '01', 26, 120, true,  'chegada do pedido 2026-001'),
       ('INTERATIVO', '02',  3, 118, false, 'entrada manual: sobra de remessa antiga'),
       ('INTERATIVO', '03',  2, 118, false, 'entrada manual: o ultimo exemplar mora aqui'),
+      -- ⚠️ AS DUAS ENTRADAS DOS MATERIAIS NOVOS DO CARD 8.1, e a do `04` tem
+      --    quantidade EXATA por uma razão que custou um CI vermelho para
+      --    aparecer. Ela existe porque João Pedro recebe esse livro na seção 8.4
+      --    e sem ela o saldo iria a −1, que é o que a suíte inteira vigia; e ela
+      --    é de UM exemplar porque o `04` precisa terminar em ZERO. Ana Paula e
+      --    Bruno são os dois alunos da corrida de `entrega_ultimo_exemplar.sh`
+      --    (card 6.3), e o script assere que quem PERDE a corrida sai com
+      --    BLOQUEADA_SEM_ESTOQUE — o que só vale enquanto nenhum outro item
+      --    pendente deles tiver estoque. Com quatro exemplares aqui, o perdedor
+      --    passou a REORDENAR para o `04` e o script reprovou no CI, corretamente:
+      --    a premissa dele tinha mudado por baixo.
+      --    Consequência assumida: são TRÊS saldos zero na fixture, não dois — e o
+      --    terceiro tem função própria, que é manter aquele desfecho.
+      ('INTERATIVO', '04',  1, 118, false, 'entrada manual: um exemplar, e ele vai para Joao Pedro'),
       ('INGLES',     '01', 11, 115, false, 'entrada manual'),
       ('INGLES',     '02',  5, 115, false, 'entrada manual'),
-      ('MODULAR',    '01', 10, 115, false, 'entrada manual')
+      ('MODULAR',    '01', 10, 115, false, 'entrada manual'),
+      ('MODULAR',    '02',  6, 115, false, 'entrada manual')
     ) as s(metodo, material, qtd, dias, do_pedido, observacao)
     join metodo   me on me.unidade_id = p_unidade and me.codigo = s.metodo
     join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id
@@ -1196,6 +1253,15 @@ begin
         ('João Pedro Martins', 'INTERATIVO', '01', 380),
         ('João Pedro Martins', 'INTERATIVO', '02', 300),
         ('João Pedro Martins', 'INTERATIVO', '03', 200),
+        -- ⚠️ A QUARTA ENTREGA NASCEU COM O CARD 8.1, e ela é o que mantém a
+        --    marca "1 em FIM" do quadro do card 2.8 §4.2: com o `INTERATIVO 04`
+        --    no combo, João Pedro voltaria a ter item pendente e a fixture
+        --    perderia o único aluno com a trilha inteira entregue — o estado que
+        --    os testes 050, 051 e 052 usam para medir o FIM.
+        --    Ela dá de brinde o terceiro intervalo de v_ritmo_aluno: ele é o
+        --    único aluno da fixture com a janela de ritmo CHEIA (três
+        --    intervalos), e é sobre ele que o teste da janela é escrito.
+        ('João Pedro Martins', 'INTERATIVO', '04', 150),
         ('Lucas Ferreira',     'INTERATIVO', '01',  40),
         ('Felipe Nunes',       'INGLES',     '01', 100)
       ) as s(aluno, metodo, material, dias)

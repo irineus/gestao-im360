@@ -35,7 +35,7 @@
 -- =============================================================================
 
 begin;
-select plan(69);
+select plan(72);
 
 -- Chaves naturais em um lugar só (card 2.8 §11: nunca `limit` sem ordem, nunca
 -- UUID literal).
@@ -291,15 +291,31 @@ select is(
 -- ===========================================================================
 -- 4. Último livro da trilha — o aviso que o card 8.3 vai transformar em checklist
 -- ===========================================================================
--- Repõe uma unidade de `INTERATIVO 03`, consumida na seção 2. A entrada entra
--- como `postgres`, que é como a própria escola-fixture escreve: quem a grava pela
--- porta da frente é fn_pedido_receber, do card 6.5.
+-- Repõe uma unidade de `INTERATIVO 03`, consumida na seção 2, e uma de
+-- `INTERATIVO 04`, que nasce com saldo zero. A entrada entra como `postgres`,
+-- que é como a própria escola-fixture escreve: quem a grava pela porta da frente
+-- é fn_pedido_receber, do card 6.5.
+--
+-- ⚠️ SÃO DUAS ENTREGAS DESDE O CARD 8.1, e a segunda não é redundância: o combo
+--    de Informática passou a ter QUATRO materiais (o `04` é o que dá ao degrau
+--    RITMO_ALUNO da projeção um aluno com ritmo medido E dois itens pendentes —
+--    ver a nota do seed), então entregar o `03` deixou de ser o fim da trilha de
+--    Ana Paula. Aproveitando, a primeira entrega passou a medir o lado NEGATIVO
+--    do `em_fim`, que antes não era medido em lugar nenhum: uma implementação
+--    que devolvesse `true` sempre passava.
 insert into public.movimento_estoque (unidade_id, material_id, tipo, quantidade, observacao)
 select (select unidade from alvo),
-       (select id from material_id where chave = 'INTERATIVO 03'),
-       'ENTRADA', 1, 'reposicao para a secao 4 do teste 052';
+       (select id from material_id where chave = s.chave),
+       'ENTRADA', 1, 'reposicao para a secao 4 do teste 052'
+  from (values ('INTERATIVO 03'), ('INTERATIVO 04')) as s(chave);
 
 select tests.autenticar(tests.uid('monitor@escola-a.test'));
+
+create temporary table r_ana_03 as
+  select * from public.fn_registrar_entrega(
+    (select a.id from public.aluno a
+      where a.unidade_id = public.fn_unidade_atual()
+        and a.nome = 'Ana Paula Ribeiro'));
 
 create temporary table r_ana as
   select * from public.fn_registrar_entrega(
@@ -309,8 +325,19 @@ create temporary table r_ana as
 
 reset role;
 
+select is((select status from r_ana_03), 'ENTREGUE',
+  'com estoque reposto, o penultimo item da trilha de Ana Paula sai normalmente');
+
+select is((select em_fim from r_ana_03), false,
+  'e o retorno diz que a trilha NAO acabou — ainda ha o 04 pendente');
+
+select is(
+  (select material_id from r_ana),
+  (select id from material_id where chave = 'INTERATIVO 04'),
+  'a entrega seguinte e o ultimo item da trilha, o 04');
+
 select is((select status from r_ana), 'ENTREGUE',
-  'com estoque reposto, o ultimo item da trilha de Ana Paula sai normalmente');
+  'que sai normalmente');
 
 select is((select em_fim from r_ana), true,
   'e o retorno ja diz que a trilha acabou');

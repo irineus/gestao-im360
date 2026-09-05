@@ -38,7 +38,7 @@ select is(
      from public.aluno_material am
      join public.aluno a on a.id = am.aluno_id
     where a.unidade_id = tests.unidade('ESCOLA_A') and a.nome = 'Carla Menezes'),
-  '10,20,30',
+  '10,20,30,40',
   'a trilha do combo de Informatica sai numerada de 10 em 10 (card 2.2 §5.1, passo 4)');
 
 select is(
@@ -58,7 +58,7 @@ select is(
      join public.aluno a on a.id = h.aluno_id
     where a.unidade_id = tests.unidade('ESCOLA_A') and a.nome = 'Carla Menezes'
       and h.motivo = 'GERACAO_COMBO'),
-  3::bigint,
+  4::bigint,
   'a geracao deixou uma linha GERACAO_COMBO por item em aluno_material_hist');
 
 select is(
@@ -207,7 +207,7 @@ select is(
       where nome = 'Karina Bastos' and unidade_id = public.fn_unidade_atual()),
     (select id from public.combo
       where nome = 'Informática Completo' and unidade_id = public.fn_unidade_atual())),
-  3,
+  4,
   'p_combo_id gera a trilha de quem nao tem combo no cadastro, e devolve quantos itens criou');
 
 reset role;
@@ -217,16 +217,21 @@ select is(
      from public.aluno_material am
      join public.aluno a on a.id = am.aluno_id
     where a.unidade_id = tests.unidade('ESCOLA_A') and a.nome = 'Karina Bastos'),
-  '10,20,30',
+  '10,20,30,40',
   'com a mesma numeracao de 10 em 10 da matricula');
 
 -- MATERIAL REPETIDO ENTRE CURSOS DO COMBO (§5.1, passo 5). A fixture não tem esse
 -- caso — os dois cursos de Informática não compartilham apostila —, então ele é
 -- montado aqui: `INTERATIVO 01` entra também no curso Avançada, que é o SEGUNDO
--- do combo. Sem o `distinct on`, a expansão devolveria quatro linhas e a segunda
+-- do combo. Sem o `distinct on`, a expansão devolveria uma linha a mais e ela
 -- morreria em `aluno_material_uk`, derrubando a matrícula inteira num 23505 cru.
+--
+-- ⚠️ `ordem` 3 e não 2 desde o card 8.1: o `04` ocupa a 2 no curso Avançada, e
+--    `curso_material_ordem_uk` é DEFERRABLE — a colisão não apareceria aqui, e
+--    sim no `commit`, que este arquivo nunca faz. Erro que só o próximo a mexer
+--    encontraria.
 insert into public.curso_material (unidade_id, curso_id, material_id, ordem)
-select tests.unidade('ESCOLA_A'), c.id, m.id, 2
+select tests.unidade('ESCOLA_A'), c.id, m.id, 3
   from public.curso c
   join public.metodo me on me.id = c.metodo_id
   join public.material m on m.unidade_id = tests.unidade('ESCOLA_A')
@@ -242,8 +247,8 @@ select is(
     (select id from public.combo
       where nome = 'Informática Completo' and unidade_id = public.fn_unidade_atual()),
     true),
-  3,
-  'material repetido entre dois cursos do combo entra UMA vez — tres itens, nao quatro');
+  4,
+  'material repetido entre dois cursos do combo entra UMA vez — quatro itens, nao cinco');
 
 reset role;
 

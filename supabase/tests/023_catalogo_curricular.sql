@@ -25,7 +25,7 @@
 -- =============================================================================
 
 begin;
-select plan(27);
+select plan(28);
 
 -- ===========================================================================
 -- 1. Os três métodos — configuração, não catálogo de planilha
@@ -118,16 +118,28 @@ select is(
      join public.material       mt on mt.id       = cm.material_id
     where cb.unidade_id = tests.unidade('ESCOLA_A')
       and cb.nome = 'Informática Completo'),
-  '01,02,03',
+  '01,02,03,04',
   'o combo devolve a trilha na ordem: curso 1 inteiro, depois curso 2');
 
--- No Modular o livro é único e o que avança é o módulo (card 7.2). Uma fixture
--- com um módulo por material não exercitaria isso.
+-- No Modular um livro dura VÁRIOS módulos, e o que avança é o módulo (card 7.2).
+-- Uma fixture com um módulo por material não exercitaria isso — daí a asserção
+-- ser "menos livros do que módulos", e não "um livro só": desde o card 8.1 os
+-- três módulos se repartem em DOIS livros, porque com um livro só nenhum aluno
+-- Modular chegava ao segundo item pendente da trilha e o degrau MODULAR da
+-- projeção era inalcançável pela fixture (ver a nota do seed).
 select is(
   (select count(distinct mo.material_id)::bigint
      from public.modulo mo where mo.unidade_id = tests.unidade('ESCOLA_A')),
-  1::bigint,
-  'os tres modulos do Modular apontam para o MESMO livro');
+  2::bigint,
+  'os tres modulos do Modular se repartem em DOIS livros');
+
+select cmp_ok(
+  (select count(distinct mo.material_id)::bigint
+     from public.modulo mo where mo.unidade_id = tests.unidade('ESCOLA_A')),
+  '<',
+  (select count(*)::bigint
+     from public.modulo mo where mo.unidade_id = tests.unidade('ESCOLA_A')),
+  'e ha menos livros do que modulos: um livro dura mais de um modulo');
 
 -- ===========================================================================
 -- 4. `deferrable initially deferred` — reordenar em UM update
@@ -219,8 +231,8 @@ select throws_ok(
 -- semanal e o dashboard aparecem VAZIOS, não errados.
 select is(
   tests.conta_como(tests.uid('direcao@escola-a.test'), 'select id from public.material'),
-  6::bigint,
-  'direcao le os seis materiais (a contagem de referencia da paridade e > 0)');
+  8::bigint,
+  'direcao le os oito materiais (a contagem de referencia da paridade e > 0)');
 
 select is(
   (select count(distinct n) from (

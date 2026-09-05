@@ -638,12 +638,13 @@ select is(
 -- ===========================================================================
 -- 13. Portões: o que ainda não existe, e o dia em que passar a existir
 -- ===========================================================================
--- ⚠️ PORTÃO DO CARD 8.1 — e ele JÁ DISPAROU UMA VEZ, no card 5.4. O §11 do card
---    2.2 dá cinco passos a rt_diaria; `rt_pcs_normaliza` e `rt_capacidades`
---    nasceram no 5.4 e entraram aqui no mesmo commit, porque este portão
---    reprovava enquanto não entrassem. Falta `rt_projecao_demanda` (8.1): criá-la
---    e esquecer de chamá-la aqui não daria erro nenhum — daria uma rotina que
---    roda todo dia sem fazer o que passou a ser dela.
+-- ⚠️ PORTÃO DO CARD 8.1 — e ele DISPAROU DUAS VEZES, no 5.4 e no próprio 8.1. O
+--    §11 do card 2.2 dá cinco passos a rt_diaria; `rt_pcs_normaliza` e
+--    `rt_capacidades` nasceram no 5.4 e entraram aqui no mesmo commit, e
+--    `rt_projecao_demanda` fez o mesmo em 05/09/2026 — criá-la e esquecer de
+--    chamá-la aqui não daria erro nenhum: daria uma rotina que roda todo dia sem
+--    fazer o que passou a ser dela, e uma projeção que nunca sairia do zero.
+--    Com a quinta, a lista do §11 fecha; o portão continua armado para a sexta.
 --    `prosrc` inclui os comentários do corpo — daí o regexp_replace, a lição que
 --    custou uma sessão no card 5.3.
 select is(

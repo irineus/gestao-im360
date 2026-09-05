@@ -157,7 +157,18 @@ create temporary view p_esperada (tabela, cmd) as values
   -- fecha.
   ('turma_modular','r'),        ('turma_modular','a'),        ('turma_modular','w'),        ('turma_modular','d'),
   ('turma_modular_modulo','r'), ('turma_modular_modulo','a'), ('turma_modular_modulo','w'), ('turma_modular_modulo','d'),
-  ('turma_modular_aluno','r'),  ('turma_modular_aluno','a'),  ('turma_modular_aluno','w');
+  ('turma_modular_aluno','r'),  ('turma_modular_aluno','a'),  ('turma_modular_aluno','w'),
+  -- card 8.1 — projeção de demanda, e as duas tabelas estão FORA do padrão de
+  -- quatro políticas por decisão, não por esquecimento (docs/projecao-demanda.md
+  -- §7.1): NINGUÉM escreve nelas pela tela. O `insert` e o `delete` de
+  -- `demanda_projetada` exigem `fn_contexto_rotina()` — não permissão de domínio
+  -- —, e são as únicas políticas do projeto assim; com uma política por
+  -- permissão, a tela de Compras poderia GRAVAR projeção via PostgREST. Sem
+  -- `update` nas duas: a rotina apaga e regrava (contrato do card 2.3), e a foto
+  -- mensal é imutável. `demanda_projetada_hist` também não tem `delete`, pela
+  -- mesma razão de aluno_status_hist — a imutabilidade AQUI é a ausência.
+  ('demanda_projetada','r'),      ('demanda_projetada','a'),      ('demanda_projetada','d'),
+  ('demanda_projetada_hist','r'), ('demanda_projetada_hist','a');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text

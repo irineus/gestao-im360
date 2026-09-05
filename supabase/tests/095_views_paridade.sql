@@ -466,36 +466,43 @@ create temporary view t_mat as
 -- (card 2.8 §6.3).
 
 -- ===========================================================================
--- 9. v_estoque_atual: os seis saldos da fixture são a SOMA COM SINAL
+-- 9. v_estoque_atual: os saldos da fixture são a SOMA COM SINAL
 -- ===========================================================================
 -- Os saldos 0/0/1/n/n/n do card 2.8 §4.2 não estão escritos em coluna nenhuma
 -- (seed §8 (a)): cada um é a soma dos movimentos que o produziram. Se algum dia
 -- alguém trocar `sum(quantidade)` por uma soma com `case` por tipo, o ESTORNO e
 -- o AJUSTE saem da conta e estas quatro asserções mudam de valor.
+--
+-- ⚠️ OITO MATERIAIS E TRÊS ZEROS DESDE O CARD 8.1. O INTERATIVO 04 entrou com um
+--    exemplar e o entregou a João Pedro, fechando em zero DE PROPÓSITO: ele é o
+--    item pendente seguinte dos dois alunos da corrida do card 6.3, e com estoque
+--    ali o perdedor reordenaria em vez de bloquear (o script reprovou no CI antes
+--    de a quantidade virar 1). O MODULAR 02 tem seis. A asserção de
+--    `abaixo_minimo`, logo abaixo, é quem vigia a lista dos zeros.
 select is(
   (select count(*)::bigint from public.v_estoque_atual v
      join t_mat t on t.id = v.material_id),
-  6::bigint,
-  'os seis materiais da fixture aparecem em v_estoque_atual');
+  8::bigint,
+  'os oito materiais da fixture aparecem em v_estoque_atual');
 
 select is(
   (select string_agg(t.apelido || '=' || v.saldo, ' | ' order by t.apelido)
      from public.v_estoque_atual v join t_mat t on t.id = v.material_id),
-  'INGLES 01=10 | INGLES 02=0 | INTERATIVO 01=20 | INTERATIVO 02=0 | INTERATIVO 03=1 | MODULAR 01=10',
+  'INGLES 01=10 | INGLES 02=0 | INTERATIVO 01=20 | INTERATIVO 02=0 | INTERATIVO 03=1 | INTERATIVO 04=0 | MODULAR 01=10 | MODULAR 02=6',
   'saldo = sum(quantidade) com sinal: os 0/0/1/n/n/n do card 2.8 §4.2, derivados e nao escritos');
 
 select is(
   (select string_agg(t.apelido || '=' || v.qtd_movimentos, ' | ' order by t.apelido)
      from public.v_estoque_atual v join t_mat t on t.id = v.material_id),
-  'INGLES 01=2 | INGLES 02=2 | INTERATIVO 01=7 | INTERATIVO 02=4 | INTERATIVO 03=2 | MODULAR 01=3',
+  'INGLES 01=2 | INGLES 02=2 | INTERATIVO 01=7 | INTERATIVO 02=4 | INTERATIVO 03=2 | INTERATIVO 04=2 | MODULAR 01=3 | MODULAR 02=1',
   'qtd_movimentos conta a linha de movimento, nao a de material');
 
 select is(
   (select string_agg(t.apelido, ', ' order by t.apelido)
      from public.v_estoque_atual v join t_mat t on t.id = v.material_id
     where v.abaixo_minimo),
-  'INGLES 02, INTERATIVO 02',
-  'abaixo_minimo e os dois saldos zero, e so eles: 1 < 1 e falso e 20 < 2 tambem');
+  'INGLES 02, INTERATIVO 02, INTERATIVO 04',
+  'abaixo_minimo e os TRES saldos zero, e so eles: 1 < 1 e falso e 20 < 2 tambem');
 
 -- O AJUSTE negativo da fixture (extravio de INGLES 02) é o que leva um saldo a
 -- zero SEM entrega nenhuma. Sem ele, `saldo = 0` e `nunca saiu para aluno`
@@ -519,7 +526,7 @@ select is(
 -- ===========================================================================
 -- 10. O material sem movimento nenhum — as duas armadilhas do card 2.3 §3
 -- ===========================================================================
--- A fixture do card 6.1 dá a TODOS os seis materiais pelo menos uma ENTRADA, e
+-- A fixture do card 6.1 dá a TODOS os oito materiais pelo menos uma ENTRADA, e
 -- é justamente o material recém-cadastrado — o que nunca foi comprado, o mais
 -- urgente de todos — que o `left join` e o `coalesce` existem para carregar.
 -- Sem esta seção, trocar `left join` por `join`, tirar o `coalesce` ou usar
@@ -527,36 +534,36 @@ select is(
 select tests.como_rotina(tests.unidade('ESCOLA_A'));
 
 insert into public.material (unidade_id, metodo_id, codigo, nome, categoria, estoque_minimo)
-select tests.unidade('ESCOLA_A'), me.id, '04', 'Informática Avançada 2', 'APOSTILA', 3
+select tests.unidade('ESCOLA_A'), me.id, '05', 'Informática Avançada 3', 'APOSTILA', 3
   from public.metodo me
  where me.unidade_id = tests.unidade('ESCOLA_A') and me.codigo = 'INTERATIVO';
 
 select is(
   (select count(*)::bigint from public.v_estoque_atual v
      join t_mat t on t.id = v.material_id),
-  7::bigint,
+  9::bigint,
   'material recem-cadastrado NAO some da lista: left join, e nunca join (card 2.3 §3.1)');
 
 select is(
   (select v.saldo from public.v_estoque_atual v
-     join t_mat t on t.id = v.material_id where t.apelido = 'INTERATIVO 04'),
+     join t_mat t on t.id = v.material_id where t.apelido = 'INTERATIVO 05'),
   0,
   'e o saldo dele e 0, nao nulo: sum() de conjunto vazio e null, e null some de toda comparacao');
 
 select is(
   (select v.qtd_movimentos from public.v_estoque_atual v
-     join t_mat t on t.id = v.material_id where t.apelido = 'INTERATIVO 04'),
+     join t_mat t on t.id = v.material_id where t.apelido = 'INTERATIVO 05'),
   0,
   'qtd_movimentos 0: count(mov.id) nao conta a linha nula do left join (card 2.3 §3.2)');
 
 select ok(
   (select v.ultimo_movimento_em is null from public.v_estoque_atual v
-     join t_mat t on t.id = v.material_id where t.apelido = 'INTERATIVO 04'),
+     join t_mat t on t.id = v.material_id where t.apelido = 'INTERATIVO 05'),
   'ultimo_movimento_em nulo — aqui o nulo e a verdade, e por isso max() nao leva coalesce');
 
 select ok(
   (select v.abaixo_minimo from public.v_estoque_atual v
-     join t_mat t on t.id = v.material_id where t.apelido = 'INTERATIVO 04'),
+     join t_mat t on t.id = v.material_id where t.apelido = 'INTERATIVO 05'),
   'e ele aparece ABAIXO DO MINIMO: com saldo nulo a comparacao daria null e ele sumiria da compra');
 
 -- ===========================================================================
@@ -593,8 +600,8 @@ select is(
      join t_mat t on t.id = v.material_id
      join public.aluno a on a.id = v.aluno_id
     where a.unidade_id = tests.unidade('ESCOLA_A') and a.nome = 'Ana Paula Ribeiro'),
-  'INTERATIVO 03|30|1',
-  'Ana Paula recebeu 01 e 02: o proximo e o 03, na ordem 30, com 1 item pendente');
+  'INTERATIVO 03|30|2',
+  'Ana Paula recebeu 01 e 02: o proximo e o 03, na ordem 30, com 2 itens pendentes');
 
 select is(
   (select t.apelido || '|' || v.itens_pendentes
@@ -602,8 +609,8 @@ select is(
      join t_mat t on t.id = v.material_id
      join public.aluno a on a.id = v.aluno_id
     where a.unidade_id = tests.unidade('ESCOLA_A') and a.nome = 'Carla Menezes'),
-  'INTERATIVO 01|3',
-  'Carla nao recebeu nada: o proximo e o primeiro da trilha, com os tres pendentes');
+  'INTERATIVO 01|4',
+  'Carla nao recebeu nada: o proximo e o primeiro da trilha, com os quatro pendentes');
 
 -- A entrega de Eduarda foi ESTORNADA (seed §8.5): o livro voltou ao estoque e o
 -- item voltou a ser o próximo dela. Sem esta linha, o estorno provaria só que o
@@ -648,7 +655,7 @@ select is(
 select is(
   (select count(*)::bigint from public.v_pedido_sugerido v
      join t_mat t on t.id = v.material_id),
-  7::bigint,
+  9::bigint,
   'todo material ATIVO aparece, inclusive com qtd_sugerida 0: quem filtra e a tela (card 2.3 §2.3)');
 
 -- INTERATIVO 03 é o único com sugestão > 0, e a conta inteira está aqui:
@@ -696,12 +703,12 @@ select is(
 
 select is_empty(
   $$ select 1 from public.v_pedido_sugerido where qtd_projetada <> 0 $$,
-  'qtd_projetada e 0 em toda linha ate o card 8.1 existir: reserva, nao esquecimento');
+  'qtd_projetada e 0 em toda linha ate o card 8.2 preencher a parcela: reserva, nao esquecimento');
 
 select is(
   (select v.qtd_imediata || '/' || v.qtd_sugerida
      from public.v_pedido_sugerido v join t_mat t on t.id = v.material_id
-    where t.apelido = 'INTERATIVO 04'),
+    where t.apelido = 'INTERATIVO 05'),
   '0/3',
   'material sem demanda e sem movimento entra com a sugestao igual ao MINIMO — o que a planilha perdia');
 
@@ -714,13 +721,13 @@ update public.material set ativo = false
 select is(
   (select count(*)::bigint from public.v_pedido_sugerido v
      join t_mat t on t.id = v.material_id),
-  6::bigint,
+  8::bigint,
   'material inativo SAI do pedido sugerido: nao se sugere comprar apostila aposentada');
 
 select is(
   (select count(*)::bigint from public.v_estoque_atual v
      join t_mat t on t.id = v.material_id),
-  7::bigint,
+  9::bigint,
   'e CONTINUA no estoque atual: apostila aposentada com saldo e estoque que a escola tem');
 
 update public.material set ativo = true

@@ -276,7 +276,23 @@ select is(
             -- não decide lotação, e quem não pode ler o cronograma recebe nulo e
             -- esbarra em TURMA_SEM_MODULO_CORRENTE — fail-CLOSED. Mesma decisão
             -- de fn_vagas_livres (5.2) e fn_pc_exclusao_valida (4.3).
-            'fn_turma_modular_ocupacao'
+            'fn_turma_modular_ocupacao',
+            -- card 8.1 — a rotina da projeção, pelo mesmo motivo das cinco
+            -- rt_* anteriores: `pg_cron` roda como `postgres` sem auth.uid(), e
+            -- o contexto de rotina do card 2.2 §2.2 só se sustenta porque ela é
+            -- definer e não tem grant para authenticated (C9). Aqui há um
+            -- segundo motivo, e ele é a própria RLS de `demanda_projetada`: as
+            -- políticas de insert e delete exigem `fn_contexto_rotina()`, e
+            -- `force row level security` alcança o dono da tabela — como
+            -- invoker, a rotina não escreveria nada e a projeção sumiria da tela
+            -- sem erro nenhum.
+            --
+            -- `fn_ritmo_aluno` NÃO está aqui, de propósito: ela é uma linha
+            -- lendo v_ritmo_aluno e o número dela vai para a FICHA do aluno, não
+            -- para uma decisão de lotação — quem não pode ler o aluno recebe
+            -- nulo, que é fail-CLOSED. Mesma decisão de
+            -- fn_turma_modular_modulo_corrente (7.2) e fn_vagas_livres (5.2).
+            'rt_projecao_demanda'
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'

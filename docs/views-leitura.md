@@ -261,7 +261,14 @@ select unidade_id,
 É a coluna DEMANDA da planilha. Material sem demanda **não tem linha aqui** — quem precisa da lista
 completa é `v_pedido_sugerido`, que faz `left join` e `coalesce` (§3.1).
 
-### 5.3 `v_demanda_projetada` — contrato agora, corpo no card 8.1
+### 5.3 `v_demanda_projetada` — ✅ implementada no card 8.1 (05/09/2026)
+
+> ✅ **O contrato abaixo foi cumprido sem alteração de coluna nenhuma.** A migração
+> `20260905150000_projecao_demanda.sql` criou a tabela exatamente como está escrita aqui, mais a
+> `demanda_projetada_hist` (a foto mensal do §7.2 de `docs/projecao-demanda.md`), a view por cima, o
+> índice `(unidade_id, mes)` e a RLS **fora do padrão de quatro políticas**: `select` por
+> `estoque.ler`, `insert`/`delete` por `fn_contexto_rotina()` e **nenhum** `update`. O que continua em
+> aberto é o card 8.2, que troca as duas expressões do §6.2.
 
 O algoritmo é do card de Ordem 5 da Fase 2 e a implementação do 8.1. O que o card 2.3 fixa é o
 **contrato**, para que `v_pedido_sugerido` já exista completa na Fase 6 e a Fase 8 não a reescreva.
