@@ -685,38 +685,57 @@ select is(
 -- ===========================================================================
 -- 11. Portão do card 8.3 — o checklist do certificado
 -- ===========================================================================
--- O passo 9 do §6.2 (`fn_certificado_abrir` no FIM) e o passo 5 do §6.3 (apagar
--- ou marcar inconsistente o checklist no estorno) dependem de
+-- O passo 9 do §6.2 (abrir o checklist no FIM) e o passo 5 do §6.3 (apagar ou
+-- marcar inconsistente o checklist no estorno) dependiam de
 -- `certificado_checklist`, que é do card 8.3. Esquecê-los não daria erro nenhum:
 -- daria um aluno que terminou a trilha e nunca entrou na fila do certificado, e um
 -- estorno que deixa um checklist aberto para quem voltou a ter livro pendente.
 --
--- Mesma forma do gate de FORMADO (card 4.2, teste 030 §5), inclusive na cautela:
--- os comentários saem do `prosrc` antes da comparação, senão o portão passaria
--- pelo próprio comentário que descreve o que falta.
+-- ⚠️ O PORTÃO DISPAROU em 05/09/2026, e a expressão dele mudou junto — a
+--    DIVERGÊNCIA está registrada. Ele procurava a citação literal de
+--    `certificado_checklist` no corpo das duas funções, escrito quando se supunha
+--    que elas fariam o `insert` e o `delete` inline. Não fazem, e não devem: o
+--    passo 9 chama `fn_certificado_abrir` (a idempotência tem um dono só, como a
+--    reposição da seção 10 acima) e o passo 5 chama
+--    `fn_certificado_reavaliar_estorno`, que precisa ser `security definer`
+--    porque a tabela não tem política de delete para ninguém. Duplicar o SQL para
+--    satisfazer a letra do portão seria duas implementações da mesma regra — o
+--    defeito que este arquivo já mede na seção 10.
+--
+--    O que o portão passou a exigir é MAIS específico, não menos: cada função tem
+--    de citar a SUA função de certificado, pelo nome. A forma antiga aceitaria
+--    qualquer menção à tabela nas duas.
+--
+-- Mesma cautela do gate de FORMADO (card 4.2, teste 030 §5): os comentários saem
+-- do `prosrc` antes da comparação, senão o portão passaria pelo próprio
+-- comentário que descreve o que falta.
 create temporary view portao_certificado as
   select to_regclass('public.certificado_checklist') is null
-      or (select count(*) = 2 from corpo_projeto
-           where proname in ('fn_registrar_entrega', 'fn_estornar_entrega')
-             and fonte ~ 'certificado_checklist') as em_dia;
+      or ((select fonte ~ 'fn_certificado_abrir' from corpo_projeto
+            where proname = 'fn_registrar_entrega')
+      and (select fonte ~ 'fn_certificado_reavaliar_estorno' from corpo_projeto
+            where proname = 'fn_estornar_entrega')) as em_dia;
 
 select ok((select em_dia from portao_certificado),
-  'portao do certificado em dia: enquanto certificado_checklist nao existe, nada e devido');
+  'portao do certificado em dia: a tabela existe e as duas funcoes chamam a sua peca do certificado');
 
 select is(
   (select count(*)::bigint from corpo_projeto
     where proname in ('fn_registrar_entrega', 'fn_estornar_entrega')
-      and fonte ~ 'certificado_checklist'),
-  0::bigint,
-  'e hoje o portao esta VAZIO de proposito — a citacao so existe no comentario, que foi removido');
+      and fonte ~ 'fn_certificado_'),
+  2::bigint,
+  'as DUAS citam — nem uma, que passaria com o estorno esquecido');
 
--- Prova por construção: portão que nunca foi visto vermelho é decoração.
-create table public.certificado_checklist (id uuid primary key);
+-- Prova por construção: portão que nunca foi visto vermelho é decoração. A
+-- sabotagem é o estorno como o card 6.3 o deixou, sem o passo 5; a entrega
+-- continua inteira, e é isso que prova que o portão exige as duas.
+create or replace function public.fn_estornar_entrega(p_movimento_id uuid, p_motivo text)
+returns uuid language plpgsql
+set search_path = public, pg_temp
+as $sab$ begin return null; end $sab$;
 
 select ok(not (select em_dia from portao_certificado),
-  'nascida a tabela do card 8.3, o portao REPROVA enquanto as duas funcoes nao a citarem');
-
-drop table public.certificado_checklist;
+  'esquecido o passo 5 no estorno, o portao REPROVA mesmo com a entrega inteira');
 
 select * from finish();
 rollback;

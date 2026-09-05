@@ -96,15 +96,20 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
    $$to_regclass('public.turma_modular_aluno') is not null$$, true,
    'APLICADA no card 7.1: duas turmas Modular de Eletricista, a `2026.1` com o cronograma dos três módulos e Eduarda Lima dentro, e a `2025.2` VAZIA e com o módulo corrente vencido. A fixture já tinha o método, o curso, os três módulos (card 4.1), a aluna (4.2) e a Sala Eletricista (4.3). A segunda turma existe por duas razões medidas: dá à guarda tg_turma_modular_exclusao_valida os DOIS lados (uma turma que recusa ser apagada e uma que aceita), como os PCs do card 4.3, e dá ao card 7.4 um módulo atrasado sem que a turma com aluno precise nascer atrasada. Consequência para o teste 090: Eduarda deixa de receber ALUNO_SEM_TURMA, que é exatamente o que o portão do card 5.5 previa.'),
 
-  -- Declarada aqui e não no card 8.3 porque o portão do teste 001 precisa de uma
-  -- camada AINDA NÃO aplicada para vigiar: com `modular` aplicada, ele ficaria
-  -- sem sentinela e a prova por construção viraria decoração — que é exatamente
-  -- a crítica do card 2.8. A instrução que o 001 já trazia era esta, e foi
-  -- seguida à risca: «quando ela for aplicada, esta asserção precisa de uma
-  -- camada NOVA para vigiar, e não de uma sentinela nova».
+  -- ⚠️ APLICADA no card 8.3, e ela é a ÚLTIMA camada declarável: a instrução que
+  --    o teste 001 §7 trazia — «quando ela for aplicada, esta asserção precisa de
+  --    uma camada NOVA para vigiar, e não de uma sentinela nova» — NÃO PODE ser
+  --    seguida, porque `certificado_checklist` é a última tabela do DDL do card
+  --    2.1 (§11: o mapa termina em 8.3) e não há tabela futura para declarar. Os
+  --    cards que faltam (8.4 a 8.7 e a fase 09) são função, tela e importação;
+  --    inventar uma camada para uma tabela que ninguém pediu seria escopo
+  --    inventado, que é o que a regra de divergência proíbe.
+  --    O portão do 001 §7 continua sendo provado por construção, por outro
+  --    caminho: em vez de criar a tabela de uma camada futura, ele desmarca uma
+  --    camada APLICADA dentro da própria transação. Detalhe no 001 §7.
   ('certificados', 90, '8.3',
-   $$to_regclass('public.certificado_checklist') is not null$$, false,
-   'Checklist de certificado de João Pedro Martins, que é o aluno em FIM da fixture (camada trilha_estoque) e o único FORMADO — com os itens em estados diferentes, para que o gate de fn_aluno_pode_formar (card 4.2) tenha os dois lados em vez de só o que passa. A fixture já tem o aluno, a trilha inteira entregue e as permissões do domínio `certificados` no seed do card 3.6; falta a tabela, que nasce no card 8.3 — e é a mesma tabela que o portão do teste 030 §6 espera para cobrar a citação em fn_aluno_pode_formar.');
+   $$to_regclass('public.certificado_checklist') is not null$$, true,
+   'APLICADA no card 8.3: o checklist de certificado de João Pedro Martins, que é o único aluno em FIM da fixture (camada trilha_estoque) e o único FORMADO. Os itens ficam em estados DIFERENTES de propósito — pedagógico e financeiro marcados, formatura não, certificado ENTREGUE —, e isso dá três coisas de uma vez: o lado do gate de fn_aluno_pode_formar (card 4.2) que PASSA sem alunos.formar_sem_certificado, o lado que NÃO passa em qualquer um dos outros onze alunos (sem checklist), e o lado NEGATIVO de tg_certificado_sugere_formado, que só dispara com os três itens OK — a fixture não nasce com uma pendência SUGERIR_FORMADO, e as contagens do teste 090 não mudam.');
 
 -- Devolve as camadas cuja condição já vale e que ainda não foram escritas.
 -- Vazio = a fixture está em dia com o schema.
@@ -1542,7 +1547,132 @@ select tests.seed_modular(tests.unidade('ESCOLA_A'));
 select tests.seed_modular(tests.unidade('ESCOLA_B'));
 
 -- =============================================================================
--- 10. Fecho: nada em `tests` alcançável por quem não é `postgres`
+-- 10. Escola-fixture — camada `certificados` (card 8.3)
+-- =============================================================================
+-- UM checklist, o de João Pedro Martins, e cada escolha aqui responde por uma
+-- asserção que existe em outro arquivo:
+--
+--   (a) É ele porque é o ÚNICO aluno em FIM da fixture (camada trilha_estoque) e
+--       o único FORMADO (camada alunos). Checklist de aluno que não terminou a
+--       trilha seria uma fixture que contradiz a própria regra — quem abre o
+--       checklist é a entrega que fecha a trilha (fn_registrar_entrega, passo 9).
+--       Um SEGUNDO checklist exigiria um segundo aluno em FIM, e a fixture tem um
+--       só de propósito: a quarta entrega dele nasceu no card 8.1 justamente para
+--       manter a marca "1 em FIM" do quadro do card 2.8 §4.2.
+--
+--   (b) Os itens ficam em estados DIFERENTES — pedagógico e financeiro marcados,
+--       formatura NÃO, certificado ENTREGUE. Isso dá três lados de uma vez:
+--         • o gate de fn_aluno_pode_formar (card 4.2 + 8.3) tem quem PASSA sem
+--           `alunos.formar_sem_certificado` (ele) e quem NÃO passa (os outros
+--           onze, sem checklist). Até aqui só o lado que não passa existia;
+--         • tg_certificado_sugere_formado tem o lado NEGATIVO permanente: com
+--           `formatura = false` a condição dos três itens não fecha, a fixture
+--           NÃO nasce com uma pendência SUGERIR_FORMADO e as contagens do teste
+--           090 não mudam. O lado positivo o teste 081 monta na transação dele,
+--           marcando a formatura;
+--         • os pares "quem/quando" nascem preenchidos em três itens e VAZIOS em
+--           formatura, que é o par novo do ajuste 3 do §14 — um par sempre cheio
+--           não distinguiria o trigger de um default.
+--
+--   (c) `formatura = false` num aluno FORMADO é coerente e não descuido: o gate
+--       do card 2.2 §3.3 pede `certificado_status = 'ENTREGUE'`, e não a
+--       cerimônia. Certificado retirado na secretaria sem ir à formatura é o caso
+--       corrente da escola.
+--
+--   (d) Os `_por` são os usuários REAIS da unidade, por perfil — o pedagógico
+--       marcou o pedagógico, o monitor marcou o financeiro (é a única marca do
+--       monitor no checklist, card 2.4 §5.1) e a secretaria alterou o status. Na
+--       ESCOLA_B só existe a direção, e o `coalesce` cai nela: a asserção de
+--       ISOLAMENTO compara CONTAGEM entre as unidades, não autoria.
+--
+-- ⚠️ Escrita DIRETA, sem passar por fn_certificado_abrir/fn_certificado_marcar.
+--    Não é atalho: as funções são `invoker` e o seed roda como `postgres`, sem
+--    auth.uid() — `tem_permissao` devolveria falso e fn_exige_permissao mataria o
+--    `db reset` em SEM_PERMISSAO. É a mesma razão pela qual a camada
+--    `trilha_estoque` marca as entregas com `update` direto nas três colunas que
+--    a guarda do card 6.1 deixa livres. E é a razão de NÃO haver contexto de
+--    rotina aqui: nenhum trigger desta tabela exige unidade no contexto, e o
+--    INSERT não dispara os três triggers de UPDATE.
+create or replace function tests.seed_certificados(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_aluno      uuid;
+  v_direcao    uuid;
+  v_pedagogico uuid;
+  v_monitor    uuid;
+  v_secretaria uuid;
+begin
+  select a.id into v_aluno
+    from aluno a
+   where a.unidade_id = p_unidade and a.nome = 'João Pedro Martins';
+
+  select u.id into v_direcao
+    from usuario u
+    join usuario_perfil up on up.usuario_id = u.id
+    join perfil pf on pf.id = up.perfil_id
+   where u.unidade_id = p_unidade and pf.codigo = 'DIRECAO' and u.ativo
+   order by u.email
+   limit 1;
+
+  select u.id into v_pedagogico
+    from usuario u
+    join usuario_perfil up on up.usuario_id = u.id
+    join perfil pf on pf.id = up.perfil_id
+   where u.unidade_id = p_unidade and pf.codigo = 'PEDAGOGICO' and u.ativo
+   limit 1;
+
+  select u.id into v_monitor
+    from usuario u
+    join usuario_perfil up on up.usuario_id = u.id
+    join perfil pf on pf.id = up.perfil_id
+   where u.unidade_id = p_unidade and pf.codigo = 'MONITOR' and u.ativo
+   limit 1;
+
+  select u.id into v_secretaria
+    from usuario u
+    join usuario_perfil up on up.usuario_id = u.id
+    join perfil pf on pf.id = up.perfil_id
+   where u.unidade_id = p_unidade and pf.codigo = 'SECRETARIA' and u.ativo
+   limit 1;
+
+  -- `data_fim_curso` é a data da ÚLTIMA entrega da trilha dele, que é o que
+  -- fn_certificado_abrir calcula. Escrever `fn_hoje()` aqui daria uma fixture em
+  -- que o curso terminou no dia do `db reset`, e a fila do card 8.6 ordena por
+  -- esta coluna.
+  insert into certificado_checklist
+    (unidade_id, aluno_id, data_fim_curso,
+     pedagogico_ok, pedagogico_por, pedagogico_em,
+     financeiro_ok, financeiro_por, financeiro_em,
+     formatura,
+     certificado_status, certificado_por, certificado_em)
+  select p_unidade, v_aluno,
+         coalesce((select max(am.data_entrega)
+                     from aluno_material am
+                    where am.aluno_id = v_aluno and am.entregue),
+                  fn_hoje() - 150),
+         true, coalesce(v_pedagogico, v_direcao), now() - interval '120 days',
+         true, coalesce(v_monitor,    v_direcao), now() - interval '110 days',
+         false,
+         'ENTREGUE', coalesce(v_secretaria, v_direcao), now() - interval '100 days'
+   where v_aluno is not null
+     and not exists (select 1 from certificado_checklist cc
+                      where cc.aluno_id = v_aluno);
+end $$;
+
+comment on function tests.seed_certificados(uuid) is
+  'Camada `certificados` da escola-fixture (card 8.3): o checklist de João Pedro Martins, o único aluno em FIM e o único FORMADO, com pedagógico e financeiro marcados, formatura NÃO e certificado ENTREGUE — os dois lados do gate de FORMADO e o lado negativo de tg_certificado_sugere_formado.';
+
+-- As duas unidades recebem o mesmo checklist, pela mesma razão das camadas
+-- anteriores: contagem igual dos dois lados é o que torna a asserção de
+-- isolamento comparável.
+select tests.seed_certificados(tests.unidade('ESCOLA_A'));
+select tests.seed_certificados(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 11. Fecho: nada em `tests` alcançável por quem não é `postgres`
 -- =============================================================================
 -- `create function` concede EXECUTE a PUBLIC por padrão. A revogação do USAGE no
 -- schema já bastaria, mas as duas juntas sobrevivem a alguém conceder o schema

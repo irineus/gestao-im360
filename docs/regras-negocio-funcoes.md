@@ -722,10 +722,13 @@ saber e que o código teve de fechar:
   para dentro da entrega daria duas implementações da mesma renumeração, e o dia em que uma mudasse a
   outra ficaria errada em silêncio.
 
-- **Passo 9 pela metade, de propósito:** a pendência `ALUNO_ULTIMO_LIVRO` existe; `fn_certificado_abrir`
-  é do card 8.3, porque `certificado_checklist` não existe. O teste `052_trilha_entrega` §11 é o
-  portão que reprova a suíte no dia em que a tabela nascer sem `fn_registrar_entrega` e
-  `fn_estornar_entrega` a citarem — mesma forma do gate de FORMADO (card 4.2). E `data_entrega` é
+- ~~**Passo 9 pela metade, de propósito**~~ — ✅ **INTEIRO desde 05/09/2026 (card 8.3).** Chegando ao
+  FIM, `fn_registrar_entrega` chama `fn_certificado_abrir` **antes** de `fn_pendencia_abrir`, e a
+  ordem é decisão: sem `certificados.criar`, a entrega inteira falha e nada é gravado — metade de uma
+  "ação única" é pior que nenhuma, e a ordem inversa deixaria um aviso de "abra o checklist" que
+  ninguém consegue atender. O portão do `052` §11 disparou e passou a exigir a citação (a expressão
+  dele mudou junto: procura `fn_certificado_abrir` e `fn_certificado_reavaliar_estorno` pelo nome, em
+  vez da tabela — as duas funções chamam, não duplicam o SQL). E `data_entrega` é
   `fn_hoje()`, não a data do servidor: o Postgres do Supabase roda em UTC, e depois das 21h a entrega
   cairia no dia seguinte, falseando o intervalo que a projeção do card 8.1 mede.
 
@@ -763,8 +766,11 @@ fn_estornar_entrega(p_movimento_id uuid, p_motivo text) → uuid   -- id do movi
   já garante que um movimento só se estorna uma vez, mas sozinha ela entrega a corrida à tela como um
   `23505` cru — o que o §1.2 proíbe. Com o lock, a segunda sessão espera e sai com
   `MOVIMENTO_JA_ESTORNADO`.
-- **O passo 5 (checklist do certificado) fica com o card 8.3**, pelo mesmo motivo do passo 9 do §6.2,
-  e com o mesmo portão no teste `052_trilha_entrega` §11.
+- ~~**O passo 5 (checklist do certificado) fica com o card 8.3**~~ — ✅ **entregue em 05/09/2026.**
+  `fn_estornar_entrega` chama `fn_certificado_reavaliar_estorno` no mesmo `if` que fecha
+  `ALUNO_ULTIMO_LIVRO`. "Nenhum item marcado" inclui o **status**: um certificado já PEDIDO é trabalho
+  da secretaria mesmo com os três itens em `false`, e apagar a linha perderia o fato de que alguém
+  pediu.
 
 ---
 
@@ -876,14 +882,28 @@ do pedido a resolve sozinha, sem ninguém precisar lembrar de limpar a lista.
 ## 8. Certificados
 
 ```sql
-fn_certificado_abrir(p_aluno_id uuid, p_data_fim_curso date default current_date) → uuid
+fn_certificado_abrir(p_aluno_id uuid, p_data_fim_curso date default null) → uuid
   -- idempotente: insert … on conflict (aluno_id) do nothing
   -- data_fim_curso é NOT NULL no DDL: default = data da última entrega da trilha
 fn_certificado_marcar(p_aluno_id uuid, p_item text, p_valor boolean) → void
   -- p_item ∈ (PEDAGOGICO, FINANCEIRO, FORMATURA)
 fn_certificado_status(p_aluno_id uuid, p_status text) → void
   -- NAO_PEDIDO | PEDIDO | ENTREGUE; exige certificados.alterar_status
+fn_certificado_reavaliar_estorno(p_aluno_id uuid) → text   -- ✅ 8.3, ver abaixo
+  -- APAGADO | MANTIDO_INCONSISTENTE | NENHUM; security definer
 ```
+
+⚠️ **Duas correções aplicadas em 05/09/2026 pelo card 8.3, e as duas são divergências registradas.**
+
+- **`default null`, não `default current_date`.** A assinatura original conflitava com o próprio
+  comentário da linha seguinte ("default = data da última entrega") e com o **C6**, que varre
+  `current_date` em `proargdefaults` desde o card 5.2. O corpo resolve na ordem escrita: última
+  entrega → `fn_hoje()`.
+- **A quarta função.** `fn_certificado_reavaliar_estorno` é o passo 5 do §6.3 escrito onde ele pode
+  funcionar: `certificado_checklist` não tem política de `delete` para ninguém e `fn_estornar_entrega`
+  é `invoker`, então um `delete` de dentro dela afetaria **zero linhas sem erro nenhum**. Mesmo
+  desenho e mesmo motivo de `fn_pendencia_abrir` (card 5.5); a contraprova com ela como `invoker` foi
+  vista vermelha no teste 081 §9 — a linha sobrevive e a função ainda devolve `APAGADO`.
 
 - Permissão **por item**: `FINANCEIRO` exige `certificados.marcar_financeiro` (monitor, na matriz
   inicial); `PEDAGOGICO` e `FORMATURA` exigem `certificados.marcar_pedagogico`.
@@ -894,7 +914,15 @@ fn_certificado_status(p_aluno_id uuid, p_status text) → void
   (§14).
 - `tg_certificado_sugere_formado` (`after update on certificado_checklist`): com os três itens OK
   e `certificado_status = 'ENTREGUE'`, abre pendência `SUGERIR_FORMADO` (severidade BAIXA). É
-  **sugestão**, não automação: quem forma o aluno é uma pessoa, por `fn_aluno_alterar_status`.
+  **sugestão**, não automação: quem forma o aluno é uma pessoa, por `fn_aluno_alterar_status` —
+  formar desaloca o aluno de todo bloco e turma (`tg_aluno_status_desaloca`), e isso não pode ser
+  efeito colateral de marcar uma caixa.
+- `tg_aluno_formado_fecha_pendencias` (`after update of status on aluno`, `when new.status =
+  'FORMADO'`) — ✅ **card 8.3, divergência registrada.** O §10.1 já dizia, nas linhas de
+  `ALUNO_ULTIMO_LIVRO` e `SUGERIR_FORMADO`, «fechada por: formatura», e **nenhum código fazia isso**:
+  só a metade do estorno existia (card 6.3). Sem ele, a central do card 5.8 sugeriria para sempre que
+  se forme quem já está FORMADO. Mora em trigger, e não dentro de `fn_aluno_alterar_status`, pela
+  decisão do card 4.2: o que precisa valer para o `PATCH` direto não mora na função de aplicação.
 
 ---
 
@@ -1079,6 +1107,9 @@ lista nunca acumula item que já deixou de ser verdade.
 | `ALOCACAO_INEXISTENTE` | 404 | `fn_bloco_remover` (card 5.3) |
 | `REPOSICAO_INEXISTENTE` / `REPOSICAO_NAO_PREVISTA` | 404 / 409 | `fn_reposicao_registrar`, `fn_reposicao_cancelar` (card 5.3) |
 | `REP_JA_CONTINUO` / `REP_NAO_CONTINUO` | 409 | `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (cards 2.5 e 5.3) |
+| `CERTIFICADO_INEXISTENTE` | 404 | `fn_certificado_marcar`, `fn_certificado_status` (card 8.3) — vale também para aluno de outra unidade, pelo precedente de `PC_INEXISTENTE`; distingue "não tem checklist" de "nada mudou", que um `update` de zero linhas não sabe dizer |
+| `ITEM_CERTIFICADO_INVALIDO` | 422 | `fn_certificado_marcar` (card 8.3) — `p_item` fora de PEDAGOGICO/FINANCEIRO/FORMATURA |
+| `STATUS_CERTIFICADO_INVALIDO` | 422 | `fn_certificado_status` (card 8.3) — senão o `check` da coluna chega cru à tela |
 
 `BLOQUEADA_SEM_ESTOQUE` **não** está aqui de propósito: é status de retorno, não erro (§1.3).
 
@@ -1111,7 +1142,7 @@ Três delas são de exceção e, na matriz inicial, ficam **só com a direção*
 | `fn_pedido_criar`, `fn_pedido_enviar`, `fn_pedido_cancelar`, `fn_pedido_receber`, `fn_ajustar_estoque`, `tg_movimento_valida_sinal`, `tg_movimento_resolve_pendencia`, `tg_pedido_item_recebimento` | 6.5 ✅ |
 | Funções Modular | 7.2 |
 | `rt_projecao_demanda` | 8.1 ✅ |
-| `fn_certificado_*`, `tg_certificado_*` | 8.3 |
+| `fn_certificado_abrir`, `fn_certificado_marcar`, `fn_certificado_status`, `tg_certificado_colunas_permitidas`, `tg_certificado_quem_quando`, `tg_certificado_sugere_formado`, mais `fn_certificado_reavaliar_estorno` e `tg_aluno_formado_fecha_pendencias` (as duas nasceram da decisão do card — ver §8) | 8.3 ✅ |
 | `tp_rep_situacao`, `fn_rep_situacao`, `fn_rep_avaliar_virada`, `fn_rep_virar_continuo`, `fn_rep_voltar_pontual` (critério fechado no card 2.5) | 5.3 ✅ |
 | `rt_rep_avaliar` | 5.5 ✅ |
 
@@ -1130,7 +1161,7 @@ simples — que é exatamente por que o card 2.1 escolheu `text` + `check` em ve
 |---|---|---|---|
 | 1 | `bloco_aluno_reposicao.status`: acrescentar **`FALTOU`** ao `check` | `drop constraint` / `add constraint` | 5.1 |
 | 2 | `pendencia.tipo`: acrescentar `ESTOQUE_ZERO`, `ESTOQUE_ABAIXO_MINIMO`, `SUGERIR_FORMADO`, `TRILHA_DIVERGENTE_COMBO`, `CERTIFICADO_INCONSISTENTE`, `REP_VIRADA`, `ROTINA_FALHOU` ao `check` | idem | 5.5 ✅ (**sem `alter`**: a tabela nasceu no próprio card, então os quinze tipos entraram direto no `check` — divergência registrada) |
-| 3 | `certificado_checklist`: acrescentar `formatura_por` / `formatura_em` | `add column` | 8.3 |
+| 3 | `certificado_checklist`: acrescentar `formatura_por` / `formatura_em` | `add column` | 8.3 ✅ (**sem `alter`**: a tabela nasceu no próprio card, então o par entrou direto no `create table` — mesma divergência, e pela mesma razão, do ajuste 2 no card 5.5) |
 | 4 | `aluno_material_hist`: acrescentar `observacao text` | `add column` | 6.2 ✅ (04/09/2026, e o card 6.1 a deixou de fora de propósito: acrescentá-la lá daria uma coluna sem escritor) |
 | 5 | `bloco_aluno`: acrescentar `tipo_desde date not null default current_date` + trigger `tg_bloco_aluno_tipo_desde` | `add column` + trigger | 5.1 |
 | 6 | `rt_pendencias_diaria`: a contagem de blocos para `ACELERAR_SEM_2O_BLOCO` filtra `tipo <> 'REP'` | corpo da rotina | 5.5 ✅ (com **contraprova** no teste 090: os mesmos dois blocos, os dois de aula, fecham a pendência) |

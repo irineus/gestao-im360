@@ -694,6 +694,13 @@ create table public.certificado_checklist (
   financeiro_por     uuid references public.usuario(id),
   financeiro_em      timestamptz,
   formatura          boolean not null default false,
+  -- ⚠️ O par abaixo é o AJUSTE 3 do §14 do card 2.2, aplicado em 05/09/2026 pelo
+  --    card 8.3 SEM `alter table`: a tabela nasce naquele arquivo, então as duas
+  --    colunas entraram direto no `create table`. Sem elas, `formatura` seria o
+  --    único dos quatro itens sem rastro de quem marcou — e o plano exige o
+  --    "quem/quando" de CADA item.
+  formatura_por      uuid references public.usuario(id),
+  formatura_em       timestamptz,
   certificado_status text not null default 'NAO_PEDIDO'
                      check (certificado_status in ('NAO_PEDIDO','PEDIDO','ENTREGUE')),
   certificado_por    uuid references public.usuario(id),
@@ -761,7 +768,7 @@ aberta. Formato sugerido: `'<TIPO>:<id_da_referencia>'`.
 | §7 (trilha), §10 (estoque) | `aluno_material`, `aluno_material_hist`, `movimento_estoque`, `pedido_compra`, `pedido_item` | 6.1 ✅ — criadas em 04/09/2026 com as **quinze** políticas do card 2.4 §4 (o `insert` de `movimento_estoque` é POR TIPO), `tg_movimento_imutavel`, a guarda de coluna de `aluno_material`, as duas guardas de exclusão (`ITEM_JA_ENTREGUE`, `PEDIDO_NAO_RASCUNHO`) e o trigger de coerência de método da pendência 9.11 |
 | §9 | `turma_modular`, `turma_modular_modulo`, `turma_modular_aluno` | 7.1 ✅ — criadas em 05/09/2026 com as **onze** políticas do card 2.4 §4 (`turma_modular_aluno` sem `delete`), `data_entrada default public.fn_hoje()`, `tg_turma_modular_aluno_colunas_permitidas` (a guarda por coluna do achado 6 do card 2.4 §7) e `tg_turma_modular_exclusao_valida` (`PT409`/`TURMA_COM_ALUNO`). No mesmo arquivo, os dois portões que venceram nesse dia: `fn_aluno_status_desaloca` passou a citar a terceira tabela do card 2.2 §3.2, e `ALUNO_SEM_TURMA` passou a olhar as duas formas de turma |
 | §9 (ajuste) | `turma_modular_aluno.motivo_saida` | 7.2 ✅ — acrescentada em 05/09/2026, e é uma **divergência registrada** do card 7.1, que a tinha adiado por não estar prevista no DDL §9. O que a torna devida é a assinatura `fn_turma_modular_remover(p_turma_id, p_aluno_id, p_motivo text)` do card 2.2 §9: sem a coluna, `p_motivo` é aceito e jogado fora. Espelha `bloco_aluno.motivo_saida` (5.3), é escrita por `fn_turma_modular_remover` e por `tg_aluno_status_desaloca`, limpa na reativação, e fica **fora** da guarda de coluna do 7.1 porque sai junto com `ativo` na desalocação sem ator |
-| §10 (certificado) | `certificado_checklist` | 8.3 |
+| §10 (certificado) | `certificado_checklist` | 8.3 ✅ — criada em 05/09/2026 com as **três** políticas do card 2.4 §4 (sem `delete`, e é a ausência que obriga `fn_certificado_reavaliar_estorno` a ser `security definer`), o par `formatura_por/_em` do ajuste 3 já embutido, `tg_certificado_colunas_permitidas` (o achado 8 do card 2.4 §7, que a RLS não alcança), `tg_certificado_quem_quando` (dono exclusivo dos quatro pares) e `tg_certificado_sugere_formado`. No mesmo arquivo, os três portões que venceram nesse dia: `fn_aluno_pode_formar` ganhou a condição (1) e virou `definer`, `fn_registrar_entrega` passou a abrir o checklist no FIM e `fn_estornar_entrega` a reavaliá-lo no estorno |
 
 Ordem de dependência entre migrações: 3.3 → 3.4 → 3.6 → 4.1 → 4.2 → 4.3 → 5.1 → 5.5 → 6.1 → 7.1 → 8.3.
 As duas FKs adiadas (`aluno_material.movimento_estoque_id` e `movimento_estoque.pedido_item_id`) são

@@ -18,7 +18,7 @@
 -- =============================================================================
 
 begin;
-select plan(56);
+select plan(58);
 
 -- ===========================================================================
 -- 1. A fixture chegou (camada `alunos` do card 3.4.5)
@@ -225,18 +225,21 @@ select lives_ok(
 
 reset role;
 
--- ⚠️ PORTÃO DO CARD 8.3 — a metade do gate que ainda não pode existir.
+-- ⚠️ PORTÃO DO CARD 8.3 — DISPAROU em 05/09/2026, e esta seção mudou de papel.
 --
--- `fn_aluno_pode_formar` hoje só implementa a condição (2), a permissão: a (1),
--- "existe certificado_checklist ENTREGUE", depende de uma tabela do card 8.3.
--- Esquecer de voltar aqui não daria erro nenhum — daria o erro ERRADO: o
+-- Até aqui `fn_aluno_pode_formar` só implementava a condição (2), a permissão: a
+-- (1), "existe certificado_checklist ENTREGUE", dependia de uma tabela que não
+-- existia. Esquecer de voltar aqui não daria erro nenhum — daria o erro ERRADO: o
 -- pedagógico com o certificado na mão receberia FORMATURA_SEM_CERTIFICADO, e a
 -- leitura óbvia da mensagem seria falsa.
 --
--- Os comentários do corpo são REMOVIDOS antes de procurar a citação. Sem isso o
--- portão passaria pelo próprio comentário que descreve o que falta — que é
--- exatamente o texto que está lá hoje —, e um portão que aprova o estado que
--- deveria reprovar é pior que portão nenhum.
+-- A tabela nasceu no card 8.3 e a condição (1) entrou no corpo. O portão continua
+-- aqui, agora exigindo a citação em vez de proibi-la — é ele que reprova a suíte
+-- se alguém simplificar a função de volta para a metade da permissão.
+--
+-- Os comentários do corpo são REMOVIDOS antes de procurar a citação: sem isso o
+-- portão passaria pelo próprio comentário que descreve o que falta, e um portão
+-- que aprova o estado que deveria reprovar é pior que portão nenhum.
 create temporary view corpo_pode_formar as
   select regexp_replace(p.prosrc, '--[^\n]*', '', 'g') as fonte
     from pg_proc p
@@ -248,19 +251,75 @@ create temporary view portao_formado as
       or (select fonte ~ 'certificado_checklist' from corpo_pode_formar) as em_dia;
 
 select ok((select em_dia from portao_formado),
-  'gate de FORMADO em dia: enquanto certificado_checklist nao existe, nada e devido');
+  'gate de FORMADO em dia: a tabela existe e fn_aluno_pode_formar a cita');
 
 select ok(
-  not (select fonte ~ 'certificado_checklist' from corpo_pode_formar),
-  'e hoje o portao esta VAZIO de proposito — a citacao so existe no comentario, que foi removido');
+  (select fonte ~ 'certificado_checklist' from corpo_pode_formar),
+  'a condicao (1) do gate esta no corpo, e nao so no comentario — que foi removido antes de olhar');
 
--- Prova por construção: portão que nunca foi visto vermelho é decoração.
-create table public.certificado_checklist (id uuid primary key);
+-- Prova por construção: portão que nunca foi visto vermelho é decoração. A
+-- sabotagem é a função como o card 4.2 a deixou — só a metade da permissão —, e
+-- ela morre no `rollback` com o resto da transação.
+create or replace function public.fn_aluno_pode_formar(p_aluno_id uuid)
+returns boolean language sql stable security definer
+set search_path = public, pg_temp
+as $sab$ select public.tem_permissao('alunos.formar_sem_certificado'); $sab$;
 
 select ok(not (select em_dia from portao_formado),
-  'nascida a tabela do card 8.3, o portao REPROVA enquanto fn_aluno_pode_formar nao a citar');
+  'reduzida a funcao a metade da permissao, o portao REPROVA');
 
-drop table public.certificado_checklist;
+-- ===========================================================================
+-- 5.1 A condição (1) do gate FUNCIONA, e não só está escrita
+-- ===========================================================================
+-- Citação no corpo é o que o portão mede; o que a escola precisa é que o
+-- pedagógico consiga formar quem tem o certificado na mão. Restaura a função de
+-- verdade e mede o comportamento nos dois lados.
+create or replace function public.fn_aluno_pode_formar(p_aluno_id uuid)
+returns boolean language sql stable security definer
+set search_path = public, pg_temp
+as $ok$
+  select exists (select 1
+                   from public.certificado_checklist cc
+                  where cc.aluno_id = p_aluno_id
+                    and cc.unidade_id = public.fn_unidade_atual()
+                    and cc.certificado_status = 'ENTREGUE')
+      or public.tem_permissao('alunos.formar_sem_certificado');
+$ok$;
+
+reset role;
+
+-- Karina Bastos é ATIVO e não tem checklist. Ela é a escolhida por não aparecer
+-- em nenhuma outra asserção deste arquivo: formar Bruno ou Diego derrubaria as
+-- oito seções que os usam adiante, dentro da mesma transação.
+--
+-- O negativo fica aqui porque é a PREMISSA do positivo logo abaixo — sem os dois
+-- lados, o `lives_ok` seguinte passaria mesmo com o gate sempre aberto.
+select is(
+  tests.codigo_do_erro(
+    $$update public.aluno set status = 'FORMADO'
+       where nome = 'Karina Bastos' and unidade_id = public.fn_unidade_atual()$$,
+    tests.uid('pedagogico@escola-a.test')),
+  'FORMATURA_SEM_CERTIFICADO',
+  'o pedagogico nao forma quem nao tem checklist — a premissa do positivo abaixo');
+
+-- Mesma aluna, mesmo usuário, mesma permissão: só o checklist ENTREGUE muda. O
+-- pedagógico NÃO tem `certificados.criar` (a matriz dá o insert a direção,
+-- secretaria e monitor), então o checklist entra como `postgres`, fora do papel:
+-- o que esta asserção mede é o GATE, não quem abre o checklist.
+insert into public.certificado_checklist (unidade_id, aluno_id, data_fim_curso,
+                                          certificado_status)
+select a.unidade_id, a.id, public.fn_hoje(), 'ENTREGUE'
+  from public.aluno a
+ where a.nome = 'Karina Bastos' and a.unidade_id = tests.unidade('ESCOLA_A');
+
+select tests.autenticar(tests.uid('pedagogico@escola-a.test'));
+
+select lives_ok(
+  $$update public.aluno set status = 'FORMADO'
+     where nome = 'Karina Bastos' and unidade_id = public.fn_unidade_atual()$$,
+  'com o certificado ENTREGUE, o pedagogico forma SEM alunos.formar_sem_certificado');
+
+reset role;
 
 -- ===========================================================================
 -- 6. Portão dos três triggers que este card não pode escrever
