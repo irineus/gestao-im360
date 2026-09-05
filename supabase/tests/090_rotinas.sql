@@ -36,14 +36,16 @@
 -- =============================================================================
 
 begin;
--- 49 → 60 no card 8.4 (05/09/2026): as §15 e §16, dos dois alertas de TEMPO do
--- aluno que `rt_pendencias_diaria` passou a abrir.
+-- 60 → 67 no card 8.4,5 (05/09/2026): a §17, do alerta de ESTADO do MATERIAL,
+-- mais a asserção-espelho do §2 — que existia só para pendência de aluno e por
+-- isso não teria reprovado nada com um tipo de material acrescentado à rotina.
 --
--- Era 49 desde o card 7.1, por coincidência aritmética que vale explicar: o
--- portão condicional do §13 perdeu uma asserção (três viraram duas, porque a
--- tabela que ele esperava passou a existir) e o §2 ganhou uma, a que fixa por
--- que Eduarda Lima saiu da lista de ALUNO_SEM_TURMA.
-select plan(60);
+-- Era 60 desde o card 8.4 (as §15 e §16, dos dois alertas de TEMPO do aluno) e
+-- 49 desde o card 7.1, por coincidência aritmética que vale explicar: o portão
+-- condicional do §13 perdeu uma asserção (três viraram duas, porque a tabela que
+-- ele esperava passou a existir) e o §2 ganhou uma, a que fixa por que Eduarda
+-- Lima saiu da lista de ALUNO_SEM_TURMA.
+select plan(67);
 
 -- ===========================================================================
 -- 1. As premissas da fixture, que dão sentido a todos os números de baixo
@@ -128,6 +130,23 @@ select is(
       and p.tipo = 'ALUNO_SEM_TURMA' and p.resolvida_em is null),
   0::bigint,
   'a aluna MODULAR esta numa turma Modular ATIVA e por isso nao aparece aqui (portao do card 5.5)');
+
+-- ⚠️ A ASSERÇÃO ACIMA TEM UM ALCANCE QUE O CARD 8.4,5 MEDIU E CORRIGIU: ela faz
+--    `join public.aluno`, então lista tudo o que a rotina abre PARA ALUNO — e
+--    um tipo de MATERIAL acrescentado à rotina passaria por ela sem tocar em
+--    nada. A nota do card 8.4,5 supunha o contrário ("o §2 lista tudo o que a
+--    rotina abre sem filtrar por tipo, então ele reprova sozinho"), e a suposição
+--    valia só enquanto todo bloco da rotina falasse de aluno. Esta é a metade que
+--    faltava: o mesmo formato, do outro lado da referência.
+select is(
+  (select string_agg(format('%s:%s:%s %s', p.tipo, p.severidade, me.codigo, m.codigo), ' | '
+                     order by me.codigo, m.codigo)
+     from public.pendencia p
+     join public.material m on m.id = p.material_id
+     join public.metodo me on me.id = m.metodo_id
+    where p.unidade_id = tests.unidade('ESCOLA_A') and p.resolvida_em is null),
+  'ESTOQUE_ABAIXO_MINIMO:BAIXA:INGLES 02 | ESTOQUE_ABAIXO_MINIMO:BAIXA:INTERATIVO 02 | ESTOQUE_ABAIXO_MINIMO:BAIXA:INTERATIVO 04',
+  'e abre o tipo de MATERIAL nos tres saldos zero da fixture, e so neles (card 8.4,5)');
 
 -- Ajuste 4 do §10 do card 2.3, BLOQUEANTE: o catálogo do card 2.2 dava INFO a
 -- ACELERAR_SEM_2O_BLOCO, e INFO não existe no `check` do DDL. Escrita assim, a
@@ -963,6 +982,161 @@ select is(
       and p.tipo = 'PREVISAO_VENCIDA' and p.resolvida_em is null),
   0::bigint,
   'e sair de ATIVO/ACELERAR fecha: e a mesma metade do where que faz a formatura fechar sozinha');
+
+-- ===========================================================================
+-- 17. ESTOQUE_ABAIXO_MINIMO — card 8.4,5, e os dois filtros que a view não tem
+-- ===========================================================================
+-- O que a §2 prova é que o tipo ENTROU na rotina, nos três saldos zero da
+-- fixture. O que se prova aqui é que ele entrou com a regra certa, e as quatro
+-- armadilhas medidas são:
+--   • a borda é `<`, e ela mora na view: `INTERATIVO 03` tem saldo 1 e mínimo 1,
+--     e "igual ao mínimo" NÃO é abaixo do mínimo;
+--   • material sem movimento NENHUM tem de aparecer — é a armadilha §3.2 do card
+--     2.3, e é o material que mais precisa ser comprado;
+--   • material INATIVO fica de fora, senão aposentar uma apostila abre uma
+--     pendência que ninguém pode fechar;
+--   • `estoque_minimo = 0` não é "mínimo zero", é mínimo não configurado.
+--
+-- Os dois últimos filtros são os que `v_estoque_atual` NÃO aplica, de propósito
+-- (`docs/views-leitura.md` §2.3): a view fala do estoque que a escola TEM, a
+-- pendência fala do que ela precisa COMPRAR.
+select is(
+  (select format('%s/%s/%s', p.severidade,
+                 p.chave_dedup = 'MINIMO:' || m.id::text,
+                 p.descricao)
+     from public.pendencia p
+     join public.material m on m.id = p.material_id
+     join public.metodo me on me.id = m.metodo_id
+    where me.codigo = 'INTERATIVO' and m.codigo = '02'
+      and p.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'ESTOQUE_ABAIXO_MINIMO' and p.resolvida_em is null),
+  'BAIXA/t/Informática Essencial 2 (INTERATIVO 02) está com saldo 0, abaixo do mínimo de 1 — avaliar compra.',
+  'a pendencia e BAIXA, com a chave do catalogo e os DOIS numeros (saldo e minimo) na descricao');
+
+-- A borda. `INTERATIVO 03` tem saldo 1 para mínimo 1 — é o último exemplar, o
+-- mesmo da corrida do card 6.3 — e não abre nada. Escrita `<=`, a regra abriria
+-- aqui e a asserção de cima continuaria passando: é esta linha que separa as
+-- duas.
+select is(
+  (select count(*)::bigint from public.pendencia p
+     join public.material m on m.id = p.material_id
+     join public.metodo me on me.id = m.metodo_id
+    where me.codigo = 'INTERATIVO' and m.codigo = '03'
+      and p.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'ESTOQUE_ABAIXO_MINIMO' and p.resolvida_em is null),
+  0::bigint,
+  'saldo IGUAL ao minimo nao abre pendencia: a comparacao e <, e ela mora em v_estoque_atual');
+
+-- A armadilha §3.2 do card 2.3, medida: material recém-cadastrado, mínimo
+-- definido e NENHUM movimento. Lendo `movimento_estoque` direto, com `join`
+-- interno, ele sumiria — e some justamente o material de que a escola não tem
+-- um exemplar sequer.
+insert into public.material (unidade_id, metodo_id, codigo, nome, categoria, estoque_minimo)
+select tests.unidade('ESCOLA_A'), me.id, '05', 'Informática Avançada 3', 'APOSTILA', 3
+  from public.metodo me
+ where me.unidade_id = tests.unidade('ESCOLA_A') and me.codigo = 'INTERATIVO';
+
+select public.rt_pendencias_diaria();
+
+select is(
+  (select p.descricao from public.pendencia p
+     join public.material m on m.id = p.material_id
+    where m.nome = 'Informática Avançada 3'
+      and p.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'ESTOQUE_ABAIXO_MINIMO' and p.resolvida_em is null),
+  'Informática Avançada 3 (INTERATIVO 05) está com saldo 0, abaixo do mínimo de 3 — avaliar compra.',
+  'material SEM MOVIMENTO NENHUM entra na lista com saldo 0 — a armadilha do left join, do lado certo');
+
+-- Aposentar o material fecha a pendência: a view continua mostrando o saldo
+-- dele (é estoque que a escola tem), e é a ROTINA que sabe que não se compra o
+-- que foi aposentado.
+update public.material m
+   set ativo = false
+  from public.metodo me
+ where me.id = m.metodo_id and me.codigo = 'INGLES' and m.codigo = '02'
+   and m.unidade_id = tests.unidade('ESCOLA_A');
+
+select public.rt_pendencias_diaria();
+
+select is(
+  (select format('%s/%s/%s',
+                 count(*) filter (where p.resolvida_em is null),
+                 count(*),
+                 bool_and(p.resolucao = 'RESOLVIDA' and p.resolvida_por is null))
+     from public.pendencia p
+     join public.material m on m.id = p.material_id
+     join public.metodo me on me.id = m.metodo_id
+    where me.codigo = 'INGLES' and m.codigo = '02'
+      and p.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'ESTOQUE_ABAIXO_MINIMO'),
+  '0/1/t',
+  'material INATIVO sai da lista e a pendencia fecha sozinha — nao se compra apostila aposentada');
+
+-- Mínimo zero é mínimo NÃO CONFIGURADO, e o caso que separa isso de uma
+-- redundância é o SALDO NEGATIVO — medido, e não suposto: com mínimo 0 e saldo
+-- 0 a própria view já devolve `abaixo_minimo` falso (`0 < 0`), então uma
+-- asserção escrita assim passaria com o filtro apagado. A primeira versão desta
+-- seção era essa, e a contraprova 3 do card 8.4,5 saiu VERDE — foi ela que
+-- mandou reescrever isto aqui.
+--
+-- Saldo negativo não é hipótese: `fn_estoque_ajustar` o recusa (card 6.5), mas a
+-- guarda mora na FUNÇÃO, e `movimento_estoque` aceita a linha por qualquer outro
+-- caminho — importação do card 9.1, correção feita por fora. É por isso que a
+-- tela do card 6.7 DESTACA o saldo negativo em vez de escondê-lo, e é por isso
+-- que ele não pode virar uma pendência dizendo "abaixo do mínimo de 0": o que se
+-- pede ali é conferência de prateleira, não compra.
+update public.material m
+   set estoque_minimo = 0
+  from public.metodo me
+ where me.id = m.metodo_id and me.codigo = 'INTERATIVO' and m.codigo = '04'
+   and m.unidade_id = tests.unidade('ESCOLA_A');
+
+insert into public.movimento_estoque (unidade_id, material_id, tipo, quantidade,
+                                      ocorrido_em, observacao)
+select tests.unidade('ESCOLA_A'), m.id, 'AJUSTE', -1, now(),
+       'ajuste errado, do tipo que a tela do 6.7 destaca (teste 090 §17)'
+  from public.material m
+  join public.metodo me on me.id = m.metodo_id
+ where me.codigo = 'INTERATIVO' and m.codigo = '04'
+   and m.unidade_id = tests.unidade('ESCOLA_A');
+
+select public.rt_pendencias_diaria();
+
+select is(
+  (select count(*)::bigint from public.pendencia p
+     join public.material m on m.id = p.material_id
+     join public.metodo me on me.id = m.metodo_id
+    where me.codigo = 'INTERATIVO' and m.codigo = '04'
+      and p.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'ESTOQUE_ABAIXO_MINIMO' and p.resolvida_em is null),
+  0::bigint,
+  'minimo ZERO nao abre pendencia nem com saldo NEGATIVO: minimo zero e minimo nao configurado');
+
+-- E a compra chegando fecha, que é a ação que a pendência pede (catálogo §10.1:
+-- "fechada quando saldo ≥ mínimo"). Uma entrada de UM exemplar leva
+-- `INTERATIVO 02` de 0 para 1, exatamente o mínimo — a mesma borda de cima, do
+-- outro lado.
+insert into public.movimento_estoque (unidade_id, material_id, tipo, quantidade,
+                                      ocorrido_em, observacao)
+select tests.unidade('ESCOLA_A'), m.id, 'ENTRADA', 1, now(),
+       'chegada de compra (teste 090 §17)'
+  from public.material m
+  join public.metodo me on me.id = m.metodo_id
+ where me.codigo = 'INTERATIVO' and m.codigo = '02'
+   and m.unidade_id = tests.unidade('ESCOLA_A');
+
+select public.rt_pendencias_diaria();
+
+select is(
+  (select format('%s/%s', p.resolucao, p.resolvida_por is null)
+     from public.pendencia p
+     join public.material m on m.id = p.material_id
+     join public.metodo me on me.id = m.metodo_id
+    where me.codigo = 'INTERATIVO' and m.codigo = '02'
+      and p.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'ESTOQUE_ABAIXO_MINIMO'),
+  'RESOLVIDA/t',
+  'a entrada que leva o saldo AO minimo fecha a pendencia sozinha, sem pessoa e sem trigger');
 
 select * from finish();
 rollback;
