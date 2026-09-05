@@ -15,6 +15,7 @@ import '../telas/em_construcao.dart';
 import '../telas/login.dart';
 import '../telas/materiais/tela_materiais.dart';
 import '../telas/pendencias/tela_pendencias.dart';
+import '../telas/projecao/tela_projecao.dart';
 import '../telas/redefinir_senha.dart';
 import '../telas/salas/tela_salas.dart';
 import '../telas/selecao_unidade.dart';
@@ -56,6 +57,10 @@ final _telaDaRota = <String, Widget Function(GoRouterState)>{
   'turmas_modular': (estado) =>
       TelaTurmasModular(turmaId: estado.uri.queryParameters['turma']),
   'pendencias': (_) => const TelaPendencias(),
+  // `?material=` segue o desenho da tela 6 e da 7: a Projeção abre já com o
+  // drill-down daquele material, em vez de largar a pessoa na grade inteira.
+  'projecao': (estado) =>
+      TelaProjecao(materialId: estado.uri.queryParameters['material']),
   'administracao': (_) => const TelaAdministracao(),
   // A rota 3b (card 2.4 §6) desde o card 6.6: `/alunos/:id/trilha` é o
   // deep-link para a aba Trilha, e não uma tela separada. Ele existe como rota
@@ -98,10 +103,10 @@ List<RouteBase> _subRotas(Rota rota) => switch (rota.id) {
 /// é a lista que encolhe a cada fase entregue.
 ///
 /// Saíram daqui: o dashboard, no card 5.9 (a tela existe e é parcial — quem
-/// nomeia o que falta é o rodapé dela), e Turmas Modular, no 7.3.
+/// nomeia o que falta é o rodapé dela), Turmas Modular, no 7.3, e a Projeção de
+/// demanda, no 8.5.
 // ignore: unused_element
 const _cardDaRota = <String, String>{
-  'projecao': '8.5',
   'certificados': '8.6',
   'importacao': '9.1',
 };

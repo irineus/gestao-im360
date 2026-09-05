@@ -356,12 +356,21 @@ aberta com permissão parcial não dá erro — dá um número menor.
 | 5 | Turmas Modular | `turmas.ler` + `salas.ler` + `materiais.ler` | todos |
 | 6 | Materiais e estoque | `materiais.ler` + `estoque.ler` | todos |
 | 7 | Compras | `materiais.ler` + `estoque.ler` + `alunos.ler` + `compras.ler` | direção, secretaria |
-| 8 | Projeção de demanda | `materiais.ler` + `estoque.ler` + `alunos.ler` | direção, pedagógico, secretaria, monitor |
+| 8 | Projeção de demanda | `materiais.ler` + `estoque.ler` + `alunos.ler` + **`turmas.ler`** | direção, pedagógico, secretaria, monitor |
 | 9 | Certificados | `certificados.ler` + `alunos.ler` | todos |
 | 10 | Salas e PCs | `salas.ler` + `professores.ler` | todos |
 | 11 | Pendências | `pendencias.ler` | todos |
 | 12 | Administração | `admin.ler` | direção |
 | 13 | Importação | `admin.ler` + os domínios do que se importa | direção |
+
+⚠️ **A linha 8 ganhou `turmas.ler` em 05/09/2026 (card 8.5), e nenhum perfil perdeu a tela** — os
+quatro já o têm. A correção não é formal: `v_projecao_aluno` (card 8.1) faz `join` **interno** em
+`metodo` e lê `turma_modular*` para achar o cronograma do degrau MODULAR, e `v_projecao_material_mes`
+junta `material`. Faltando qualquer um dos quatro códigos, a tela que decide **o que a escola compra**
+não vem errada: vem **vazia**, com cara de escola que não vai precisar de apostila nenhuma. É o §3.4
+do card 2.3 no pior lugar em que ele podia cair, e a nota do card de Ordem 5 da Fase 2 já o dizia
+desde 01/09/2026 — esta tabela é que tinha ficado com três. O `guardas_rota_test` percorre a tabela e
+foi corrigido no mesmo commit.
 
 O botão dentro da tela é guardado pela permissão de ação (`turmas.alocar` no botão "adicionar
 aluno", `estoque.lancar_saida` no "Registrar entrega"), e a função no banco repete a checagem com

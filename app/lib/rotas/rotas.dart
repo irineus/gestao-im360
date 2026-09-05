@@ -141,13 +141,19 @@ const rotasAplicacao = <Rota>[
     grupo: GrupoMenu.material,
     exige: {'materiais.ler', 'estoque.ler', 'alunos.ler', 'compras.ler'},
   ),
+  // ⚠️ `turmas.ler` entrou no card 8.5, e a matriz do card 2.4 registrava só os
+  // três primeiros. A parcela MODULAR da projeção lê `turma_modular*` para achar
+  // o cronograma, e `v_projecao_aluno` junta `metodo` internamente: sem as
+  // quatro, a tela não vem errada — vem VAZIA (card 2.3 §3.4), que é a redução
+  // silenciosa que decide o que a escola compra. Os quatro perfis já têm
+  // `turmas.ler`, então nenhum perfil perde a tela com esta correção.
   Rota(
     id: 'projecao',
     caminho: '/projecao',
     titulo: 'Projeção',
     icone: Icons.timeline_outlined,
     grupo: GrupoMenu.material,
-    exige: {'materiais.ler', 'estoque.ler', 'alunos.ler'},
+    exige: {'materiais.ler', 'estoque.ler', 'alunos.ler', 'turmas.ler'},
   ),
   Rota(
     id: 'certificados',

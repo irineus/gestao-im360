@@ -22,7 +22,11 @@ const _esperado = <String, Set<String>>{
   'turmas_modular': {'turmas.ler', 'salas.ler', 'materiais.ler'},
   'materiais': {'materiais.ler', 'estoque.ler'},
   'compras': {'materiais.ler', 'estoque.ler', 'alunos.ler', 'compras.ler'},
-  'projecao': {'materiais.ler', 'estoque.ler', 'alunos.ler'},
+  // ⚠️ Quatro desde o card 8.5 (05/09/2026), e o quarto é `turmas.ler`: a
+  // parcela MODULAR da projeção lê o cronograma da turma, e `v_projecao_aluno`
+  // junta `metodo` internamente. Sem ele a tela não vem errada — vem VAZIA.
+  // `permissoes-matriz.md` §6 registrava três e foi corrigido no mesmo commit.
+  'projecao': {'materiais.ler', 'estoque.ler', 'alunos.ler', 'turmas.ler'},
   'certificados': {'certificados.ler', 'alunos.ler'},
   'salas': {'salas.ler', 'professores.ler'},
   'pendencias': {'pendencias.ler'},
