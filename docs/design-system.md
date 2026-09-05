@@ -876,6 +876,15 @@ dizer com mais precisão:
 | 24 | **O portão `texto_de_tela_test` varria `card \d` e deixava passar a interpolação** | `'$nome — aba do card $card.'` rendia "Certificado — aba do card 8.6." **na tela** e nada no portão. O padrão passou a `card (\d|\$)`, e os dois textos que ele então reprovou — a aba futura da ficha e o `TelaEmConstrucao` — passaram a dizer "chega numa próxima versão", a mesma frase do rodapé do dashboard. Qual card entrega cada tela continua registrado **no código** (`_cardDaRota`, no roteador), que é onde a informação serve |
 | 25 | **Nenhuma tela das fases 06 e 07 tinha teste em 390 px** | É por onde as correções 19 e o `Scaffold.of()` do shell passaram por todo o CI. Cada uma ganhou o teste mobile mínimo — monta em 390×800, `takeException()` nulo, ação primária alcançável —, e a obrigação entrou em `docs/estrategia-testes.md` §13 para todo card de Tela |
 
+### Divergências do card 8.5 (05/09/2026) — a tela de Projeção
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 26 | **O §7.2 escreve o código `ROTINA_FALHOU` dentro do texto de tela** | A tela usa o **rótulo** que a central de pendências já mostra: *"A projeção não foi calculada: a rotina diária falhou. Veja a pendência «Rotina diária falhou» na central de Pendências."* Código de catálogo é vocabulário de quem escreveu o sistema, e é a mesma regra que o portão `texto_de_tela_test` aplica a `card N` e a código de permissão (correção 24). Duas frases para o mesmo defeito ensinariam à secretaria que são dois |
+| 27 | **O §7.2 pede dois vazios que a tabela vazia não distingue** | "Rotina ok e sem linhas" e "rotina falhou" produzem, os dois, uma `demanda_projetada` sem linha e **sem carimbo**: a rotina faz `delete` + `insert` na mesma transação, e a falha reverte os dois deixando a projeção anterior de pé. O discriminador é a **pendência aberta**, consultada à parte — sem ela, o vazio honesto de uma escola sem aluno ativo viraria alarme falso, e o alarme viraria silêncio. Detalhe e o custo da permissão em `wireframes.md` §17, item 50 |
+| 28 | **O §7.3 fixa o cabeçalho da Projeção em "calculada em {calculado_em}" e não diz o que fazer sem carimbo** | São **três** estados, os mesmos que o card 8.2 fixou para Compras e pela mesma razão: calculada, **nunca calculada** ("A projeção ainda não foi calculada. Ela é atualizada pela rotina da madrugada.") e carimbo ilegível. Enquanto carrega, **nada** é desenhado — piscar "ainda não foi calculada" por meio segundo diz uma coisa falsa —, e o texto vai num `Flexible`, que é a correção 19 aplicada antes de doer |
+| 29 | **O §5.2 não previa célula clicável dentro da linha** | O drill-down do `wireframes.md` §11 é por **célula** (`INT-04 × out`), e a `TabelaIm360` só oferece `aoTocarLinha`. A célula do mês virou `ColunaIm360.celula` com `InkWell` + `Tooltip` + `Semantics(button:)` — o alvo interno vence o da linha, e a linha continua sendo o alvo do resto. **Célula em traço não recebe `InkWell`**: mês sem projeção não tem o que detalhar, e o toque cai na linha. Registrado como padrão reusável; não virou componente porque é a primeira tabela com dois níveis de alvo |
+
 
 ---
 

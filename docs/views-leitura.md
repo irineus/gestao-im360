@@ -730,6 +730,8 @@ o número certo se o leitor tiver **todo** o conjunto (§3.4), e é esse conjunt
 | `v_estoque_atual` | `materiais.ler`, `estoque.ler` |
 | `v_demanda_imediata_aluno` / `v_demanda_imediata` | `alunos.ler` — ⚠️ ~~`materiais.ler`~~, ver a correção abaixo |
 | `v_demanda_projetada` | `materiais.ler`, `estoque.ler` |
+| `v_projecao_material_mes` | `estoque.ler`, **`materiais.ler`** (join interno em `material`) |
+| `v_projecao_aluno_detalhe` | `alunos.ler`, **`materiais.ler`**, **`turmas.ler`** — os três da rota da tela 8 |
 | `v_pedido_sugerido` | `materiais.ler`, `estoque.ler`, `alunos.ler`, `compras.ler` |
 | `v_bloco_vagas_semana` | `turmas.ler`, `salas.ler`, **`materiais.ler`** |
 | `v_turma_modular_lotacao` | `turmas.ler`, `salas.ler`, **`materiais.ler`** |
@@ -791,14 +793,46 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | `v_turma_modular_lotacao`, `v_turma_modular_cronograma`, `v_turma_modular_aluno` | **7.3** ✅ — `20260905120000_views_turmas_modular.sql`, as três sem uma linha de dado. ⚠️ **A de lotação estava atribuída ao 7.4 (e ao 5.9) e nasceu no 7.3**: o `wireframes.md` §8 manda a tela 5 lê-la, e o §12.1 abaixo é a regra geral — view de tela é do card da tela, como em 6.6, 6.7 e 6.8. O SQL é cópia palavra por palavra do §7.2. O **7.4** ✅ (05/09/2026) foi **consumidor** e não criou objeto nenhum, como o 5.9 foi para `v_bloco_vagas_semana` — soma esta view por curso na região "Lotação Modular" do dashboard, e o que ele acrescentou ao banco foram **três asserções** no teste `095` (o `join` interno em `curso` × `materiais.ler`, o bloqueante nº 1 de `permissoes-matriz.md` §7). As outras duas o §7.2 não previa: o cronograma precisa da ordem e do nome do módulo (que só existem em `modulo`, por join — o card 7.1 recusou coluna própria de ordem), e a lista de alunos precisa do nome (que `turma_modular_aluno` não tem). Teste em `072_modular_views`, 34 asserções | 7 |
 | `demanda_projetada`, `v_demanda_projetada` | 8.1 | 8 |
 | `v_pedido_sugerido` — troca do literal `0` pela parcela projetada | 8.2 | 8 |
+| `v_projecao_material_mes`, `v_projecao_aluno_detalhe` e a coluna `v_projecao_aluno.ritmo_dias` | **8.5** ✅ — `20260906010000_views_projecao_tela.sql`, as duas views sem uma linha de dado; ver §12.1 | 8 |
 | `v_dashboard_alunos_metodo`, `v_dashboard_conclusoes_semestre`, `v_dashboard_tipos_bloco` | 8.7 (o 5.9 já cria as de vaga) | 8 |
 
 ### 12.1 Views de tela, que pertencem aos seus próprios cards
 
 Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6) ✅,
 `v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7) ✅, `v_pedido_compra` e `v_pedido_item`
-(6.8) ✅, `v_turma_modular_cronograma` e `v_turma_modular_aluno` (7.3) ✅, `v_certificado_fila` (8.6).
+(6.8) ✅, `v_turma_modular_cronograma` e `v_turma_modular_aluno` (7.3) ✅,
+`v_projecao_material_mes` e `v_projecao_aluno_detalhe` (8.5) ✅, `v_certificado_fila` (8.6).
 São views de listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+
+⚠️ **As duas do card 8.5 nasceram em 05/09/2026** (`20260906010000_views_projecao_tela.sql`), e três
+decisões merecem registro:
+
+- **`v_projecao_aluno` ganhou `ritmo_dias`, por `create or replace`, com a coluna NO FIM.** O
+  wireframe §11 põe o ritmo na última coluna do detalhe — é ele que explica a data, e "12/10, ritmo
+  de 23 dias" é revisável enquanto "12/10" não é. Sai da CTE `ritmo_efetivo`, que **já o calcula**
+  para produzir `data_prevista`; recompô-lo de fora (`v_ritmo_aluno` para um degrau, `fn_param_int`
+  para outro, mais o fator de aceleração) seria a segunda implementação que o §4.1 proíbe, e ela
+  passaria em qualquer asserção de igualdade. A contraprova que a separa é **o passo**: dois itens
+  consecutivos da trilha distam exatamente `ritmo_dias` (teste `082` §1.1). É **NULO** em
+  `PREVISAO_CURSO` e `MODULAR`, onde a data não vem de ritmo nenhum — preencher daria à tela um
+  número que não participou da conta. `rt_projecao_demanda` lê colunas nomeadas e não viu diferença.
+- **A paridade total ↔ detalhe é a propriedade da tela, e ela mora no `mes`.** O `mes` de
+  `v_projecao_aluno_detalhe` é `date_trunc('month', data_prevista)::date`, **letra por letra** a
+  expressão do `group by` da rotina; um recorte "entre o dia 1 e o último dia do mês" daria o mesmo
+  resultado hoje e outro no dia em que a rotina mudasse de grão. O teste `082` §3.1 compara
+  `sum(quantidade)` da grade com `count(*)` do detalhe, célula a célula e por regra, **dentro da
+  janela** — e a §3.3 prova que fora dela os dois divergem de propósito, senão a paridade estaria
+  medindo duas listas idênticas por construção.
+- **`v_projecao_material_mes` NÃO filtra `material.ativo`**, e é exceção declarada. Apostila
+  aposentada que ainda está na trilha de um aluno ATIVO vai ser precisa, e escondê-la aqui esconderia
+  a demanda exatamente do caso mais fácil de esquecer; quem filtra ativo é o pedido sugerido (§2.3),
+  que fala de **compra** — esta tela fala de **demanda**. O `082` §2.1 desativa um material projetado
+  e assere que ele continua, com a contraprova (`where m.ativo`) vista vermelha.
+
+⚠️ **As duas reduções silenciosas são DIFERENTES, e a tela precisa saber disso** (§3.4): sem
+`materiais.ler` as **duas** vêm vazias (join interno em `material`); sem `alunos.ler` o detalhe vem
+vazio e a grade continua **cheia**. É por isso que a rota da tela 8 exige os quatro códigos
+(`permissoes-matriz.md` §6, linha 8, corrigida no mesmo commit).
 
 ⚠️ **As duas do card 7.3 nasceram em 05/09/2026** (`20260905120000_views_turmas_modular.sql`), junto
 com a de lotação do §7.2, e duas decisões merecem registro:
