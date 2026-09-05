@@ -5,8 +5,10 @@
 /// `PC_COM_HISTORICO` (card 4.3), `BLOCO_COM_ALOCACAO` (card 5.1), os três do
 /// card 6.1 (trilha e estoque), `MATERIAL_JA_NA_TRILHA` (card 6.2),
 /// `MOVIMENTO_INEXISTENTE` (card 6.3), os dez do card 6.5 (pedidos de compra,
-/// recebimento e ajuste de estoque) e `TURMA_COM_ALUNO` (card 7.1). O contrato
-/// do conjunto é `test/fixtures/codigos_erro.txt`, na raiz do repositório.
+/// recebimento e ajuste de estoque), `TURMA_COM_ALUNO` (card 7.1) e os seis do
+/// card 7.2 (regras Modular), traduzidos no 7.3 quando a tela 5 nasceu. O
+/// contrato do conjunto é `test/fixtures/codigos_erro.txt`, na raiz do
+/// repositório.
 ///
 /// O app trata SEMPRE pelo código, nunca pelo texto do banco (card 2.2 §1.2):
 /// o texto pode mudar numa migração; o código é estável.
@@ -187,6 +189,37 @@ abstract final class CatalogoErros {
     'TURMA_COM_ALUNO':
         'Esta turma tem histórico de alunos e não pode ser excluída. '
         'Desative-a.',
+
+    // --- card 7.2 (regras Modular), traduzidos no card 7.3
+    // Os seis nasceram nas funções e nos triggers do 7.2 e chegam ao catálogo
+    // aqui: até a tela 5 existir não havia onde aparecerem, e código sem
+    // tradução vira "não foi possível concluir", que tem cara de problema de
+    // rede. `TURMA_INEXISTENTE` vale também para turma de OUTRA unidade, pela
+    // mesma razão de `PC_INEXISTENTE` e `BLOCO_INEXISTENTE`: quem não pode ver
+    // não descobre que existe.
+    'TURMA_INEXISTENTE': 'Esta turma Modular não foi encontrada.',
+    // Código próprio, e não `BLOCO_LOTADO`: a saída é OUTRA. No bloco de
+    // horário a capacidade vem dos PCs da sala, e a mensagem manda verificá-la;
+    // aqui a capacidade é digitada na própria turma, e é lá que se resolve.
+    'TURMA_LOTADA':
+        'Esta turma está lotada. Remova um aluno, aumente a capacidade da '
+        'turma ou use outra turma do curso.',
+    // Não se confunde com `METODO_INCOMPATIVEL`, e é por isso que o card 7.2
+    // precisou das DUAS checagens: este fala do aluno (não é do Modular);
+    // aquele, da turma (o curso dela é de outro método).
+    'ALUNO_NAO_MODULAR':
+        'Só aluno do método Modular entra em turma Modular. Alunos dos outros '
+        'métodos são alocados em blocos de horário.',
+    // Os dois sentidos do "não há módulo corrente", separados de propósito
+    // (card 7.2 §5): dizer "todos já foram concluídos" a quem nunca montou o
+    // cronograma manda procurar o erro no lugar errado.
+    'TURMA_SEM_CRONOGRAMA':
+        'Esta turma não tem cronograma de módulos. Monte o cronograma antes de '
+        'avançar o módulo.',
+    'TURMA_SEM_MODULO_CORRENTE':
+        'Todos os módulos desta turma já foram concluídos. Desative a turma ou '
+        'acrescente módulos ao cronograma.',
+    'DATA_OBRIGATORIA': 'Informe a data para continuar.',
 
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':

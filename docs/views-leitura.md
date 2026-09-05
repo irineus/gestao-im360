@@ -467,7 +467,13 @@ select b.unidade_id,
   de capacidade no sistema (card 5.2 é dono da fórmula). Se um dia doer, o alvo é a função, não a
   view.
 
-### 7.2 `v_turma_modular_lotacao` — cards 7.4 e 5.9
+### 7.2 `v_turma_modular_lotacao` — ~~cards 7.4 e 5.9~~ **card 7.3** (05/09/2026)
+
+⚠️ **Corrigido em 05/09/2026, pelo card 7.3.** A atribuição a "7.4 e 5.9" não podia valer ao mesmo
+tempo que o §8 do `wireframes.md`, que manda a **tela 5** (card 7.3) ler esta view — e o 7.4 vem
+depois dela na ordem do board. Vence o §12.1: view de tela pertence ao card da tela, como em 6.6,
+6.7 e 6.8. O SQL abaixo foi aplicado **palavra por palavra** em
+`20260905120000_views_turmas_modular.sql`; o 7.4 (lotação por curso no Dashboard) é consumidor.
 
 ```sql
 create view public.v_turma_modular_lotacao with (security_invoker = on) as
@@ -733,7 +739,7 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | `v_bloco_alunos`, `fn_bloco_alunos` | **5.7** ✅ — ver §12.1 | 5 |
 | `v_estoque_atual`, `v_demanda_imediata_aluno`, `v_demanda_imediata`, `v_pedido_sugerido` | **6.4** ✅ — `20260904180000_views_estoque_demanda.sql`, as quatro sem uma linha de dado; o teste `095` cresceu de 29 para 86 asserções | 6 |
 | `v_aluno_trilha` | **6.6** ✅ — `20260904233000_view_aluno_trilha.sql`, view de listagem (§12.1); o teste nasceu em `053_aluno_trilha`, com 23 asserções | 6 |
-| `v_turma_modular_lotacao` | 7.4 | 7 |
+| `v_turma_modular_lotacao`, `v_turma_modular_cronograma`, `v_turma_modular_aluno` | **7.3** ✅ — `20260905120000_views_turmas_modular.sql`, as três sem uma linha de dado. ⚠️ **A de lotação estava atribuída ao 7.4 (e ao 5.9) e nasceu no 7.3**: o `wireframes.md` §8 manda a tela 5 lê-la, e o §12.1 abaixo é a regra geral — view de tela é do card da tela, como em 6.6, 6.7 e 6.8. O SQL é cópia palavra por palavra do §7.2. O **7.4** passa a ser **consumidor** e não cria objeto nenhum, como o 5.9 foi para `v_bloco_vagas_semana`. As outras duas o §7.2 não previa: o cronograma precisa da ordem e do nome do módulo (que só existem em `modulo`, por join — o card 7.1 recusou coluna própria de ordem), e a lista de alunos precisa do nome (que `turma_modular_aluno` não tem). Teste em `072_modular_views`, 34 asserções | 7 |
 | `demanda_projetada`, `v_demanda_projetada` | 8.1 | 8 |
 | `v_pedido_sugerido` — troca do literal `0` pela parcela projetada | 8.2 | 8 |
 | `v_dashboard_alunos_metodo`, `v_dashboard_conclusoes_semestre`, `v_dashboard_tipos_bloco` | 8.7 (o 5.9 já cria as de vaga) | 8 |
@@ -742,8 +748,28 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 
 Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6) ✅,
 `v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7) ✅, `v_pedido_compra` e `v_pedido_item`
-(6.8) ✅, `v_certificado_fila` (8.6). São views de listagem, sem número derivado — o cuidado de §3
-vale, o resto é do card da tela.
+(6.8) ✅, `v_turma_modular_cronograma` e `v_turma_modular_aluno` (7.3) ✅, `v_certificado_fila` (8.6).
+São views de listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+
+⚠️ **As duas do card 7.3 nasceram em 05/09/2026** (`20260905120000_views_turmas_modular.sql`), junto
+com a de lotação do §7.2, e duas decisões merecem registro:
+
+- **`v_turma_modular_cronograma` tem `corrente` como COLUNA**, e isso a torna a terceira expressão do
+  mesmo fato (a função `fn_turma_modular_modulo_corrente` do card 7.2 e o `left join lateral` do
+  §7.2 são as outras duas). O card 2.3 §4.1 proíbe a segunda conta, e a exceção só se paga com
+  medição: o teste `072` §2 compara **as três, turma a turma**, e a contraprova de removê-la já foi
+  vista vermelha. Existe como coluna porque a tela marca o `►` numa **linha**, e derivá-la em Dart
+  seria a quarta definição. ⚠️ `atrasado` exige `not concluido`: `fn_turma_modular_avancar` grava a
+  data REAL da conclusão em `prev_conclusao`, então **todo** módulo fechado tem previsão no passado,
+  e sem a condição uma turma em dia apareceria com metade do cronograma em vermelho.
+- **`v_turma_modular_aluno` junta `aluno` INTERNAMENTE, e a rota da tela 5 não exige `alunos.ler`**
+  (`permissoes-matriz.md` §6, linha 5). A consequência é deliberada e é a mais enganosa do §3.4: sem
+  a permissão a lista vem vazia enquanto a lotação, ao lado, diz `1/15`. As três saídas foram
+  pesadas — `left join` (turma de oito alunos anônimos), acrescentar `alunos.ler` à rota (fecha a
+  tela inteira, inclusive cronograma e avanço, que não dependem de aluno nenhum) e a escolhida: join
+  interno **e a região declara a permissão que lhe falta** (`EstadoSemAcesso` por região,
+  design-system §5.6). É o que torna esta redução visível em vez de silenciosa, e o `072` §4 a mede
+  com um perfil que tem o conjunto exato da rota e nada mais.
 
 ⚠️ **`v_pedido_compra` e `v_pedido_item` nasceram em 04/09/2026** (`20260905010000_views_pedidos_compra.sql`,
 card 6.8), e as duas trazem o que faltava para a tela 7 não recalcular nada. Três decisões:
