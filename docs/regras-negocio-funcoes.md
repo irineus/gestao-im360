@@ -906,10 +906,32 @@ Detalhamento na Fase 7; as assinaturas ficam aqui para o resto do sistema poder 
 fn_turma_modular_admitir(p_turma_id uuid, p_aluno_id uuid) → uuid
 fn_turma_modular_remover(p_turma_id uuid, p_aluno_id uuid, p_motivo text) → void
 fn_turma_modular_ocupacao(p_turma_id uuid) → integer            -- stable
-fn_turma_modular_avancar(p_turma_id uuid, p_data_conclusao date default current_date) → uuid
+fn_turma_modular_avancar(p_turma_id uuid, p_data_conclusao date default public.fn_hoje()) → uuid
   -- id do módulo que passou a ser o corrente
 fn_turma_modular_modulo_corrente(p_turma_id uuid) → uuid        -- stable
 ```
+
+> ✅ **As cinco foram implementadas em 05/09/2026 pelo card 7.2**, em
+> `supabase/migrations/20260905070000_modular_regras.sql`, com a camada 2 que faltava
+> (`tg_turma_modular_aluno_admissao`) e o teste `071_modular_regras.sql`. Três divergências desta
+> especificação, todas registradas no arquivo:
+>
+> 1. **`p_data_conclusao` tem default `public.fn_hoje()` e não `current_date`** — a assinatura acima
+>    foi corrigida. O ajuste 2 do §10 do card 2.3 vale também para default de parâmetro, e desde o
+>    card 5.2 o teste C6 varre `proargdefaults`: com `current_date` a suíte reprova, e um avanço
+>    lançado depois das 21h concluiria o módulo com a data de amanhã.
+> 2. **`turma_modular_aluno` ganhou `motivo_saida`**, que o card 7.1 tinha adiado. Sem ela o
+>    `p_motivo` de `fn_turma_modular_remover` seria um parâmetro aceito e jogado fora — a tela do
+>    7.3 pediria o motivo e nada seria gravado. É a mesma coluna de `bloco_aluno` (card 5.3), escrita
+>    pelos mesmos dois atores, e fica FORA da guarda de coluna do 7.1 porque é escrita junto com
+>    `ativo` pela desalocação sem ator.
+> 3. **Duas checagens de método, não uma.** «Aluno do método MODULAR» sozinho aceitaria a matrícula
+>    numa `turma_modular` cujo `curso_id` aponta para um curso de Inglês — nada no schema impede a
+>    turma de nascer assim. A igualdade `curso.metodo_id = aluno.metodo_id` sozinha aceitaria uma
+>    turma Interativo inteira. Códigos: `ALUNO_NAO_MODULAR` e `METODO_INCOMPATIVEL`.
+>
+> O advisory lock **não** é exercitado pela suíte pgTAP (§7 de `docs/estrategia-testes.md`): o C13 do
+> teste 071 é o guarda-chuva, e a suíte de duas sessões virou o **card 7.4,5**.
 
 - Admissão respeita `turma_modular.capacidade` (mesmo advisory lock de §4.5) e exige aluno
   ATIVO/ACELERAR do método MODULAR.

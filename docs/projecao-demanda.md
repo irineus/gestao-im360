@@ -851,7 +851,7 @@ perfis que o card 2.4 autorizou a ver a tela.
 |---|---|---|---|---|
 | 1 | `fn_param_int`/`fn_param_txt` como `security definer` com `search_path` fixo | infraestrutura | 3.4 | **sim** (era "alta" no card 2.4) |
 | 2 | Nove parâmetros novos no seed (§3) | seed | 3.6 | **sim** — sem eles a projeção roda pelos defaults do código, não pelo que a escola decidiu |
-| 3 | `TURMA_MODULAR_SEM_CRONOGRAMA` no `check` de `pendencia.tipo` | migração de pendências | 5.5 | **sim** — sem o tipo, o `insert` da rotina falha e vira `ROTINA_FALHOU` |
+| 3 ✅ | `TURMA_MODULAR_SEM_CRONOGRAMA` no `check` de `pendencia.tipo` | migração de pendências | ~~5.5~~ → **7.2** ✅ (05/09/2026) | **sim** — sem o tipo, o `insert` da rotina falha e vira `ROTINA_FALHOU` |
 | 4 | Políticas de RLS de `demanda_projetada` por `fn_contexto_rotina()` (§7.1) | migração da projeção | 8.1 | **sim** — sem elas a rotina não escreve (`force` RLS) |
 | 5 | Tabela `demanda_projetada_hist` + políticas (§7.2) | migração da projeção | 8.1 | não (mas sem ela o card 11.2 vira opinião) |
 | 6 | Card 2.2 §2.2 diz que "cada `rt_*` itera unidades"; §11 diz que `rt_diaria` itera e chama as sub-rotinas. Adotado o §11: as `rt_*` operam na unidade do contexto | redação da especificação | 2.2 / 8.1 | não |
@@ -861,6 +861,16 @@ perfis que o card 2.4 autorizou a ver a tela.
 | 10 | Card 9.5 passa a ter procedimento objetivo: `fn_ritmo_metodo_observado` por método, `update` em `parametro` (§9.1) | nota do card | 9.5 | não |
 | 11 | Card 11.2 passa a ter critério objetivo: `v_projecao_acuracia` + gatilhos de §9.2 | nota do card | 11.2 | não |
 
+> ⚠️ **O ajuste 3 estava dado como feito por três documentos e não estava** — achado do card 7.2, em
+> 05/09/2026. O `check` de `pendencia.tipo` da migração do card 5.5 tem quinze tipos e nenhum é
+> `TURMA_MODULAR_SEM_CRONOGRAMA`; mesmo assim o card 7.1 escreveu em comentário que ele «já está no
+> check desde o card 5.5» e a nota do card 8.1 no board o listava como pré-condição resolvida.
+> Ninguém mediu porque **quem abre a pendência é `rt_projecao_demanda`, que ainda não existe** — e no
+> dia em que existisse o sintoma seria uma `ROTINA_FALHOU` às 03:10 da manhã, com a projeção de
+> demanda simplesmente deixando de existir e o erro aparecendo longe da causa. É a falha 1 do §5 de
+> `docs/estrategia-testes.md`, exatamente na forma descrita lá. Aplicado e medido pelo teste `071`
+> §7, que tem contraprova ao lado (tipo fora da lista continua sendo recusado com `23514`).
+
 ---
 
 ## 12. Mapa objeto → card
@@ -869,7 +879,7 @@ perfis que o card 2.4 autorizou a ver a tela.
 |---|---|---|
 | Nove parâmetros de §3 no seed | 3.6 | 3 |
 | `fn_param_int`/`fn_param_txt` como `security definer` | 3.4 | 3 |
-| `TURMA_MODULAR_SEM_CRONOGRAMA` no `check` | 5.5 | 5 |
+| `TURMA_MODULAR_SEM_CRONOGRAMA` no `check` | ~~5.5~~ → **7.2** ✅ | 7 |
 | `v_ritmo_aluno`, `fn_ritmo_aluno` | 8.1 | 8 |
 | `v_projecao_aluno` | 8.1 | 8 |
 | `demanda_projetada` (RLS), `demanda_projetada_hist`, `v_demanda_projetada` | 8.1 | 8 |

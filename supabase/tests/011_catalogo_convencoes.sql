@@ -262,7 +262,21 @@ select is(
             -- fn_movimento_valida_sinal e fn_pedido_item_recebimento_valido
             -- também não: as duas só leem linha que o próprio chamador já pode
             -- ler, e falham FECHADO quando não podem.
-            'fn_movimento_resolve_pendencia'
+            'fn_movimento_resolve_pendencia',
+            -- card 7.2 — a ocupação da turma Modular, pela mesma razão de
+            -- fn_ocupacao_bloco: número derivado que decide LOTAÇÃO não pode
+            -- depender do que o leitor enxerga. Como invoker, um chamador sem
+            -- `turmas.ler` contaria ZERO alunos numa turma cheia — a RLS nega
+            -- linha em vez de devolver erro (card 2.3 §3.4) — e a admissão
+            -- passaria em silêncio numa turma lotada, que é fail-OPEN. Filtra a
+            -- unidade no corpo e devolve NULO, não zero, para turma de outra
+            -- unidade.
+            --
+            -- fn_turma_modular_modulo_corrente NÃO está aqui, de propósito: ela
+            -- não decide lotação, e quem não pode ler o cronograma recebe nulo e
+            -- esbarra em TURMA_SEM_MODULO_CORRENTE — fail-CLOSED. Mesma decisão
+            -- de fn_vagas_livres (5.2) e fn_pc_exclusao_valida (4.3).
+            'fn_turma_modular_ocupacao'
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'
