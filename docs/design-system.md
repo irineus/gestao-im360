@@ -280,7 +280,8 @@ TabelaIm360<T>(
 ### 5.5 `CardDashboard`
 
 Existe em `lib/widgets/card_dashboard.dart` desde 04/09/2026 (antes era privado dentro dos cartões
-por método do card 5.9; o card 8.7 traz mais cinco).
+por método do card 5.9; o card **7.4** foi o primeiro a reusá-lo, na lotação Modular por curso, e o
+card 8.7 traz mais cinco).
 
 - Superfície com borda (sem sombra), raio 8, padding 12; título `rotulo` em texto secundário;
   valor principal `titulo` (24/700, tnum); linhas secundárias `corpoTabela` com badge/ícone de

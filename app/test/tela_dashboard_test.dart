@@ -9,14 +9,17 @@ import 'package:gestao_im360/pendencias/pendencias_provider.dart';
 import 'package:gestao_im360/pendencias/pendencias_repositorio.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/telas/dashboard/grade_vagas.dart';
+import 'package:gestao_im360/telas/dashboard/lotacao_modular.dart';
 import 'package:gestao_im360/telas/dashboard/pendencias_abertas.dart';
 import 'package:gestao_im360/telas/dashboard/tela_dashboard.dart';
 import 'package:gestao_im360/theme/tema.dart';
+import 'package:gestao_im360/turmas/modular_provider.dart';
 import 'package:gestao_im360/turmas/turmas_provider.dart';
 
 import 'apoio/app_de_teste.dart';
 import 'apoio/carregar.dart';
 import 'apoio/dashboard_falso.dart';
+import 'apoio/modular_falso.dart';
 import 'apoio/pendencias_falso.dart';
 
 /// A obrigação de teste de um card de **Tela** (card 2.8 §13): ocultação por
@@ -46,6 +49,7 @@ void main() {
     WidgetTester tester, {
     DashboardFalso? repositorio,
     PendenciasRepositorio? pendencias,
+    ModularFalso? modular,
     Set<String> permissoes = comTurmas,
     Size tamanho = const Size(1400, 900),
   }) async {
@@ -60,6 +64,11 @@ void main() {
           dashboardRepositorioProvider.overrideWithValue(dashboard),
           pendenciasRepositorioProvider.overrideWithValue(
             pendencias ?? PendenciasFalso.fixture(),
+          ),
+          // A lotação Modular (card 7.4) lê a MESMA `v_turma_modular_lotacao`
+          // da tela 5, pelo repositório dela — não há um segundo repositório.
+          modularRepositorioProvider.overrideWithValue(
+            modular ?? ModularFalso.fixture(),
           ),
           permissoesProvider.overrideWithValue(permissoes),
           unidadeAtualProvider.overrideWithValue('unidade-teste'),
@@ -202,7 +211,15 @@ void main() {
     // no dashboard, número que desaparece parece erro (design-system §7.2).
     await montar(tester, pendencias: PendenciasFalso(pendencias: const []));
     expect(find.text('BAIXA'), findsOneWidget);
-    expect(find.text('0'), findsNWidgets(3));
+    // Restrito à região: o cartão de Depilação, ao lado, também mostra um zero
+    // (nenhuma vaga livre), e contar zeros da tela inteira mediria outra coisa.
+    expect(
+      find.descendant(
+        of: find.byType(PendenciasAbertas),
+        matching: find.text('0'),
+      ),
+      findsNWidgets(3),
+    );
   });
 
   testWidgets('falha ao ler pendências NÃO vira zero', (tester) async {
@@ -269,6 +286,7 @@ void main() {
       retry: semRetryAutomatico,
       overrides: [
         dashboardRepositorioProvider.overrideWithValue(DashboardFalso()),
+        modularRepositorioProvider.overrideWithValue(ModularFalso.fixture()),
         permissoesProvider.overrideWithValue(comTurmas),
         unidadeAtualProvider.overrideWithValue('unidade-teste'),
       ],
@@ -352,6 +370,7 @@ void main() {
         pendenciasRepositorioProvider.overrideWithValue(
           PendenciasFalso.fixture(),
         ),
+        modularRepositorioProvider.overrideWithValue(ModularFalso.fixture()),
         permissoesProvider.overrideWithValue(comTurmas),
         unidadeAtualProvider.overrideWithValue('unidade-teste'),
       ],
@@ -394,6 +413,150 @@ void main() {
     );
     // A célula VAZIA também é anunciada: antes ficava fora do `Semantics`.
     expect(find.bySemanticsLabel(RegExp('sem turma')), findsWidgets);
+    semantica.dispose();
+  });
+
+  // -------------------------------------------------------------------------
+  // Card 7.4 — a lotação Modular por curso
+  // -------------------------------------------------------------------------
+
+  testWidgets('a lotação Modular soma as turmas por CURSO', (tester) async {
+    await montar(tester);
+
+    expect(find.text(tituloLotacaoModular), findsOneWidget);
+    expect(find.text('Eletricista Instalador'), findsOneWidget);
+    expect(find.text('Depilação'), findsOneWidget);
+
+    // Eletricista tem TRÊS turmas de 15 com uma aluna só; Depilação, uma de 15
+    // com dezesseis.
+    expect(find.text('1 de 45 ocupados · 3 turmas'), findsOneWidget);
+    expect(find.text('16 de 15 ocupados · 1 turma'), findsOneWidget);
+
+    // A ocupação sai por extenso, e não como `1/45`: a grade acima diz `n/m`
+    // com n sendo VAGA — a leitura oposta, na mesma tela.
+    expect(find.text('1/45'), findsNothing);
+    expect(find.text('16/15'), findsNothing);
+  });
+
+  testWidgets('turma acima da capacidade e módulo atrasado são DITOS', (
+    tester,
+  ) async {
+    await montar(tester);
+
+    // Vermelho é dado inconsistente (16 numa turma de 15); âmbar é previsão
+    // vencida, com a turma funcionando. Nenhum dos dois é só cor: cada um tem
+    // ícone e texto (design-system §8.2).
+    expect(find.text('1 turma acima da capacidade'), findsOneWidget);
+    expect(find.text('1 turma com módulo atrasado'), findsOneWidget);
+    expect(
+      find.text('1 acima da capacidade'),
+      findsOneWidget,
+      reason: 'esse é o cartão do MÉTODO, que conta blocos de horário',
+    );
+  });
+
+  testWidgets('a vaga do curso é a SOMA, e nunca capacidade − alocados', (
+    tester,
+  ) async {
+    await montar(tester);
+
+    // 15 − 16 daria −1. A view tem piso zero (card 7.3), e a região soma as
+    // parcelas: o curso lotado mostra 0, não um número negativo.
+    expect(
+      find.descendant(
+        of: find.byType(LotacaoModular),
+        matching: find.text('-1'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(LotacaoModular),
+        matching: find.text('44'),
+      ),
+      findsOneWidget,
+      reason: 'Eletricista: 14 + 15 + 15',
+    );
+  });
+
+  testWidgets('falha ao ler a lotação NÃO vira zero', (tester) async {
+    // Mesma razão das pendências: uma região do dashboard é número reportado, e
+    // "0 ocupados" por falha de rede faz a direção ler "as turmas estão vazias".
+    await montar(tester, modular: ModularFalso.queFalha());
+
+    expect(find.text(erroLotacaoModular), findsOneWidget);
+    expect(find.text('Eletricista Instalador'), findsNothing);
+    // E a região vizinha continua inteira.
+    expect(find.text('Pendências abertas'), findsOneWidget);
+  });
+
+  testWidgets('sem turma Modular a região DIZ por que não há número', (
+    tester,
+  ) async {
+    await montar(tester, modular: ModularFalso());
+
+    expect(find.text(vazioLotacaoModular), findsOneWidget);
+    expect(
+      find.text(tituloLotacaoModular),
+      findsOneWidget,
+      reason: 'a região não some: espaço em branco no dashboard parece defeito',
+    );
+  });
+
+  testWidgets('o cartão é atalho e leva à tela 5 FILTRADA pelo curso', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      retry: semRetryAutomatico,
+      overrides: [
+        dashboardRepositorioProvider.overrideWithValue(DashboardFalso()),
+        pendenciasRepositorioProvider.overrideWithValue(
+          PendenciasFalso.fixture(),
+        ),
+        modularRepositorioProvider.overrideWithValue(ModularFalso.fixture()),
+        permissoesProvider.overrideWithValue(comTurmas),
+        unidadeAtualProvider.overrideWithValue('unidade-teste'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: appDeTeste(
+          construtor: (filho) => filho,
+          conteudo: const Scaffold(body: TelaDashboard()),
+        ),
+      ),
+    );
+    await carregar(tester);
+
+    // O cartão é de um CURSO, então o destino é a tela 5 filtrada por ele — e
+    // não uma turma eleita em silêncio entre as três (divergência com o §5,
+    // registrada em wireframes §17).
+    await tester.tap(find.text('1 de 45 ocupados · 3 turmas'));
+    await carregar(tester);
+    expect(container.read(filtroTurmasModularProvider).cursoId, 'c-ele');
+  });
+
+  testWidgets('o cartão do curso anuncia o que cada número significa', (
+    tester,
+  ) async {
+    final semantica = tester.ensureSemantics();
+    await montar(tester);
+
+    // Sem isto a leitura de tela anuncia "Depilação 0 16 de 15 ocupados" em
+    // sequência, sem separar o que é o quê.
+    expect(
+      find.bySemanticsLabel(
+        'Depilação, 0 vagas livres, 16 de 15 ocupados, 1 turma, '
+        '1 turma acima da capacidade',
+      ),
+      findsOneWidget,
+    );
     semantica.dispose();
   });
 
