@@ -30,6 +30,16 @@ abstract interface class ComprasRepositorio {
   /// zero. Quem esconde é o filtro da tela.
   Future<List<LinhaSugerida>> sugerido();
 
+  /// Quando a projeção que alimenta `qtd_projetada` foi calculada, ou `null` se
+  /// ela nunca rodou nesta unidade (card 8.2).
+  ///
+  /// ⚠️ **Consulta separada de propósito.** `calculado_em` é da projeção
+  /// inteira, não de um material: pendurá-lo como 13ª coluna de
+  /// `v_pedido_sugerido` repetiria o mesmo carimbo em toda linha e mudaria a
+  /// forma da view que o card 6.4 fixou (docs/views-leitura.md §6.2). Ele vem de
+  /// `v_demanda_projetada`, que é o contrato de leitura da projeção.
+  Future<DateTime?> projecaoCalculadaEm();
+
   /// `v_pedido_compra`, do mais recente para o mais antigo.
   Future<List<PedidoCompra>> pedidos();
 
@@ -105,6 +115,25 @@ class ComprasRepositorioSupabase implements ComprasRepositorio {
         .select(_colunasSugerido)
         .order('codigo', ascending: true);
     return linhas.map(LinhaSugerida.deLinha).toList();
+  }
+
+  /// `rt_projecao_demanda` apaga e regrava as linhas da unidade a cada execução,
+  /// então o carimbo é o mesmo em todas — `order by … desc limit 1` pega o da
+  /// última rodada, e sobreviveria a uma execução parcial mostrando a mais
+  /// recente. Lista vazia é a projeção que **nunca rodou**, e a tela diz isso em
+  /// vez de mostrar um traço mudo.
+  ///
+  /// `.toLocal()` porque `calculado_em` é `timestamptz` e chega em UTC: sem ele,
+  /// a rotina das 03:10 apareceria como 06:10.
+  @override
+  Future<DateTime?> projecaoCalculadaEm() async {
+    final linhas = await _cliente
+        .from('v_demanda_projetada')
+        .select('calculado_em')
+        .order('calculado_em', ascending: false)
+        .limit(1);
+    if (linhas.isEmpty) return null;
+    return DateTime.parse('${linhas.first['calculado_em']}').toLocal();
   }
 
   @override

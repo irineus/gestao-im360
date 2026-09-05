@@ -60,7 +60,7 @@
 -- =============================================================================
 
 begin;
-select plan(89);
+select plan(90);
 
 -- ===========================================================================
 -- 1. As premissas da fixture, que são o que dá sentido aos números abaixo
@@ -701,9 +701,19 @@ select is(
   0,
   'INTERATIVO 01 daria −4 pela formula e sai 0 — com a linha e as parcelas na tela');
 
+-- A parcela projetada AQUI e zero, e desde o card 8.2 ela e zero POR UMA CAUSA
+-- MEDIDA, nao por reserva: este arquivo nunca chama `rt_projecao_demanda()`,
+-- entao `demanda_projetada` esta vazia e a soma da janela nao tem o que somar. As
+-- duas asercoes andam juntas de proposito — sozinha, a segunda voltaria a passar
+-- no dia em que alguem quebrasse o `left join` e a view parasse de ver a
+-- projecao. Quem mede a parcela CHEIA e o 080 §10, que roda a rotina antes.
+select is_empty(
+  $$ select 1 from public.demanda_projetada $$,
+  'a fixture deste arquivo nao roda a rotina da projecao: a tabela esta vazia');
+
 select is_empty(
   $$ select 1 from public.v_pedido_sugerido where qtd_projetada <> 0 $$,
-  'qtd_projetada e 0 em toda linha ate o card 8.2 preencher a parcela: reserva, nao esquecimento');
+  'e por isso a parcela projetada e 0 em toda linha — sem projecao gravada nao ha o que somar');
 
 select is(
   (select v.qtd_imediata || '/' || v.qtd_sugerida
@@ -734,11 +744,19 @@ update public.material set ativo = true
  where id = (select id from t_mat where apelido = 'INGLES 01');
 
 -- ===========================================================================
--- 13. A coluna reservada está na POSIÇÃO definitiva — card 2.3 §6.2
+-- 13. A coluna projetada está na POSIÇÃO definitiva — card 2.3 §6.2
 -- ===========================================================================
--- É o que o card 8.2 vai depender: `create or replace view` não insere coluna
--- no meio, não renomeia e não troca tipo. Com a coluna no lugar certo, o 8.2
--- troca duas expressões; fora dele, precisaria de `drop view` em cascata. A
+-- Nasceu para proteger a RESERVA: `create or replace view` não insere coluna no
+-- meio, não renomeia e não troca tipo, e sem a coluna no lugar certo o card 8.2
+-- precisaria de `drop view` em cascata. ✅ **A reserva foi consumida em
+-- 05/09/2026 pelo card 8.2**, que trocou as duas expressões e nada mais — o que
+-- estas duas asserções mediram na hora certa.
+--
+-- Elas FICAM, e agora protegem outra coisa: a forma que o app lê. O repositório
+-- pede as doze colunas pelo nome (`_colunasSugerido`, em
+-- app/lib/compras/compras_repositorio.dart) e a tela desenha a Projetada entre a
+-- Imediata e a "A caminho". Coluna nova pendurada no fim é barata; coluna que
+-- muda de nome ou de lugar é a tela mostrando o número errado sem erro nenhum. A
 -- asserção é de CATÁLOGO porque é a ordem, e não o valor, que está em jogo.
 select is(
   (select a.attnum::integer
@@ -757,7 +775,7 @@ select is(
      join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relname = 'v_pedido_sugerido' and a.attnum > 0),
   12,
-  'e a view tem doze colunas, com qtd_sugerida na ultima — a forma que o 8.2 encontra');
+  'e a view tem doze colunas, com qtd_sugerida na ultima — a forma que o app le pelo nome');
 
 -- ===========================================================================
 -- 14. Paridade de linhas por perfil, e as quatro reduções silenciosas do §3.4

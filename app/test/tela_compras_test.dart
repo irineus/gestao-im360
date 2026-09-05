@@ -141,14 +141,16 @@ void main() {
       }
     });
 
-    testWidgets('a coluna Projetada mostra ZERO, e não some da tela', (
-      tester,
-    ) async {
-      // Card 2.3 §6.2: a reserva é honesta. Esconder a coluna faria a soma
-      // exibida não fechar com o total.
+    testWidgets('sem projeção calculada, a coluna Projetada mostra ZERO e '
+        'a tela DIZ por quê', (tester) async {
+      // Card 2.3 §2.3: esconder a coluna faria a soma exibida não fechar com o
+      // total. Mas zero calado é pior que coluna escondida — pareceria uma
+      // escola que não vai precisar de apostila nenhuma. Desde o card 8.2 o
+      // zero vem com a razão dele.
       await montar(tester);
       expect(find.text('Projetada'), findsOneWidget);
       expect(find.text('0'), findsWidgets);
+      expect(find.text(projecaoNaoCalculada), findsOneWidget);
     });
 
     testWidgets(
@@ -165,6 +167,63 @@ void main() {
         expect(find.text('Informática Essencial 1'), findsOneWidget);
       },
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // Card 8.2 — a parcela projetada, e a validade dela
+  // -------------------------------------------------------------------------
+  /// Dois materiais, um com projeção e outro sem. As parcelas são as do
+  /// `ComprasFalso`, que deriva `qtd_sugerida` com a MESMA fórmula da view:
+  ///
+  ///   • `07`: 2 imediata + 5 projetada + 1 mínimo − 0 saldo − 0 pendente = 8;
+  ///   • `08`: 3 imediata + 0 projetada + 1 mínimo − 0 saldo − 0 pendente = 4.
+  ///
+  /// O `08` está aí de propósito: material sem projeção **continua na lista**
+  /// com a parcela zero, que é o `left join` da view visto pela tela.
+  ComprasFalso comProjecao({DateTime? em}) => ComprasFalso(
+    materiais: const [
+      MaterialFalso('mat-p7', 'm-int', '07', 'Projeção Um', 0, 1, 2, 5),
+      MaterialFalso('mat-p8', 'm-int', '08', 'Projeção Dois', 0, 1, 3),
+    ],
+    pedidos: const [],
+    itens: const {},
+  )..projecaoEm = em;
+
+  group('a parcela projetada e a data do cálculo', () {
+    testWidgets('a projetada aparece AO LADO das outras, e o total fecha '
+        'com ela', (tester) async {
+      compras = comProjecao(em: DateTime(2026, 9, 5, 3, 10));
+      await montar(tester);
+      // A parcela na linha do material que a tem…
+      expect(find.text('5'), findsOneWidget);
+      // …e o total que só fecha somando-a: 2 + 5 + 1 = 8.
+      expect(find.text('8'), findsOneWidget);
+      // O outro material não some da lista por não ter projeção: 3 + 0 + 1 = 4.
+      expect(find.text('Projeção Dois'), findsOneWidget);
+      expect(find.text('4'), findsOneWidget);
+    });
+
+    testWidgets('e vem com QUANDO foi calculada — número de projeção sem a '
+        'data do cálculo é número sem validade', (tester) async {
+      compras = comProjecao(em: DateTime(2026, 9, 5, 3, 10));
+      await montar(tester);
+      expect(
+        find.text(projecaoCalculadaEmTexto('05/09/2026 03:10')),
+        findsOneWidget,
+      );
+      expect(find.text(projecaoNaoCalculada), findsNothing);
+    });
+
+    testWidgets('o carimbo que falha NÃO derruba a conta: a tabela continua, '
+        'e o que falta é dito', (tester) async {
+      compras = comProjecao(em: DateTime(2026, 9, 5, 3, 10))
+        ..falhaAoLerProjecao = ComprasFalso.erro('500', 'FALHA');
+      await montar(tester);
+      expect(find.text(erroProjecaoCalculadaEm), findsOneWidget);
+      // A lista continua de pé — o erro fica no slot dele.
+      expect(find.text('Projeção Um'), findsOneWidget);
+      expect(find.text('8'), findsOneWidget);
+    });
   });
 
   group('a ocultação por permissão, e o botão desabilitado COM motivo', () {
@@ -610,6 +669,10 @@ void main() {
     expect(tester.takeException(), isNull);
     // A ação primária continua alcançável, na segunda linha da barra.
     expect(find.text('Criar pedido com os sugeridos'), findsOneWidget);
+    // O carimbo da projeção (card 8.2) é a frase mais longa da aba, e a que
+    // nunca foi calculada é a mais longa das três — em 390 px ela quebra em
+    // linhas dentro do `Flexible`, e não estoura a `Row`.
+    expect(find.text(projecaoNaoCalculada), findsOneWidget);
     await abrirPedidos(tester);
     expect(tester.takeException(), isNull);
   });

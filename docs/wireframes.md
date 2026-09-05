@@ -517,6 +517,13 @@ novo o que já está a caminho).
   pedida pendente, saldo, mínimo): o usuário confere a conta em vez de acreditar nela (card 2.3
   §2.3). A coluna Projetada existe desde o primeiro dia mostrando `0` (reserva do card 2.3 §6.2);
   quando o card 8.2 preencher, a tela também mostra o `calculado_em` da projeção.
+  ✅ **Feito em 05/09/2026 (card 8.2):** o carimbo é uma linha `apoio` acima da barra de filtros —
+  fora da tabela de propósito, porque vale para a coluna inteira e não para as linhas que o filtro
+  deixou passar. **Três estados, e a diferença entre eles importa** (design-system §7.3): calculada
+  (com data e hora), **nunca calculada** (a frase que explica o zero da coluna, senão ele pareceria
+  uma escola que não vai precisar de apostila nenhuma) e falha na leitura do carimbo — esta última
+  **não derruba a tabela**, fica no lugar dela. Enquanto carrega não desenha nada: piscar "ainda não
+  foi calculada" por meio segundo é dizer uma coisa falsa.
 - O filtro "só sugerido > 0" é **da tela e desligável** — a view devolve tudo, inclusive o material
   que acabou de zerar.
 - `[Criar pedido…]` (`compras.criar`) monta um RASCUNHO com os itens sugeridos, editável antes de

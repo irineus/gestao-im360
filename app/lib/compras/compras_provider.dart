@@ -64,6 +64,18 @@ final sugeridoProvider = FutureProvider<List<LinhaSugerida>>((ref) {
   return _traduzindo(_repositorio(ref).sugerido);
 });
 
+/// Quando a projeção foi calculada (card 8.2). Número de projeção sem a data do
+/// cálculo é número sem validade — é a mesma exigência que o cabeçalho da tela
+/// de Projeção carrega (design-system §7.3).
+///
+/// Observa a versão do estoque junto com a das compras pelo mesmo motivo do
+/// `sugeridoProvider`: quem recarrega a aba espera que o carimbo recarregue com
+/// ela, e não que fique preso ao da primeira abertura da sessão.
+final projecaoCalculadaEmProvider = FutureProvider<DateTime?>((ref) {
+  ref.watch(versaoEstoqueProvider);
+  return _traduzindo(_repositorio(ref).projecaoCalculadaEm);
+});
+
 /// A aba "Pedidos": `v_pedido_compra` (card 6.8).
 final pedidosProvider = FutureProvider<List<PedidoCompra>>(
   (ref) => _traduzindo(_repositorio(ref).pedidos),
