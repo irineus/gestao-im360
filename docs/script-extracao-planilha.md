@@ -1,5 +1,14 @@
 # Script de extração da planilha (protótipo para a migração)
 
+⚠️ **SUPERADO EM 06/09/2026 PELO CARD 9.2. A ferramenta vive em `extracao/` e a fonte
+é `docs/extracao-planilha.md`.** Este documento continua aqui por uma razão só, e é a
+que importa: **as posições de célula abaixo foram lidas na planilha real**, em
+29–30/08/2026, e foram portadas para `extracao/layout.mjs` **sem uma mudança**. É o
+registro de onde o mapa veio. O que mudou foi a linguagem (Node, sem dependência —
+o motivo está no §2.2 daquele documento) e o formato de saída (JSON, decidido pelo
+card 9.1). As abas `Base Modular`, as abas por curso, `Pedidos` e `PCS` **nunca
+tiveram as colunas lidas**, nem aqui nem lá — ver §3.2 de `docs/extracao-planilha.md`.
+
 Código Python usado na análise de 29–30/08/2026 para ler `Gestão Interativo.xlsx`. Serve de ponto de partida para a ferramenta de importação da Fase 6. Requer `openpyxl` (`pip install openpyxl`). O arquivo está no projeto como upload; em uma sessão Claude, obtenha o caminho local com `Projects.project_read("Gestão Interativo.xlsx")`.
 
 Observações importantes para quem for evoluir o script:
