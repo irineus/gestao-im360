@@ -190,6 +190,8 @@ determinismo.
 | Blocos | 3 (um vazio, um com 9 alunos, um com 10) | 9 → aceita o 10º; 10 → recusa o 11º, sem depender de ordem de execução |
 | Materiais | 6 (2 com saldo 0, 1 com saldo 1, 3 com saldo folgado) | saldo 1 é o teste de concorrência; saldo 0 é o `REORDENADA` e o `BLOQUEADA_SEM_ESTOQUE` |
 | Alunos | 12, cobrindo os 4 degraus da cascata da projeção, 1 em FIM, 1 em STANDBY antigo, 1 com débito REP na borda | um aluno por caso que alguma decisão criou |
+| Turmas Modular | 3 (uma com a aluna e cronograma de 3 módulos, uma vazia com o corrente vencido, uma **individual de capacidade 1 e vazia**) | a vazia dá à guarda de exclusão os dois lados e o `modulo_atrasado` os dois valores; a individual é a borda "existe UMA vaga" da concorrência (card 7.4,5) sem custar catorze alunos de fixture |
+| Alunos de cenário | 13 de lotação (blocos de 9 e de 10, card 5.1) + **1 MODULAR sem combo e sem turma** (card 7.4,5) | o segundo MODULAR é o que dá dois alunos DIFERENTES à corrida da última vaga da turma — e, sem turma, fixa o lado positivo de `ALUNO_SEM_TURMA` para o método Modular |
 
 A fixture é **datada em relativo** (`fn_hoje() - interval 'N days'`), nunca em datas absolutas: uma
 fixture com `'2026-09-01'` começa a falhar sozinha em janeiro.
@@ -407,6 +409,21 @@ tests_concorrencia/entrega_ultimo_exemplar.sh
 O irmão é `admissao_ultima_vaga.sh`: bloco com 9/10, duas admissões simultâneas → uma passa, a outra
 recebe `BLOCO_LOTADO`, e `count(*) = 10`, nunca 11.
 
+O terceiro é `admissao_turma_modular.sh` (card **7.4,5**, 05/09/2026): turma Modular de capacidade 1
+e vazia, duas admissões simultâneas de alunos diferentes → uma passa, a outra recebe `TURMA_LOTADA`,
+e `count(*) = 1`, nunca 2. A capacidade da turma é a mesma regra de agregado do bloco, com um
+agravante: aqui ela é **coluna** (`turma_modular.capacidade`) e não conta de PC, então não há nem o
+consolo de um recurso físico que acabe. O C13 do teste `071` continua sendo o guarda-chuva barato —
+assere que a chamada do lock não sumiu — e **não substitui** este.
+
+> ⚠️ **O que segurou o 7.4,5 fora do 7.2 foi FIXTURE, e a saída vale para o próximo caso.** A
+> escola-fixture tinha **um** aluno MODULAR e a corrida exige dois; estes scripts são a única suíte
+> do projeto sem `rollback`, então criar aluno dentro deles significaria apagá-lo à mão depois. O
+> 7.4,5 fez o contrário: acrescentou à camada `modular` o segundo MODULAR (`Aluno Modular 01`, sem
+> combo, sem turma) e a turma de **capacidade 1**. Capacidade 1 é a decisão que barateia tudo — a
+> borda que importa é ocupação = capacidade − 1, e numa turma de 15 ela custaria catorze alunos de
+> fixture para medir exatamente a mesma aritmética.
+
 Dois cuidados que decidem se o teste vale alguma coisa: os scripts **não podem** rodar dentro da
 transação de teste (por definição), então limpam o que criaram no fim (`delete` explícito num banco
 local descartável); e precisam de **timeout** — se o lock não existir, os dois passam e o teste tem
@@ -561,13 +578,21 @@ limpa. `db push` incremental nunca descobre que a migração 12 depende de algo 
 
 O portão que substitui a meta de cobertura (§2). Um card não é "Concluído" com a sua linha em aberto.
 
+⚠️ **A linha de Tela ganhou o teste em 390 px em 05/09/2026 (card 8.1,5).** Nenhuma das telas das
+fases 06 e 07 tinha um, e é por aí que passaram, por **todo** o CI, dois defeitos que tornavam o app
+inutilizável no celular: o `Scaffold.of()` com o contexto errado, que impedia a gaveta do "Mais" de
+abrir — nove telas inalcançáveis —, e a barra de ações da `TabelaIm360`, que estourava até 537 px à
+direita. `flutter analyze` não vê overflow e `flutter test` só o vê se **algum** teste renderizar
+aquela tela naquela largura. É a mesma família dos dois portões do card 5.5,5 (glifo fora da fonte,
+jargão em texto de tela): passa por tudo e só aparece quando alguém abre a tela.
+
 | Tipo de card | Testes obrigatórios |
 |---|---|
 | **Migração de schema** | Suíte de catálogo (§5) verde com as tabelas novas incluídas; um teste por `check`/`unique` que expresse regra de negócio (camada 1) |
 | **Função de aplicação** | Caminho feliz com efeito conferido; **um `throws_ok` por `codigo` que a função pode levantar**; um teste negativo de permissão (perfil sem o código → `PT403`); teste de camada 2 se houver trigger-garantia |
 | **View** | Paridade de linhas por perfil + zero para quem não pode + isolamento de unidade (§6.3); as quatro armadilhas do card 2.3 §3 quando aplicáveis (soma de conjunto vazio, `count` sobre `left join`, `fn_hoje`, RLS silenciosa) |
 | **Rotina `rt_*`** | Idempotência (rodar duas vezes) + isolamento de falha + contexto de rotina (§8) |
-| **Tela** | Guarda de rota tabelada; ocultação por permissão; estado vazio renderizado com o texto do card 2.7 |
+| **Tela** | Guarda de rota tabelada; ocultação por permissão; estado vazio renderizado com o texto do card 2.7; **e o teste mobile mínimo — monta em 390×800, `takeException()` nulo, painel/detalhe em `Dialog.fullscreen`, ação primária alcançável** (card 8.1,5, item H6, 05/09/2026) |
 | **Migração de dados (Fase 9)** | Reexecutabilidade: importar duas vezes o mesmo snapshot produz os mesmos totais, sem duplicar |
 | **Correção de bug** | O teste que reproduz o defeito entra **no mesmo commit** da correção, e falha sem ela |
 
@@ -683,11 +708,35 @@ RLS; qualquer política exigindo permissão que o seed não cria (é o C11 — n
 
 **Pré-condições automatizadas:** suítes `010`–`060` verdes **e** a suíte de concorrência (§7) verde —
 esta é a única pré-condição que não é negociável por prazo, porque o defeito que ela pega (saldo −1,
-11 alunos em 10 PCs) é invisível em uso normal e corrompe dado.
+11 alunos em 10 PCs) é invisível em uso normal e corrompe dado. ✅ **As duas foram medidas verdes em
+04/09/2026 (sessão do card 6.9):** `supabase test db` = 927/927 em 25 arquivos, e os **dois** scripts
+de `tests_concorrencia/` (entregáveis dos cards 5.3 e 6.3) saindo `rc=0` — bloco fechando em 10/10 e
+saldo fechando em 0. Enquanto a suíte de concorrência não existia, esta linha era o único bloqueante
+aberto da pendência 9.8 das Decisões vigentes.
 
-**Roteiro:** matricular no combo (trilha gerada) → alocar em bloco → tentar alocar em bloco lotado →
-receber um pedido (ENTRADA) → registrar entrega (SAIDA) → registrar entrega de material sem estoque →
-zerar a trilha inteira e tentar de novo → estornar.
+**Roteiro, e AGORA COM O ATOR DE CADA PASSO:**
+
+| # | Passo | Quem |
+|---|---|---|
+| 1 | Matricular no combo (a trilha nasce sozinha) | secretaria |
+| 2 | Alocar em bloco, e depois tentar um bloco **lotado** | secretaria |
+| 3 | Criar, enviar e **receber** um pedido (ENTRADA) | secretaria |
+| 4 | Registrar entrega (SAIDA) — **no celular** | **monitor** |
+| 5 | Registrar entrega de material sem estoque (REORDENADA) | **monitor** |
+| 6 | Zerar a trilha inteira e tentar de novo (BLOQUEADA) | **monitor** |
+| 7 | Duas entregas simultâneas, em duas janelas | monitor + secretaria |
+| 8 | Estornar | secretaria |
+
+⚠️ **A coluna "quem" foi acrescentada em 04/09/2026 (sessão do card 6.9), e a falta dela era um
+defeito do critério, não do sistema.** O roteiro original era uma sequência corrida com o critério 8
+("o monitor completa a jornada inteira") logo abaixo, e isso se lê como se os oito passos fossem do
+monitor. Medida a matriz inicial, **três não são**: o monitor tem `estoque.lancar_saida`,
+`estoque.ler` e `alunos.ler`, e **não** tem `estoque.estornar`, `turmas.alocar` nem `compras.receber`.
+Sem a coluna, o monitor bate em `SEM_PERMISSAO` no estorno e reporta como defeito a matriz do card
+2.4 funcionando exatamente como foi desenhada — a mesma classe de erro do critério 1 do M1, que
+reprovava software correto por estar escrito errado. **Isto não muda o critério 8**, que reprova
+"passo que exija a **direção** para o que é jornada do monitor": estorno, alocação e recebimento são
+da **secretaria** também, então nenhum deles exige direção.
 
 **Aprova se, e só se:**
 
@@ -704,6 +753,23 @@ zerar a trilha inteira e tentar de novo → estornar.
 
 **Reprova se:** saldo negativo em qualquer momento; entrega que grave movimento sem marcar a trilha
 (ou o contrário); qualquer passo que exija a direção para o que é jornada do monitor.
+
+⚠️ **Três pré-condições que não são automatizáveis, e são de Irineu** (achado da sessão do card 6.9,
+04/09/2026). Valem além das duas do §15.1, que continuam abertas:
+
+1. **O M2 não roda antes dos cadastros do M1.** O roteiro começa em "matricular num combo", e o combo
+   é entregável do roteiro do M1. Contado no dev nesta data: `aluno`, `material`, `curso`, `combo`,
+   `sala`, `pc`, `professor`, `bloco_horario`, `aluno_material`, `movimento_estoque` e `pedido_compra`
+   **todos em 0** (só `metodo` = 3, que é configuração). Não é defeito — é a decisão de 02/09/2026
+   funcionando —, mas põe **os dois marcos em fila, não em paralelo**.
+2. ⚠️ **Um usuário que seja SÓ monitor, e ele não existe.** Os três usuários do homolog são duas
+   direções e uma conta com os **quatro** perfis. `tem_permissao` é a **união** dos perfis, então essa
+   conta tem as 50 permissões da direção: com ela o critério 8 ("o monitor completa a jornada **com o
+   perfil dele**, sem esbarrar em RLS") **passaria sem medir nada**, porque não haveria RLS de monitor
+   agindo. É o modo de falha que este §15 existe para impedir. Vale igual para os critérios 2, 3 e 4
+   do M1.
+3. **Duas janelas para o critério 7.** Duas anônimas do mesmo navegador bastam; não precisa de duas
+   pessoas.
 
 ### 15.3 M3 — Dashboard e projeção (card 8.8)
 
@@ -797,7 +863,7 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 
 | Suíte / arquivo | Card que cria | Fase |
 |---|---|---|
-| `seed.sql` (pgTAP, schema `tests`, helpers, escola-fixture) | 3.3 (bootstrap) → **3.4.5** (helpers e camada `acesso`) → cresceu em 3.6, 4.1, 4.2, 4.3, 5.1 e **6.1** ✅ → cresce em 7.1 (camada `modular`, declarada pelo 6.1 para o portão do `001` continuar com uma sentinela) | 3+ |
+| `seed.sql` (pgTAP, schema `tests`, helpers, escola-fixture) | 3.3 (bootstrap) → **3.4.5** (helpers e camada `acesso`) → cresceu em 3.6, 4.1, 4.2, 4.3, 5.1, 6.1 e **7.1** ✅ (camada `modular`) → cresce em 8.3 (camada `certificados`, declarada pelo 7.1 para o portão do `001` continuar com uma sentinela) | 3+ |
 | `001_infra_teste` (helpers, fixture e o portão das camadas) | **3.4.5** | 3 |
 | `010_catalogo_rls`, `011_catalogo_convencoes` | 3.3 (nasce) → cresce em toda migração | 3+ |
 | `012_catalogo_contratos` (C10, C11, C12, C13) | 3.6 (precisa do seed de permissões) | 3 |
@@ -813,17 +879,26 @@ Mesmo formato do §14 do card 2.2, do §10 do 2.3 e do §11 do card de Ordem 5.
 | `042_vagas_admissao` + `tests_concorrencia/admissao_ultima_vaga.sh` — era `040` até o card 5.1 ocupar o número, e `041` até o 5.2 ocupar o seguinte | **5.3** ✅ | 5 |
 | `043_bloco_alunos` (`v_bloco_alunos` e `fn_bloco_alunos`: a lista soma o que o cabeçalho diz, a reposição aparece na data dela com o bloco de origem, bloco desativado passa a abrir `ALUNO_SEM_TURMA`, e falta de permissão vira erro em vez de lista vazia) | **5.7** ✅ | 5 |
 | `050_trilha_estoque` (as cinco tabelas, a imutabilidade do movimento nas duas camadas, o insert POR TIPO, a guarda de coluna de `aluno_material` e as duas guardas de exclusão) | **6.1** ✅ | 6 |
-| `051_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` — era `050` até o card 6.1 ocupar o número, exatamente como o `040` do 5.3 virou `042`. ⚠️ **Divergência registrada** | 6.3 | 6 |
-| `060_estoque_compras` | 6.5 | 6 |
-| `070_modular` | 7.2 | 7 |
-| `080_projecao` | 8.1 | 8 |
+| `051_trilha_geracao` (fn_trilha_gerar e as três de edição, as três consultas derivadas, e os dois triggers em `aluno` que a matrícula e a troca de combo disparam) | **6.2** ✅ | 6 |
+| `052_trilha_entrega` + `tests_concorrencia/entrega_ultimo_exemplar.sh` — era `050` até o card 6.1 ocupar o número, e `051` até o 6.2 ocupar o seguinte; é o mesmo deslocamento que levou o `040` do card 5.3 a `042`. ⚠️ **Divergência registrada** | **6.3** ✅ | 6 |
+| `060_estoque_compras` (o ciclo do pedido — criar, enviar, receber parcial e total, cancelar —, o excedente como exceção de PERMISSÃO nas duas camadas, as pendências que a chegada da compra fecha e o ajuste que não deixa o saldo negativo) | **6.5** ✅ | 6 |
+| `061_material_movimento` (`v_material_movimento`: uma linha por movimento, a soma do painel fechando com o saldo de `v_estoque_atual`, e a paridade de linhas **perfil a perfil** — o monitor sem `compras.ler` e um perfil só com `estoque.ler` veem as MESMAS linhas que a direção, com o rótulo em branco) | **6.7** ✅. ⚠️ **Divergência registrada:** o §17 não previa arquivo nenhum para o 6.7 — a tela foi planejada sem objeto de banco, e ela tem um, que o `views-leitura.md` §12.1 sempre disse ser deste card. É o mesmo caso do `053` (card 6.6), e a solução é a mesma: o arquivo mora no bloco do domínio (aqui o `06x`, ao lado do `060_estoque_compras`), não no `095`. ⚠️ **A paridade aqui é o CONTRÁRIO da do `053`:** lá se prova que a view vem vazia sem `materiais.ler` (join interno de propósito); aqui, que **nenhum perfil perde linha** (todo join de rótulo é externo). As duas asserções foram vistas vermelhas com o `join` do pedido convertido em interno | 6 |
+| `estoque_test` (a lógica pura da tela 6: situação do material com o negativo vencendo o "abaixo do mínimo", os filtros da lista e do painel, e os três rótulos de "existe e você não pode ver") e `tela_estoque_test` (a tela: linha em alerta com fundo tonal **e** ícone **e** palavra, o painel por material, o estado vazio do card 2.7 apontando para Compras, o ajuste chegando ao repositório com sinal e motivo, e a ausência de qualquer caminho de ENTRADA) | **6.7** ✅ | 6 |
+| `062_pedidos_compra_tela` (`v_pedido_compra` e `v_pedido_item`: pedido SEM item contando ZERO — a armadilha do §3.2 num caso real, com contraprova na forma ingênua ao lado —, `qtd_pendente` com piso por item, a `data_referencia` no fuso da escola, e a **guarda `tg_pedido_item_edicao`**, que recusa criar item, mudar `qtd_pedida` e mover item fora do RASCUNHO **sem derrubar o recebimento**, que escreve `qtd_recebida` em pedido ENVIADO e PARCIAL) | **6.8** ✅. ⚠️ **Divergência registrada:** o §17 não previa arquivo para o 6.8 — é o mesmo caso do `053` (6.6) e do `061` (6.7): a tela foi planejada sem objeto de banco e tem três, e `views-leitura.md` §12.1 sempre disse que view de tela é do card da tela. Mora no bloco `06x`, ao lado do `060` e do `061`, não no `095`. ⚠️ **Cinco contraprovas vistas vermelhas:** guarda como no-op (3 recusas caem), guarda sem o `of qtd_pedida` (o recebimento inteiro morre, e o `060` junto), `count(*)` sobre `left join` (o pedido sem item conta 1 e soma null), `qtd_pendente` sem o piso (`−2`), e o `join` em `material` externo (a lista de itens deixa de vir vazia sem `materiais.ler`) | 6 |
+| `compras_test` (a lógica pura da tela 7: o que cada ESTADO do pedido permite com o motivo palavra por palavra, o filtro "só sugeridos" ligado por padrão e desligável, e o que entra no "criar pedido" — só as linhas EXIBIDAS) e `tela_compras_test` (a tela: guarda de rota tabelada, botão escondido sem `compras.criar` e desabilitado **com motivo** sem sugestão, os dois estados vazios do card 2.7, o recebimento chegando por item e o `RECEBIMENTO_EXCEDE_PEDIDO` virando a frase do catálogo em vez de erro cru) | **6.8** ✅ | 6 |
+| `070_turmas_modular` (as três tabelas, os `check`/`unique` de camada 1 — inclusive a unique PARCIAL que permite ao 7.2 reativar em vez de duplicar —, o `default fn_hoje()` de `data_entrada`, a guarda de coluna do `or`, a guarda de exclusão nos dois mundos, a terceira tabela de `tg_aluno_status_desaloca` e as duas formas de turma em `ALUNO_SEM_TURMA`) | **7.1** ✅ | 7 |
+| `071_modular_regras` (as duas derivadas do §9, admitir/remover com reativação e motivo, a camada 2 atacada por POST direto — método, status, unidade e CAPACIDADE —, o avanço conjunto com o passo aprendido e a preservação das datas, o motivo na desalocação sem ator, a trilha Modular = livros do curso, e `TURMA_MODULAR_SEM_CRONOGRAMA` no `check`) | **7.2** ✅ — era `070` até o card 7.1 ocupar o número. ⚠️ **Divergência registrada:** o §17 previa um arquivo `070_modular` para o **7.2**, escrito quando se supunha que o 7.1 não teria teste próprio; card de Schema tem obrigação de teste no §13 e ela é cumprida no `070`. É o mesmo deslocamento que levou o `040` do card 5.3 a `042` e o `050` do 6.3 a `052`. `ALUNO_SEM_TURMA` do aluno Modular saiu do escopo deste arquivo porque o **card 7.1** já a entregou e a mede no `070` §6 | 7 |
+| `072_modular_views` (as três views da tela 5: a lotação com `vagas_livres` de piso zero e `alocados` sem piso, o `modulo_atrasado` medido nas DUAS turmas da fixture, a turma inativa que sai da lotação, a turma terminada que **fica** com o corrente nulo, e o cronograma com `corrente` comparado às outras DUAS expressões do mesmo fato, turma a turma) | **7.3** ✅. ⚠️ **Divergência registrada:** o §17 não previa arquivo para o 7.3 — é o mesmo caso do `053` (6.6), do `061` (6.7) e do `062` (6.8): a tela foi planejada sem objeto de banco e tem três views. Mora no bloco `07x`, ao lado do `070` e do `071`, não no `095`. ⚠️ **Segunda divergência:** `v_turma_modular_lotacao` estava atribuída aos cards **7.4 e 5.9** e nasceu aqui, porque o `wireframes.md` §8 manda a tela 5 lê-la e o `views-leitura.md` §12.1 é a regra geral. ⚠️ **Duas contraprovas vistas vermelhas:** `atrasado` sem o filtro `not concluido` (o módulo 1 da 2026.1, concluído e com a data REAL no passado, passa a `1=true`) e `corrente` sem a partição por `concluido` (a turma 2026.1 fica **sem** linha corrente e as três expressões divergem) | 7 |
+| `tests_concorrencia/admissao_turma_modular.sh` (duas sessões disputando a única vaga de uma turma Modular: uma admissão aceita, uma `TURMA_LOTADA`, e a turma fechando em 1/1) | **7.4,5** ✅ — o script que o 7.2 não pôde entregar por falta de fixture. ⚠️ **Contraprova vista vermelha:** com `fn_turma_modular_admitir` reaplicada **sem** o `pg_advisory_xact_lock`, as duas admissões passaram e a turma fechou em **2 de 1**, com o script saindo 1 pela CONTAGEM — não por *timeout*. Trouxe junto a mudança de fixture (turma individual de capacidade 1 e o segundo aluno MODULAR), que reescreveu cinco asserções de premissa nos arquivos `030`, `070` e `090` | 7 |
+| `080_projecao_demanda` (`v_ritmo_aluno` com os dois filtros e a janela, os quatro degraus da cascata com um aluno nomeado em cada, a ORDEM entre eles, a **disjunção** `k >= 2`, as datas de cada degrau, a extrapolação do cronograma Modular, e a rotina: contexto, janela, idempotência, foto mensal e a pendência de cronograma abrindo e fechando) | **8.1** ✅ — o §17 previa o nome `080_projecao`; o arquivo nasceu `080_projecao_demanda`, para casar com o nome da migração e do documento. ⚠️ **Quatro contraprovas vistas vermelhas:** sem `where k >= 2` a disjunção cai (e a previsão de Carla passa a começar em `hoje + 30`); sem o limite de um ritmo na âncora, Ana Paula salta de `hoje + 60` para `hoje + 30`; sem o piso e o teto, João Pedro vai de `90/2` para `60/3` (entrega em lote) e `117/3` (volta de parada), que são as duas falhas OPOSTAS do §4.2 na mesma medida; e com a política de `insert` por `tem_permissao` em vez de `fn_contexto_rotina()`, a direção grava projeção pelo PostgREST. ⚠️ **A fixture cresceu junto, e por necessidade estrutural, não por conveniência:** com o combo de Informática em três materiais, "duas entregas" e "dois itens pendentes" eram mutuamente exclusivos e o degrau RITMO_ALUNO era inalcançável; no Modular, o curso de um livro só deixava todo aluno em `k = 1`. Dois materiais novos e uma previsão de conclusão depois, os quatro degraus têm aluno — e vinte asserções de premissa mudaram de valor nos arquivos `023`, `050`, `051`, `052`, `071`, `090` e `095`. ⚠️ **E a suíte de concorrência reprovou no CI por causa da fixture, não do código:** `INTERATIVO 04` nasceu com quatro exemplares e virou o "próximo item pendente com estoque" de Ana Paula e Bruno, que são os dois alunos da corrida de `entrega_ultimo_exemplar.sh` — quem perdia passou a **reordenar** em vez de sair com `BLOQUEADA_SEM_ESTOQUE`, e o script reprovou com razão. Corrigido dando ao `04` **um** exemplar, entregue a João Pedro: a fixture passa a ter **três** saldos zero, e o terceiro existe para manter aquele desfecho | 8 |
 | `085_rep_virada` | **5.3** ✅ (funções REP entram na mesma migração) — mede o VEREDITO; a seção 6 era o portão da pendência, **disparou em 03/09/2026 (card 5.5)** e virou a asserção estrutural de que as duas funções da virada fecham a pendência, cada uma com o seu sufixo. O comportamento ponta a ponta ficou no `090_rotinas`, que é o arquivo da pendência | 5 |
-| `090_rotinas` (a tabela `pendencia`, as três funções do §10, rt_pendencias_diaria/rt_rep_avaliar/rt_diaria, o job `pg_cron` e a view `v_pendencias_abertas`) | **5.5** ✅ (primeira rotina) → cresce em 8.1 | 5+ |
+| `090_rotinas` (a tabela `pendencia`, as três funções do §10, rt_pendencias_diaria/rt_rep_avaliar/rt_diaria, o job `pg_cron` e a view `v_pendencias_abertas`) | **5.5** ✅ (primeira rotina) → o portão do §13 **disparou pela segunda vez no 8.1** ✅ (05/09/2026): `rt_projecao_demanda` entrou em `rt_diaria` no mesmo commit em que nasceu, porque esta asserção reprovava enquanto não entrasse. Com a quinta sub-rotina a lista do §11 do card 2.2 fecha; o portão continua armado para a sexta | 5+ |
 | `091_manutencao_capacidade` (o status derivado de `pc_manutencao`, a pendência por EVENTO, `rt_pcs_normaliza` e `rt_capacidades`) | **5.4** ✅ — mora ao lado do `090`, que é o arquivo das rotinas: aqui está o que só o caminho por evento prova | 5 |
-| `095_views_paridade` (a grade semanal: `fn_grade_semana` e `v_bloco_vagas_semana`) | **5.6** ✅ → cresce em 6.4, 5.9 e 8.7. ⚠️ **Divergência registrada:** esta linha atribuía o nascimento do arquivo ao **6.4** ("primeiras views"), e o 6.4 é da fase 06 — quem chegou primeiro foi o 5.6, e o arquivo nasceu lá. A obrigação de teste de card de View (§13) não mudou; mudou só quem a cumpre primeiro | 5+ |
+| `095_views_paridade` (a grade semanal: `fn_grade_semana` e `v_bloco_vagas_semana`; desde o **6.4** ✅ as quatro views de estoque, demanda e pedido sugerido; e desde o **7.4** ✅ o par vazia→inteira de `v_turma_modular_lotacao` sob `materiais.ler`, com a contraprova de que a direção vê turma Modular — 29 → 86 → **89** asserções) | **5.6** ✅ → cresceu em **6.4** ✅ e **7.4** ✅ → cresce em 8.7. ⚠️ **O 7.4 é card de Tela e não criou objeto de banco nenhum** (a view é do 7.3): o que ele acrescentou aqui foi a segunda das cinco views do bloqueante nº 1 de `permissoes-matriz.md` §7, com a contraprova vista **vermelha** trocando o `join` interno em `curso` por `left join` — e o `072`, que mede a mesma view, passou verde nessa sabotagem, porque ele mede aritmética e este mede permissão. ⚠️ **Divergência registrada:** esta linha atribuía o nascimento do arquivo ao **6.4** ("primeiras views"), e o 6.4 é da fase 06 — quem chegou primeiro foi o 5.6, e o arquivo nasceu lá. A obrigação de teste de card de View (§13) não mudou; mudou só quem a cumpre primeiro | 5+ |
 | `catalogo_erros_test`, `guardas_rota_test`, `permissao_widget_test`, `faixa_test`, `tnum_test` | 3.7 | 3 |
 | `badge_status_test` / `badge_tipo_test` | 4.6 (status) e **5.7** ✅ (tipo). ⚠️ **Divergência registrada:** o §9.2 pede *golden* de badge; os dois arquivos asserem o **par de cores e a forma** lidos do tema, e o `badge_tipo_test` acrescenta a asserção que um golden não daria — preenchido × contorno lado a lado, que é a decisão do card 1.9 §6. Golden de 8 badges × 2 temas seriam 16 PNGs que reprovam por *antialiasing* de versão do engine, e o que se quer provar é a regra, não o pixel | 4–5 |
-| `dialogo_resultado_test` | 6.6 | 6 |
+| `053_aluno_trilha` (`v_aluno_trilha`: a view e `fn_trilha_proximo_material` concordam sobre o próximo em todo aluno, `posicao` é 1..n e não a `ordem` de 10 em 10, o saldo é o de `v_estoque_atual`, e as duas reduções silenciosas em formas opostas — sem `materiais.ler` vazia, sem `estoque.ler` cheia com saldo 0) | **6.6** ✅. ⚠️ **Divergência registrada:** este arquivo não estava previsto — a linha do 6.6 abaixo só cita o `dialogo_resultado_test`, porque a tela foi planejada sem objeto de banco. Ela tem um, e `docs/views-leitura.md` §12.1 sempre disse que `v_aluno_trilha` é deste card; card de View tem obrigação própria no §13, e ela é cumprida aqui. Mora no bloco `05x` da trilha (ao lado do 050, 051 e 052) e não no `095`, que é o arquivo das views nascidas com a grade | 6 |
+| `dialogo_resultado_test` (o resultado que muda a próxima ação: diálogo no desktop, folha inferior no celular, **nunca snackbar**, ícone de forma própria por tom e alvo de 44 px), `trilha_test` (a lógica pura: os três status, "trilha vazia" ≠ "trilha em fim", e os textos do §7.3 palavra por palavra) e `tela_trilha_test` (a aba: guarda por `estoque.ler`, ocultação por permissão, estado vazio do card 2.7, os três resultados na tela e o botão desabilitado **com motivo**) | **6.6** ✅ | 6 |
 | `testes.yml` + gate no `db-migrations` | 3.9 | 3 |
 | Reexecutabilidade da importação | 9.1 / 9.4 | 9 |
 

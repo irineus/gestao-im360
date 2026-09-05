@@ -241,7 +241,58 @@ select is(
             -- cima: `pg_cron` roda como `postgres` sem auth.uid(), e o contexto
             -- de rotina só se sustenta porque elas são definer e não têm grant
             -- para authenticated (C9).
-            'rt_pcs_normaliza', 'rt_capacidades'
+            'rt_pcs_normaliza', 'rt_capacidades',
+            -- card 6.5 — o trigger que fecha ESTOQUE_ZERO e COMPRA_SEM_ESTOQUE
+            -- quando a compra chega. Ele dispara na transação de quem RECEBE
+            -- (`compras.receber`) e precisa ler `pendencia` (`pendencias.ler`) e
+            -- `aluno_material` (`alunos.ler`) — duas permissões que quem recebe
+            -- pode não ter. Como invoker ele percorreria zero linhas e a
+            -- pendência ficaria aberta com o material já na prateleira, sem nada
+            -- denunciando: a redução silenciosa do card 2.3 §3.4 na tabela que a
+            -- central do 5.8 lê. Com a matriz INICIAL nada disso aparece, e o
+            -- card 4.2 já deixou escrito que isso não é argumento. Filtra a
+            -- unidade no corpo, e ela vem da LINHA que o trigger recebe
+            -- (`new.unidade_id`), como fn_perfil_permissao_historico.
+            --
+            -- As cinco funções de aplicação do card (fn_pedido_criar,
+            -- fn_pedido_enviar, fn_pedido_cancelar, fn_pedido_receber e
+            -- fn_ajustar_estoque) NÃO estão aqui, e é o ponto: definer as tiraria
+            -- da política `insert` POR TIPO de movimento_estoque, que é a única
+            -- coisa que impede uma ENTRADA inventada (achado 9 do card 2.4 §7).
+            -- fn_movimento_valida_sinal e fn_pedido_item_recebimento_valido
+            -- também não: as duas só leem linha que o próprio chamador já pode
+            -- ler, e falham FECHADO quando não podem.
+            'fn_movimento_resolve_pendencia',
+            -- card 7.2 — a ocupação da turma Modular, pela mesma razão de
+            -- fn_ocupacao_bloco: número derivado que decide LOTAÇÃO não pode
+            -- depender do que o leitor enxerga. Como invoker, um chamador sem
+            -- `turmas.ler` contaria ZERO alunos numa turma cheia — a RLS nega
+            -- linha em vez de devolver erro (card 2.3 §3.4) — e a admissão
+            -- passaria em silêncio numa turma lotada, que é fail-OPEN. Filtra a
+            -- unidade no corpo e devolve NULO, não zero, para turma de outra
+            -- unidade.
+            --
+            -- fn_turma_modular_modulo_corrente NÃO está aqui, de propósito: ela
+            -- não decide lotação, e quem não pode ler o cronograma recebe nulo e
+            -- esbarra em TURMA_SEM_MODULO_CORRENTE — fail-CLOSED. Mesma decisão
+            -- de fn_vagas_livres (5.2) e fn_pc_exclusao_valida (4.3).
+            'fn_turma_modular_ocupacao',
+            -- card 8.1 — a rotina da projeção, pelo mesmo motivo das cinco
+            -- rt_* anteriores: `pg_cron` roda como `postgres` sem auth.uid(), e
+            -- o contexto de rotina do card 2.2 §2.2 só se sustenta porque ela é
+            -- definer e não tem grant para authenticated (C9). Aqui há um
+            -- segundo motivo, e ele é a própria RLS de `demanda_projetada`: as
+            -- políticas de insert e delete exigem `fn_contexto_rotina()`, e
+            -- `force row level security` alcança o dono da tabela — como
+            -- invoker, a rotina não escreveria nada e a projeção sumiria da tela
+            -- sem erro nenhum.
+            --
+            -- `fn_ritmo_aluno` NÃO está aqui, de propósito: ela é uma linha
+            -- lendo v_ritmo_aluno e o número dela vai para a FICHA do aluno, não
+            -- para uma decisão de lotação — quem não pode ler o aluno recebe
+            -- nulo, que é fail-CLOSED. Mesma decisão de
+            -- fn_turma_modular_modulo_corrente (7.2) e fn_vagas_livres (5.2).
+            'rt_projecao_demanda'
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'

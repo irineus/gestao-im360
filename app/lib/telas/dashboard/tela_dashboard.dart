@@ -13,6 +13,7 @@ import '../../turmas/turmas_provider.dart';
 import '../../widgets/estados.dart';
 import 'cartoes_metodo.dart';
 import 'grade_vagas.dart';
+import 'lotacao_modular.dart';
 import 'pendencias_abertas.dart';
 
 /// Tela 2 — Dashboard, **versão 1** (docs/wireframes.md §5), card 5.9: vagas
@@ -39,6 +40,9 @@ import 'pendencias_abertas.dart';
 /// o contador do menu); e o fato de que sem elas `pendencias.ler` ficaria no
 /// conjunto mínimo desta rota **sem consumidor nenhum**, que é justamente o que
 /// o card 2.4 (a) recusa.
+///
+/// **A lotação Modular por curso entrou no card 7.4**, também sem migração: a
+/// fonte é `v_turma_modular_lotacao`, entregue pelo card 7.3 com a tela 5.
 ///
 /// **O que ainda não está aqui é do card 8.7** (alunos por método, conclusões
 /// por semestre e tipos por bloco): as três `v_dashboard_*` são dele
@@ -127,7 +131,30 @@ class TelaDashboard extends ConsumerWidget {
           const SizedBox(height: Dim.e24),
           const Divider(),
           const SizedBox(height: Dim.e8),
-          const PendenciasAbertas(),
+          // A lotação Modular e as pendências abertas dividem a linha, como o
+          // wireframe §5 as desenha lado a lado; no celular empilham, na ordem
+          // do desenho. Duas regiões independentes: uma falhar não apaga a
+          // outra (design-system §7.2).
+          LayoutBuilder(
+            builder: (context, restricoes) =>
+                faixaDe(restricoes.maxWidth) == Faixa.mobile
+                ? const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LotacaoModular(),
+                      SizedBox(height: Dim.e24),
+                      PendenciasAbertas(),
+                    ],
+                  )
+                : const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: LotacaoModular()),
+                      SizedBox(width: Dim.e24),
+                      Expanded(child: PendenciasAbertas()),
+                    ],
+                  ),
+          ),
           const SizedBox(height: Dim.e24),
           _NotaDoQueFalta(linhas: vagas.value?.length),
         ],
@@ -262,4 +289,4 @@ class _NotaDoQueFalta extends StatelessWidget {
 
 const textoRestanteDoDashboard =
     'Alunos por método, conclusões por semestre e tipos por bloco chegam numa '
-    'próxima versão, junto com a lotação das turmas Modular.';
+    'próxima versão.';

@@ -76,9 +76,22 @@ class TelaPendencias extends ConsumerWidget {
         // há" é a primeira informação, e ela não cabe em nenhuma coluna.
         Padding(
           padding: const EdgeInsets.fromLTRB(Dim.e16, Dim.e16, Dim.e16, 0),
-          child: Text(
-            tituloPendencias(pendencias.value?.length),
-            style: Tipografia.subtitulo,
+          child: Builder(
+            builder: (context) {
+              // ⚠️ No celular o app bar do shell JÁ diz "Pendências", e este
+              // cabeçalho repetia a palavra logo abaixo — duas vezes em 100 px
+              // de altura (item H5). Ali sobra só a contagem, que é a
+              // informação que o §14.1 quer no topo de uma fila de trabalho.
+              final mobile =
+                  faixaDe(MediaQuery.sizeOf(context).width) == Faixa.mobile;
+              final abertas = pendencias.value?.length;
+              return Text(
+                mobile
+                    ? contagemPendencias(abertas)
+                    : tituloPendencias(abertas),
+                style: mobile ? Tipografia.rotulo : Tipografia.subtitulo,
+              );
+            },
           ),
         ),
         Expanded(
@@ -181,4 +194,10 @@ const vazioPendenciasFiltro = 'Nenhuma pendência com esses filtros.';
 /// ali seria número errado com cara de certo.
 String tituloPendencias(int? abertas) => abertas == null
     ? 'Pendências'
-    : 'Pendências ($abertas ${abertas == 1 ? 'aberta' : 'abertas'})';
+    : 'Pendências (${contagemPendencias(abertas)})';
+
+/// Só a contagem — é o que sobra no celular, onde o app bar já diz de que tela
+/// se trata (item H5).
+String contagemPendencias(int? abertas) => abertas == null
+    ? 'carregando…'
+    : '$abertas ${abertas == 1 ? 'aberta' : 'abertas'}';

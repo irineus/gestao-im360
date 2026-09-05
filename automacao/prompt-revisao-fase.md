@@ -16,6 +16,14 @@ entregue com o que a spec pediu.
 Esta revisão é a segunda passada **com a spec na mão**. Não é auditoria de estilo: é conferir se o
 que foi construído é o que foi especificado.
 
+## Como chamar comando de shell
+
+**Você já está na raiz do repositório.** Não prefixe comando com `cd "C:/…/gestao-im360" &&`: o motor
+de permissões avalia isso como comando composto e recusa mesmo quando cada parte está liberada — foi
+o que mais custou turno na primeira corrida longa. Use o caminho no próprio comando (`git -C <dir>`,
+`sed -n '1,20p' <caminho>`) ou as ferramentas nativas `Read`, `Grep` e `Glob`, que não passam por
+shell. E invoque a skill `proxima-tarefa` **antes** da primeira consulta ao board.
+
 ## Regras deste modo
 
 1. **Nunca use `AskUserQuestion`.** Onde houver dúvida que só Irineu decide, marque o item como
@@ -60,7 +68,16 @@ predominante do que foi revisado, `Tamanho` estimado pelo volume, `Status` = `A 
   visuais e acessibilidade, divergências de spec, qualidade, testes que faltam);
 - cada item com **arquivo:linha**, o que está errado, **por que** (seção da spec ou linha da
   migração) e a correção esperada;
-- **DECISÃO** onde a resposta for de Irineu;
+- **DECISÃO** onde a resposta for de Irineu — e aqui a forma decide se a cadeia para ou anda:
+  - escreva **`DECISÃO (recomendado: <opção>)`** com o motivo da recomendação em uma linha. A sessão
+    que executar o card **adota a recomendação e segue**, registrando o que adotou e como reverter;
+  - escreva **`DECISÃO BLOQUEANTE`** quando a escolha mudar schema ou dado em **produção**, mexer em
+    permissão ou segurança, criar compromisso externo, ou custar mais para desfazer do que para
+    fazer. Aí a cadeia para, e é para isso que a marcação existe;
+  - ⚠️ **`DECISÃO` sem recomendação para a cadeia inteira** por tempo indeterminado. Se você tem
+    opinião, escreva-a: em 04/09/2026 a fila parou horas num card cuja decisão já vinha com as
+    opções, e Irineu escolheu exatamente as recomendadas. Sem opinião, prefira `BLOQUEANTE` — deixa
+    claro que a parada é deliberada, e não esquecimento de quem redigiu;
 - uma lista de **critério de aceite** no fim.
 
 Nas Notas do card, o resumo curto e a origem.

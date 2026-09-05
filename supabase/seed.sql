@@ -78,7 +78,7 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
 
   ('alunos', 40, '4.2',
    $$to_regclass('public.aluno') is not null$$, true,
-   'APLICADA no card 4.2: doze alunos por unidade, um por caso que alguma decisão criou — os quatro degraus da cascata da projeção, previsão vencida, STANDBY antigo, os dois terminais (FORMADO e CANCELADO), TRANCADO, ACELERAR e um sem combo. Datas SEMPRE relativas a fn_hoje(). O "em FIM" e o "com débito REP na borda" do card 2.8 §4.2 dependem de aluno_material e bloco_aluno: ficam com as camadas trilha_estoque (6.1) e turmas (5.1), e os alunos que os receberão já nascem aqui.'),
+   'APLICADA no card 4.2: doze alunos por unidade, um por caso que alguma decisão criou — os quatro degraus da cascata da projeção, previsão vencida, STANDBY antigo, os dois terminais (FORMADO e CANCELADO), TRANCADO, ACELERAR e um sem combo. Datas SEMPRE relativas a fn_hoje(). Desde o card 6.2 a camada roda em CONTEXTO DE ROTINA e a TRILHA dos doze nasce aqui, gerada por tg_aluno_trilha_inicial — a fixture deixou de ter uma cópia à mão da expansão do combo. O "com débito REP na borda" do card 2.8 §4.2 depende de bloco_aluno e fica com a camada turmas (5.1); o "em FIM" depende das entregas, que ficam com a trilha_estoque (6.1).'),
 
   ('infra_fisica', 50, '4.3',
    $$to_regclass('public.pc') is not null$$, true,
@@ -90,17 +90,21 @@ insert into tests.fixture_camada (camada, ordem, card, devida_se, aplicada, nota
 
   ('trilha_estoque', 70, '6.1',
    $$to_regclass('public.movimento_estoque') is not null$$, true,
-   'APLICADA no card 6.1: trilha dos doze alunos (menos Karina, que não tem combo) derivada do combo, três pedidos de compra — um por estado que muda alguma conta — e os movimentos que produzem os saldos 0/0/1/n/n/n do card 2.8 §4.2. Saldo 1 é o material que é o PRÓXIMO de dois alunos, que é o teste de concorrência do card 6.3; os dois saldos zero são diferentes de propósito (um com item pendente adiante = REORDENADA, um sem = BLOQUEADA_SEM_ESTOQUE). João Pedro fica em FIM, fechando a última marca do quadro §4.2 que ainda não tinha casa. Os quatro tipos de movimento aparecem, incluindo o único ESTORNO da fixture.'),
+   'APLICADA no card 6.1: três pedidos de compra — um por estado que muda alguma conta — e os movimentos que produzem os saldos 0/0/1/n/n/n do card 2.8 §4.2. Desde o card 6.2 a TRILHA não nasce mais aqui (vem de tg_aluno_trilha_inicial, nas camadas alunos e turmas); esta camada marca as ENTREGAS sobre ela. Saldo 1 é o material que é o PRÓXIMO de dois alunos, que é o teste de concorrência do card 6.3; os dois saldos zero são diferentes de propósito (um com item pendente adiante = REORDENADA, um sem = BLOQUEADA_SEM_ESTOQUE). João Pedro fica em FIM, fechando a última marca do quadro §4.2 que ainda não tinha casa. Os quatro tipos de movimento aparecem, incluindo o único ESTORNO da fixture.'),
 
-  -- Declarada aqui e não no card 7.1 porque o portão do teste 001 precisa de uma
-  -- camada AINDA NÃO aplicada para vigiar: com `trilha_estoque` aplicada, ele
-  -- ficaria sem sentinela e a prova por construção viraria decoração — que é
-  -- exatamente a crítica do card 2.8. A nota do 001 já escrevia isso: «quando ela
-  -- for aplicada, esta asserção precisa de uma camada NOVA para vigiar, e não de
-  -- uma sentinela nova».
   ('modular', 80, '7.1',
-   $$to_regclass('public.turma_modular_aluno') is not null$$, false,
-   'Turma Modular de Eletricista com o cronograma dos três módulos e Eduarda Lima dentro. A fixture já tem o método, o curso, os três módulos (card 4.1) e a aluna (4.2) — falta a turma, que é o que torna fn_aluno_status_desaloca capaz de citar turma_modular_aluno (portão do teste 040 §10).');
+   $$to_regclass('public.turma_modular_aluno') is not null$$, true,
+   'APLICADA no card 7.1: duas turmas Modular de Eletricista, a `2026.1` com o cronograma dos três módulos e Eduarda Lima dentro, e a `2025.2` VAZIA e com o módulo corrente vencido. A fixture já tinha o método, o curso, os três módulos (card 4.1), a aluna (4.2) e a Sala Eletricista (4.3). A segunda turma existe por duas razões medidas: dá à guarda tg_turma_modular_exclusao_valida os DOIS lados (uma turma que recusa ser apagada e uma que aceita), como os PCs do card 4.3, e dá ao card 7.4 um módulo atrasado sem que a turma com aluno precise nascer atrasada. Consequência para o teste 090: Eduarda deixa de receber ALUNO_SEM_TURMA, que é exatamente o que o portão do card 5.5 previa.'),
+
+  -- Declarada aqui e não no card 8.3 porque o portão do teste 001 precisa de uma
+  -- camada AINDA NÃO aplicada para vigiar: com `modular` aplicada, ele ficaria
+  -- sem sentinela e a prova por construção viraria decoração — que é exatamente
+  -- a crítica do card 2.8. A instrução que o 001 já trazia era esta, e foi
+  -- seguida à risca: «quando ela for aplicada, esta asserção precisa de uma
+  -- camada NOVA para vigiar, e não de uma sentinela nova».
+  ('certificados', 90, '8.3',
+   $$to_regclass('public.certificado_checklist') is not null$$, false,
+   'Checklist de certificado de João Pedro Martins, que é o aluno em FIM da fixture (camada trilha_estoque) e o único FORMADO — com os itens em estados diferentes, para que o gate de fn_aluno_pode_formar (card 4.2) tenha os dois lados em vez de só o que passa. A fixture já tem o aluno, a trilha inteira entregue e as permissões do domínio `certificados` no seed do card 3.6; falta a tabela, que nasce no card 8.3 — e é a mesma tabela que o portão do teste 030 §6 espera para cobrar a citação em fn_aluno_pode_formar.');
 
 -- Devolve as camadas cuja condição já vale e que ainda não foram escritas.
 -- Vazio = a fixture está em dia com o schema.
@@ -443,8 +447,22 @@ select tests.criar_usuario('direcao@escola-b.test',    'DIRECAO', tests.unidade(
 --   (b) o combo de Informática tem DOIS cursos, com ordens 1 e 2. Um combo de
 --       curso único não exercita `combo_curso_ordem_uk` nem a ordem da trilha
 --       que o card 6.2 gera a partir do combo — e a trilha resultante (01, 02,
---       03, sem repetição) é justamente o que o 6.2 precisa ter contra o que
+--       03, 04, sem repetição) é justamente o que o 6.2 precisa ter contra o que
 --       comparar.
+--
+-- ⚠️ ESTA CAMADA CRESCEU NO CARD 8.1, DE SEIS MATERIAIS PARA OITO, e o motivo é
+--    aritmético — vale escrever porque a leitura óbvia ("mais um material para
+--    ter mais um material") está errada. A projeção só conta o aluno a partir do
+--    SEGUNDO item pendente da trilha (§2.4 de docs/projecao-demanda.md): é a
+--    disjunção com a demanda imediata, sem a qual todo aluno ativo pesaria duas
+--    vezes no pedido sugerido. Com o combo de Informática em TRÊS materiais,
+--    "duas entregas" e "dois itens pendentes" eram mutuamente exclusivos — o
+--    aluno com ritmo mensurável (que precisa de duas entregas) tinha no máximo
+--    um item pendente e nunca chegava a k = 2. O degrau RITMO_ALUNO era
+--    estruturalmente inalcançável pela fixture, e o teste dele passaria medindo
+--    um conjunto vazio, que é o modo de falha que o card 2.8 §6.3 nomeia.
+--    `INTERATIVO 04` é o quarto item que desfaz isso; `MODULAR 02` faz o mesmo
+--    pelo degrau MODULAR (ver a nota do bloco de `modulo`, abaixo).
 --
 -- Saldos de estoque (0/0/1/n/n/n do card 2.8 §4.2) NÃO entram aqui: dependem de
 -- `movimento_estoque`, que nasce no card 6.1 com a camada `trilha_estoque`. O
@@ -475,9 +493,11 @@ begin
     (p_unidade, v_interativo, '01', 'Informática Essencial 1', 'APOSTILA', 2),
     (p_unidade, v_interativo, '02', 'Informática Essencial 2', 'APOSTILA', 1),
     (p_unidade, v_interativo, '03', 'Informática Avançada 1',  'APOSTILA', 1),
+    (p_unidade, v_interativo, '04', 'Informática Avançada 2',  'APOSTILA', 1),
     (p_unidade, v_ingles,     '01', 'English Book 1',          'APOSTILA', 1),
     (p_unidade, v_ingles,     '02', 'English Book 2',          'APOSTILA', 2),
-    (p_unidade, v_modular,    '01', 'Eletricista Instalador',  'LIVRO',    1)
+    (p_unidade, v_modular,    '01', 'Eletricista Instalador',  'LIVRO',    1),
+    (p_unidade, v_modular,    '02', 'Eletricista Projetos',    'LIVRO',    1)
   on conflict (unidade_id, metodo_id, codigo) do nothing;
 
   insert into curso (unidade_id, metodo_id, nome)
@@ -497,29 +517,47 @@ begin
       ('Informática Essencial',  'INTERATIVO', '01', 1),
       ('Informática Essencial',  'INTERATIVO', '02', 2),
       ('Informática Avançada',   'INTERATIVO', '03', 1),
+      ('Informática Avançada',   'INTERATIVO', '04', 2),
       ('Inglês Kids',            'INGLES',     '01', 1),
       ('Inglês Kids',            'INGLES',     '02', 2),
-      -- No Modular o curso tem UM livro; o que avança é o módulo (abaixo).
-      ('Eletricista Instalador', 'MODULAR',    '01', 1)
+      -- No Modular o livro dura vários módulos, mas o curso NÃO tem um livro só:
+      -- os três módulos abaixo se repartem em dois (1 e 2 no `01`, 3 no `02`).
+      -- ⚠️ Cresceu no card 8.1, e o motivo é aritmético, não decorativo — ver a
+      --    nota ⚠️ do cabeçalho desta seção.
+      ('Eletricista Instalador', 'MODULAR',    '01', 1),
+      ('Eletricista Instalador', 'MODULAR',    '02', 2)
     ) as s(curso, metodo, material, ordem)
     join metodo   me on me.unidade_id = p_unidade and me.codigo = s.metodo
     join curso    c  on c.unidade_id  = p_unidade and c.metodo_id = me.id and c.nome = s.curso
     join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id and m.codigo = s.material
   on conflict (curso_id, material_id) do nothing;
 
-  -- Três módulos sobre o MESMO livro: é a forma do Modular (card 7.2), e uma
-  -- fixture com um módulo por material não exercitaria isso.
+  -- DOIS módulos sobre o MESMO livro (o `01`) e o terceiro sobre o `02`: é a
+  -- forma do Modular (card 7.2) — um livro dura vários módulos —, e uma fixture
+  -- com um módulo por material não exercitaria isso.
+  --
+  -- ⚠️ O TERCEIRO MÓDULO MUDOU DE MATERIAL NO CARD 8.1, e a razão é aritmética:
+  --    a projeção só olha o SEGUNDO item pendente em diante (§2.4 de
+  --    docs/projecao-demanda.md — a disjunção com a demanda imediata), e a
+  --    trilha de um aluno Modular tem um item por MATERIAL do curso. Com um
+  --    livro só, todo aluno Modular tinha exatamente um item pendente, ficava em
+  --    k = 1 e NUNCA aparecia em v_projecao_aluno: o degrau MODULAR da cascata
+  --    era estruturalmente inalcançável pela fixture, e o teste dele passaria
+  --    medindo um conjunto vazio. A troca custa uma linha aqui e não mexe em
+  --    contagem de módulo nenhuma — continuam três, e continuam dois sobre o
+  --    mesmo livro, que é a propriedade que o card 7.1 escolheu exercitar.
   insert into modulo (unidade_id, curso_id, material_id, nome, ordem)
   select p_unidade, c.id, m.id, s.nome, s.ordem
     from (values
-      ('Módulo 1 — Comandos elétricos', 1),
-      ('Módulo 2 — Instalações prediais', 2),
-      ('Módulo 3 — Projetos', 3)
-    ) as s(nome, ordem)
+      ('Módulo 1 — Comandos elétricos',   '01', 1),
+      ('Módulo 2 — Instalações prediais', '01', 2),
+      ('Módulo 3 — Projetos',             '02', 3)
+    ) as s(nome, material, ordem)
     join metodo   me on me.unidade_id = p_unidade and me.codigo = 'MODULAR'
     join curso    c  on c.unidade_id  = p_unidade and c.metodo_id = me.id
                     and c.nome = 'Eletricista Instalador'
-    join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id and m.codigo = '01'
+    join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id
+                    and m.codigo = s.material
    where not exists (select 1 from modulo x where x.curso_id = c.id and x.ordem = s.ordem);
 
   insert into combo (unidade_id, metodo_id, nome)
@@ -578,12 +616,33 @@ select tests.seed_catalogo(tests.unidade('ESCOLA_B'));
 --       FORMADO). São a única entrada possível para fn_aluno_reverter_status, e
 --       sem eles o teste da reversão teria de criar o próprio aluno — que é o
 --       caminho para um teste que passa porque montou o cenário que queria.
+--
+-- ⚠️ ESTA CAMADA PASSOU A RODAR EM CONTEXTO DE ROTINA NO CARD 6.2, pelo mesmo
+--    motivo e com a mesma escolha das camadas `infra_fisica` (5.4) e `turmas`:
+--    o `insert` em `aluno` dispara `tg_aluno_trilha_inicial`, que chama
+--    `fn_trilha_gerar` — e ela exige permissão (`alunos.editar_trilha` ou
+--    `alunos.criar`) e escreve em tabelas com RLS forçada. O seed roda como
+--    `postgres`, sem `auth.uid()`: sem o contexto, `tem_permissao()` é falsa e o
+--    `supabase db reset` inteiro morre no primeiro aluno. A saída RECUSADA,
+--    de novo, foi afrouxar a função para acomodar um arquivo de teste.
+--
+--    CONSEQUÊNCIA QUE VALE ESCREVER: **a trilha dos doze alunos passa a nascer
+--    aqui**, gerada pelo trigger, e não mais na camada `trilha_estoque` — que
+--    tinha uma cópia da expansão combo → curso → material escrita à mão. A
+--    fixture deixou de duplicar a regra e passou a EXERCITÁ-LA, que é o mesmo
+--    argumento do `update` de entrega da seção 8.4. Com isso a `ordem` da trilha
+--    é a da função (10, 20, 30…) e não mais 1, 2, 3.
 create or replace function tests.seed_alunos(p_unidade uuid)
 returns void
 language plpgsql
 set search_path = public, pg_temp
 as $$
 begin
+  -- Contexto de rotina (ver a nota ⚠️ acima). `is_local => true`: morre no fim
+  -- da transação mesmo se o `insert` falhar no meio.
+  perform set_config('app.rotina', 'on', true);
+  perform set_config('app.rotina_unidade', p_unidade::text, true);
+
   insert into aluno (unidade_id, codigo_sgf, nome, metodo_id, combo_id, status,
                      status_desde, prev_conclusao_curso, data_inicio)
   select p_unidade, s.codigo_sgf, s.nome, me.id, cb.id, s.status,
@@ -595,7 +654,15 @@ begin
       -- prev_conclusao (dias a partir de hoje; negativo = vencida), dias de matrícula
       ('Ana Paula Ribeiro',  '3001', 'INTERATIVO', 'Informática Completo', 'ATIVO',     180, null, 180),
       ('Bruno Carvalho',     '3002', 'INTERATIVO', 'Informática Completo', 'ATIVO',      90,   90,  90),
-      ('Carla Menezes',      '3003', 'INTERATIVO', 'Informática Completo', 'ATIVO',      10, null,  10),
+      -- ⚠️ Carla ganhou `prev_conclusao_curso` FUTURA no card 8.1, e é a única
+      --    mudança de valor que aquele card fez nesta camada. Ela é a aluna
+      --    recém-matriculada e SEM entrega nenhuma — logo, sem ritmo mensurável
+      --    —, e com a previsão informada ela é o único caso do degrau
+      --    PREVISAO_CURSO da cascata: Bruno também tem previsão futura, mas tem
+      --    ritmo, e o ritmo vem antes (é ele quem prova a ORDEM da cascata).
+      --    Sem esta data o degrau 3 não teria nenhum aluno de fixture, e o teste
+      --    dele passaria medindo conjunto vazio.
+      ('Carla Menezes',      '3003', 'INTERATIVO', 'Informática Completo', 'ATIVO',      10,  120,  10),
       ('Diego Alves',        '3004', 'INTERATIVO', 'Informática Completo', 'ATIVO',     120,  -15, 120),
       ('Eduarda Lima',       '3005', 'MODULAR',    'Eletricista Completo', 'ATIVO',      60, null,  60),
       ('Felipe Nunes',       '3006', 'INGLES',     'Inglês Kids Completo', 'ACELERAR',   30,   60, 150),
@@ -972,9 +1039,12 @@ select tests.seed_turmas(tests.unidade('ESCOLA_B'));
 -- 8. Escola-fixture — camada `trilha_estoque` (card 6.1)
 -- =============================================================================
 -- Fecha o quadro do card 2.8 §4.2: os seis materiais ganham os saldos
--- **0, 0, 1, n, n, n** e os doze alunos ganham trilha — inclusive o "1 em FIM",
--- que era a última marca do quadro ainda sem casa (as outras duas foram para as
--- camadas `alunos` e `turmas`).
+-- **0, 0, 1, n, n, n** e a trilha dos alunos ganha ENTREGAS — inclusive o
+-- "1 em FIM", que era a última marca do quadro ainda sem casa (as outras duas
+-- foram para as camadas `alunos` e `turmas`).
+--
+-- ⚠️ Desde o card 6.2 a trilha em si NÃO nasce mais nesta camada: ela vem de
+--    `tg_aluno_trilha_inicial` na matrícula (seção 8.3 abaixo diz por quê).
 --
 -- Cinco escolhas que valem explicação:
 --
@@ -1032,8 +1102,16 @@ begin
   -- -------------------------------------------------------------------------
   -- 8.1 Pedidos de compra — um por estado que muda alguma conta
   -- -------------------------------------------------------------------------
+  -- ⚠️ TODO PEDIDO NASCE RASCUNHO AQUI, E SÓ DEPOIS RECEBE O STATUS FINAL — a
+  --    fixture passou a montar o pedido na ORDEM em que o sistema o monta
+  --    (04/09/2026, card 6.8). `tg_pedido_item_edicao` recusa item novo em pedido
+  --    que não é RASCUNHO, e recusa com razão: item que entra num pedido já
+  --    enviado abate a parcela "já pedida" de `v_pedido_sugerido` sem que o
+  --    fornecedor saiba dele. Inserir o pedido já como RECEBIDO e pendurar os
+  --    itens depois era um atalho que o banco não oferece a ninguém — nem à
+  --    fixture, nem ao importador do card 9.1, que faz o mesmo par de passos.
   insert into pedido_compra (unidade_id, numero, status, data_envio, fornecedor)
-  select p_unidade, s.numero, s.status,
+  select p_unidade, s.numero, 'RASCUNHO',
          case when s.envio_ha is null then null else fn_hoje() - s.envio_ha end,
          s.fornecedor
     from (values
@@ -1059,6 +1137,20 @@ begin
    where not exists (select 1 from pedido_item pi
                       where pi.pedido_id = pc.id and pi.material_id = m.id);
 
+  -- O status final, agora que os itens existem. `where p.status = 'RASCUNHO'`
+  -- é o que mantém a idempotência do seed (docs/seed-inicial.md): numa segunda
+  -- execução os pedidos já saíram do rascunho e nada é reescrito — e o
+  -- `2026-003`, cujo destino É o rascunho, nunca se move.
+  update pedido_compra p
+     set status = s.status
+    from (values
+      ('2026-001', 'RECEBIDO'),
+      ('2026-002', 'ENVIADO'),
+      ('2026-003', 'RASCUNHO')
+    ) as s(numero, status)
+   where p.unidade_id = p_unidade and p.numero = s.numero
+     and p.status = 'RASCUNHO' and s.status <> 'RASCUNHO';
+
   -- -------------------------------------------------------------------------
   -- 8.2 Entradas de estoque
   -- -------------------------------------------------------------------------
@@ -1080,9 +1172,24 @@ begin
       ('INTERATIVO', '01', 26, 120, true,  'chegada do pedido 2026-001'),
       ('INTERATIVO', '02',  3, 118, false, 'entrada manual: sobra de remessa antiga'),
       ('INTERATIVO', '03',  2, 118, false, 'entrada manual: o ultimo exemplar mora aqui'),
+      -- ⚠️ AS DUAS ENTRADAS DOS MATERIAIS NOVOS DO CARD 8.1, e a do `04` tem
+      --    quantidade EXATA por uma razão que custou um CI vermelho para
+      --    aparecer. Ela existe porque João Pedro recebe esse livro na seção 8.4
+      --    e sem ela o saldo iria a −1, que é o que a suíte inteira vigia; e ela
+      --    é de UM exemplar porque o `04` precisa terminar em ZERO. Ana Paula e
+      --    Bruno são os dois alunos da corrida de `entrega_ultimo_exemplar.sh`
+      --    (card 6.3), e o script assere que quem PERDE a corrida sai com
+      --    BLOQUEADA_SEM_ESTOQUE — o que só vale enquanto nenhum outro item
+      --    pendente deles tiver estoque. Com quatro exemplares aqui, o perdedor
+      --    passou a REORDENAR para o `04` e o script reprovou no CI, corretamente:
+      --    a premissa dele tinha mudado por baixo.
+      --    Consequência assumida: são TRÊS saldos zero na fixture, não dois — e o
+      --    terceiro tem função própria, que é manter aquele desfecho.
+      ('INTERATIVO', '04',  1, 118, false, 'entrada manual: um exemplar, e ele vai para Joao Pedro'),
       ('INGLES',     '01', 11, 115, false, 'entrada manual'),
       ('INGLES',     '02',  5, 115, false, 'entrada manual'),
-      ('MODULAR',    '01', 10, 115, false, 'entrada manual')
+      ('MODULAR',    '01', 10, 115, false, 'entrada manual'),
+      ('MODULAR',    '02',  6, 115, false, 'entrada manual')
     ) as s(metodo, material, qtd, dias, do_pedido, observacao)
     join metodo   me on me.unidade_id = p_unidade and me.codigo = s.metodo
     join material m  on m.unidade_id  = p_unidade and m.metodo_id = me.id
@@ -1105,40 +1212,28 @@ begin
                         and mv.tipo = 'AJUSTE');
 
   -- -------------------------------------------------------------------------
-  -- 8.3 A trilha inteira, derivada do combo
+  -- 8.3 A trilha — que desde o card 6.2 NÃO nasce aqui
   -- -------------------------------------------------------------------------
-  -- A `ordem` sai de combo_curso.ordem × curso_material.ordem, que é a mesma
-  -- cadeia que a função do card 6.2 vai percorrer — e é por isso que ela é
-  -- calculada e não digitada: uma trilha escrita à mão aqui deixaria o 6.2 sem
-  -- nada contra o que comparar o resultado dele.
+  -- Até o card 6.1 esta seção tinha uma cópia da expansão combo → curso →
+  -- material, escrita à mão porque a função ainda não existia. Ela existe desde o
+  -- card 6.2 (`fn_trilha_gerar`), disparada por `tg_aluno_trilha_inicial` na
+  -- matrícula: a trilha dos doze alunos nasce na camada `alunos` e a dos treze
+  -- `Aluno de Lotação` nasce na camada `turmas`, as duas pelo caminho REAL.
   --
-  -- ⚠️ O `row_number()` sobre as DUAS ordens é a parte que não pode simplificar:
-  --    `curso_material.ordem` é a posição dentro do CURSO, então o combo de
-  --    Informática (dois cursos) tem duas apostilas com `cm.ordem = 1`, e usá-la
-  --    direto derrubaria a inserção em `aluno_material_ordem_uk` — ou, pior num
-  --    combo de um curso só, passaria e deixaria a fixture com a ordem errada
-  --    sem nada acusando.
+  -- Manter a cópia aqui seria pior do que redundância: uma trilha escrita à mão
+  -- deixaria o 6.2 sem nada contra o que comparar, e o dia em que a função e a
+  -- cópia divergissem a suíte continuaria verde medindo a cópia. É o mesmo
+  -- argumento do `update` de entrega da seção 8.4 — a fixture percorre o caminho
+  -- que o sistema real tem.
   --
-  -- Karina Bastos NÃO ganha trilha, e é a decisão: ela é a aluna sem combo da
-  -- camada `alunos`, e aluno ATIVO sem trilha é exatamente o que a pendência do
-  -- card 6.2 existe para acusar.
+  -- Karina Bastos continua SEM trilha, e agora por construção: ela é a aluna sem
+  -- combo, e o `when (new.combo_id is not null)` do trigger a deixa de fora.
   --
   -- Os treze `Aluno de Lotação` da camada `turmas` GANHAM trilha, e isso não é
   -- efeito colateral aceito de má vontade: eles são ATIVO e têm combo, então um
-  -- deles sem trilha seria uma pendência FALSA na fixture — a mesma que a
-  -- pendência do card 6.2 vai abrir. O preço é conhecido e está escrito: a
-  -- demanda imediata de `INTERATIVO 01` (card 6.4) conta treze alunos a mais do
-  -- que a leitura ingênua "doze alunos na fixture" sugere.
-  insert into aluno_material (unidade_id, aluno_id, material_id, ordem, origem)
-  select p_unidade, a.id, cm.material_id,
-         row_number() over (partition by a.id order by cc.ordem, cm.ordem),
-         'COMBO'
-    from aluno a
-    join combo_curso cc on cc.combo_id = a.combo_id and cc.unidade_id = p_unidade
-    join curso_material cm on cm.curso_id = cc.curso_id and cm.unidade_id = p_unidade
-   where a.unidade_id = p_unidade
-     and not exists (select 1 from aluno_material am
-                      where am.aluno_id = a.id and am.material_id = cm.material_id);
+  -- deles sem trilha seria um caso falso na fixture. O preço é conhecido e está
+  -- escrito: a demanda imediata de `INTERATIVO 01` (card 6.4) conta treze alunos
+  -- a mais do que a leitura ingênua "doze alunos na fixture" sugere.
 
   -- -------------------------------------------------------------------------
   -- 8.4 As entregas: uma SAIDA por item entregue, e o vínculo na trilha
@@ -1158,6 +1253,15 @@ begin
         ('João Pedro Martins', 'INTERATIVO', '01', 380),
         ('João Pedro Martins', 'INTERATIVO', '02', 300),
         ('João Pedro Martins', 'INTERATIVO', '03', 200),
+        -- ⚠️ A QUARTA ENTREGA NASCEU COM O CARD 8.1, e ela é o que mantém a
+        --    marca "1 em FIM" do quadro do card 2.8 §4.2: com o `INTERATIVO 04`
+        --    no combo, João Pedro voltaria a ter item pendente e a fixture
+        --    perderia o único aluno com a trilha inteira entregue — o estado que
+        --    os testes 050, 051 e 052 usam para medir o FIM.
+        --    Ela dá de brinde o terceiro intervalo de v_ritmo_aluno: ele é o
+        --    único aluno da fixture com a janela de ritmo CHEIA (três
+        --    intervalos), e é sobre ele que o teste da janela é escrito.
+        ('João Pedro Martins', 'INTERATIVO', '04', 150),
         ('Lucas Ferreira',     'INTERATIVO', '01',  40),
         ('Felipe Nunes',       'INGLES',     '01', 100)
       ) as s(aluno, metodo, material, dias)
@@ -1231,7 +1335,214 @@ select tests.seed_trilha_estoque(tests.unidade('ESCOLA_A'));
 select tests.seed_trilha_estoque(tests.unidade('ESCOLA_B'));
 
 -- =============================================================================
--- 9. Fecho: nada em `tests` alcançável por quem não é `postgres`
+-- 9. Escola-fixture — camada `modular` (card 7.1)
+-- =============================================================================
+-- Duas turmas do curso Eletricista Instalador, e a segunda não é enfeite. Três
+-- escolhas que valem explicação:
+--
+--   (a) a `2026.1` tem UMA aluna, Eduarda Lima, que é a única MODULAR da camada
+--       `alunos` (card 4.2). Não há treze alunos de lotação como na camada
+--       `turmas`, e a diferença é de forma: a capacidade do bloco é DERIVADA dos
+--       PCs (card 5.2), então a borda 10/11 precisava de gente de verdade; a
+--       capacidade da turma Modular é COLUNA, e a borda dela é aritmética que o
+--       card 7.2 monta dentro da própria transação, sem custo de fixture.
+--
+--   (b) a `2025.2` está VAZIA de propósito, e é o que dá à guarda de exclusão os
+--       DOIS lados — uma turma que recusa ser apagada (a de Eduarda) e uma que
+--       aceita. É a mesma escolha que a camada `infra_fisica` fez com os PCs:
+--       fixture em que toda linha recusa não distingue a guarda de um `delete`
+--       simplesmente quebrado.
+--
+--   (c) o módulo corrente da `2025.2` está com `prev_conclusao` VENCIDA e o da
+--       `2026.1` não. A view `v_turma_modular_lotacao` do card 7.4 marca
+--       `modulo_atrasado` por essa comparação: com as duas turmas no mesmo
+--       estado, uma implementação que devolvesse sempre `true` (ou sempre
+--       `false`) passaria. E a turma atrasada é a SEM aluno de propósito — a
+--       com aluno serve à rotina de pendências, e uma turma que nasce atrasada
+--       misturaria os dois assuntos.
+--
+--   (d) ⚠️ CARD 7.4,5: a TERCEIRA turma, `Eletricista Individual 2026`, tem
+--       `capacidade = 1` e nasce VAZIA, e é o cenário da suíte de concorrência
+--       (`supabase/tests_concorrencia/admissao_turma_modular.sh`). Capacidade 1
+--       não é número de teste disfarçado: turma individual é forma corrente no
+--       Modular, e é a única em que a borda que interessa — ocupação =
+--       capacidade − 1, o instante em que existe UMA vaga — custa ZERO linha de
+--       fixture. A alternativa era uma turma de 15 com catorze alunos dentro:
+--       treze alunos a mais para medir exatamente a mesma aritmética.
+--       Ela é o irmão Modular do bloco de 9/10 da camada `turmas` (card 5.3), e
+--       o segundo aluno MODULAR (`Aluno Modular 01`) é quem corre contra Eduarda
+--       Lima por essa vaga.
+--
+-- Cronograma da `2026.1`: módulo 1 concluído, módulo 2 corrente, módulo 3 ainda
+-- sem datas. É a forma que o card 7.2 vai avançar (`fn_turma_modular_avancar`) e
+-- a que o 7.4 lê — turma com todos os módulos concluídos, que é o estado "turma
+-- terminou", fica para o teste do 7.4 montar, porque na fixture ela seria uma
+-- turma ativa que não representa nada em curso.
+--
+-- ⚠️ CONSEQUÊNCIA QUE VALE ESCREVER, porque muda quatro asserções do teste 090:
+--    com Eduarda numa turma ATIVA, ela deixa de receber `ALUNO_SEM_TURMA`. Não é
+--    regressão — é literalmente o que o portão do card 5.5 previa por escrito
+--    («no dia em que a tabela nascer, um aluno MODULAR alocado numa turma
+--    modular passará a receber ALUNO_SEM_TURMA todo dia — pendência falsa»),
+--    resolvido pelo `not exists` que este card acrescentou à rotina. A fixture é
+--    o que faz a correção ser MEDIDA em vez de declarada.
+--
+-- ⚠️ PASSOU A RODAR EM CONTEXTO DE ROTINA NO CARD 7.2, e o motivo é o mesmo das
+--    camadas `infra_fisica` (5.4) e `turmas` (5.3). O card 7.1 escreveu aqui,
+--    com razão PARA AQUELE DIA, que a camada não precisava de contexto: «nenhum
+--    trigger destas três tabelas chama função que exija unidade no contexto».
+--    O card 7.2 criou `tg_turma_modular_aluno_admissao`, que chama
+--    `fn_turma_modular_ocupacao` — `security definer` e filtrada por
+--    `fn_unidade_atual()`, como manda o C8. O seed roda como `postgres`, sem
+--    `auth.uid()`: sem o contexto a ocupação vem NULA, o trigger a lê como
+--    "turma de outra unidade" e o `supabase db reset` inteiro morre em PT404 na
+--    primeira aluna. Medido em 05/09/2026, no primeiro reset depois da migração.
+--
+--    A saída RECUSADA foi a mesma que o card 5.3 já tinha recusado: tratar
+--    unidade nula como "não faz nada" dentro da função. Isso seria um contorno
+--    permanente em produção — e, aqui, um contorno que abriria a admissão em
+--    turma de outra unidade — escrito para acomodar um arquivo de teste.
+create or replace function tests.seed_modular(p_unidade uuid)
+returns void
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_curso      uuid;
+  v_sala       uuid;
+  v_turma      uuid;
+  v_vazia      uuid;
+  v_individual uuid;
+begin
+  -- Contexto de rotina (ver a nota ⚠️ acima). `is_local => true`: morre no fim
+  -- da transação mesmo se o `insert` falhar no meio.
+  perform set_config('app.rotina', 'on', true);
+  perform set_config('app.rotina_unidade', p_unidade::text, true);
+
+  select c.id into v_curso
+    from curso c
+    join metodo me on me.id = c.metodo_id
+   where c.unidade_id = p_unidade and me.codigo = 'MODULAR'
+     and c.nome = 'Eletricista Instalador';
+
+  select id into v_sala from sala
+   where unidade_id = p_unidade and nome = 'Sala Eletricista';
+
+  -- Capacidade 15: é a capacidade real da turma de Eletricista, confirmada em
+  -- 31/08/2026 (Decisões vigentes §2). Aqui ela é COLUNA e não conta de PC — a
+  -- sala modular não tem nenhum.
+  insert into turma_modular (unidade_id, curso_id, nome, sala_id, capacidade,
+                             data_inicio, ativo)
+  select p_unidade, v_curso, s.nome, v_sala, s.capacidade,
+         fn_hoje() - s.inicio_ha, true
+    from (values
+      ('Eletricista 2026.1',         15,  60),
+      ('Eletricista 2025.2',         15, 300),
+      ('Eletricista Individual 2026', 1,  30)
+    ) as s(nome, capacidade, inicio_ha)
+   where not exists (select 1 from turma_modular x
+                      where x.unidade_id = p_unidade and x.nome = s.nome);
+
+  select id into v_turma from turma_modular
+   where unidade_id = p_unidade and nome = 'Eletricista 2026.1';
+  select id into v_vazia from turma_modular
+   where unidade_id = p_unidade and nome = 'Eletricista 2025.2';
+  select id into v_individual from turma_modular
+   where unidade_id = p_unidade and nome = 'Eletricista Individual 2026';
+
+  -- Cronograma da turma com aluna. A ORDEM não é coluna daqui: o join é por
+  -- `modulo.ordem`, que é de onde o módulo corrente sai (card 2.2 §9).
+  insert into turma_modular_modulo (unidade_id, turma_id, modulo_id,
+                                    data_inicio, prev_conclusao, concluido)
+  select p_unidade, v_turma, m.id,
+         case when s.inicio_ha is null then null else fn_hoje() - s.inicio_ha end,
+         case when s.prev_em  is null then null else fn_hoje() + s.prev_em  end,
+         s.concluido
+    from (values
+      -- ordem do módulo, dias desde o início, previsão (dias a partir de hoje),
+      -- concluído
+      (1,   60, -25, true),
+      (2,   25,  35, false),
+      (3, null, null, false)
+    ) as s(ordem, inicio_ha, prev_em, concluido)
+    join modulo m on m.unidade_id = p_unidade and m.curso_id = v_curso
+                 and m.ordem = s.ordem
+   where not exists (select 1 from turma_modular_modulo x
+                      where x.turma_id = v_turma and x.modulo_id = m.id);
+
+  -- Cronograma da turma vazia: só o primeiro módulo, começado e com previsão
+  -- VENCIDA. É o `modulo_atrasado` do card 7.4 com o outro valor.
+  insert into turma_modular_modulo (unidade_id, turma_id, modulo_id,
+                                    data_inicio, prev_conclusao, concluido)
+  select p_unidade, v_vazia, m.id, fn_hoje() - 300, fn_hoje() - 40, false
+    from modulo m
+   where m.unidade_id = p_unidade and m.curso_id = v_curso and m.ordem = 1
+     and not exists (select 1 from turma_modular_modulo x
+                      where x.turma_id = v_vazia and x.modulo_id = m.id);
+
+  -- Cronograma da turma individual: primeiro módulo em curso e com previsão
+  -- FUTURA. Turma sem cronograma nenhum é o caso que abre
+  -- TURMA_MODULAR_SEM_CRONOGRAMA na rotina do card 8.1, e a turma da borda de
+  -- concorrência não deve carregar um segundo assunto junto; previsão futura
+  -- pela mesma razão, para não virar a terceira turma atrasada do card 7.4.
+  insert into turma_modular_modulo (unidade_id, turma_id, modulo_id,
+                                    data_inicio, prev_conclusao, concluido)
+  select p_unidade, v_individual, m.id, fn_hoje() - 30, fn_hoje() + 45, false
+    from modulo m
+   where m.unidade_id = p_unidade and m.curso_id = v_curso and m.ordem = 1
+     and not exists (select 1 from turma_modular_modulo x
+                      where x.turma_id = v_individual and x.modulo_id = m.id);
+
+  -- O SEGUNDO ALUNO MODULAR (card 7.4,5). Nasce aqui, e não na camada `alunos`,
+  -- porque ele não é um caso de negócio: existe para que a corrida da seção de
+  -- concorrência tenha DOIS alunos diferentes disputando a mesma vaga. É a mesma
+  -- escolha — e o mesmo padrão de nome e de código — dos treze "Aluno de
+  -- Lotação" da camada `turmas`, que o card 5.3 criou pela mesma necessidade.
+  --
+  --   • `combo_id` NULO de propósito: com combo, `tg_aluno_trilha_inicial`
+  --     geraria uma trilha e a apostila de Eletricista passaria a ter mais um
+  --     item pendente — o que deslocaria a demanda imediata que os testes 050 a
+  --     062 medem. Karina Bastos (camada `alunos`) já é o precedente de aluno
+  --     sem combo, e a admissão em turma Modular não olha o combo: olha o
+  --     MÉTODO, que é MODULAR.
+  --   • SEM turma, e a consequência é desejada: ele recebe `ALUNO_SEM_TURMA`
+  --     todo dia, o que dá à rotina do card 5.5 o lado POSITIVO permanente do
+  --     `not exists` que o card 7.1 lhe acrescentou. Até aqui só o lado negativo
+  --     era fixo (Eduarda, com turma, não recebe) e o positivo só existia dentro
+  --     do 070 §6, desativando a turma dela dentro da transação.
+  insert into aluno (unidade_id, codigo_sgf, nome, metodo_id, combo_id, status,
+                     status_desde, data_inicio)
+  select p_unidade, '9101', 'Aluno Modular 01',
+         me.id, null, 'ATIVO', fn_hoje() - 30, fn_hoje() - 30
+    from metodo me
+   where me.unidade_id = p_unidade and me.codigo = 'MODULAR'
+     and not exists (select 1 from aluno a
+                      where a.unidade_id = p_unidade and a.codigo_sgf = '9101');
+
+  -- `data_entrada` explícita e não o default: a aluna está matriculada há 60
+  -- dias (camada `alunos`), e deixar o default de hoje faria a fixture dizer que
+  -- ela entrou na turma no dia em que alguém rodou o `db reset` — a mesma razão
+  -- pela qual o card 5.1 deixou `tipo_desde` valer no INSERT.
+  insert into turma_modular_aluno (unidade_id, turma_id, aluno_id, data_entrada, ativo)
+  select p_unidade, v_turma, a.id, fn_hoje() - 60, true
+    from aluno a
+   where a.unidade_id = p_unidade and a.nome = 'Eduarda Lima'
+     and not exists (select 1 from turma_modular_aluno x
+                      where x.turma_id = v_turma and x.aluno_id = a.id);
+end $$;
+
+comment on function tests.seed_modular(uuid) is
+  'Camada `modular` da escola-fixture (card 7.1): três turmas Modular de Eletricista — a 2026.1 com cronograma de três módulos e Eduarda Lima dentro, a 2025.2 vazia e com o módulo corrente vencido, e a Individual 2026 de capacidade 1 e vazia, cenário da suíte de concorrência do card 7.4,5, que traz junto o segundo aluno MODULAR (Aluno Modular 01, sem combo e sem turma).';
+
+-- As duas unidades recebem as mesmas turmas, pela mesma razão das camadas
+-- anteriores: `turma_modular_nome_uk` é única por UNIDADE, então repetir
+-- `Eletricista 2026.1` entre elas é exatamente o caso que a unique precisa
+-- aceitar — e recusaria se estivesse escrita sem o `unidade_id`.
+select tests.seed_modular(tests.unidade('ESCOLA_A'));
+select tests.seed_modular(tests.unidade('ESCOLA_B'));
+
+-- =============================================================================
+-- 10. Fecho: nada em `tests` alcançável por quem não é `postgres`
 -- =============================================================================
 -- `create function` concede EXECUTE a PUBLIC por padrão. A revogação do USAGE no
 -- schema já bastaria, mas as duas juntas sobrevivem a alguém conceder o schema

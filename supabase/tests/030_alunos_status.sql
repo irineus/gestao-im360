@@ -24,15 +24,18 @@ select plan(56);
 -- 1. A fixture chegou (camada `alunos` do card 3.4.5)
 -- ===========================================================================
 -- 12 de caso (camada `alunos`, card 4.2) + 13 de lotação (camada `turmas`,
--- card 5.1, para os blocos de 9 e de 10 terem alunos DISJUNTOS). A asserção
--- passou de 12 a 25 no card 5.1; as duas seguintes é que continuam guardando os
--- doze de caso, e por isso os de lotação nasceram com codigo_sgf na faixa 9xxx
--- em vez de nulo — os "três alunos sem codigo_sgf" seguem sendo três.
+-- card 5.1, para os blocos de 9 e de 10 terem alunos DISJUNTOS) + 1 Modular de
+-- concorrência (camada `modular`, card 7.4,5 — `Aluno Modular 01`, 9101, o
+-- segundo aluno MODULAR que a corrida da última vaga exige). A asserção passou
+-- de 12 a 25 no card 5.1 e de 25 a 26 no 7.4,5; as duas seguintes é que
+-- continuam guardando os doze de caso, e por isso os de cenário nasceram com
+-- codigo_sgf na faixa 9xxx em vez de nulo — os "três alunos sem codigo_sgf"
+-- seguem sendo três.
 select is(
   (select count(*)::bigint from public.aluno a
      join public.unidade u on u.id = a.unidade_id where u.codigo = 'ESCOLA_A'),
-  25::bigint,
-  'doze alunos de caso mais treze de lotacao na unidade A');
+  26::bigint,
+  'doze alunos de caso, treze de lotacao e um Modular de concorrencia na unidade A');
 
 select is(
   (select string_agg(distinct a.status, ',' order by a.status) from public.aluno a
@@ -297,6 +300,15 @@ drop table public.certificado_checklist;
 --    Os comentários saem de `prosrc` antes da busca: é a lição do card 4.2, onde
 --    o portão do gate de FORMADO teria aprovado a si mesmo por causa do
 --    comentário que descrevia o que faltava.
+--
+-- ✅ O PORTÃO DISPAROU E FOI ATENDIDO EM 04/09/2026 (card 6.2): `fn_trilha_gerar`
+--    nasceu, e com ela os dois triggers. A partir daqui o portão deixa de ser
+--    "ainda não é devido" e passa a ser "continua cumprido" — o que muda é a
+--    CONTRAPROVA, que não pode mais ser uma função sentinela: com os triggers no
+--    lugar, criar a pré-condição não torna nada devido. A prova por construção
+--    passou a derrubar os próprios triggers dentro da transação, que é o único
+--    jeito de o portão ser visto acusando alguma coisa. O `rollback` do fim do
+--    arquivo os devolve.
 create temporary view portao_trigger (gatilho, card, devida, precondicao) as
   select 'tg_aluno_status_desaloca', '5.1',
          to_regclass('public.bloco_aluno') is not null,
@@ -321,24 +333,32 @@ create temporary view portao_trigger_devido as
                       where t.tgname = p.gatilho and not t.tgisinternal);
 
 select is((select devido from portao_trigger_devido), '',
-  'nenhum trigger de aluno esta devido — tg_aluno_status_desaloca existe e a geracao da trilha ainda nao');
+  'nenhum trigger de aluno esta devido — os tres existem, e a geracao da trilha do card 6.2 ja e a pre-condicao cumprida');
 
--- Prova por construção: a função que torna os dois devidos, criada dentro desta
--- transação. A sentinela deixou de ser uma TABELA (que o card 6.1 criou de
--- verdade, e cujo `create table` morreria com "already exists") e passou a ser a
--- função que o card 6.2 vai escrever.
-create function public.fn_portao_sentinela_trilha() returns void
-language plpgsql set search_path = public, pg_temp as $sentinela$
-begin
-  insert into public.aluno_material (unidade_id, aluno_id, material_id, ordem)
-  values (null, null, null, 1);
-end $sentinela$;
+-- Prova por construção: o mundo sem os dois triggers do card 6.2, montado dentro
+-- desta transação. Sem `tg_aluno_trilha_inicial` a matrícula deixa de gerar
+-- trilha e `fn_trilha_gerar` vira função sem chamador (o defeito do card 4.7,7);
+-- sem `tg_aluno_combo_alterado` a troca de combo passa em silêncio e a trilha
+-- continua a do combo anterior, sem pendência nenhuma. Nenhum dos dois daria
+-- erro — daria um sistema que parece funcionar.
+drop trigger tg_aluno_trilha_inicial on public.aluno;
+drop trigger tg_aluno_combo_alterado on public.aluno;
 
 select is((select devido from portao_trigger_devido),
   'a geracao da trilha existe (card 6.2) e tg_aluno_combo_alterado nao; a geracao da trilha existe (card 6.2) e tg_aluno_trilha_inicial nao',
-  'nascida a geracao da trilha, o portao nomeia os triggers que ficaram para tras e o card deles');
+  'derrubados os dois, o portao nomeia cada um e o card deles');
 
-drop function public.fn_portao_sentinela_trilha();
+-- Devolvidos na hora: o resto do arquivo tem de rodar contra o schema de
+-- verdade, e não contra o mundo mutilado da contraprova.
+create trigger tg_aluno_trilha_inicial
+  after insert on public.aluno
+  for each row when (new.combo_id is not null)
+  execute function public.fn_aluno_trilha_inicial();
+
+create trigger tg_aluno_combo_alterado
+  after update of combo_id on public.aluno
+  for each row when (new.combo_id is distinct from old.combo_id)
+  execute function public.fn_aluno_combo_alterado();
 
 -- ===========================================================================
 -- 7. fn_aluno_alterar_status — caminho feliz com efeito conferido

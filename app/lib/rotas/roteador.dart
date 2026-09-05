@@ -9,6 +9,7 @@ import '../telas/acesso_bloqueado.dart';
 import '../telas/administracao/tela_administracao.dart';
 import '../telas/alunos/ficha_aluno.dart';
 import '../telas/alunos/tela_alunos.dart';
+import '../telas/compras/tela_compras.dart';
 import '../telas/dashboard/tela_dashboard.dart';
 import '../telas/em_construcao.dart';
 import '../telas/login.dart';
@@ -18,6 +19,7 @@ import '../telas/redefinir_senha.dart';
 import '../telas/salas/tela_salas.dart';
 import '../telas/selecao_unidade.dart';
 import '../telas/turmas/tela_turmas.dart';
+import '../telas/turmas/tela_turmas_modular.dart';
 import '../telas/sem_acesso.dart';
 import '../widgets/estados.dart';
 import '../widgets/shell_im360.dart';
@@ -40,10 +42,28 @@ final _telaDaRota = <String, Widget Function(GoRouterState)>{
   'materiais': (estado) =>
       TelaMateriais(materialId: estado.uri.queryParameters['material']),
   'salas': (estado) => TelaSalas(pcId: estado.uri.queryParameters['pc']),
+  // `?pedido=` segue o desenho de `?material=` e `?bloco=`: a tela abre já na
+  // aba Pedidos, com o pedido escolhido no painel. Quem o usa hoje é o próprio
+  // app, ao criar um rascunho a partir do pedido sugerido.
+  'compras': (estado) =>
+      TelaCompras(pedidoId: estado.uri.queryParameters['pedido']),
   'turmas': (estado) =>
       TelaTurmas(blocoId: estado.uri.queryParameters['bloco']),
+  // `?turma=` segue o desenho de `?bloco=`: a tela 5 abre já com a turma
+  // expandida. Quem o usará é a pendência `TURMA_MODULAR_SEM_CRONOGRAMA`
+  // (card 8.1), e ele existe desde já porque "Ver turma" sem o id larga a
+  // pessoa na lista inteira.
+  'turmas_modular': (estado) =>
+      TelaTurmasModular(turmaId: estado.uri.queryParameters['turma']),
   'pendencias': (_) => const TelaPendencias(),
   'administracao': (_) => const TelaAdministracao(),
+  // A rota 3b (card 2.4 §6) desde o card 6.6: `/alunos/:id/trilha` é o
+  // deep-link para a aba Trilha, e não uma tela separada. Ele existe como rota
+  // própria porque o conjunto mínimo dele tem `estoque.ler` a mais que o da
+  // ficha — quem chega aqui sem a permissão vê a tela "sem acesso" com o
+  // diagnóstico, em vez de a ficha abrir e a aba mentir com saldo 0.
+  'aluno_trilha': (estado) =>
+      FichaAluno(alunoId: estado.pathParameters['id']!, aba: 'trilha'),
 };
 
 /// Rotas filhas de uma tela — hoje só a ficha do aluno (`/alunos/:id`, card
@@ -69,15 +89,18 @@ List<RouteBase> _subRotas(Rota rota) => switch (rota.id) {
   _ => const [],
 };
 
-/// Cards que entregam cada tela — o placeholder diz o seu, para não virar
-/// destino permanente (docs/wireframes.md §18).
+/// Cards que entregam cada tela — registro de CÓDIGO, não texto de tela
+/// (docs/wireframes.md §18).
+///
+/// ⚠️ O número do card era exibido pelo placeholder ("Tela do card 8.5."), e
+/// jargão do board não vai para a tela de quem usa o sistema (item C1). O mapa
+/// fica porque continua respondendo *quem entrega o quê* a quem lê o código, e
+/// é a lista que encolhe a cada fase entregue.
+///
+/// Saíram daqui: o dashboard, no card 5.9 (a tela existe e é parcial — quem
+/// nomeia o que falta é o rodapé dela), e Turmas Modular, no 7.3.
+// ignore: unused_element
 const _cardDaRota = <String, String>{
-  // O dashboard saiu daqui no card 5.9: a tela existe, e é **parcial** — quem
-  // nomeia o card do que falta é a própria tela, em rodapé, e não um
-  // placeholder que esconderia a metade já entregue.
-  'aluno_trilha': '6.6',
-  'turmas_modular': '7.3',
-  'compras': '6.8',
   'projecao': '8.5',
   'certificados': '8.6',
   'importacao': '9.1',
@@ -211,6 +234,6 @@ class _TelaGuardada extends ConsumerWidget {
     }
     final construtor = this.construtor ?? _telaDaRota[rota.id];
     if (construtor != null) return construtor(estado);
-    return TelaEmConstrucao(rota: rota, card: _cardDaRota[rota.id] ?? '—');
+    return TelaEmConstrucao(rota: rota);
   }
 }

@@ -7,8 +7,19 @@ Sistema web/mobile que substitui a planilha "Gestão Interativo" na gestão de a
 ## Início de sessão (obrigatório, nesta ordem)
 
 1. Ler `docs/README-continuidade.md`.
-2. Ler a página Notion **"Gestão Interativo — Decisões vigentes"** (id `3cd2f3f4-b9b2-8106-95cd-fc8d937bd953`) via MCP do Notion. Em conflito com qualquer documento deste repositório, **a página do Notion vence** — ela é escrita no momento de cada decisão.
+2. Ler a página Notion **"Gestão Interativo — Decisões vigentes"** (id `3cd2f3f4-b9b2-8106-95cd-fc8d937bd953`) via MCP do Notion — as **seções 1 a 6**, que são as vigentes. Em conflito com qualquer documento deste repositório, **a página do Notion vence** — ela é escrita no momento de cada decisão.
 3. Só então executar a tarefa. Para "próxima tarefa" / "concluí" / "status do board", usar a skill `proxima-tarefa` (`.claude/skills/proxima-tarefa/SKILL.md`).
+
+**O que NÃO é leitura de partida** (decidido em 04/09/2026, cards 6.1,5 e 6.2,5, e é o que mantém esses dois passos baratos):
+
+- o **log cronológico**, que mora em `docs/historico-marcos.md` e na subpágina **📜 Histórico de decisões** da página do Notion;
+- o **detalhe das decisões** — raciocínio, medições e contraprovas —, que mora nas **subpáginas de detalhe** da própria página Decisões vigentes. São catorze: nove da **§2**, por domínio (Modelagem/views/projeção; Acesso, permissões e RLS; Alunos; Currículo e catálogo; Trilha e estoque; Alocação, blocos, grade e REP; Capacidade, salas, PCs e credenciais; Pendências, rotinas e testes; App, telas e design system); três da **§1**, por peça (Deploy web, CI/CD e portão de migrações; Vigia, backup e observabilidade; Fluxo de entrega, guarda de destrutivos e Edge Function); e duas da **§5**, por dono (Ajustes por card e achados transferidos; Configuração de Irineu, promoções e estimativa) — as cinco últimas do card 6.2,6.
+
+Os dois se consultam **quando a tarefa pedir** — mexendo em estoque, abre-se a subpágina de estoque; rastreando um card ou um defeito antigo, abre-se o histórico —, e não no início da sessão. O que as seções enxugadas guardam (**§1**, **§2** e **§5**) é o **enunciado** de cada regra (o que vale hoje e onde ela mora no código) mais a **armadilha concreta** que aquela regra já custou, com teto de **6 linhas** escrito na própria seção.
+
+Por que a regra existe: antes desta separação os dois documentos de partida somavam cerca de 430 mil caracteres, e a maior parte era log — as sessões batiam no limite de leitura e fatiavam arquivo só para obedecer a esta regra. O card 6.1,5 tirou o log; a §2 continuava com 146 KB e ainda obrigava a fatiar, e o 6.2,5 desceu o raciocínio para as subpáginas, chegando a ~180 KB. O **6.2,6** repetiu a cirurgia na **§1** (48 KB) e na **§5** (51 KB), que juntas saíram com 29 KB, e a página chegou a ~125 KB. O **6.2,7** fez a segunda passagem na **§2** (66.884 → **61.408**), e a página está hoje em **120.161 caracteres**. **Nenhuma linha foi resumida ou apagada em nenhum dos quatro — mudou de lugar.**
+
+⚠️ **A §2 tem piso, e ele foi medido (card 6.2,7, 04/09/2026): não adianta repetir a cirurgia.** Depois de descer todo o raciocínio que restava, ela é **70 enunciados (31 KB) + 111 armadilhas (33 KB)**; encolhê-la mais só apagando um ou outro, que é o que o método proíbe. Consequência prática para toda sessão: **a página continua não cabendo num `notion-fetch` só** — o limite da ferramenta fica por volta de 67 KB de português, e a página tem 120 KB. Quem precisar dela inteira lê em fatias; quem precisar de um domínio abre a subpágina dele. Encolher isso de verdade exige mudar o método, e essa decisão é de Irineu.
 
 Se o MCP do Notion não estiver disponível na sessão, avisar Irineu antes de prosseguir — o board e as decisões vivem lá.
 
@@ -90,8 +101,8 @@ não interativa (uma sessão por card, em sequência) está em `docs/cadeia-exec
 - Campo `Notas`: buscar o valor atual antes de atualizar e reenviar o texto completo — nunca sobrescrever a linha "Origem:".
 - Páginas de resultado de tarefa: sempre **subpáginas do card** (`parent: {page_id: <card-id>}`), nunca soltas na raiz.
 - Inserir card no meio da sequência: `Ordem` decimal (ex.: 3.5), sem renumerar os demais.
-- Ao encerrar tarefa que gere decisão: atualizar a Decisões vigentes com `update_content` na seção correspondente (nunca `replace_content`) + registrar no Histórico com data e card de origem.
+- Ao encerrar tarefa que gere decisão: atualizar a Decisões vigentes com `update_content` na seção correspondente (nunca `replace_content`) + registrar na subpágina **📜 Histórico de decisões** (`3d12f3f4-b9b2-815e-9643-edc69db65f5c`), com `insert_content` e `position: start`, com data e card de origem. A linha nova vai **na subpágina**, nunca de volta na página-mãe (card 6.1,5, 04/09/2026).
 
-## Estado atual (31/08/2026)
+## Estado atual (04/09/2026)
 
-Concepção concluída; plano v1.1 aprovado com as 9 respostas do dono do produto; decisões técnicas fechadas. **Fase 0 (Fundação) em andamento.** Target de go-live: outubro/2026 (adoção provavelmente em fases). Detalhes e pendências: Decisões vigentes no Notion.
+Concepção concluída; plano v1.1 aprovado com as 9 respostas do dono do produto; decisões técnicas fechadas. **Fases 0 a 06 entregues (a 06 só espera o marco 6.9, que depende de gente); Fase 07 (Modular) em andamento desde 05/09/2026.** Target de go-live: outubro/2026 (adoção provavelmente em fases). O estado corrente de verdade é o board do Notion — esta linha envelhece, ele não. Detalhes e pendências: Decisões vigentes no Notion.

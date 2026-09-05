@@ -2,10 +2,13 @@
 ///
 /// Fonte dos textos: docs/design-system.md §7.1 (card 2.7), mais `PC_INEXISTENTE`
 /// (card 2.9), os três do card 3.5, `ALUNO_INEXISTENTE` (card 4.2),
-/// `PC_COM_HISTORICO` (card 4.3), `BLOCO_COM_ALOCACAO` (card 5.1) e os três do
-/// card 6.1 (trilha e estoque). O contrato
-/// do conjunto é
-/// `test/fixtures/codigos_erro.txt`, na raiz do repositório.
+/// `PC_COM_HISTORICO` (card 4.3), `BLOCO_COM_ALOCACAO` (card 5.1), os três do
+/// card 6.1 (trilha e estoque), `MATERIAL_JA_NA_TRILHA` (card 6.2),
+/// `MOVIMENTO_INEXISTENTE` (card 6.3), os dez do card 6.5 (pedidos de compra,
+/// recebimento e ajuste de estoque), `TURMA_COM_ALUNO` (card 7.1) e os seis do
+/// card 7.2 (regras Modular), traduzidos no 7.3 quando a tela 5 nasceu. O
+/// contrato do conjunto é `test/fixtures/codigos_erro.txt`, na raiz do
+/// repositório.
 ///
 /// O app trata SEMPRE pelo código, nunca pelo texto do banco (card 2.2 §1.2):
 /// o texto pode mudar numa migração; o código é estável.
@@ -124,15 +127,99 @@ abstract final class CatalogoErros {
     'COMPOSICAO_METODO_DIVERGENTE':
         'Este item é de outro método. A composição do catálogo não pode '
         'misturar métodos.',
+    // ⚠️ A frase falava só em REMOVER até 04/09/2026 (card 6.8). O mesmo código
+    // passou a cobrir criar item e mudar a quantidade fora do rascunho —
+    // `tg_pedido_item_edicao` —, e o texto antigo mandaria a pessoa procurar um
+    // botão de remover que ela não estava usando.
     'PEDIDO_NAO_RASCUNHO':
-        'Só dá para remover item de pedido em rascunho. Cancele o pedido ou '
-        'ajuste as quantidades.',
+        'Só dá para mexer nos itens de um pedido em rascunho. Cancele o pedido '
+        'ou receba o que chegou.',
     // Mesma família do PC_COM_HISTORICO e do BLOCO_COM_ALOCACAO, mas aqui a
     // recusa é total: movimento de estoque não se altera nem se apaga, e a
     // correção é sempre um movimento novo.
     'MOVIMENTO_IMUTAVEL':
         'Movimento de estoque não pode ser alterado nem apagado. Para corrigir, '
         'lance um estorno.',
+
+    // --- card 6.2 (edição da trilha)
+    // Sem este código a segunda inclusão da mesma apostila chegaria à tela como
+    // um erro cru da unique — o que o card 2.2 §1.2 proíbe.
+    'MATERIAL_JA_NA_TRILHA':
+        'Esta apostila já está na trilha do aluno. Para mudá-la de lugar, use a '
+        'reordenação.',
+
+    // --- card 6.3 (entrega e estorno)
+    // Vale também para movimento de outra unidade, pela mesma razão do
+    // PC_INEXISTENTE. Não se confunde com MOVIMENTO_NAO_ESTORNAVEL: aquele fala
+    // de um movimento que existe e é do tipo errado (ENTRADA, AJUSTE, ESTORNO).
+    'MOVIMENTO_INEXISTENTE': 'Este movimento de estoque não foi encontrado.',
+
+    // --- card 6.5 (pedidos de compra, recebimento e ajuste de estoque)
+    // Os dois primeiros valem também para pedido e material de OUTRA unidade,
+    // pela mesma razão do PC_INEXISTENTE: quem não pode ver não descobre que
+    // existe.
+    'PEDIDO_INEXISTENTE': 'Este pedido de compra não foi encontrado.',
+    'MATERIAL_INEXISTENTE': 'Esta apostila não foi encontrada.',
+    // Três estados, três frases: reaproveitar PEDIDO_NAO_RECEBIVEL nos outros
+    // dois mandaria a pessoa procurar o problema no lugar errado.
+    'PEDIDO_NAO_ENVIAVEL':
+        'Só pedido em rascunho pode ser enviado. Este já saiu do rascunho.',
+    'PEDIDO_NAO_CANCELAVEL':
+        'Este pedido não pode ser cancelado. Pedido já recebido se corrige '
+        'estornando as entradas de estoque.',
+    'PEDIDO_SEM_ITEM': 'Informe ao menos um item para o pedido.',
+    'MATERIAL_JA_NO_PEDIDO':
+        'O mesmo material aparece mais de uma vez no pedido. Some as '
+        'quantidades numa linha só.',
+    'ITEM_FORA_DO_PEDIDO':
+        'Este item não pertence ao pedido que está sendo recebido.',
+    'QUANTIDADE_INVALIDA': 'Informe uma quantidade válida.',
+    'ESTORNO_SINAL_INVALIDO':
+        'O estorno tem de devolver exatamente o que o movimento original '
+        'movimentou.',
+    'SALDO_INSUFICIENTE':
+        'O ajuste deixaria o estoque negativo. Confira a contagem.',
+
+    // --- card 7.1 (guarda de exclusão de turma Modular)
+    // Mesma família do PC_COM_HISTORICO e do BLOCO_COM_ALOCACAO:
+    // `turma_modular_aluno.turma_id` é `on delete cascade` e a tabela não tem
+    // política de delete para ninguém, então apagar a turma levava junto, em
+    // silêncio, quem esteve nela. A mensagem diz a saída, que é a mesma que a
+    // tela de Turmas Modular do card 7.3 oferece.
+    'TURMA_COM_ALUNO':
+        'Esta turma tem histórico de alunos e não pode ser excluída. '
+        'Desative-a.',
+
+    // --- card 7.2 (regras Modular), traduzidos no card 7.3
+    // Os seis nasceram nas funções e nos triggers do 7.2 e chegam ao catálogo
+    // aqui: até a tela 5 existir não havia onde aparecerem, e código sem
+    // tradução vira "não foi possível concluir", que tem cara de problema de
+    // rede. `TURMA_INEXISTENTE` vale também para turma de OUTRA unidade, pela
+    // mesma razão de `PC_INEXISTENTE` e `BLOCO_INEXISTENTE`: quem não pode ver
+    // não descobre que existe.
+    'TURMA_INEXISTENTE': 'Esta turma Modular não foi encontrada.',
+    // Código próprio, e não `BLOCO_LOTADO`: a saída é OUTRA. No bloco de
+    // horário a capacidade vem dos PCs da sala, e a mensagem manda verificá-la;
+    // aqui a capacidade é digitada na própria turma, e é lá que se resolve.
+    'TURMA_LOTADA':
+        'Esta turma está lotada. Remova um aluno, aumente a capacidade da '
+        'turma ou use outra turma do curso.',
+    // Não se confunde com `METODO_INCOMPATIVEL`, e é por isso que o card 7.2
+    // precisou das DUAS checagens: este fala do aluno (não é do Modular);
+    // aquele, da turma (o curso dela é de outro método).
+    'ALUNO_NAO_MODULAR':
+        'Só aluno do método Modular entra em turma Modular. Alunos dos outros '
+        'métodos são alocados em blocos de horário.',
+    // Os dois sentidos do "não há módulo corrente", separados de propósito
+    // (card 7.2 §5): dizer "todos já foram concluídos" a quem nunca montou o
+    // cronograma manda procurar o erro no lugar errado.
+    'TURMA_SEM_CRONOGRAMA':
+        'Esta turma não tem cronograma de módulos. Monte o cronograma antes de '
+        'avançar o módulo.',
+    'TURMA_SEM_MODULO_CORRENTE':
+        'Todos os módulos desta turma já foram concluídos. Desative a turma ou '
+        'acrescente módulos ao cronograma.',
+    'DATA_OBRIGATORIA': 'Informe a data para continuar.',
 
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':

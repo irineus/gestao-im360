@@ -4,7 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../erros/erro_app.dart';
 import '../theme/dimensoes.dart';
 import '../theme/tipografia.dart';
+import 'barra_filtros.dart';
 import 'estados.dart';
+
+/// O tom de uma linha em alerta (design-system §5.2). `atencao` é o par tonal
+/// terciário (âmbar), `erro` é o par de erro — e nenhum dos dois substitui o
+/// ícone e a palavra que dão o motivo: cor não é portadora única (§8.2).
+enum TomLinha { nenhum, atencao, erro }
 
 /// Uma coluna da [TabelaIm360].
 ///
@@ -96,6 +102,8 @@ class TabelaIm360<T> extends StatelessWidget {
     this.aoTocarLinha,
     this.cartao,
     this.aoRepetir,
+    this.tomDaLinha,
+    this.linhaSelecionada,
   });
 
   final List<ColunaIm360<T>> colunas;
@@ -116,6 +124,22 @@ class TabelaIm360<T> extends StatelessWidget {
   final void Function(T item)? aoTocarLinha;
   final CartaoIm360 Function(T item)? cartao;
   final VoidCallback? aoRepetir;
+
+  /// "Linha em alerta" do design-system §5.2: fundo tonal de atenção ou de erro.
+  /// Nasceu na tela 6 (card 6.7), que é a primeira com linha em alerta — saldo
+  /// abaixo do mínimo (atenção) e saldo negativo (erro).
+  ///
+  /// ⚠️ O fundo tonal é a **segunda** metade do contrato: cor nunca é portadora
+  /// única (§8.2), e o ícone com forma própria mora na célula que dá o motivo —
+  /// no caso da tela 6, a do Saldo. Ver a divergência registrada no §11 do
+  /// design-system: o documento pede o ícone na PRIMEIRA célula, e ele fica na
+  /// do número.
+  final TomLinha Function(T item)? tomDaLinha;
+
+  /// A linha destacada como escolhida — o painel de detalhe abaixo da tabela
+  /// (tela 6) mostra o conteúdo dela, e sem a marca a lista não diz de quem é o
+  /// painel. Nasceu no card 6.7.
+  final bool Function(T item)? linhaSelecionada;
 
   /// Quais colunas cabem em [largura]: sai primeiro a de maior [prioridade];
   /// as de prioridade 1 ficam sempre, mesmo apertadas.
@@ -155,7 +179,7 @@ class TabelaIm360<T> extends StatelessWidget {
                 Dim.e16,
                 Dim.e8,
               ),
-              child: mobile ? _barraMobile(context) : _barra(),
+              child: _barra(context, mobile),
             ),
           Expanded(
             child: linhas.when(
@@ -180,41 +204,13 @@ class TabelaIm360<T> extends StatelessWidget {
     },
   );
 
-  Widget _barra() => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Expanded(child: filtros ?? const SizedBox.shrink()),
-      for (final acao in acoes) ...[const SizedBox(width: Dim.e8), acao],
-    ],
-  );
-
-  Widget _barraMobile(BuildContext context) => Row(
-    children: [
-      if (filtros != null)
-        OutlinedButton.icon(
-          onPressed: () => showModalBottomSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            builder: (contexto) => SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  Dim.e16,
-                  Dim.e16,
-                  Dim.e16,
-                  Dim.e16 + MediaQuery.viewInsetsOf(contexto).bottom,
-                ),
-                child: filtros,
-              ),
-            ),
-          ),
-          icon: const Icon(Icons.filter_list),
-          label: Text(
-            filtrosAtivos > 0 ? 'Filtrar ($filtrosAtivos)' : 'Filtrar',
-          ),
-        ),
-      const Spacer(),
-      for (final acao in acoes) ...[const SizedBox(width: Dim.e8), acao],
-    ],
+  /// A barra saiu deste arquivo na revisão das telas 06/07 (item H4): as telas
+  /// 4 e 5 não usam a tabela e precisavam da MESMA barra.
+  Widget _barra(BuildContext context, bool mobile) => BarraFiltrosIm360(
+    filtros: filtros,
+    filtrosAtivos: filtrosAtivos,
+    acoes: acoes,
+    mobile: mobile,
   );
 
   Widget _tabela(BuildContext context, List<T> itens, double largura) {
@@ -230,9 +226,41 @@ class TabelaIm360<T> extends StatelessWidget {
             itemBuilder: (context, i) {
               final item = itens[i];
               final tocar = aoTocarLinha;
-              return InkWell(
-                onTap: tocar == null ? null : () => tocar(item),
-                child: _linha(visiveis, item: item),
+              final cores = Theme.of(context).colorScheme;
+              final tom = tomDaLinha?.call(item) ?? TomLinha.nenhum;
+              final selecionada = linhaSelecionada?.call(item) ?? false;
+              final fundo = switch (tom) {
+                TomLinha.erro => cores.errorContainer,
+                TomLinha.atencao => cores.tertiaryContainer,
+                TomLinha.nenhum =>
+                  selecionada ? cores.surfaceContainerHighest : null,
+              };
+              // O texto acompanha o fundo tonal. Sem isto a célula ficava com
+              // o `onSurface` da tabela sobre um fundo que não é o da tabela —
+              // o par de contraste verificado é (container, onContainer), e
+              // metade dele não estava sendo usada (item A1).
+              final corTexto = switch (tom) {
+                TomLinha.erro => cores.onErrorContainer,
+                TomLinha.atencao => cores.onTertiaryContainer,
+                TomLinha.nenhum => null,
+              };
+              final linha = _linha(
+                visiveis,
+                item: item,
+                selecionada: selecionada,
+                cores: cores,
+              );
+              return Material(
+                color: fundo ?? Colors.transparent,
+                child: InkWell(
+                  onTap: tocar == null ? null : () => tocar(item),
+                  child: corTexto == null
+                      ? linha
+                      : DefaultTextStyle.merge(
+                          style: TextStyle(color: corTexto),
+                          child: linha,
+                        ),
+                ),
               );
             },
           ),
@@ -246,8 +274,18 @@ class TabelaIm360<T> extends StatelessWidget {
     List<ColunaIm360<T>> visiveis, {
     List<String>? celulas,
     T? item,
-  }) => SizedBox(
+    bool selecionada = false,
+    ColorScheme? cores,
+  }) => Container(
     height: Dim.alturaLinha,
+    decoration: selecionada && cores != null
+        // Barra à esquerda, e não só o fundo: a marca de "é esta a linha do
+        // painel" precisa sobreviver ao fundo tonal de alerta, que já ocupa a
+        // cor da própria linha.
+        ? BoxDecoration(
+            border: Border(left: BorderSide(color: cores.primary, width: 3)),
+          )
+        : null,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: Dim.e16),
       child: Row(

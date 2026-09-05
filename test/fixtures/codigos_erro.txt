@@ -63,3 +63,63 @@ RESOLUCAO_INVALIDA
 COMPOSICAO_METODO_DIVERGENTE
 PEDIDO_NAO_RASCUNHO
 MOVIMENTO_IMUTAVEL
+# 1 do card 6.2 (edicao da trilha)
+# Sem ele, a segunda inclusao da mesma apostila chega a tela como um 23505 cru
+# da aluno_material_uk — que e o que o card 2.2 §1.2 proibe.
+MATERIAL_JA_NA_TRILHA
+# 1 do card 6.3 (estorno de entrega)
+# Mesma familia de PC_INEXISTENTE, ALUNO_INEXISTENTE, BLOCO_INEXISTENTE e
+# PENDENCIA_INEXISTENTE: vale tambem para movimento de OUTRA unidade, porque a
+# leitura e invoker — quem nao pode ver nao descobre que existe. Reaproveitar
+# MOVIMENTO_NAO_ESTORNAVEL mandaria procurar o problema no lugar errado.
+MOVIMENTO_INEXISTENTE
+# 10 do card 6.5 (pedidos de compra, recebimento e ajuste de estoque)
+# Familia de PC_INEXISTENTE / ALUNO_INEXISTENTE / MOVIMENTO_INEXISTENTE: vale
+# tambem para pedido e material de OUTRA unidade, porque a leitura e invoker.
+PEDIDO_INEXISTENTE
+MATERIAL_INEXISTENTE
+# Os tres estados que recusam uma acao de pedido. Nao se resumem num codigo so:
+# "nao esta aguardando recebimento", "so rascunho se envia" e "este pedido nao
+# pode ser cancelado" sao tres frases diferentes na tela, e reaproveitar um deles
+# mandaria a pessoa procurar o problema no lugar errado.
+PEDIDO_NAO_ENVIAVEL
+PEDIDO_NAO_CANCELAVEL
+PEDIDO_SEM_ITEM
+# O mesmo material duas vezes no pedido violaria pedido_item_uk e chegaria a tela
+# como 23505 cru — mesmo molde do MATERIAL_JA_NA_TRILHA do card 6.2.
+MATERIAL_JA_NO_PEDIDO
+ITEM_FORA_DO_PEDIDO
+QUANTIDADE_INVALIDA
+# Camada 2 do estorno: sinal oposto, mesma magnitude, mesmo material e mesma
+# unidade do movimento de origem. Nao se confunde com MOVIMENTO_NAO_ESTORNAVEL,
+# que fala do TIPO do movimento, nem com MOVIMENTO_JA_ESTORNADO.
+ESTORNO_SINAL_INVALIDO
+# "Sinal livre" no ajuste e sobre a direcao, nao sobre o saldo: saldo negativo
+# reprova o criterio (4) do marco 6.9 e e um numero que ninguem explica.
+SALDO_INSUFICIENTE
+# 1 do card 7.1 (guarda de exclusao de turma Modular)
+# Mesma familia de PC_COM_HISTORICO (4.3) e BLOCO_COM_ALOCACAO (5.1):
+# turma_modular_aluno e `on delete cascade` e nao tem politica de delete para
+# ninguem, entao apagar a turma levava junto, em silencio, quem esteve nela.
+# Codigo proprio e nao BLOCO_COM_ALOCACAO: a mensagem manda DESATIVAR A TURMA, e
+# turma Modular nao e bloco de horario — a saida de tela e outra.
+TURMA_COM_ALUNO
+# 6 do card 7.2 (regras Modular), traduzidos no card 7.3 (a tela 5)
+# Ate a tela existir nao havia onde eles aparecerem — e codigo sem traducao vira
+# "nao foi possivel concluir", que tem cara de problema de rede.
+# TURMA_INEXISTENTE e da familia de PC_INEXISTENTE / BLOCO_INEXISTENTE: vale
+# tambem para turma de OUTRA unidade, porque a leitura e invoker.
+TURMA_INEXISTENTE
+# Codigo proprio e nao BLOCO_LOTADO: a saida e OUTRA. No bloco a capacidade vem
+# dos PCs da sala; aqui ela e digitada na propria turma, e e la que se resolve.
+TURMA_LOTADA
+# Nao se confunde com METODO_INCOMPATIVEL, e e por isso que o 7.2 precisou das
+# DUAS checagens: este fala do ALUNO (nao e do Modular); aquele, da TURMA (o
+# curso dela e de outro metodo).
+ALUNO_NAO_MODULAR
+# Os dois sentidos do "nao ha modulo corrente" (card 7.2 §5), separados: dizer
+# "todos ja foram concluidos" a quem nunca montou o cronograma manda a pessoa
+# procurar o erro no lugar errado.
+TURMA_SEM_CRONOGRAMA
+TURMA_SEM_MODULO_CORRENTE
+DATA_OBRIGATORIA

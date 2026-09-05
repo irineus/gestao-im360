@@ -167,30 +167,45 @@ class _Centro extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ⚠️ `SingleChildScrollView` desde 04/09/2026 (card 6.8), e não é zelo: os
+    //    quatro estados moram em `Expanded` dentro de PAINÉIS — o de
+    //    movimentações (6.7) e o de pedido (6.8) ocupam 2/5 da altura —, e ali o
+    //    conjunto ícone + frase + código + botão não cabe. Sem o scroll o
+    //    Flutter desenha as listras amarelas de overflow POR CIMA do botão
+    //    "Tentar de novo", e o estado de erro deixa de ter saída justamente na
+    //    tela em que a pessoa precisa dela. Medido no `tela_compras_test`, com
+    //    o painel de itens falhando: `A RenderFlex overflowed by 40 pixels`.
+    //    Continua CENTRADO: o scroll só entra quando não cabe.
     return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: Dim.larguraFormularioMax),
-        child: Padding(
-          padding: const EdgeInsets.all(Dim.e24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icone, size: 40, color: corIcone),
-              const SizedBox(height: Dim.e16),
-              Text(texto, style: Tipografia.corpo, textAlign: TextAlign.center),
-              if (apoio != null) ...[
-                const SizedBox(height: Dim.e8),
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: Dim.larguraFormularioMax),
+          child: Padding(
+            padding: const EdgeInsets.all(Dim.e24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icone, size: 40, color: corIcone),
+                const SizedBox(height: Dim.e16),
                 Text(
-                  apoio!,
-                  style: Tipografia.apoio.copyWith(color: corIcone),
+                  texto,
+                  style: Tipografia.corpo,
                   textAlign: TextAlign.center,
                 ),
+                if (apoio != null) ...[
+                  const SizedBox(height: Dim.e8),
+                  Text(
+                    apoio!,
+                    style: Tipografia.apoio.copyWith(color: corIcone),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                if (rotuloAcao != null && aoAgir != null) ...[
+                  const SizedBox(height: Dim.e24),
+                  FilledButton(onPressed: aoAgir, child: Text(rotuloAcao!)),
+                ],
               ],
-              if (rotuloAcao != null && aoAgir != null) ...[
-                const SizedBox(height: Dim.e24),
-                FilledButton(onPressed: aoAgir, child: Text(rotuloAcao!)),
-              ],
-            ],
+            ),
           ),
         ),
       ),

@@ -315,7 +315,10 @@ Rota: `alunos.ler + materiais.ler` (aba Trilha soma `estoque.ler`). Perfis: todo
 ```
 
 - Fonte: `v_aluno_trilha` (card 6.6) + saldo do próximo via `v_estoque_atual` (por isso a aba exige
-  `estoque.ler`). O ritmo vem de `fn_ritmo_aluno` (ajuste não bloqueante do card de Ordem 5).
+  `estoque.ler`). *(Implementada em 04/09/2026: a view traz o saldo por `fn_saldo_material`, que é a
+  mesma soma de `v_estoque_atual` — a tela lê um objeto só, e não dois.)* O ritmo vem de
+  `fn_ritmo_aluno` (ajuste não bloqueante do card de Ordem 5) — **e ela ainda não existe**: é do
+  card 8.1, e a linha "ritmo: 1 apostila/23 dias" está fora da aba até lá (divergência 15 do §17).
 - **[Registrar entrega]** (`estoque.lancar_saida`) chama `fn_registrar_entrega` e reage aos três
   status de `tp_entrega_resultado` (card 2.2 §6.1):
   - `ENTREGUE` → confirmação com o próximo material já recalculado;
@@ -875,8 +878,72 @@ que se resolve em silêncio volta como defeito na revisão seguinte.
 | 12 | **Compras (tela 7) ainda não existe**, e o §14.3 manda os três tipos de estoque para lá | Vão para **Materiais** com `?material=<id>`. Quando o card 6.8 nascer, muda uma linha em `rotaDaAcao` |
 | 13 | **Abas Trilha e Certificado** ainda não existem (cards 6.6 e 8.6), e o §14.3 manda pendências para elas | A ficha abre nelas assim mesmo: a aba está no lugar e diz qual card a entrega. Destino certo com conteúdo por vir é honesto; mandar para Dados seria mandar para o lugar errado |
 
+### Divergência do card 6.5 (04/09/2026)
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 14 | **`[Criar pedido…]` (§10.1) é guardado por `compras.criar`** | `fn_pedido_criar` exige **`compras.criar` E `compras.ler`**. O número do pedido é derivado da leitura dos pedidos da unidade: sob RLS, quem não lê conta zero e repete um número já usado — a redução silenciosa do `views-leitura.md` §3.4 chegando à tela como `23505` cru. Exigir explicitamente troca isso por `SEM_PERMISSAO`, que é uma frase que se entende. Na matriz inicial ninguém tem `compras.criar` sem `compras.ler`, então **a tela não muda**; muda o modo de falha. É a mesma regra que o card 2.4 (g) já aplica às rotas: guardar pelo conjunto mínimo que faz a tela mostrar número certo, não pela permissão óbvia |
+
+### Divergências do card 6.6 (04/09/2026) — a aba Trilha
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 15 | ✅ **FECHADA em 05/09/2026 (card 8.1,5).** O 8.1 entregou `v_ritmo_aluno` e `fn_ritmo_aluno`, e a linha entrou no cabeçalho da aba: *"ritmo: 1 apostila a cada N dias · última entrega dd/mm/aaaa"*, lida da **view** (o mesmo número que a projeção usou) e com os três estados — `ritmo_dias` nulo diz "sem ritmo ainda (menos de duas entregas com intervalo válido)", **nunca "0 dias"**, e erro de leitura não vira "sem ritmo". Enunciado original preservado: **A linha "ritmo: 1 apostila/23 dias"** (§6.3) depende de `fn_ritmo_aluno` | **Fora da aba até o card 8.1.** A função é dele (`docs/projecao-demanda.md` §4.3, item 9 do mapa de ajustes, marcado "não bloqueante"), e este card não a antecipa: implementá-la aqui seria trazer meia cascata da projeção para dentro de uma tela, e o número sairia diferente do que o 8.1 vai publicar. Quando ela nascer, entra uma linha no cabeçalho — a aba já tem o lugar |
+| 16 | **`[Editar trilha]` "entra em modo de reordenação (arrastar)"** (§6.3) | O modo de edição existe; a reordenação é por **setas** (subir/descer) mais um "Mover para…" com a posição de destino. Arrastar dentro de um `TabBarView` que já rola disputa o gesto vertical com a rolagem numa lista de 14 a 17 itens, o alvo de arraste ficaria abaixo dos 44 px do design-system §8.4, e **arrastar não tem equivalente por teclado**, que o §8.3 exige no desktop. `fn_trilha_reordenar` recebe uma POSIÇÃO (card 6.2 §5.3) — é exatamente o que a seta produz, e o arraste teria de traduzir pixels para ela |
+| 17 | **`[Estornar]` "oferecido nas entregas recentes"** (§6.3) | Aparece em **toda** entrega com movimento vinculado. "Recente" não tem definição no modelo — não há coluna, parâmetro nem regra que a fixe —, e escondê-lo nas antigas deixaria uma correção **sem tela nenhuma**, que é o mesmo buraco que o card 5.7 fechou no bloco desativado. Estornar duas vezes continua impossível (`movimento_estorno_uk` + `MOVIMENTO_JA_ESTORNADO`, card 6.3). Entrega **sem** movimento vinculado — a fixture do 6.1 e a importação do 9.1 produzem essas linhas — mantém o botão **visível e desabilitado com o motivo**, pela decisão 1 |
+| 18 | **`/alunos/:id/trilha`** era a rota 3b sem tela | Virou o **deep-link da aba**: abre a ficha já em Trilha, guardada pelo conjunto da 3b (`alunos.ler` + `materiais.ler` + `estoque.ler`). Ela existe como rota própria porque exige `estoque.ler` a mais que a ficha — quem chega sem a permissão vê o diagnóstico em vez de a aba abrir mentindo com saldo 0. O placeholder "card 6.6" saiu do roteador |
+
 Nenhum ajuste bloqueante em documento anterior: este card consome os contratos fechados e não
 precisou corrigi-los.
+
+### Divergências do card 6.7 (04/09/2026) — o estoque na tela 6
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 19 | **A nota do card no board pedia "lançamento manual de ENTRADA (sem pedido) e AJUSTE"** — e o §9 deste documento diz, com todas as letras, que *"não existe 'lançar entrada'"* | **Só o AJUSTE existe, e a nota é que estava desatualizada.** Não é preferência: a decisão (c) do card 2.4 §7 dá a `movimento_estoque` um `insert` **por tipo**, e `ENTRADA` exige **`compras.receber`** — entrada é sempre recebimento de pedido (tela 7, card 6.8), e é assim que a chegada fica ligada ao item comprado. Um "lançar entrada" aqui seria escrita **sem função** (contra o card 2.3 §1) e daria ao monitor um caminho para inventar estoque que ninguém comprou, que é exatamente o modo de falha que o `insert` por tipo existe para fechar. O caso real que a nota queria cobrir — "chegou material e não há pedido" — é atendido pelo **AJUSTE positivo**: passa por `fn_ajustar_estoque`, exige `estoque.ajustar`, tem **motivo obrigatório** e deixa a mesma linha imutável no histórico. O estado vazio do painel diz onde se lança entrada e aponta para Compras (design-system §7.2) |
+| 20 | **"Ao selecionar uma linha"** (§9) não dizia o que acontece com a **edição** do material, que desde o card 4.4 abria no toque da linha | O toque na linha passou a **abrir o painel de movimentações** (é o que o §9 desenha), e o cadastro ficou num botão do painel. Esse botão é a **exceção da regra do design-system §5.7**: não tem guarda de permissão, porque ver o cadastro nunca exigiu `materiais.editar` e guardá-lo tiraria de quem tem `materiais.ler` uma leitura que já tinha. O rótulo diz de antemão o que vai acontecer — "Editar material" para quem pode, "Ver cadastro" para quem não —, e quem decide se há "Salvar" continua sendo o `FormularioMaterial`, pela permissão |
+| 21 | **O painel inline abaixo da tabela** não cabe no celular | No desktop e no tablet ele é o que o §9 desenha, abaixo da tabela; **no mobile abre em tela cheia** (design-system §5.4), pela mesma razão do formulário. Empilhar tabela e painel numa tela de 430 px deixaria as duas ilegíveis |
+| 22 | **O atalho `?material=<id>`** da central de pendências (§14.3) abria o **formulário** de cadastro | Passou a abrir o **painel**. As três pendências de estoque perguntam "quanto tem e por quê", e a resposta é a história do material — não o formulário de nome e categoria |
+
+### Divergências do card 6.8 (04/09/2026) — a tela de Compras
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 23 | **O §10.2 desenha o recebimento INLINE**, abaixo da lista de pedidos (`── recebimento (#23) ──`) | O recebimento abre em **formulário** (`FormularioIm360`), e não no corpo do painel. Duas razões, e nenhuma é de gosto: (a) o painel já vive em 2/5 da altura ao lado da lista, e um formulário com um campo por item ali dentro empurra a última linha para fora; (b) o formulário do projeto é quem dá **banner de erro traduzido pelo `codigo`**, primário travando reenvio e realce de campo (design-system §5.4) — inline, o `RECEBIMENTO_EXCEDE_PEDIDO` teria de ser tratado à mão, e é justamente o erro que esta tela mais produz. O conteúdo é o do desenho, linha por linha: material, `pedido N`, `recebido N` e o campo de quanto chegou |
+| 24 | **`[Editar]` e `[Enviar]` no §10.2** aparecem como botões **da linha** da lista | Ficaram no **painel** do pedido, junto de `[Receber]` e `[Cancelar pedido]`. Cinco botões por linha numa tabela de seis colunas ou estouram a largura ou viram um menu de três pontinhos — e o painel já existe, porque o recebimento precisa dos itens. A linha continua clicável, e é ela que escolhe o pedido |
+| 25 | **O §10.1 não diz o que o toque na LINHA do pedido sugerido faz** | Abre o "criar pedido" **com aquele material só** (para quem tem `compras.criar`). É o caso real que o botão em massa não cobre: falta um material, e comprar a lista inteira não é a resposta. Sem a permissão a linha não é clicável — não há o que oferecer |
+| 26 | **O §10.1 não previa ordenação** | A lista ordena por **maior sugestão primeiro**, e depois por código. É a ordem em que a compra se decide; ordenar por código puro põe o que não precisa ser comprado no topo. A conta não é refeita na tela: `qtd_sugerida` continua vindo da view |
+| 27 | **A tela ganhou três objetos de banco que o §10 não previa** — o wireframe descreve a tela como leitura de `v_pedido_sugerido` e das tabelas de pedido | `v_pedido_compra` e `v_pedido_item` (view de tela pertence ao card da tela, `views-leitura.md` §12.1) e o trigger `tg_pedido_item_edicao`, que fecha as duas metades que o card 6.1 deixou abertas: criar item e mudar `qtd_pedida` em pedido que já saiu do rascunho. Detalhe e contraprovas em `supabase/tests/062_pedidos_compra_tela.sql` |
+
+### Divergências do card 7.3 (05/09/2026) — a tela de Turmas Modular
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 28 | **O §8 manda a tela ler `v_turma_modular_lotacao`, e `views-leitura.md` §7.2 atribuía a view aos cards 7.4 e 5.9** — que vêm **depois** desta tela na ordem do board | A view **nasceu aqui**, em `20260905120000_views_turmas_modular.sql`, com o SQL do §7.2 copiado palavra por palavra. Vence o §12.1 do próprio `views-leitura.md`, que é a regra geral e é literal: *view de tela pertence ao card da tela* — foi assim no 6.6, no 6.7 e no 6.8, três precedentes registrados. O 7.4 (lotação por curso no Dashboard) passa a ser **consumidor**, exatamente como o 5.9 foi de `v_bloco_vagas_semana`. A alternativa — a tela montar a lotação por conta própria — está proibida duas vezes por escrito (card 2.3 §4.1 e o §7.2, que fixa `modulo_atrasado` como coluna) |
+| 29 | **A tela ganhou DUAS views que o §8 não previa** — o wireframe descreve o cronograma como leitura direta de `turma_modular_modulo` | `v_turma_modular_cronograma` e `v_turma_modular_aluno`. A primeira porque **a ordem e o nome do módulo não existem em `turma_modular_modulo`**: o card 7.1 recusou coluna de ordem de propósito («o cronograma herda a sequência do catálogo», card 2.2 §9), e ler a tabela crua obrigaria a tela a resolver a ordem em Dart — a segunda fonte da verdade que o 7.1 evitou. A segunda porque a tabela guarda só o `aluno_id`, e a região «Alunos (8)» precisa de nome, código e status. As duas seguem `views-leitura.md` §12.1 |
+| 30 | **A rota do §8 é `turmas.ler + salas.ler + materiais.ler` e NÃO inclui `alunos.ler`**, mas a região de alunos precisa dela | A região **declara a permissão que falta** (`EstadoSemAcesso` com o texto daquela região, design-system §5.6) em vez de listar vazio. Sem isto a turma apareceria "sem aluno nenhum" com `1/15` ao lado — a redução silenciosa do card 2.3 §3.4 na forma mais enganosa que ela tem. Acrescentar `alunos.ler` à rota foi recusado: fecharia a tela **inteira**, inclusive o cronograma e o avanço de módulo, que não dependem de aluno nenhum. Medido nos dois lados (`072` §4 e `tela_turmas_modular_test`) |
+| 31 | **O §8 desenha o cronograma como uma FAIXA horizontal** (`1 ✓ · 2 ✓ · 3 ► (01/08–20/09) · 4 · 5`) | Virou **linhas**. Cada módulo precisa de nome, período, estado em texto e um alvo de toque de 44 px para editar as datas (§8 pede "datas editáveis"), e cinco desses lado a lado não cabem numa tela de 430 px (design-system §3). O `✓`/`►` continua, como **ícone ao lado do número e do texto do estado** — símbolo não é portador único (design-system §8.2) |
+| 32 | **O §8 não diz como o cronograma NASCE** — ele o descreve já pronto, e `fn_turma_modular_avancar` responde `TURMA_SEM_CRONOGRAMA` com o *hint* "monte o cronograma antes" sem que houvesse tela que o montasse | A tela ganhou **"Montar cronograma"** (e "Acrescentar N módulo(s)" quando o cronograma está parcial): traz os módulos do curso que ainda não estão na turma, **sem datas**, por `insert` em `turma_modular_modulo` com `turmas.editar`. Sem datas de propósito — quem as informa é quem conhece a turma, e inventá-las daria à projeção Modular um cronograma inteiro de palpite com cara de planejamento. É o que fecha a pendência `TURMA_MODULAR_SEM_CRONOGRAMA` |
+| 33 | **O §8 não previa a lista de turmas INATIVAS**, e a view de lotação filtra `where t.ativo` | Ganhou o botão "Inativas (n)", como a grade do card 5.6. Sem ele, desativar seria porta de mão única: a turma sumiria da única tela que fala de turma Modular e só voltaria por alguém escrevendo no banco |
+| 34 | **O `[Avançar módulo →]` do §8 não diz o que fazer quando não há o que avançar** | Fica **visível e desabilitado com o motivo** (design-system §5.7), e o motivo distingue os **dois** sentidos do fim de linha — "monte o cronograma" × "todos os módulos já foram concluídos" —, que é a mesma distinção que `fn_turma_modular_avancar` faz entre `TURMA_SEM_CRONOGRAMA` e `TURMA_SEM_MODULO_CORRENTE`. Escondê-lo ensinaria que a ação não existe, quando o que falta é o cronograma — que a própria tela oferece montar |
+| 35 | **A tela ganhou `?turma=<id>`**, que o §14.3 não lista entre os atalhos da central | Segue o desenho de `?bloco=`, `?material=` e `?pc=`: abre a lista com aquela turma expandida. Existe desde já porque quem vai usá-lo é a pendência `TURMA_MODULAR_SEM_CRONOGRAMA` (card 8.1), e "Ver turma" sem o id larga a pessoa na lista inteira — o defeito que o card 5.8 já pagou uma vez |
+
+Nenhum ajuste bloqueante em documento anterior. Os **seis códigos de erro do card 7.2**
+(`TURMA_INEXISTENTE`, `TURMA_LOTADA`, `ALUNO_NAO_MODULAR`, `TURMA_SEM_CRONOGRAMA`,
+`TURMA_SEM_MODULO_CORRENTE`, `DATA_OBRIGATORIA`) chegaram ao catálogo do app **neste card**: até a
+tela 5 existir não havia onde eles aparecerem, e código sem tradução vira "não foi possível
+concluir", que tem cara de problema de rede. `TURMA_LOTADA` é código próprio e **não** reaproveita
+`BLOCO_LOTADO` porque a saída é outra — no bloco a capacidade vem dos PCs da sala, aqui é digitada na
+própria turma.
+
+### Divergências do card 7.4 (05/09/2026) — a lotação Modular no Dashboard
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 36 | **O §5 escreve a lotação como `Massagem 8/10`** | O cartão diz **"8 de 10 ocupados"**, por extenso. É a mesma correção que a revisão da fase 05 já aplicou ao cartão do método (`30 de 40 ocupados`) e pela mesma razão, na mesma tela: a poucos pixels dali a célula da grade diz `n/m` com `n` sendo **vaga livre** — a leitura oposta —, e a barra convida a ler as duas do mesmo jeito. O número grande do cartão é a **vaga livre**, como no cartão do método, e a ocupação vem na linha de apoio |
+| 37 | **O §5 diz que "a linha Modular abre a turma"** | O cartão é de um **curso** (é o que a Nota do card pede e o que o desenho mostra: `Massagem`, `Eletricista`, `Depilação` são cursos), e um curso com três turmas não tem uma turma a abrir. O atalho leva à **tela 5 filtrada por aquele curso** (`filtroTurmasModularProvider`), como a célula da grade leva a Turmas com método e semana acertados. Eleger uma turma em silêncio entre as três seria o defeito que o card 5.8 já pagou uma vez |
+| 38 | **`vagas_livres` é somado, e a lotação por curso NÃO é `capacidade − alocados`** | A view tem piso zero (card 7.3), então uma turma com 16 numa capacidade de 15 faria a diferença dar **−1** e o curso apareceria devendo vaga; com duas turmas, o excesso de uma **abateria** a vaga real da outra. É a mesma armadilha do card 5.9, e aqui ela está medida nos dois níveis — `dashboard_test` (vista vermelha com a soma trocada pela diferença) e `tela_dashboard_test` |
+| 39 | **O §5 não diz o que a região faz quando a leitura FALHA** | Erro **não vira zero**: a região mostra a frase em vez dos números, como as pendências abertas (design-system §7.2). "0 ocupados" por falha de rede faz a direção ler "as turmas estão vazias" quando ninguém sabe. Sem turma Modular ativa nenhuma, a região **diz** isso em vez de sumir |
 
 ---
 
@@ -885,7 +952,7 @@ precisou corrigi-los.
 | Tela | Wireframe | Cards que a implementam |
 |---|---|---|
 | 1 Login/unidade | §4 | 3.5 / 3.7 |
-| 2 Dashboard | §5 | 5.9 (v1) / 8.7 (completo) |
+| 2 Dashboard | §5 | 5.9 (v1) / 7.4 (lotação Modular) / 8.7 (completo) |
 | 3 Alunos (lista + ficha) | §6 | 4.6 (lista/ficha) / 6.6 (trilha) / 5.7 (turmas do aluno) / 8.6 (certificado) |
 | 4 Turmas por horário | §7 | 5.6 (grade) / 5.7 (bloco) |
 | 5 Turmas Modular | §8 | 7.3 |
@@ -897,6 +964,17 @@ precisou corrigi-los.
 | 11 Pendências | §14 | 5.8 |
 | 12 Administração | §15 | 4.7 (+ 4.7.5) |
 | 13 Importação | §16 | 9.1 |
+
+### Divergências e achados do card 8.1,5 (05/09/2026) — revisão das telas 06 e 07
+
+| # | Apontamento | Como ficou / card afetado |
+|---|---|---|
+| 41 | **A data de início da turma Modular não é editável na tela** (§8) | Consequência da correção do defeito que reescrevia `data_inicio` para hoje em **toda** edição: o `update` deixou de enviar a coluna. `v_turma_modular_lotacao` **não expõe** `data_inicio` e `TurmaModular` não a carrega, então a tela não pode nem mostrá-la nem editá-la sem view nova — o que é migração, e este card não tem nenhuma. Fica gravada só na criação. Expô-la (e editá-la) é do card que mexer nas views Modular; registrado também em `views-leitura.md` §7.2 |
+| 42 | **`[Ajustar]` do §9 fica na barra de ações da tela**, ao lado de `[+ Novo material]` | Na implementação ele existe **só no painel do material**, que é onde há contexto (qual material, qual saldo). Um "Ajustar" na barra teria de perguntar o material primeiro — um passo a mais para a mesma coisa. Registrado, não alterado |
+| 43 | **A navegação de semana da tela 4 não é filtro** | Com a barra de filtros comum (design-system §11, correção 20), ela ficou **acima** da barra e em largura total: é o controle mais tocado da tela e não pertence à folha "Filtrar (n)", que guarda método e sala |
+| 44 | **No celular o título da tela 11 aparecia duas vezes** | O app bar do shell já diz "Pendências", e o cabeçalho da fila dizia "Pendências (0 abertas)" logo abaixo — a palavra duas vezes em 100 px. No mobile o cabeçalho passou a mostrar **só a contagem** ("0 abertas"), que é a informação que o §14.1 quer no topo de uma fila de trabalho; fora do mobile nada muda |
+| 45 | **O §3.2 não dizia onde mora o menu do usuário no celular** | Ele estava num alvo de 24×24 px no app bar, e o nome e a unidade **não apareciam em faixa nenhuma** fora do desktop. Passaram para o **cabeçalho da gaveta do "Mais"**, junto com "Tema escuro/claro" e "Sair"; o ícone do app bar abre a mesma gaveta, e o trilho do tablet ganhou nome e iniciais no rodapé |
+
 
 ---
 

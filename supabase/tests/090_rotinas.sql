@@ -36,6 +36,10 @@
 -- =============================================================================
 
 begin;
+-- Continua 49 depois do card 7.1 (05/09/2026), por coincidência aritmética que
+-- vale explicar: o portão condicional do §13 perdeu uma asserção (três viraram
+-- duas, porque a tabela que ele esperava passou a existir) e o §2 ganhou uma, a
+-- que fixa por que Eduarda Lima saiu da lista de ALUNO_SEM_TURMA.
 select plan(49);
 
 -- ===========================================================================
@@ -52,8 +56,8 @@ select is(
       and a.status in ('ATIVO', 'ACELERAR')
       and not exists (select 1 from public.bloco_aluno ba
                        where ba.aluno_id = a.id and ba.ativo)),
-  'Eduarda Lima, Felipe Nunes',
-  'fixture: exatamente dois alunos ATIVO/ACELERAR sem bloco — Eduarda (MODULAR) e Felipe (ACELERAR)');
+  'Aluno Modular 01, Eduarda Lima, Felipe Nunes',
+  'fixture: exatamente tres alunos ATIVO/ACELERAR sem bloco — os dois MODULAR e Felipe (ACELERAR)');
 
 -- ⚠️ MUDOU NO CARD 5.4, e a mudança é o contrário de um relaxamento. Até aqui a
 --    fixture nascia sem pendência nenhuma. Com o trigger tg_pc_revalida_blocos,
@@ -89,8 +93,31 @@ select is(
      from public.pendencia p
      join public.aluno a on a.id = p.aluno_id
     where p.unidade_id = tests.unidade('ESCOLA_A') and p.resolvida_em is null),
-  'ACELERAR_SEM_2O_BLOCO:BAIXA:Felipe Nunes | ALUNO_SEM_TURMA:ALTA:Eduarda Lima | ALUNO_SEM_TURMA:ALTA:Felipe Nunes',
-  'abre ALUNO_SEM_TURMA (ALTA) para os dois e ACELERAR_SEM_2O_BLOCO (BAIXA) para o de ACELERAR');
+  'ACELERAR_SEM_2O_BLOCO:BAIXA:Felipe Nunes | ALUNO_SEM_TURMA:ALTA:Aluno Modular 01 | ALUNO_SEM_TURMA:ALTA:Felipe Nunes',
+  'abre ALUNO_SEM_TURMA (ALTA) para quem nao tem turma nenhuma e ACELERAR_SEM_2O_BLOCO (BAIXA) para o de ACELERAR');
+
+-- ⚠️ EDUARDA LIMA SAIU DESTA LISTA EM 05/09/2026, e não é regressão: é o portão
+--    do card 5.5 sendo cobrado. Até o card 7.1 ela era MODULAR sem `bloco_aluno`
+--    e recebia ALUNO_SEM_TURMA — o que estava CERTO enquanto turma Modular não
+--    existia, e passaria a ser pendência FALSA no dia seguinte. Hoje a fixture a
+--    põe na turma `Eletricista 2026.1` (camada `modular`) e a rotina olha as
+--    duas formas de turma. O par de asserções que mede isso dos dois lados
+--    (turma ativa → sem pendência; turma desativada → com pendência) está no
+--    teste 070 §6.
+--
+--    ⚠️ E DESDE O CARD 7.4,5 (05/09/2026) o lado POSITIVO é fixo: a camada
+--    `modular` passou a trazer `Aluno Modular 01` — MODULAR, ATIVO e sem turma
+--    nenhuma —, e a asserção de cima o mostra recebendo ALUNO_SEM_TURMA. Até
+--    aqui o `not exists` de turma Modular só era medido no negativo fora do 070;
+--    a fixture agora tem os dois alunos MODULAR lado a lado, um em cada lado da
+--    condição.
+select is(
+  (select count(*)::bigint from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Eduarda Lima' and p.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'ALUNO_SEM_TURMA' and p.resolvida_em is null),
+  0::bigint,
+  'a aluna MODULAR esta numa turma Modular ATIVA e por isso nao aparece aqui (portao do card 5.5)');
 
 -- Ajuste 4 do §10 do card 2.3, BLOQUEANTE: o catálogo do card 2.2 dava INFO a
 -- ACELERAR_SEM_2O_BLOCO, e INFO não existe no `check` do DDL. Escrita assim, a
@@ -104,11 +131,13 @@ select is(
 
 -- A central mostra a descrição, não o UUID. Sem nome e código a pendência
 -- obriga quem a lê a ir procurar de quem se trata.
+-- ⚠️ Era Eduarda Lima até o card 7.1; passou a Felipe Nunes pela razão do aviso
+--    acima — ela deixou de ter pendência de que ler a descrição.
 select ok(
-  (select p.descricao like '%Eduarda Lima%' and p.descricao like '%3005%'
+  (select p.descricao like '%Felipe Nunes%' and p.descricao like '%3006%'
      from public.pendencia p
      join public.aluno a on a.id = p.aluno_id
-    where a.nome = 'Eduarda Lima' and p.unidade_id = tests.unidade('ESCOLA_A')
+    where a.nome = 'Felipe Nunes' and p.unidade_id = tests.unidade('ESCOLA_A')
       and p.tipo = 'ALUNO_SEM_TURMA'),
   'a descricao carrega nome e codigo SGF — a central nao mostra UUID a ninguem');
 
@@ -122,6 +151,9 @@ select public.rt_pendencias_diaria();
 
 -- `aluno_id is not null` desde o card 5.4: a PC_SEM_SUBSTITUTO da seção 1 é da
 -- fixture e não tem nada a ver com a idempotência que se está medindo aqui.
+-- Três linhas desde o card 7.4,5 e não duas: o `Aluno Modular 01` da camada
+-- `modular` traz uma ALUNO_SEM_TURMA própria. O que se mede continua sendo o
+-- mesmo — o número não muda com a terceira execução da rotina.
 select is(
   (select count(*)::bigint from public.pendencia
     where unidade_id = tests.unidade('ESCOLA_A') and aluno_id is not null),
@@ -172,10 +204,10 @@ select is(
 select is(
   (select count(*)::bigint from public.pendencia p
      join public.aluno a on a.id = p.aluno_id
-    where a.nome in ('Eduarda Lima', 'Felipe Nunes') and p.tipo = 'ALUNO_SEM_TURMA'
+    where a.nome = 'Felipe Nunes' and p.tipo = 'ALUNO_SEM_TURMA'
       and p.unidade_id = tests.unidade('ESCOLA_A') and p.resolvida_em is null),
-  2::bigint,
-  'e as dos outros dois continuam ABERTAS: o fechamento e por chave_dedup, nao por tipo');
+  1::bigint,
+  'e a do outro continua ABERTA: o fechamento e por chave_dedup, nao por tipo');
 
 -- ===========================================================================
 -- 5. Reabre o que continua verdadeiro — inclusive o que alguém IGNOROU
@@ -606,12 +638,13 @@ select is(
 -- ===========================================================================
 -- 13. Portões: o que ainda não existe, e o dia em que passar a existir
 -- ===========================================================================
--- ⚠️ PORTÃO DO CARD 8.1 — e ele JÁ DISPAROU UMA VEZ, no card 5.4. O §11 do card
---    2.2 dá cinco passos a rt_diaria; `rt_pcs_normaliza` e `rt_capacidades`
---    nasceram no 5.4 e entraram aqui no mesmo commit, porque este portão
---    reprovava enquanto não entrassem. Falta `rt_projecao_demanda` (8.1): criá-la
---    e esquecer de chamá-la aqui não daria erro nenhum — daria uma rotina que
---    roda todo dia sem fazer o que passou a ser dela.
+-- ⚠️ PORTÃO DO CARD 8.1 — e ele DISPAROU DUAS VEZES, no 5.4 e no próprio 8.1. O
+--    §11 do card 2.2 dá cinco passos a rt_diaria; `rt_pcs_normaliza` e
+--    `rt_capacidades` nasceram no 5.4 e entraram aqui no mesmo commit, e
+--    `rt_projecao_demanda` fez o mesmo em 05/09/2026 — criá-la e esquecer de
+--    chamá-la aqui não daria erro nenhum: daria uma rotina que roda todo dia sem
+--    fazer o que passou a ser dela, e uma projeção que nunca sairia do zero.
+--    Com a quinta, a lista do §11 fecha; o portão continua armado para a sexta.
 --    `prosrc` inclui os comentários do corpo — daí o regexp_replace, a lição que
 --    custou uma sessão no card 5.3.
 select is(
@@ -628,35 +661,39 @@ select is(
   '',
   'PORTAO 8.1 (disparou no 5.4): toda rt_* do projeto e chamada por rt_diaria');
 
--- ⚠️ PORTÃO DO CARD 7.1. "Sem turma" hoje é "sem bloco_aluno ativo", porque
---    `turma_modular_aluno` não existe. No dia em que existir, todo aluno MODULAR
---    alocado numa turma modular passará a receber ALUNO_SEM_TURMA todo dia —
---    pendência falsa, e das piores, porque ensina a lista a ser ignorada. Mesma
---    forma que o card 5.1 deu à terceira tabela de tg_aluno_status_desaloca.
+-- ⚠️ O PORTÃO DO CARD 7.1 FOI COBRADO EM 05/09/2026, e este bloco é o que
+--    sobrou dele. Enquanto `turma_modular_aluno` não existia, ele era
+--    condicional e provava que reprovava criando a tabela dentro da transação;
+--    nascida a tabela de verdade, o `create table` morreria com "already exists"
+--    e a condição `is null` deixa de separar dois mundos. O que fica é a
+--    asserção direta.
+--
+--    O que ela mede continua sendo o motivo pelo qual o portão existiu: sem esta
+--    metade, todo aluno MODULAR alocado numa turma receberia ALUNO_SEM_TURMA
+--    todo dia — pendência falsa, e das piores, porque ensina a lista a ser
+--    ignorada. A prova de COMPORTAMENTO (a aluna Modular da fixture não aparece
+--    na lista, e aparece quando a turma é desativada) está no teste 070 §7.
+--
+--    `prosrc` inclui os comentários do corpo, e o desta rotina cita a tabela
+--    duas vezes em comentário: sem o `regexp_replace` a asserção passaria com o
+--    `not exists` apagado.
 create temporary view corpo_pendencias as
   select regexp_replace(p.prosrc, '--[^\n]*', '', 'g') as fonte
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname = 'rt_pendencias_diaria';
 
-create temporary view portao_modular as
-  select to_regclass('public.turma_modular_aluno') is null
-      or (select fonte ~ 'turma_modular_aluno' from corpo_pendencias) as em_dia;
+select ok(
+  (select fonte ~ 'turma_modular_aluno' from corpo_pendencias),
+  'ALUNO_SEM_TURMA olha as DUAS formas de turma — bloco de horario e turma Modular');
 
-select ok((select em_dia from portao_modular),
-  'portao em dia: enquanto turma_modular_aluno nao existe, nada e devido');
-
-select is(
-  (select count(*)::bigint from corpo_pendencias where fonte ~ 'turma_modular'),
-  0::bigint,
-  'e o portao esta VAZIO de proposito — a citacao so existe no comentario, que foi removido');
-
-create table public.turma_modular_aluno (id uuid primary key);
-
-select ok(not (select em_dia from portao_modular),
-  'nascida a tabela do card 7.1, o portao REPROVA enquanto ALUNO_SEM_TURMA ignorar a turma modular');
-
-drop table public.turma_modular_aluno;
+-- E a turma Modular só conta ATIVA, pela mesma razão que o card 5.7 deu ao
+-- `bloco_ativo`: turma desativada não é turma. Sem esta metade, desativar uma
+-- turma tiraria a turma da tela sem abrir pendência nenhuma para os alunos dela.
+select ok(
+  (select fonte ~ 'turma_modular' from corpo_pendencias
+    where fonte ~ 'tm\.ativo'),
+  'e a turma Modular so conta quando ela propria esta ativa');
 
 -- ===========================================================================
 -- 14. RLS e a view: quem vê o quê

@@ -30,10 +30,21 @@ select plan(37);
 -- ===========================================================================
 -- 1. A fixture chegou (camada `trilha_estoque` do card 3.4.5)
 -- ===========================================================================
--- O quadro do card 2.8 §4.2 pede seis materiais com saldos "0, 0, 1, n, n, n", e
--- os saldos são DERIVADOS: cada um é a soma dos movimentos que o produziram.
--- Asserir a soma, e não uma coluna, é o que faz este teste medir a decisão do
--- projeto (estoque atual nunca é coluna) em vez de medir o seed.
+-- O quadro do card 2.8 §4.2 pede saldos "0, 0, 1, n, n, n", e os saldos são
+-- DERIVADOS: cada um é a soma dos movimentos que o produziram. Asserir a soma, e
+-- não uma coluna, é o que faz este teste medir a decisão do projeto (estoque
+-- atual nunca é coluna) em vez de medir o seed.
+--
+-- ⚠️ SÃO OITO MATERIAIS E TRÊS ZEROS DESDE O CARD 8.1, e o terceiro zero tem
+--    função própria. Os dois primeiros continuam sendo os escolhidos do card
+--    6.1: INTERATIVO 02 é o caso REORDENADA e INGLES 02 é o
+--    BLOQUEADA_SEM_ESTOQUE. O terceiro é o INTERATIVO 04, que entrou com UM
+--    exemplar e o entregou a João Pedro — e ele precisa fechar em zero porque
+--    Ana Paula e Bruno são os dois alunos da corrida de
+--    `entrega_ultimo_exemplar.sh`: se o item pendente SEGUINTE deles tivesse
+--    estoque, quem perde a corrida reordenaria em vez de bloquear, e o script
+--    reprovaria. Reprovou de verdade no CI antes de a quantidade virar 1.
+--    O saldo 1 continua sendo um só, o do último exemplar disputado.
 select is(
   (select string_agg(saldo::text, ',' order by metodo, codigo) from (
      select me.codigo as metodo, m.codigo,
@@ -43,8 +54,8 @@ select is(
        left join public.movimento_estoque mv on mv.material_id = m.id
       where m.unidade_id = tests.unidade('ESCOLA_A')
       group by me.codigo, m.codigo) s),
-  '10,0,20,0,1,10',
-  'os seis materiais tem os saldos 0/0/1/n/n/n do card 2.8 §4.2, somados dos movimentos');
+  '10,0,20,0,1,0,10,6',
+  'os oito materiais tem os saldos 0/0/0/1/n/n/n/n do card 2.8 §4.2, somados dos movimentos');
 
 -- O saldo 1 só é o teste de concorrência do card 6.3 se o último exemplar for o
 -- PRÓXIMO de mais de uma pessoa. Com um aluno só, as duas sessões da corrida
@@ -185,6 +196,15 @@ select throws_ok(
   '23505', null,
   'um movimento so se estorna UMA vez — a unique parcial de estorno_de_id');
 
+-- ⚠️ Era um `23514` de `pedido_item_recebido_ck` até o card 6.5, e a mudança é
+-- decisão registrada, não regressão: `check` não conhece permissão, então ele
+-- valia igual para a direção e tornava `compras.receber_excedente` (card 2.4
+-- §5.2) INALCANÇÁVEL — com `RECEBIMENTO_EXCEDE_PEDIDO`, que está no contrato de
+-- erros desde o card 2.2 §12, sem nenhum caminho até a tela. A regra virou
+-- `tg_pedido_item_recebimento`, que é MAIS forte (alcança BYPASSRLS igual, e
+-- ainda distingue quem pode) e devolve o código do catálogo em vez do erro cru
+-- que o card 2.2 §1.2 proíbe. Aqui a sessão é `postgres` sem auth.uid(), então
+-- tem_permissao é falsa e a recusa acontece.
 select throws_ok(
   $$update public.pedido_item set qtd_recebida = qtd_pedida + 1
      where unidade_id = tests.unidade('ESCOLA_A')
@@ -195,8 +215,8 @@ select throws_ok(
                             join public.metodo me on me.id = m.metodo_id
                            where m.unidade_id = tests.unidade('ESCOLA_A')
                              and me.codigo = 'INTERATIVO' and m.codigo = '02')$$,
-  '23514', null,
-  'receber mais do que foi pedido e recusado pelo check — a excecao e permissao, no card 6.5');
+  'PT422', null,
+  'receber mais do que foi pedido e recusado — e a excecao e PERMISSAO, medida no 060');
 
 -- ===========================================================================
 -- 3. `deferrable initially deferred` — reordenar em UM update
@@ -213,12 +233,16 @@ select throws_ok(
 --    quem tem a permissão continua reordenando.
 select tests.autenticar(tests.uid('secretaria@escola-a.test'));
 
+--
+-- ⚠️ As ordens são 10 e 20, e não 1 e 2, desde o card 6.2: a trilha da fixture
+--    passou a nascer de `fn_trilha_gerar`, que numera de 10 em 10 (§5.1, passo 4)
+--    para deixar espaço à inserção manual.
 select lives_ok(
-  $$update public.aluno_material set ordem = 3 - ordem
+  $$update public.aluno_material set ordem = 30 - ordem
      where aluno_id = (select id from public.aluno
                         where nome = 'Carla Menezes'
                           and unidade_id = public.fn_unidade_atual())
-       and ordem in (1, 2)$$,
+       and ordem in (10, 20)$$,
   'trocar duas posicoes da trilha e UM update, sem valor temporario');
 
 reset role;
@@ -341,7 +365,7 @@ select is(
        where aluno_id = (select id from public.aluno
                           where nome = 'Carla Menezes'
                             and unidade_id = public.fn_unidade_atual())
-         and ordem = 3$$,
+         and ordem = 30$$,
     tests.uid('monitor@escola-a.test')),
   'SEM_PERMISSAO',
   'nem troca a apostila devida por outra, inclusive de outro metodo');
@@ -375,7 +399,7 @@ select lives_ok(
      where aluno_id = (select id from public.aluno
                         where nome = 'Carla Menezes'
                           and unidade_id = public.fn_unidade_atual())
-       and ordem = 3$$,
+       and ordem = 30$$,
   'e continua registrando a ENTREGA — que e o que o `or` da politica existe para permitir');
 
 reset role;
@@ -485,27 +509,29 @@ select is(
   'e a trilha inteira da unidade A, sem nenhuma linha da unidade B');
 
 -- ===========================================================================
--- 9. Portão dos dois triggers de movimento_estoque que são do card 6.5
+-- 9. Portão dos dois triggers de movimento_estoque — DISPARADO no card 6.5
 -- ===========================================================================
 -- `tg_movimento_valida_sinal` (o estorno com sinal oposto e mesma magnitude do
 -- movimento de origem) e `tg_movimento_resolve_pendencia` (a chegada do pedido
--- fechando ESTOQUE_ZERO e COMPRA_SEM_ESTOQUE) são do card 6.5, e nenhum deles
--- pode nascer aqui: o primeiro depende de fn_estornar_entrega para ter um
--- chamador real e o segundo depende dos dois tipos de pendência, que só o card
--- 6.3 passa a abrir.
+-- fechando ESTOQUE_ZERO e COMPRA_SEM_ESTOQUE) eram do card 6.5, e não podiam
+-- nascer aqui: o primeiro dependia de fn_estornar_entrega para ter um chamador
+-- real e o segundo dos dois tipos de pendência, que só o card 6.3 passa a abrir.
 --
--- Esquecê-los não daria erro nenhum: daria um estorno de magnitude qualquer
--- (devolvendo ao estoque mais do que saiu) e uma central de pendências que
--- continua pedindo a compra de um material que já chegou — as duas com cara de
--- sistema funcionando.
+-- ✅ O card 6.5 fechou os dois em 04/09/2026, e o portão MUDOU DE LADO: até
+--    aqui ele vigiava a ausência da função; agora vigia a ausência dos triggers,
+--    que é o que continua podendo desaparecer numa refatoração — e a razão de o
+--    portão continuar existindo é que esquecê-los não daria erro nenhum. Daria
+--    um estorno de magnitude qualquer (devolvendo ao estoque mais do que saiu) e
+--    uma central de pendências que continua pedindo a compra de um material que
+--    já chegou: as duas com cara de sistema funcionando.
 create temporary view portao_estoque (gatilho, card) as values
   ('tg_movimento_valida_sinal',      '6.5'),
   ('tg_movimento_resolve_pendencia', '6.5');
 
--- A condição casa pelo NOME e ignora a assinatura: o card 6.5 ainda pode
--- escolher outros parâmetros para fn_pedido_receber, e um portão preso a
--- `(uuid, jsonb)` deixaria de disparar em silêncio — que é o pior desfecho
--- possível para um portão, pior do que não existir.
+-- A condição casa pelo NOME e ignora a assinatura: um portão preso a
+-- `(uuid, jsonb)` deixaria de disparar em silêncio no dia em que a função
+-- mudasse de parâmetros — que é o pior desfecho possível para um portão, pior do
+-- que não existir.
 create temporary view portao_estoque_devido as
   select coalesce(string_agg(format('fn_pedido_receber existe (card %s) e %s nao', p.card, p.gatilho),
                              '; ' order by p.gatilho), '') as devido
@@ -517,21 +543,15 @@ create temporary view portao_estoque_devido as
                       where t.tgname = p.gatilho and not t.tgisinternal);
 
 select is((select devido from portao_estoque_devido), '',
-  'nenhum trigger de estoque esta devido — fn_pedido_receber, do card 6.5, ainda nao existe');
+  'portao em dia: fn_pedido_receber existe (card 6.5) e os dois triggers dela tambem');
 
--- Prova por construção, dentro da transação: nascida a função do card 6.5, o
--- portão nomeia os dois triggers e o card deles.
-create function public.fn_pedido_receber(p_pedido_id uuid, p_itens jsonb) returns void
-language plpgsql set search_path = public, pg_temp as $sentinela$
-begin
-  perform 1;
-end $sentinela$;
+-- Prova por construção, dentro da transação: portão que nunca foi visto vermelho
+-- é decoração. O `rollback` do fim devolve o trigger.
+drop trigger tg_movimento_resolve_pendencia on public.movimento_estoque;
 
 select is((select devido from portao_estoque_devido),
-  'fn_pedido_receber existe (card 6.5) e tg_movimento_resolve_pendencia nao; fn_pedido_receber existe (card 6.5) e tg_movimento_valida_sinal nao',
-  'nascida fn_pedido_receber, o portao acusa os dois triggers que ficaram para tras');
-
-drop function public.fn_pedido_receber(uuid, jsonb);
+  'fn_pedido_receber existe (card 6.5) e tg_movimento_resolve_pendencia nao',
+  'retirado o trigger, o portao o nomeia — e nomeia o card de quem o deve');
 
 select * from finish();
 rollback;

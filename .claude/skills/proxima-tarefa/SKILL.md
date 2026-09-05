@@ -11,7 +11,8 @@ Este projeto é rastreado no Notion. Este repositório contém o código e os do
 
 - Board (data source): `e50abe7f-1688-402a-96b5-c6049b24ce82`
 - Database (página): `f3bd0f112cde4ed699d616fc7fc30dff`
-- Decisões vigentes (página): `3cd2f3f4-b9b2-8106-95cd-fc8d937bd953`
+- Decisões vigentes (página): `3cd2f3f4-b9b2-8106-95cd-fc8d937bd953` — ler as **seções 1 a 6**
+- Histórico de decisões (subpágina da anterior, onde entra a linha nova de cada card): `3d12f3f4-b9b2-815e-9643-edc69db65f5c`
 - Repositório: `github.com/irineus/gestao-im360` — branches `main` (prod) e `develop` (dev)
 - Propriedades do card: `Tarefa` (título — **não existe coluna `Nome`**), `Fase` (select, prefixo numérico e acentos exatos), `Ordem` (número, aceita decimal), `Status` ("A fazer" / "Em andamento" / "Concluído"), `Prioridade` ("Alta" / "Média" / "Baixa"), `Notas` (texto), e as três da estimativa (card 3.13, 02/09/2026): `Concluído em` (data — na query use `date:Concluído em:start`), `Tamanho` ("P"/"M"/"G"/"GG" = 1/3/5/8 pontos) e `Tipo` ("Documento/decisão" / "Schema/migração" / "Função/regra" / "View" / "Tela" / "Infra/CI" / "Marco/validação" / "Externo").
 - NÃO confundir com o board do Desmalha (`d50a2925-fb74-4f67-b0db-af03ef41d1b4`) — projeto diferente. Se o pedido citar carnê-leão/Desmalha, esta skill não se aplica.
@@ -23,7 +24,25 @@ MCP do Notion conectado na sessão. Se não estiver, parar e avisar Irineu (sem 
 ## Passos obrigatórios no início
 
 1. Ler `docs/README-continuidade.md` e `CLAUDE.md` do repositório.
-2. Buscar a página Decisões vigentes no Notion e ler por completo. Em conflito com os documentos do repo, ela vence.
+2. Buscar a página Decisões vigentes no Notion e ler as **seções 1 a 6**, que são as vigentes. Em conflito com os documentos do repo, ela vence.
+3. **Não ler o log cronológico na partida** (card 6.1,5, 04/09/2026): ele mora em `docs/historico-marcos.md` e na subpágina **📜 Histórico de decisões**, e se consulta quando a tarefa pedir — rastrear um card, um documento ou um defeito antigo. Ao encerrar a tarefa, é **lá** que entra a linha nova (`insert_content`, `position: start`), não na página-mãe.
+4. **Nem o detalhe das decisões** (card 6.2,5, 04/09/2026). A §2 guarda o **enunciado** de cada regra — o que vale hoje, onde ela mora no código — mais a **armadilha concreta** que aquela regra já custou, com teto de **6 linhas por regra** escrito na própria seção. O raciocínio, as medições e as contraprovas moram em **nove subpáginas por domínio** da própria página Decisões vigentes:
+
+   | Subpágina | Quando abrir |
+   |---|---|
+   | Modelagem, views e projeção | view nova, contrato de leitura, projeção de demanda |
+   | Acesso, permissões e RLS | política, `tem_permissao`, matriz de perfis |
+   | Alunos | status, histórico, matrícula, combo do aluno |
+   | Currículo e catálogo | material, curso, módulo, combo, método |
+   | Trilha e estoque | `aluno_material`, entrega, estorno, pedido |
+   | Alocação, blocos, grade e REP | `bloco_aluno`, admissão, reposição, virada REP |
+   | Capacidade, salas, PCs e credenciais | capacidade efetiva, manutenção, substituto |
+   | Pendências, rotinas e testes | `pendencia`, `rt_*`, pgTAP, concorrência |
+   | App, telas e design system | Flutter, rotas, estados, tipografia, a11y |
+
+   Abre-se **a do domínio da tarefa**, e só ela: mexendo em estoque, a de estoque. Ler as nove na partida desfaz o que o card 6.2,5 pagou US$ 34 para conseguir.
+
+   ⚠️ **Ao encerrar tarefa que gere decisão**, o enunciado curto vai para a §2 (respeitando o teto de 6 linhas) e o raciocínio vai para a **subpágina do domínio** — nunca tudo na página-mãe, que foi como ela chegou a 146 KB.
 
 ## Consultar o board
 
@@ -76,7 +95,12 @@ Se a ferramenta de renomear não estiver exposta na sessão, dizer isso **uma ve
 
 1. **Resultado extenso** (especificação, DDL, relatório): criar como **subpágina do card** (`parent: {page_id: <card-id>}`), nunca solta na raiz.
 2. **Notas do card**: `update_properties` **sobrescreve** o campo — buscar o valor atual primeiro e reenviar o texto completo, preservando a linha "Origem:". Prefixar o que foi feito com `CONCLUÍDO <data>:`.
-3. **Decisões vigentes**, se a tarefa gerou decisão (arquitetura, schema, regra, parâmetro, risco): `update_content` na seção correspondente (**nunca** `replace_content`) + linha no Histórico com data e card de origem. Decisão revogada vai para "Decisões superadas" com o motivo.
+3. **Decisões vigentes**, se a tarefa gerou decisão (arquitetura, schema, regra, parâmetro, risco). A decisão se escreve em **três lugares diferentes**, e misturá-los é como a página chegou a 146 KB:
+   - **o enunciado** vai para a seção correspondente da página-mãe, com `update_content` (**nunca** `replace_content`) — o que a regra manda hoje e onde ela mora no código, dentro do **teto de 6 linhas por regra** (card 6.2,5);
+   - **o raciocínio, as medições e as contraprovas** vão para a **subpágina de detalhe do domínio** (a tabela está nos "Passos obrigatórios no início"), com `insert_content`;
+   - **a linha do log** vai para a subpágina **📜 Histórico de decisões** (`3d12f3f4-b9b2-815e-9643-edc69db65f5c`), com `insert_content` e `position: start`, com data e card de origem.
+
+   **Nada disso volta para a página-mãe além do enunciado.** Ela é lida em toda sessão, e enxugá-la custou dois cards (6.1,5 e 6.2,5) e ~US$ 60. Decisão revogada é a única exceção: vai para "Decisões superadas", na página-mãe mesmo, com o motivo.
 4. **Continuidade**: atualizar `docs/README-continuidade.md` (tabela de documentos, marcos) quando a tarefa criar documento novo ou mudar o estado do projeto.
 5. **Status = Concluído** e **`Concluído em` = a data de hoje**. As duas coisas, sempre — a data alimenta a estimativa de entrega (`docs/estimativa-entrega.md`), e card concluído sem data é um buraco na série. Se o card ainda não tiver `Tamanho` e `Tipo`, preencher também.
 6. **Fechar o ciclo do Git — faz parte da tarefa, não é extra.** São duas perguntas clicáveis a Irineu, na ordem: PR + merge em `develop`, depois promoção para `main`.
@@ -137,6 +161,32 @@ pergunta**. Nesse modo:
 - **Escolher a tarefa sozinho**, sem a pergunta da seção "Escolher a tarefa": é o primeiro card não
   concluído na ordenação, **pulando** os que estão `Em andamento` com a linha
   `AGUARDANDO RETORNO DOS USUÁRIOS` nas Notas (marco esperando resposta de gente não bloqueia a fila).
+- **Nota do card marcada como `DECISÃO`: decidir pela recomendação, não parar** — desde que ela
+  exista e a decisão seja reversível. A regra saiu de um custo medido: em 04/09/2026 a cadeia parou
+  horas num card cuja `DECISÃO` já trazia a opção recomendada, e Irineu escolheu exatamente as duas
+  recomendadas. Parar para confirmar o que já estava escrito é tempo gasto sem informação nova.
+
+  O critério **não** é "tem recomendação", é **quanto custa desfazer**:
+
+  | Marcação na Nota | O que a sessão faz |
+  |---|---|
+  | `DECISÃO (recomendado: …)` | **adota a recomendação** e segue |
+  | `DECISÃO BLOQUEANTE` | **para** com `CARD_PARADO`, sempre |
+  | `DECISÃO` sem recomendação | **para** com `CARD_PARADO` — não há o que adotar |
+
+  ⚠️ **É `DECISÃO BLOQUEANTE`, mesmo com recomendação**, o que muda schema ou dado em produção, mexe
+  em permissão ou segurança, cria compromisso externo (conta, loja, contrato, e-mail a terceiro), ou
+  custa mais para desfazer do que para fazer. Na dúvida entre as duas, é bloqueante: o erro de parar
+  custa uma espera; o de seguir custa uma migração em produção.
+
+  **Adotar recomendação obriga a registrar**, nos três lugares, para a reversão sair barata: nas
+  Notas do card (o que foi adotado e que foi a sessão que adotou), no corpo do PR, e no resumo final.
+  Dizer também **como reverter**.
+
+  **Exceção estreita:** se a sessão tiver evidência MEDIDA de que a recomendação quebra algo — não
+  opinião, medida —, ela para com `CARD_PARADO` e mostra a medida. Discordar por preferência não
+  vale; para isso existe a divergência registrada.
+
 - **Card de `Tipo` = `Externo`** e qualquer card cuja nota diga que depende de ação de Irineu: **não
   executar** — encerrar com `CADEIA_FIM`.
 - **Card de `Tipo` = `Marco/validação`:** executar tudo o que não depende de gente (pré-condições

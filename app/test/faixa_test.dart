@@ -107,5 +107,98 @@ void main() {
       // A jornada do monitor primeiro (docs/wireframes.md §3.2).
       expect(rotulos, ['Alunos', 'Turmas', 'Pendências', 'Mais']);
     });
+
+    testWidgets('tocar em "Mais" ABRE a gaveta com as rotas que sobraram', (
+      tester,
+    ) async {
+      // ⚠️ Vermelho antes da correção do item H1: `Scaffold.of(context)` era
+      // chamado com o contexto do `build` de `ShellIm360`, ACIMA do Scaffold —
+      // lançava `Scaffold.of() called with a context that does not contain a
+      // Scaffold` e a gaveta nunca abria. Com isso, no celular, Dashboard,
+      // Turmas Modular, Materiais, Compras, Projeção, Certificados, Salas,
+      // Administração e Importação eram INALCANÇÁVEIS. O `faixa_test` só
+      // conferia os rótulos da barra, e por isso nada no CI acusou.
+      await montar(tester, const Size(390, 800));
+      expect(find.byType(Drawer), findsNothing);
+
+      await tester.tap(find.text('Mais'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(Drawer), findsOneWidget);
+      // As rotas que não coubemos na barra inferior estão lá dentro. (O
+      // "Dashboard" aparece duas vezes: no app bar, como título da rota atual,
+      // e na gaveta.)
+      expect(find.text('Dashboard'), findsNWidgets(2));
+      expect(find.text('Materiais e estoque'), findsOneWidget);
+      expect(find.text('Administração'), findsOneWidget);
+    });
+
+    testWidgets('a gaveta diz quem está logado, e tem tema e saída', (
+      tester,
+    ) async {
+      // Item H2: no celular e no tablet o nome e a unidade não apareciam em
+      // lugar nenhum — `comNome` só existia no menu lateral do desktop.
+      await montar(tester, const Size(390, 800));
+      expect(find.text('Direção'), findsNothing);
+
+      await tester.tap(find.text('Mais'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Direção'), findsOneWidget);
+      expect(find.text('Instituto Mix Charqueadas'), findsOneWidget);
+      expect(find.text('Sair'), findsOneWidget);
+      expect(find.text('Tema escuro'), findsOneWidget);
+    });
+
+    testWidgets('o ícone do usuário do app bar abre a MESMA gaveta', (
+      tester,
+    ) async {
+      await montar(tester, const Size(390, 800));
+      await tester.tap(find.byKey(chaveGatilhoMenuUsuario));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(Drawer), findsOneWidget);
+      expect(find.text('Sair'), findsOneWidget);
+    });
+
+    testWidgets('o alvo do menu do usuário tem 44 px nas três faixas', (
+      tester,
+    ) async {
+      // Medido em 24×24 px antes da correção (item H2a) — metade do mínimo do
+      // design-system §8.4, no controle que é a única saída do sistema.
+      for (final tamanho in [
+        const Size(390, 800),
+        const Size(800, 900),
+        const Size(1400, 900),
+      ]) {
+        await montar(tester, tamanho);
+        final alvo = tester.getSize(find.byKey(chaveGatilhoMenuUsuario));
+        expect(
+          alvo.width,
+          greaterThanOrEqualTo(Dim.alvoMobile),
+          reason: 'largura do gatilho em ${tamanho.width} px',
+        );
+        expect(
+          alvo.height,
+          greaterThanOrEqualTo(Dim.alvoMobile),
+          reason: 'altura do gatilho em ${tamanho.width} px',
+        );
+      }
+    });
+
+    testWidgets('no tablet o trilho diz quem está logado', (tester) async {
+      await montar(tester, const Size(800, 900));
+      expect(find.text('Direção'), findsOneWidget);
+    });
+  });
+
+  group('iniciais do avatar da gaveta', () {
+    test('uma ou duas, e nome vazio não inventa nada', () {
+      expect(iniciaisDe('Direção'), 'D');
+      expect(iniciaisDe('Maria Aparecida Silva'), 'MS');
+      expect(iniciaisDe('  '), '');
+    });
   });
 }

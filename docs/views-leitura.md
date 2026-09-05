@@ -48,6 +48,20 @@ pelas políticas do usuário que perguntou.
 Vale também para view sobre view: a opção é **por view**, não herdada. `v_demanda_imediata` lê
 `v_demanda_imediata_aluno`; as duas declaram.
 
+⚠️ **Medido em 04/09/2026 (card 6.4), e o custo de esquecer é ASSIMÉTRICO — não é o que a leitura
+ingênua da regra sugere.** Com `alter view … reset (security_invoker)` nas duas pontas da cadeia:
+
+- tirar a opção da view **de baixo** (`v_demanda_imediata_aluno`) **vaza até em cima**: a agregada,
+  que continua `invoker`, passa a ler a de baixo como o **dono** dela, que tem `BYPASSRLS` (card
+  3.3), e a soma das **duas unidades** chega à tela com a cara de um número certo. Três asserções de
+  paridade do teste `095` ficam vermelhas;
+- tirar a opção da view **de cima**, sozinha, **não vaza**: com a de baixo ainda `invoker`, as
+  tabelas continuam sendo checadas contra o usuário da sessão e a contagem não muda. **Quem acusa
+  esse caso é só o C5**, e é por isso que ele não é redundante com o teste de paridade.
+
+Consequência para os cards 8.1 e 8.2, que vão empilhar mais uma view aqui: a opção segue obrigatória
+nas duas pontas, mas a que **precisa** de teste de comportamento é a de baixo.
+
 ### 2.2 Nunca `materialized view`
 
 Uma matview **não respeita RLS** — é um instantâneo materializado com a visibilidade de quem deu o
@@ -247,7 +261,14 @@ select unidade_id,
 É a coluna DEMANDA da planilha. Material sem demanda **não tem linha aqui** — quem precisa da lista
 completa é `v_pedido_sugerido`, que faz `left join` e `coalesce` (§3.1).
 
-### 5.3 `v_demanda_projetada` — contrato agora, corpo no card 8.1
+### 5.3 `v_demanda_projetada` — ✅ implementada no card 8.1 (05/09/2026)
+
+> ✅ **O contrato abaixo foi cumprido sem alteração de coluna nenhuma.** A migração
+> `20260905150000_projecao_demanda.sql` criou a tabela exatamente como está escrita aqui, mais a
+> `demanda_projetada_hist` (a foto mensal do §7.2 de `docs/projecao-demanda.md`), a view por cima, o
+> índice `(unidade_id, mes)` e a RLS **fora do padrão de quatro políticas**: `select` por
+> `estoque.ler`, `insert`/`delete` por `fn_contexto_rotina()` e **nenhum** `update`. O que continua em
+> aberto é o card 8.2, que troca as duas expressões do §6.2.
 
 O algoritmo é do card de Ordem 5 da Fase 2 e a implementação do 8.1. O que o card 2.3 fixa é o
 **contrato**, para que `v_pedido_sugerido` já exista completa na Fase 6 e a Fase 8 não a reescreva.
@@ -337,7 +358,8 @@ select e.unidade_id,
          on di.unidade_id = e.unidade_id and di.material_id = e.material_id
   left join (
          select pi.unidade_id, pi.material_id,
-                sum(pi.qtd_pedida - pi.qtd_recebida)::integer as qtd_pendente
+                -- piso zero POR ITEM (card 6.5) — ver o item novo abaixo
+                sum(greatest(pi.qtd_pedida - pi.qtd_recebida, 0))::integer as qtd_pendente
            from public.pedido_item pi
            join public.pedido_compra pc on pc.id = pi.pedido_id
           where pc.status in ('ENVIADO','PARCIAL')
@@ -353,6 +375,13 @@ select e.unidade_id,
   linha continua, com as parcelas visíveis (§2.3).
 - Quantidade pendente é `qtd_pedida − qtd_recebida` do item, não do pedido: recebimento parcial é a
   regra, não a exceção.
+- ⚠️ **`greatest(…, 0)` TAMBÉM POR ITEM (card 6.5, 04/09/2026).** Enquanto `qtd_recebida` não podia
+  passar de `qtd_pedida`, a parcela por item nunca era negativa e o piso do total bastava. O card 6.5
+  tornou o recebimento com excedente possível — é o que `compras.receber_excedente` significa —, e a
+  partir daí um item com 11 de 10 recebidos entra na soma como **−1**. O piso do total não alcança
+  isso: ele age sobre a soma, e o −1 já teria abatido a necessidade de **outro material do mesmo
+  pedido**, com todas as parcelas parecendo plausíveis ao lado. O teste `060_estoque_compras` mede o
+  caso, e a contraprova (view sem o piso por item) o vê **vermelho** com `−1`.
 
 ### 6.2 Por que a coluna `qtd_projetada` já nasce como `0`
 
@@ -383,6 +412,12 @@ replace view` que troca **duas expressões** e nada mais:
 
 O zero é honesto e está documentado como reserva: até a Fase 8, o pedido sugerido é a v1 do plano, e
 a tela mostra a coluna projetada zerada em vez de fingir que ela não existe.
+
+✅ **A reserva deixou de ser parágrafo em 04/09/2026 (card 6.4).** O teste `095` assere a **posição**
+pelo catálogo — `qtd_projetada` é a 10ª coluna e a view tem 12, com `qtd_sugerida` na última —, que
+é a asserção que o card 2.8 §14 pedia para esta decisão. Exercitada: recriando a view com a coluna
+**no fim**, que é como ela nasceria se o 6.4 a tivesse deixado para a Fase 8, a asserção fica
+vermelha sozinha. É ela que garante ao card 8.2 o `create or replace` de duas expressões.
 
 > **Consequência para o board:** o card 8.2 deixa de ser "evoluir a view" e passa a ser "preencher a
 > parcela e mostrar a coluna na tela de Compras". Registrado nas Notas do card.
@@ -439,7 +474,22 @@ select b.unidade_id,
   de capacidade no sistema (card 5.2 é dono da fórmula). Se um dia doer, o alvo é a função, não a
   view.
 
-### 7.2 `v_turma_modular_lotacao` — cards 7.4 e 5.9
+### 7.2 `v_turma_modular_lotacao` — ~~cards 7.4 e 5.9~~ **card 7.3** (05/09/2026)
+
+> ⚠️ **A view NÃO expõe `data_inicio` da turma, e é por isso que a tela 5 não deixa editá-la**
+> (card 8.1,5, 05/09/2026, item A2). O defeito corrigido lá era o oposto do que parece: o `update`
+> reenviava `data_inicio = hoje` e **toda** edição da turma — renomear, mudar capacidade,
+> desativar — apagava a data real de início. Medido: "Eletricista 2025.2" foi de 2025-11-09 para
+> 2026-09-05 num clique em Salvar sem mudar nada. A correção é o `update` **não** enviar a coluna;
+> a consequência é que o campo só existe na criação. Expor `data_inicio` aqui (e permitir editá-la)
+> é **view nova**, para o card que mexer nas views Modular — é dado que o importador do card 9.1
+> traz da planilha e que a projeção Modular do 8.1 lê.
+
+⚠️ **Corrigido em 05/09/2026, pelo card 7.3.** A atribuição a "7.4 e 5.9" não podia valer ao mesmo
+tempo que o §8 do `wireframes.md`, que manda a **tela 5** (card 7.3) ler esta view — e o 7.4 vem
+depois dela na ordem do board. Vence o §12.1: view de tela pertence ao card da tela, como em 6.6,
+6.7 e 6.8. O SQL abaixo foi aplicado **palavra por palavra** em
+`20260905120000_views_turmas_modular.sql`; o 7.4 (lotação por curso no Dashboard) é consumidor.
 
 ```sql
 create view public.v_turma_modular_lotacao with (security_invoker = on) as
@@ -627,7 +677,7 @@ Mesmo formato do §14 do card 2.2 e do §8 do card 2.5: o que precisa mudar em d
 | # | Ajuste | Onde | Card | Gravidade |
 |---|---|---|---|---|
 | 1 | Criar `fn_hoje()` e trocar **todo** `current_date` de view, função e rotina por ela | 2.1 §3, 2.2, 2.5 | 3.4 | **bloqueante** para a correção dos números à noite (§3.3) |
-| 2 | `default current_date` → `default public.fn_hoje()` em `aluno.status_desde`, `aluno.data_inicio`, `bloco_aluno.tipo_desde`, `turma_modular_aluno.data_entrada` | 2.1 §7, §8, §9 | 4.2 / 5.1 / 7.1 | alta — data errada gravada, não só exibida |
+| 2 ✅ | **Fechado em 05/09/2026 (card 7.1), o último dos quatro.** `default current_date` → `default public.fn_hoje()` em `aluno.status_desde` e `aluno.data_inicio` (4.2), `bloco_aluno.tipo_desde` (5.1) e `turma_modular_aluno.data_entrada` (7.1). O C6 prova que `current_date` não está escrito; o `070` §2 prova que o valor gravado é o de `fn_hoje()` | 2.1 §7, §8, §9 | 4.2 / 5.1 / 7.1 | alta — data errada gravada, não só exibida |
 | 3 | ✅ **Feito em 03/09/2026 (card 5.2).** `fn_capacidade_efetiva` e `fn_ocupacao_bloco` são `security definer` + `search_path` fixo + filtro `unidade_id = fn_unidade_atual()` no corpo, e entraram na lista fechada do C8. `fn_vagas_livres` ficou **invoker**: não lê tabela, só compõe as duas | 2.2 §4.1, §4.2 | 5.2 | **bloqueante** — como invoker, a grade mostra tudo lotado para quem não tem `salas.ler` (§3.4) |
 | 4 ✅ | **Feito em 03/09/2026 (card 5.5).** Severidade `INFO` de `ACELERAR_SEM_2O_BLOCO` no catálogo do card 2.2 **não existe** no `check` do DDL (`BAIXA`,`MEDIA`,`ALTA`) — adotado `BAIXA`. Exercitado: escrito `INFO`, `rt_pendencias_diaria` morre no `check` já na primeira execução | 2.2 §10.1 | 5.5 | **bloqueante** — o insert falharia no `check` de `pendencia.severidade` |
 | 5 ✅ | **Feito em 03/09/2026 (card 5.5):** `pendencia_severidade_ix` | 2.1 §10 | 5.5 | baixa — desempenho |
@@ -645,7 +695,7 @@ o número certo se o leitor tiver **todo** o conjunto (§3.4), e é esse conjunt
 | View | Permissões de leitura exigidas |
 |---|---|
 | `v_estoque_atual` | `materiais.ler`, `estoque.ler` |
-| `v_demanda_imediata_aluno` / `v_demanda_imediata` | `alunos.ler`, `materiais.ler` |
+| `v_demanda_imediata_aluno` / `v_demanda_imediata` | `alunos.ler` — ⚠️ ~~`materiais.ler`~~, ver a correção abaixo |
 | `v_demanda_projetada` | `materiais.ler`, `estoque.ler` |
 | `v_pedido_sugerido` | `materiais.ler`, `estoque.ler`, `alunos.ler`, `compras.ler` |
 | `v_bloco_vagas_semana` | `turmas.ler`, `salas.ler`, **`materiais.ler`** |
@@ -676,6 +726,18 @@ lê-lo —, Irineu escolheu a segunda: exigir tiraria o dashboard de quem não t
 o professor já aparece na tela de **Turmas**, cuja rota o exige (e onde `fn_grade_semana`, não esta
 view, é a fonte). A leitura foi removida de `dashboard_repositorio.dart` no mesmo dia.
 
+⚠️ **`materiais.ler` SAIU da linha das duas views de demanda em 04/09/2026** (card 6.4), fechando o
+achado nº 12 de `docs/permissoes-matriz.md` §7, que estava atribuído a este card desde 01/09/2026.
+Ao contrário das cinco linhas em negrito acima, `v_demanda_imediata_aluno` **não faz `join` em
+material nenhum**: ela lê `aluno_material` e `aluno`, as duas com política de `select` por
+`alunos.ler`, e devolve `material_id`. Quem precisa do **nome** do material é a tela, que já carregou
+o catálogo. Declarar a permissão a mais não deixava a view errada — deixava o **contrato** errado, e
+contrato de permissão errado é o que faz alguém guardar uma rota por um conjunto que não é o mínimo
+(ou enxugar a matriz confiando numa linha que nunca foi medida). Agora foi: `supabase/tests/095_views_paridade.sql`
+ganhou o perfil `SO_ALUNOS`, que tem **só** `alunos.ler` e recebe as duas views **inteiras** — e o
+mesmo perfil vê `v_estoque_atual` vazia, que é a coerência do outro lado. Se um dia a view passar a
+citar `material`, a asserção cai e diz que a linha voltou a estar errada.
+
 Nove códigos novos, todos no padrão `<dominio>.ler`: `alunos.ler`, `materiais.ler`, `estoque.ler`,
 `compras.ler`, `turmas.ler`, `salas.ler`, `certificados.ler`, `pendencias.ler`, `admin.ler`.
 Na matriz inicial do plano, o **monitor** não tem `compras.ler` — logo não recebe a tela de Compras,
@@ -691,17 +753,95 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | `v_pendencias_abertas` | **5.5** ✅ — a primeira view do projeto, e com ela nasceu o C5 (toda view `security_invoker`, zero matview) | 5 |
 | `v_bloco_vagas_semana`, `fn_grade_semana` | **5.6** ✅ (grade) — o **5.9** (dashboard) ✅ é consumidor da view e **não criou objeto nenhum de banco** | 5 |
 | `v_bloco_alunos`, `fn_bloco_alunos` | **5.7** ✅ — ver §12.1 | 5 |
-| `v_estoque_atual`, `v_demanda_imediata_aluno`, `v_demanda_imediata`, `v_pedido_sugerido` | 6.4 | 6 |
-| `v_turma_modular_lotacao` | 7.4 | 7 |
+| `v_estoque_atual`, `v_demanda_imediata_aluno`, `v_demanda_imediata`, `v_pedido_sugerido` | **6.4** ✅ — `20260904180000_views_estoque_demanda.sql`, as quatro sem uma linha de dado; o teste `095` cresceu de 29 para 86 asserções | 6 |
+| `v_aluno_trilha` | **6.6** ✅ — `20260904233000_view_aluno_trilha.sql`, view de listagem (§12.1); o teste nasceu em `053_aluno_trilha`, com 23 asserções | 6 |
+| `v_turma_modular_lotacao`, `v_turma_modular_cronograma`, `v_turma_modular_aluno` | **7.3** ✅ — `20260905120000_views_turmas_modular.sql`, as três sem uma linha de dado. ⚠️ **A de lotação estava atribuída ao 7.4 (e ao 5.9) e nasceu no 7.3**: o `wireframes.md` §8 manda a tela 5 lê-la, e o §12.1 abaixo é a regra geral — view de tela é do card da tela, como em 6.6, 6.7 e 6.8. O SQL é cópia palavra por palavra do §7.2. O **7.4** ✅ (05/09/2026) foi **consumidor** e não criou objeto nenhum, como o 5.9 foi para `v_bloco_vagas_semana` — soma esta view por curso na região "Lotação Modular" do dashboard, e o que ele acrescentou ao banco foram **três asserções** no teste `095` (o `join` interno em `curso` × `materiais.ler`, o bloqueante nº 1 de `permissoes-matriz.md` §7). As outras duas o §7.2 não previa: o cronograma precisa da ordem e do nome do módulo (que só existem em `modulo`, por join — o card 7.1 recusou coluna própria de ordem), e a lista de alunos precisa do nome (que `turma_modular_aluno` não tem). Teste em `072_modular_views`, 34 asserções | 7 |
 | `demanda_projetada`, `v_demanda_projetada` | 8.1 | 8 |
 | `v_pedido_sugerido` — troca do literal `0` pela parcela projetada | 8.2 | 8 |
 | `v_dashboard_alunos_metodo`, `v_dashboard_conclusoes_semestre`, `v_dashboard_tipos_bloco` | 8.7 (o 5.9 já cria as de vaga) | 8 |
 
 ### 12.1 Views de tela, que pertencem aos seus próprios cards
 
-Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6),
-`v_bloco_alunos` (5.7), `v_material_movimento` (6.7), `v_certificado_fila` (8.6). São views de
-listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6) ✅,
+`v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7) ✅, `v_pedido_compra` e `v_pedido_item`
+(6.8) ✅, `v_turma_modular_cronograma` e `v_turma_modular_aluno` (7.3) ✅, `v_certificado_fila` (8.6).
+São views de listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+
+⚠️ **As duas do card 7.3 nasceram em 05/09/2026** (`20260905120000_views_turmas_modular.sql`), junto
+com a de lotação do §7.2, e duas decisões merecem registro:
+
+- **`v_turma_modular_cronograma` tem `corrente` como COLUNA**, e isso a torna a terceira expressão do
+  mesmo fato (a função `fn_turma_modular_modulo_corrente` do card 7.2 e o `left join lateral` do
+  §7.2 são as outras duas). O card 2.3 §4.1 proíbe a segunda conta, e a exceção só se paga com
+  medição: o teste `072` §2 compara **as três, turma a turma**, e a contraprova de removê-la já foi
+  vista vermelha. Existe como coluna porque a tela marca o `►` numa **linha**, e derivá-la em Dart
+  seria a quarta definição. ⚠️ `atrasado` exige `not concluido`: `fn_turma_modular_avancar` grava a
+  data REAL da conclusão em `prev_conclusao`, então **todo** módulo fechado tem previsão no passado,
+  e sem a condição uma turma em dia apareceria com metade do cronograma em vermelho.
+- **`v_turma_modular_aluno` junta `aluno` INTERNAMENTE, e a rota da tela 5 não exige `alunos.ler`**
+  (`permissoes-matriz.md` §6, linha 5). A consequência é deliberada e é a mais enganosa do §3.4: sem
+  a permissão a lista vem vazia enquanto a lotação, ao lado, diz `1/15`. As três saídas foram
+  pesadas — `left join` (turma de oito alunos anônimos), acrescentar `alunos.ler` à rota (fecha a
+  tela inteira, inclusive cronograma e avanço, que não dependem de aluno nenhum) e a escolhida: join
+  interno **e a região declara a permissão que lhe falta** (`EstadoSemAcesso` por região,
+  design-system §5.6). É o que torna esta redução visível em vez de silenciosa, e o `072` §4 a mede
+  com um perfil que tem o conjunto exato da rota e nada mais.
+
+⚠️ **`v_pedido_compra` e `v_pedido_item` nasceram em 04/09/2026** (`20260905010000_views_pedidos_compra.sql`,
+card 6.8), e as duas trazem o que faltava para a tela 7 não recalcular nada. Três decisões:
+
+- **`v_pedido_compra` tem os agregados numa SUBCONSULTA agrupada, e não num `left join` com
+  `count(*)`.** É o §3.2 num caso real, não hipotético: **pedido sem item existe** — é o rascunho
+  recém-criado, e `PEDIDO_SEM_ITEM` de `fn_pedido_enviar` só faz sentido porque ele existe. Sobre o
+  `left join` direto ele contaria **1** item que não há, e `sum()` do conjunto vazio viria `null`
+  (§3.1). O teste `062` mede os dois com a **contraprova ao lado**, escrita na forma ingênua.
+- **`data_referencia` é `coalesce(data_envio, criado_em at time zone 'America/Sao_Paulo')`**, e não
+  `criado_em::date` (§3.3): o banco roda em UTC, e um rascunho criado às 22h apareceria datado do
+  dia seguinte na lista.
+- **O `join` em `material` de `v_pedido_item` é INTERNO**, como o de `v_aluno_trilha` (6.6) e ao
+  contrário do de `v_material_movimento` (6.7). A diferença é qual permissão está em jogo: a rota da
+  tela 7 **exige** `materiais.ler` (permissoes-matriz §6, linha 7), então quem chega sem ela já viu
+  a tela "sem acesso". Das duas reduções do §3.4, a menos pior aqui é a lista **vazia**: um pedido
+  cheio de itens sem nome seria uma lista de apostilas anônimas para conferir contra a caixa que
+  chegou, e conferir apostila pelo id é como se recebe a errada. O `062` prova as duas reações
+  opostas com um perfil que tem `compras.ler` e não tem `materiais.ler`, e a asserção da lista vazia
+  foi **vista vermelha** com o `join` convertido em externo.
+
+O `qtd_pendente` de `v_pedido_item` repete o `greatest(…, 0)` **por item** de `v_pedido_sugerido`
+(§6, card 6.5) e pela mesma razão: item recebido com excedente tem `qtd_pedida − qtd_recebida`
+negativo, e "faltam −2" não é frase de painel de conferência. Contraprova no `062`, lendo a
+subtração crua ao lado.
+
+⚠️ **`v_material_movimento` nasceu em 04/09/2026** (`20260904235500_view_material_movimento.sql`,
+card 6.7), e a decisão dela é **o contrário** da de `v_aluno_trilha`: **todo `join` de rótulo é
+externo**. Aluno, pedido, movimento estornado e autor entram por `left join`, e a view leva o **id ao
+lado do nome** (`aluno_id`/`aluno_nome`, `pedido_item_id`/`pedido_numero`, `criado_por`/
+`criado_por_nome`). O critério é o mesmo do 6.6 — perguntar o que cada forma de errar custa —, e aqui
+ele aponta para o outro lado por duas razões: **(a)** o painel é a *conferência* do saldo, e a soma
+das linhas exibidas tem de fechar com `v_estoque_atual`; uma linha que sumisse por um rótulo ilegível
+quebraria a conta na tela **sem erro nenhum**, e a pessoa concluiria que o sistema perdeu movimento;
+**(b)** os quatro rótulos moram atrás de permissões que a rota da tela 6 **não exige** (§6 do card
+2.4: só `materiais.ler` + `estoque.ler`) — com `join` interno em `pedido_compra`, o **monitor**, que
+não tem `compras.ler`, deixaria de ver *toda ENTRADA vinda de pedido*. Não há `join` em `material`:
+o painel é de um material já escolhido na lista de cima, e trazê-lo de volta acrescentaria a única
+redução silenciosa que faltava. O que isto obriga na tela está escrito e testado: id preenchido com
+nome nulo é *"existe e você não pode ver"*, nunca um traço — um traço faria uma SAIDA de entrega
+parecer um ajuste sem dono (a armadilha da pendência 9.13). O teste `061` assere a paridade de linhas
+perfil a perfil e a igualdade **soma do painel = saldo**, e as duas foram **vistas vermelhas** com o
+`join` do pedido convertido em interno.
+
+⚠️ **`v_aluno_trilha` nasceu em 04/09/2026** (`20260904233000_view_aluno_trilha.sql`, card 6.6), e
+duas coisas dela valem para as duas que faltam. **(a) Ela não recopia número nenhum:** `proximo`
+repete o critério de `fn_trilha_proximo_material` como janela (a função responde por um aluno; a
+view, por todos de uma vez) e `saldo` **chama** `fn_saldo_material` em vez de somar de novo — a
+segunda implementação da soma já existe e é aquela, e uma terceira é o que o §4.1 proíbe. O teste
+`053` asserta que view e função concordam aluno a aluno, e essa asserção foi **vista vermelha** com
+o `filter (where not entregue)` removido. **(b) O `join` em `material` é interno de propósito:** sem
+`materiais.ler` a trilha vem VAZIA, e não "cheia sem o nome". Das duas reduções silenciosas do §3.4,
+esta é a menos pior — uma trilha com o nome em branco pareceria uma trilha curta, e a pessoa
+entregaria a apostila errada. Sem `estoque.ler` a redução é a **oposta**: vem cheia com saldo 0 em
+tudo, que é o motivo escrito de a rota 3b exigir a permissão. As duas estão asseridas no `053` §5,
+cada uma com contraprova.
 
 ~~`v_aluno_lista` (4.6)~~ — **não existe, e não vai existir.** A lista de alunos lê a tabela `aluno`
 e junta método, combo e turmas em memória: a view juntaria os três num objeto de banco a mais sem

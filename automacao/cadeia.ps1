@@ -75,7 +75,33 @@ param(
     # Teto de utilização da janela de 5 h. Acima disto o driver não começa card
     # novo — espera. 0.92 deixa folga para a estimativa errar para menos sem
     # matar a sessão no meio, que é o desfecho caro.
-    [double]$TetoJanela = 0.92
+    [double]$TetoJanela = 0.92,
+
+    # Teto da janela SEMANAL, mais alto que o de 5 h de propósito — e a razão é
+    # medida, não intuição. A margem existe para absorver o erro da estimativa
+    # de UM card, e o erro tem tamanhos muito diferentes nas duas janelas:
+    #
+    #   5 h     : média 18 pontos por card, MÁXIMO 54 -> erro de até +36
+    #   semanal : média 1,5 ponto por card, máximo  2 -> erro de até +0,5
+    #
+    # A API reporta a utilização semanal em ponto percentual INTEIRO (os únicos
+    # valores medidos foram 1 e 2), o que dá ±0,5 de incerteza NA LEITURA. ⚠️ Ela
+    # NÃO acumula entre decisões: cada card relê a utilização corrente, então o
+    # que importa é a imprecisão de uma leitura só. (Primeira versão desta conta
+    # somava o arredondamento de várias leituras e chegava a 0,94 — conservador
+    # demais por erro de aritmética, não por prudência.)
+    #
+    # Pior desfecho ao começar em U: U + 0,5 (leitura) + 2,5 (card) = U + 3.
+    # Com 0,96 o card só começa se U <= 94,4, e o pior caso termina em 97,4% —
+    # não estoura. Com o 0,88 do de 5 h sobrariam 12 pontos, quatro vezes o
+    # necessário: ~7 cards de capacidade semanal jogados fora por semana.
+    [double]$TetoSemanal = 0.96,
+
+    # Quanto o driver aceita ESPERAR por um reset antes de desistir e parar.
+    # Existe porque a janela SEMANAL reinicia às segundas: quem tranca por ela
+    # teria três dias de espera, e script que dorme três dias não é espera, é
+    # travamento com cara de funcionamento.
+    [int]$MaxEsperaMin = 360
 )
 
 $ErrorActionPreference = 'Stop'
@@ -234,16 +260,48 @@ function PreVoo {
     # da busca. A chamada tinha funcionado — a sonda e que reprovou por causa do
     # formato. Sonda que reprova quando o sistema esta bom ensina a ignorar
     # vermelho, que e o pior defeito que uma checagem pode ter.
+    # ⚠️ A ferramenta e NOMEADA, e nao descrita. Pedindo "a ferramenta de busca
+    # do Notion", a sessao escolheu `notion-ai-search` — que exige plano
+    # Business e devolve upsell —, e a sonda reprovou com o MCP funcionando
+    # perfeitamente (medido em 04/09/2026). Sonda que reprova com o sistema bom
+    # ensina a ignorar vermelho, e esta ja tinha caido nisso duas vezes.
+    #
+    # A consulta escolhida e a MESMA que a skill `proxima-tarefa` faz primeiro:
+    # exercita o caminho de verdade e devolve um numero, nao uma pagina.
     $perg = 'RESPONDA COM UMA UNICA PALAVRA E NADA MAIS. ' +
-            'Chame a ferramenta de busca do Notion procurando por "Roadmap de Construcao". ' +
-            'Se a chamada responder, sua resposta inteira e exatamente: PRONTO. ' +
+            'Use a ferramenta mcp__claude_ai_Notion__notion-query-data-sources (modo sql) para rodar ' +
+            'SELECT count(*) FROM "collection://e50abe7f-1688-402a-96b5-c6049b24ce82". ' +
+            'NAO use notion-ai-search nem notion-search. ' +
+            'Se a consulta responder, sua resposta inteira e exatamente: PRONTO. ' +
             'Se for negada ou falhar, sua resposta inteira e exatamente: NEGADO. ' +
-            'Nao escreva tabelas, listas, explicacoes, nem os resultados da busca.'
+            'Nao escreva tabelas, listas, explicacoes, nem o resultado da consulta.'
+
+    # ⚠️ A sonda passa PELO EXECUTOR, e não pelo `claude` direto, por um motivo
+    # que não é organização de código: o executor é quem grava o `limite.json`.
+    # Chamando o `claude` direto, o pré-voo abria uma sessão, VIA o estado da
+    # janela e o jogava fora — e o primeiro card decidia o orçamento com a
+    # leitura do fim da corrida anterior, que podia ser de horas antes. Foi o que
+    # Irineu viu em 04/09/2026: "janela em 91%" com o painel marcando 96%.
+    #
+    # Com a decisão passando a ser fina (autonomia contra tempo até o reset),
+    # número velho deixa de ser incômodo e vira erro de conta.
+    $exeClaude = ResolverExecutavelClaude
+    if (-not (Test-Path $DirLogs)) { New-Item -ItemType Directory -Path $DirLogs -Force | Out-Null }
+    $arqPergunta = Join-Path $DirLogs 'sonda-prompt.md'
+    $arqSondaLog = Join-Path $DirLogs 'sonda.log'
+    $arqSondaCru = Join-Path $DirLogs 'sonda.jsonl'
+    Set-Content -Path $arqPergunta -Value $perg -Encoding UTF8
+    Remove-Item $arqSondaLog, $arqSondaCru -Force -ErrorAction SilentlyContinue
 
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $sonda = (& claude -p $perg --permission-mode acceptEdits --allowedTools @FerramentasPermitidas 2>&1 | Out-String)
+        if ($exeClaude -and (Test-Path $ExecutorSessao)) {
+            $sonda = (& node $ExecutorSessao $exeClaude $arqPergunta $arqSondaLog $arqSondaCru $ArqLimite `
+                             @FerramentasPermitidas 2>&1 | Out-String)
+        } else {
+            $sonda = 'falhou: sem executável do claude ou sem o executor de sessão'
+        }
     } catch {
         $sonda = "falhou: $($_.Exception.Message)"
     } finally { $ErrorActionPreference = $eap }
@@ -385,22 +443,25 @@ function MediaPorCard {
             if (-not $l.Trim()) { continue }
             try { $r = $l.TrimStart([char]0xFEFF) | ConvertFrom-Json } catch { continue }
             if ($r.veredito -eq 'CARD_OK' -and $r.janelaGasta -gt 0) {
-                $medidos += [pscustomobject]@{ janela = [double]$r.janelaGasta; minutos = [double]$r.minutos }
+                $sem = if ($r.semanalGasta) { [double]$r.semanalGasta } else { 0.0 }
+                $medidos += [pscustomobject]@{ janela = [double]$r.janelaGasta; minutos = [double]$r.minutos; semanal = $sem }
             }
         }
     }
 
     if ($medidos.Count -ge 2) {
+        $semanal = ($medidos | Where-Object { $_.semanal -gt 0 })
         return @{
             janela  = ($medidos | Measure-Object janela  -Average).Average
             minutos = ($medidos | Measure-Object minutos -Average).Average
+            semanal = if ($semanal) { ($semanal | Measure-Object semanal -Average).Average } else { 0.016 }
             base    = "$($medidos.Count) card(s) medido(s)"
         }
     }
 
-    # Padrão até haver medida própria: o que a corrida de 04/09/2026 mostrou —
-    # ~0,11 de janela e ~31 min por card, seis cards de 5.6 a 6.1.
-    return @{ janela = 0.11; minutos = 31.0; base = 'padrão da corrida de 04/09 (sem medida local ainda)' }
+    # Padrão até haver medida própria, das corridas de 04/09/2026: ~25 pontos da
+    # janela de 5 h, ~1,6 ponto da semanal e ~33 min por card, em nove sessões.
+    return @{ janela = 0.25; minutos = 33.0; semanal = 0.016; base = 'padrão das corridas de 04/09 (sem medida local ainda)' }
 }
 
 # Lê o último estado da janela. Devolve $null quando ainda não há leitura.
@@ -408,10 +469,38 @@ function EstadoJanela {
     if (-not (Test-Path $ArqLimite)) { return $null }
     try {
         $j = Get-Content $ArqLimite -Raw -Encoding UTF8 | ConvertFrom-Json
-        $uso = $j.unifiedWindows.five_hour.utilization
-        if ($null -eq $uso) { $uso = 0 }
-        $reset = if ($j.resetsAt) { [DateTimeOffset]::FromUnixTimeSeconds([long]$j.resetsAt).LocalDateTime } else { $null }
-        return @{ uso = [double]$uso; reset = $reset; status = $j.status }
+        $w = $j.unifiedWindows
+        if ($null -eq $w) { return $null }
+        $lidoEm = if ($j.lidoEm) { [datetime]$j.lidoEm } else { $null }
+
+        # ⚠️ O `resetsAt` DO TOPO não serve: ele descreve a janela que estiver
+        # apertando no momento, e em 04/09/2026 virou `seven_day` assim que o
+        # semanal passou o de 5 h. O driver estava casando a UTILIZAÇÃO de 5 h
+        # com o RESET do semanal e anunciando "reset em 4.405 min" — três dias.
+        # Cada janela traz o seu par dentro de `unifiedWindows`; é de lá que se
+        # lê, sempre.
+        $janelas = @()
+        foreach ($def in @(@{ k = 'five_hour'; n = '5 h' }, @{ k = 'seven_day'; n = 'semanal' })) {
+            $chave = $def.k; $nome = $def.n
+            $d = $w.$chave
+            if ($null -eq $d) { continue }
+            $uso = if ($null -ne $d.utilization) { [double]$d.utilization } else { 0.0 }
+            $reset = if ($d.resetsAt) { [DateTimeOffset]::FromUnixTimeSeconds([long]$d.resetsAt).LocalDateTime } else { $null }
+            $janelas += @{ chave = $chave; nome = $nome; uso = $uso; reset = $reset }
+        }
+
+        $cinco = $janelas | Where-Object { $_.chave -eq 'five_hour' } | Select-Object -First 1
+        $uso = if ($cinco) { $cinco.uso } else { 0.0 }
+        $reset = if ($cinco) { $cinco.reset } else { $null }
+
+        # ⚠️ Leitura cujo reset JÁ PASSOU não é velha, é INVÁLIDA: aquela
+        # utilização pertence a um ciclo que não existe mais, e o ciclo novo
+        # começa perto de zero. Devolver $null faz o driver dizer "sem leitura
+        # ainda" e seguir — em vez de anunciar um "não cabe" com o número do
+        # ciclo anterior, que é o tipo de mensagem que ensina a ignorar o aviso.
+        if ($reset -and $reset -lt (Get-Date)) { return $null }
+
+        return @{ uso = [double]$uso; reset = $reset; status = $j.status; lidoEm = $lidoEm; janelas = $janelas }
     } catch { return $null }
 }
 
@@ -425,45 +514,137 @@ function CabeNaJanela($indice) {
         return $true
     }
 
-    $sobra = 1.0 - $e.uso
-    $ateReset = if ($e.reset) { [int]([Math]::Max(0, ($e.reset - (Get-Date)).TotalMinutes)) } else { $null }
-    $projetado = $e.uso + $m.janela
+    $idade = if ($e.lidoEm) { [int]((Get-Date) - $e.lidoEm).TotalMinutes } else { $null }
+    $script:leituraEm = $e.lidoEm
+    $nota = if ($null -ne $idade -and $idade -gt 5) { " · leitura de $idade min atrás" } else { '' }
 
-    $txtReset = if ($null -ne $ateReset) { "reset em {0} min" -f $ateReset } else { 'reset desconhecido' }
-    Escrever ("  orçamento: janela em {0:P0}, sobra {1:P0}, {2}; card estimado em {3:P0} / {4:N0} min ({5})" -f `
-              $e.uso, $sobra, $txtReset, $m.janela, $m.minutos, $m.base) 'DarkGray'
+    Escrever ("  orçamento: card estimado em {0:P0} da janela de 5 h e {1:P1} da semanal / {2:N0} min ({3}){4}" -f `
+              $m.janela, $m.semanal, $m.minutos, $m.base, $nota) 'DarkGray'
 
-    if ($projetado -le $TetoJanela) {
-        Escrever ("  ✓ cabe: projeção {0:P0} contra teto de {1:P0}" -f $projetado, $TetoJanela) 'DarkGray'
-        return $true
-    }
+    # ⚠️ AS DUAS JANELAS DECIDEM, e a que apertar primeiro manda. Modelar só a
+    # de 5 h deixaria a cadeia planejar contra ela e ser barrada pela semanal
+    # sem entender por quê — em 04/09/2026 a semanal já estava em 75% enquanto a
+    # de 5 h marcava 28%. Medido: ~25 pontos de 5 h e ~1,6 ponto de semanal por
+    # card, ou seja, a semanal aguenta ~15 cards e a de 5 h aguenta ~3.
+    $script:janelaQueTranca = $null
+    $cabe = $true
 
-    Escrever ("  ⏸ não cabe: projeção {0:P0} passaria do teto de {1:P0}." -f $projetado, $TetoJanela) 'Yellow'
-    return $false
-}
+    foreach ($j in $e.janelas) {
+        $est = if ($j.chave -eq 'five_hour') { $m.janela } else { $m.semanal }
+        $teto = if ($j.chave -eq 'five_hour') { $TetoJanela } else { $TetoSemanal }
+        $sobra = [Math]::Max([double]0, $teto - $j.uso)
+        $ateReset = if ($j.reset) { ($j.reset - (Get-Date)).TotalMinutes } else { $null }
+        $txtReset = if ($null -ne $ateReset) { "reset em {0:N0} min" -f $ateReset } else { 'reset desconhecido' }
 
-# Espera em passos de 10 min até o card caber (ou até o reset chegar).
-function EsperarJanela($indice) {
-    while ($true) {
-        $e = EstadoJanela
-        if ($null -eq $e) { return }   # sem leitura, não há o que esperar
+        Escrever ("             {0,-8} em {1,5:P0} · sobra {2,5:P0} até o teto · {3}" -f `
+                  $j.nome, $j.uso, $sobra, $txtReset) 'DarkGray'
 
-        $ateReset = if ($e.reset) { ($e.reset - (Get-Date)).TotalMinutes } else { 0 }
-        if ($ateReset -le 0) {
-            # A janela virou. A utilização real vem no primeiro evento da
-            # sessão seguinte; aqui só se registra que a espera acabou.
-            Escrever '  ▶ janela reiniciada — retomando.' 'Green'
-            try { Remove-Item $ArqLimite -Force } catch { }
-            return
+        # Caso simples: o card inteiro cabe no que resta desta janela.
+        if (($j.uso + $est) -le $teto) { continue }
+
+        # ---------------------------------------------------------------
+        # AUTONOMIA — substituiu "não cabe inteiro, então tranca".
+        #
+        # Aquela regra desperdiçava a sobra: com a janela em 72% e um card de
+        # 29%, trancava e deixava 20 pontos morrerem no reset. Mas o card NÃO
+        # PRECISA caber inteiro no ciclo atual — precisa AGUENTAR ATÉ O RESET,
+        # e daí em diante corre no ciclo novo. O card 5.7 da primeira corrida
+        # atravessou um reset (66% -> 5% no meio dele) e terminou normalmente.
+        #
+        # ⚠️ `[Math]::Max([double]0, …)` com o `[double]` NÃO é firula: sem
+        # ele o PowerShell escolhe a sobrecarga de inteiros e ARREDONDA —
+        # `[Math]::Max(0, 0.60)` devolve `1`. A sobra virava 100% na tela, e
+        # como a autonomia só é consultada quando a sobra é menor que a
+        # estimativa (sempre < 0,5 na prática), ela arredondava para ZERO e a
+        # otimização inteira nunca disparava. Medido em 04/09/2026.
+        # ---------------------------------------------------------------
+        if ($null -eq $ateReset -or $m.minutos -le 0 -or $est -le 0) {
+            Escrever ("  ⏸ {0}: não cabe, e sem reset conhecido para calcular autonomia." -f $j.nome) 'Yellow'
+            $cabe = $false; $script:janelaQueTranca = $j; continue
         }
 
-        $passo = [Math]::Min(10, [Math]::Ceiling($ateReset))
-        Escrever ("  ⏳ aguardando {0} min (faltam {1:N0} min para o reset) — reavaliação às {2:HH:mm}" -f `
-                  $passo, $ateReset, (Get-Date).AddMinutes($passo)) 'Yellow'
-        Start-Sleep -Seconds ([int]($passo * 60))
+        $taxa = $est / $m.minutos                     # pontos por minuto nesta janela
+        $autonomia = if ($taxa -gt 0) { $sobra / $taxa } else { [double]::PositiveInfinity }
 
-        if (CabeNaJanela $indice) { return }
+        if ($autonomia -ge $ateReset) {
+            Escrever ("             {0,-8} autonomia de {1:N0} min cobre os {2:N0} min até o reset" -f `
+                      $j.nome, $autonomia, $ateReset) 'DarkGray'
+            continue
+        }
+
+        Escrever ("  ⏸ {0}: autonomia de {1:N0} min acaba antes do reset ({2:N0} min) — a sessão morreria no meio." -f `
+                  $j.nome, $autonomia, $ateReset) 'Yellow'
+        $cabe = $false
+        if ($null -eq $script:janelaQueTranca) { $script:janelaQueTranca = $j }
     }
+
+    if ($cabe) { Escrever '  ✓ cabe nas duas janelas' 'DarkGray' }
+    return $cabe
+}
+
+# Espera o reset da janela, em passos, mostrando quanto falta.
+#
+# ⚠️ NÃO REAVALIA A UTILIZAÇÃO, e a versão anterior fingia que sim. O
+# `limite.json` só é escrito pelo EXECUTOR, no fim de uma sessão; durante a
+# espera não há sessão nenhuma, então reler o arquivo devolve o mesmo número
+# para sempre. Medido em 04/09/2026: o driver imprimiu "janela em 91%" sete
+# vezes seguidas enquanto o painel de Irineu já marcava 96%.
+#
+# E mesmo com leitura fresca a reavaliação não teria o que decidir: a janela é
+# FIXA — o `resetsAt` é idêntico em todas as leituras —, então antes do reset a
+# utilização só pode SUBIR. Um laço que só pode piorar não é reavaliação, é
+# contagem regressiva com outro nome. Aqui ela tem o nome certo.
+#
+# O passo de 10 min existe para a espera dar sinal de vida e poder ser
+# interrompida, não porque algo mude a cada 10 min.
+function EsperarJanela($indice) {
+    $j = $script:janelaQueTranca
+    if ($null -eq $j -or -not $j.reset) { return $true }   # sem reset, não há o que esperar
+
+    $faltam = ($j.reset - (Get-Date)).TotalMinutes
+
+    # ⚠️ NUNCA dormir por dias. Quando quem tranca é a janela SEMANAL, o reset
+    # pode estar a três dias — e um script que dorme três dias não é espera, é
+    # travamento com aparência de funcionamento. Aí a cadeia PARA e diz por quê:
+    # a decisão de esperar até segunda-feira é de Irineu, não do driver.
+    if ($faltam -gt $MaxEsperaMin) {
+        Escrever ("  ✗ quem tranca é a janela {0}, e o reset dela é só às {1:dd/MM HH:mm} ({2:N0} h)." -f `
+                  $j.nome, $j.reset, ($faltam / 60)) 'Red'
+        Escrever '    A cadeia não espera tanto — retome quando a janela abrir.' 'Red'
+        return $false
+    }
+
+    while ($true) {
+        $faltam = ($j.reset - (Get-Date)).TotalMinutes
+        if ($faltam -le 0) { break }
+
+        $passo = [Math]::Min(10, [Math]::Ceiling($faltam))
+
+        # ⚠️ O número NÃO é de agora, e a tela precisa dizer isso. `limite.json`
+        # só é escrito pelo executor, no fim de cada card; durante a espera nada
+        # roda e nada o atualiza — e não há como reler de graça: a utilização
+        # chega apenas nos eventos de uma sessão, e sondar gastaria justamente o
+        # que foi medir. Em 04/09/2026 a tela repetiu 71% por horas enquanto o
+        # real já era 75% — a diferença era a SESSÃO INTERATIVA, porque a janela
+        # é da conta, não do script. Defasagem inofensiva para a decisão (dentro
+        # de uma janela fixa o uso só sobe, então a medida velha é um piso), mas
+        # anunciá-la como se fosse leitura viva ensina a desconfiar do painel.
+        $idadeLeitura = if ($script:leituraEm) { [int]((Get-Date) - $script:leituraEm).TotalMinutes } else { $null }
+        $selo = if ($null -ne $idadeLeitura) { "{0:P0} há {1:N0} min, só sobe" -f $j.uso, $idadeLeitura }
+                else { "{0:P0} na última medida" -f $j.uso }
+
+        Escrever ("  ⏳ janela {0} sem espaço para um card ({1}); reset às {2:HH:mm} — faltam {3:N0} min" -f `
+                  $j.nome, $selo, $j.reset, $faltam) 'Yellow'
+        Start-Sleep -Seconds ([int]($passo * 60))
+    }
+
+    # A janela virou. A utilização REAL do novo ciclo vem no primeiro evento da
+    # sessão seguinte — pode não ser zero, porque a janela é da conta inteira e
+    # outra sessão pode já estar consumindo. Apagar a leitura velha é o que
+    # impede o driver de decidir o próximo card com o número do ciclo anterior.
+    Escrever ("  ▶ janela {0} reiniciada — retomando." -f $j.nome) 'Green'
+    try { Remove-Item $ArqLimite -Force -ErrorAction SilentlyContinue } catch { }
+    return $true
 }
 
 # ---------------------------------------------------------------------------
@@ -517,7 +698,12 @@ for ($i = 1; $i -le $MaxCards; $i++) {
 
     # A conta sai ANTES de todo card, inclusive o primeiro — quem acompanha
     # precisa saber o que vai acontecer, não descobrir depois.
-    if (-not (CabeNaJanela $i)) { EsperarJanela $i }
+    if (-not (CabeNaJanela $i)) {
+        if (-not (EsperarJanela $i)) {
+            $parou = 'janela de uso esgotada e o reset está longe demais para esperar'
+            break
+        }
+    }
 
     $eAntes = EstadoJanela
     $t0 = Get-Date
@@ -532,6 +718,13 @@ for ($i = 1; $i -le $MaxCards; $i++) {
     if ($eAntes -and $eDepois) {
         $gasto = $eDepois.uso - $eAntes.uso
         if ($gasto -gt 0) { $registro['janelaGasta'] = [Math]::Round($gasto, 4) }
+
+        $semAntes  = ($eAntes.janelas  | Where-Object { $_.chave -eq 'seven_day' } | Select-Object -First 1)
+        $semDepois = ($eDepois.janelas | Where-Object { $_.chave -eq 'seven_day' } | Select-Object -First 1)
+        if ($semAntes -and $semDepois) {
+            $gastoSem = $semDepois.uso - $semAntes.uso
+            if ($gastoSem -gt 0) { $registro['semanalGasta'] = [Math]::Round($gastoSem, 5) }
+        }
     }
 
     switch ($r.veredito) {

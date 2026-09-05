@@ -23,6 +23,17 @@ const _esquemaClaro = ColorScheme.light(
   onError: Colors.white,
   errorContainer: Cores.erroFundo,
   onErrorContainer: Cores.erro,
+  // ⚠️ Mesma família do `errorContainer` que o card 5.11 corrigiu no escuro:
+  // sem estes três o Flutter devolve `tertiary = secondary` (grafite) e
+  // `tertiaryContainer = tertiary`, e TODA superfície tonal de atenção sai
+  // grafite escuro — a linha "abaixo do mínimo" de Materiais e a "sugerido > 0"
+  // de Compras ficavam ilegíveis, e o `AvisoTonal` de atenção virava caixa
+  // grafite com texto branco. Nenhum teste desenha cor e nenhum `analyze` lê
+  // contraste: só aparece quando alguém abre a tela (item A1).
+  tertiary: Cores.atencao,
+  onTertiary: Colors.white,
+  tertiaryContainer: Cores.atencaoFundo,
+  onTertiaryContainer: Cores.atencao,
 );
 
 const _esquemaEscuro = ColorScheme.dark(
@@ -45,6 +56,12 @@ const _esquemaEscuro = ColorScheme.dark(
   // `BadgesStatus.escuro`, cujo contraste já foi verificado.
   errorContainer: Cores.erroFundoEscuro,
   onErrorContainer: Cores.erroEscuro,
+  // O par de atenção do escuro, pela mesma razão (item A1). O fundo é o do
+  // badge STANDBY escuro, cujo contraste com `atencaoEscuro` já é verificado.
+  tertiary: Cores.atencaoEscuro,
+  onTertiary: Cores.grafite900,
+  tertiaryContainer: Cores.atencaoFundoEscuro,
+  onTertiaryContainer: Cores.atencaoEscuro,
 );
 
 ThemeData _tema(

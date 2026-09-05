@@ -191,6 +191,14 @@ const rotasAplicacao = <Rota>[
 /// rota nova; a aba Trilha é a 3b, acima.
 const caminhoAlunos = '/alunos';
 
+/// A rota 3b, para a **aba** consultar o conjunto dela sem repetir os três
+/// códigos (card 6.6). A aba mora dentro de `/alunos/:id`, que exige menos:
+/// quem a abre já passou pela guarda da ficha, e é a aba que precisa dizer o
+/// que falta — daí a consulta, e não uma segunda guarda de rota.
+final rotaAlunoTrilha = rotasAplicacao.firstWhere(
+  (r) => r.id == 'aluno_trilha',
+);
+
 /// As abas da ficha, **na ordem em que aparecem**. A ordem é contrato: é ela
 /// que traduz `?aba=turmas` em `initialIndex`, e mudá-la aqui muda a ficha.
 const abasFicha = <String>[
