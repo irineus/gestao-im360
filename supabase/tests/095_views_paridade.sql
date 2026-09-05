@@ -473,9 +473,12 @@ create temporary view t_mat as
 -- alguém trocar `sum(quantidade)` por uma soma com `case` por tipo, o ESTORNO e
 -- o AJUSTE saem da conta e estas quatro asserções mudam de valor.
 --
--- ⚠️ OITO MATERIAIS DESDE O CARD 8.1 — INTERATIVO 04 e MODULAR 02, os dois com
---    entrada positiva no seed para que os DOIS zeros continuem sendo os dois
---    escolhidos (a asserção de `abaixo_minimo`, logo abaixo, é quem vigia isso).
+-- ⚠️ OITO MATERIAIS E TRÊS ZEROS DESDE O CARD 8.1. O INTERATIVO 04 entrou com um
+--    exemplar e o entregou a João Pedro, fechando em zero DE PROPÓSITO: ele é o
+--    item pendente seguinte dos dois alunos da corrida do card 6.3, e com estoque
+--    ali o perdedor reordenaria em vez de bloquear (o script reprovou no CI antes
+--    de a quantidade virar 1). O MODULAR 02 tem seis. A asserção de
+--    `abaixo_minimo`, logo abaixo, é quem vigia a lista dos zeros.
 select is(
   (select count(*)::bigint from public.v_estoque_atual v
      join t_mat t on t.id = v.material_id),
@@ -485,7 +488,7 @@ select is(
 select is(
   (select string_agg(t.apelido || '=' || v.saldo, ' | ' order by t.apelido)
      from public.v_estoque_atual v join t_mat t on t.id = v.material_id),
-  'INGLES 01=10 | INGLES 02=0 | INTERATIVO 01=20 | INTERATIVO 02=0 | INTERATIVO 03=1 | INTERATIVO 04=3 | MODULAR 01=10 | MODULAR 02=6',
+  'INGLES 01=10 | INGLES 02=0 | INTERATIVO 01=20 | INTERATIVO 02=0 | INTERATIVO 03=1 | INTERATIVO 04=0 | MODULAR 01=10 | MODULAR 02=6',
   'saldo = sum(quantidade) com sinal: os 0/0/1/n/n/n do card 2.8 §4.2, derivados e nao escritos');
 
 select is(
@@ -498,8 +501,8 @@ select is(
   (select string_agg(t.apelido, ', ' order by t.apelido)
      from public.v_estoque_atual v join t_mat t on t.id = v.material_id
     where v.abaixo_minimo),
-  'INGLES 02, INTERATIVO 02',
-  'abaixo_minimo e os dois saldos zero, e so eles: 1 < 1 e falso e 20 < 2 tambem');
+  'INGLES 02, INTERATIVO 02, INTERATIVO 04',
+  'abaixo_minimo e os TRES saldos zero, e so eles: 1 < 1 e falso e 20 < 2 tambem');
 
 -- O AJUSTE negativo da fixture (extravio de INGLES 02) é o que leva um saldo a
 -- zero SEM entrega nenhuma. Sem ele, `saldo = 0` e `nunca saiu para aluno`

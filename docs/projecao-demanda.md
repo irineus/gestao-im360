@@ -878,6 +878,16 @@ Três correções de fato, nenhuma de opinião. O algoritmo de §5 e §6 foi imp
    materiais (`INTERATIVO 04` e `MODULAR 02`, o segundo assumindo o módulo 3 do cronograma) e uma
    previsão de conclusão (Carla Menezes), e passou a ter **um aluno nomeado por degrau**, que é o que
    o §6.4 de `docs/estrategia-testes.md` pede. O detalhe está nas notas do `supabase/seed.sql`.
+
+   ⚠️ **E a quantidade de estoque do material novo não é livre — o CI reprovou para ensinar isso.**
+   `INTERATIVO 04` nasceu com quatro exemplares e o job `banco (pgTAP)` reprovou no script de
+   concorrência `entrega_ultimo_exemplar.sh` (card 6.3): Ana Paula e Bruno são os dois alunos da
+   corrida, e o script assere que **quem perde sai com `BLOQUEADA_SEM_ESTOQUE`** — o que só vale
+   enquanto nenhum outro item pendente deles tiver estoque. Com o `04` cheio, o perdedor passou a
+   **reordenar** para ele. A correção foi dar ao `04` **um** exemplar, entregue a João Pedro: ele
+   fecha em zero e o desfecho volta a ser o que o script mede. A fixture passa a ter **três** saldos
+   zero, e o terceiro tem função própria. Vale como aviso geral para quem crescer a fixture: material
+   novo não é inerte — ele é o "próximo item pendente" de alguém.
 3. **`update` e `delete` em `demanda_projetada` não levantam erro**, e a asserção da decisão (g) tinha
    de ser escrita sobre o efeito. Sem política para o comando, a RLS não devolve 42501: ela
    simplesmente não encontra linha, e o comando afeta **zero**. Só o `insert` dá erro, porque lá o

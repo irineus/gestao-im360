@@ -1172,15 +1172,20 @@ begin
       ('INTERATIVO', '01', 26, 120, true,  'chegada do pedido 2026-001'),
       ('INTERATIVO', '02',  3, 118, false, 'entrada manual: sobra de remessa antiga'),
       ('INTERATIVO', '03',  2, 118, false, 'entrada manual: o ultimo exemplar mora aqui'),
-      -- ⚠️ AS DUAS ENTRADAS DOS MATERIAIS NOVOS DO CARD 8.1 existem para que os
-      --    saldos 0/0/1/n/n/n do card 2.8 §4.2 continuem sendo o que dizem: os
-      --    DOIS zeros são escolhidos (INTERATIVO 02 é o caso REORDENADA, INGLES
-      --    02 é o BLOQUEADA_SEM_ESTOQUE), e um terceiro zero por omissão
-      --    misturaria "material sem estoque de propósito" com "material que
-      --    ninguém comprou ainda". A do `INTERATIVO 04` tem de existir também
-      --    porque João Pedro recebe esse livro na seção 8.4: sem ela o saldo
-      --    ficaria em −1, que é justamente o que a suíte inteira vigia.
-      ('INTERATIVO', '04',  4, 118, false, 'entrada manual'),
+      -- ⚠️ AS DUAS ENTRADAS DOS MATERIAIS NOVOS DO CARD 8.1, e a do `04` tem
+      --    quantidade EXATA por uma razão que custou um CI vermelho para
+      --    aparecer. Ela existe porque João Pedro recebe esse livro na seção 8.4
+      --    e sem ela o saldo iria a −1, que é o que a suíte inteira vigia; e ela
+      --    é de UM exemplar porque o `04` precisa terminar em ZERO. Ana Paula e
+      --    Bruno são os dois alunos da corrida de `entrega_ultimo_exemplar.sh`
+      --    (card 6.3), e o script assere que quem PERDE a corrida sai com
+      --    BLOQUEADA_SEM_ESTOQUE — o que só vale enquanto nenhum outro item
+      --    pendente deles tiver estoque. Com quatro exemplares aqui, o perdedor
+      --    passou a REORDENAR para o `04` e o script reprovou no CI, corretamente:
+      --    a premissa dele tinha mudado por baixo.
+      --    Consequência assumida: são TRÊS saldos zero na fixture, não dois — e o
+      --    terceiro tem função própria, que é manter aquele desfecho.
+      ('INTERATIVO', '04',  1, 118, false, 'entrada manual: um exemplar, e ele vai para Joao Pedro'),
       ('INGLES',     '01', 11, 115, false, 'entrada manual'),
       ('INGLES',     '02',  5, 115, false, 'entrada manual'),
       ('MODULAR',    '01', 10, 115, false, 'entrada manual'),
