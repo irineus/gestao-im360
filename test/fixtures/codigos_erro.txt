@@ -104,3 +104,22 @@ SALDO_INSUFICIENTE
 # Codigo proprio e nao BLOCO_COM_ALOCACAO: a mensagem manda DESATIVAR A TURMA, e
 # turma Modular nao e bloco de horario — a saida de tela e outra.
 TURMA_COM_ALUNO
+# 6 do card 7.2 (regras Modular), traduzidos no card 7.3 (a tela 5)
+# Ate a tela existir nao havia onde eles aparecerem — e codigo sem traducao vira
+# "nao foi possivel concluir", que tem cara de problema de rede.
+# TURMA_INEXISTENTE e da familia de PC_INEXISTENTE / BLOCO_INEXISTENTE: vale
+# tambem para turma de OUTRA unidade, porque a leitura e invoker.
+TURMA_INEXISTENTE
+# Codigo proprio e nao BLOCO_LOTADO: a saida e OUTRA. No bloco a capacidade vem
+# dos PCs da sala; aqui ela e digitada na propria turma, e e la que se resolve.
+TURMA_LOTADA
+# Nao se confunde com METODO_INCOMPATIVEL, e e por isso que o 7.2 precisou das
+# DUAS checagens: este fala do ALUNO (nao e do Modular); aquele, da TURMA (o
+# curso dela e de outro metodo).
+ALUNO_NAO_MODULAR
+# Os dois sentidos do "nao ha modulo corrente" (card 7.2 §5), separados: dizer
+# "todos ja foram concluidos" a quem nunca montou o cronograma manda a pessoa
+# procurar o erro no lugar errado.
+TURMA_SEM_CRONOGRAMA
+TURMA_SEM_MODULO_CORRENTE
+DATA_OBRIGATORIA

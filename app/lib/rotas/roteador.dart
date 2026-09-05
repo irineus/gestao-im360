@@ -19,6 +19,7 @@ import '../telas/redefinir_senha.dart';
 import '../telas/salas/tela_salas.dart';
 import '../telas/selecao_unidade.dart';
 import '../telas/turmas/tela_turmas.dart';
+import '../telas/turmas/tela_turmas_modular.dart';
 import '../telas/sem_acesso.dart';
 import '../widgets/estados.dart';
 import '../widgets/shell_im360.dart';
@@ -48,6 +49,12 @@ final _telaDaRota = <String, Widget Function(GoRouterState)>{
       TelaCompras(pedidoId: estado.uri.queryParameters['pedido']),
   'turmas': (estado) =>
       TelaTurmas(blocoId: estado.uri.queryParameters['bloco']),
+  // `?turma=` segue o desenho de `?bloco=`: a tela 5 abre já com a turma
+  // expandida. Quem o usará é a pendência `TURMA_MODULAR_SEM_CRONOGRAMA`
+  // (card 8.1), e ele existe desde já porque "Ver turma" sem o id larga a
+  // pessoa na lista inteira.
+  'turmas_modular': (estado) =>
+      TelaTurmasModular(turmaId: estado.uri.queryParameters['turma']),
   'pendencias': (_) => const TelaPendencias(),
   'administracao': (_) => const TelaAdministracao(),
   // A rota 3b (card 2.4 §6) desde o card 6.6: `/alunos/:id/trilha` é o
@@ -88,7 +95,7 @@ const _cardDaRota = <String, String>{
   // O dashboard saiu daqui no card 5.9: a tela existe, e é **parcial** — quem
   // nomeia o card do que falta é a própria tela, em rodapé, e não um
   // placeholder que esconderia a metade já entregue.
-  'turmas_modular': '7.3',
+  // Turmas Modular saiu daqui no card 7.3: a tela existe.
   'projecao': '8.5',
   'certificados': '8.6',
   'importacao': '9.1',
