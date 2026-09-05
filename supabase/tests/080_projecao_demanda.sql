@@ -34,6 +34,12 @@
 --   • `demanda_projetada` é escrita SÓ pela rotina: a direção, que tem todas as
 --     50 permissões, é recusada no `insert` e no `delete`.
 --
+-- ⚠️ A SEÇÃO 10 É DO CARD 8.2, e não do 8.1: é onde a parcela projetada chega a
+--    `v_pedido_sugerido`. Mora aqui, e não no 095, porque a asserção só existe
+--    depois de `rt_projecao_demanda()` ter rodado — e quem a roda é este arquivo.
+--    O 095 mede a mesma view com a projeção VAZIA, que é o outro caso, e diz isso
+--    na §12.
+--
 -- ⚠️ AS DATAS SÃO TODAS RELATIVAS A `fn_hoje()`, e as asserções de data foram
 --    escolhidas entre as que NÃO dependem do dia do mês: `hoje + 60`, `hoje + 30`
 --    e `hoje + 36` valem em qualquer data. Quem depende do calendário é a janela
@@ -45,7 +51,7 @@
 -- =============================================================================
 
 begin;
-select plan(54);
+select plan(60);
 
 -- Chaves naturais em um lugar só (card 2.8 §11: nunca `limit` sem ordem, nunca
 -- UUID literal).
@@ -719,6 +725,111 @@ select cmp_ok(
                    'select 1 from public.v_projecao_aluno'),
   '>', 0::bigint,
   'contraprova na mesma transacao: para a direcao ela continua cheia');
+
+-- ===========================================================================
+-- 10. A parcela projetada CHEGA ao pedido sugerido — card 8.2
+-- ===========================================================================
+-- O card 8.2 troca duas expressoes de `v_pedido_sugerido` (docs/views-leitura.md
+-- §6.2): o literal `0::integer` da coluna `qtd_projetada` e o `+ 0` de dentro do
+-- `greatest`. Sao duas, e as asercoes abaixo sao construidas para que MEXER EM
+-- UMA SO ja fique vermelho:
+--   • trocar so a coluna (e esquecer o `greatest`) reprova em 10.3, porque o
+--     total deixa de fechar com as parcelas que a propria linha exibe;
+--   • trocar so o `greatest` (e esquecer a coluna) reprova no MESMO 10.3, pelo
+--     lado oposto — o total cresce sem que a parcela apareca ao lado dele;
+--   • nao trocar nenhuma das duas reprova em 10.1.
+-- Vista vermelha em 05/09/2026 revertendo a view para o `0::integer` do card 6.4.
+--
+-- Roda como `postgres`, que tem BYPASSRLS (card 3.3): o filtro por `unidade_id`
+-- e o que restringe o resultado a ESCOLA_A, e nao a RLS. Quem mede a RLS desta
+-- view e o 095 §14 — misturar as duas coisas produz o teste que passa sem testar
+-- nada (card 2.8 §6.3). A projecao aqui e a que a secao 7 deixou gravada.
+--
+-- ⚠️ MAS PRECISA DE CONTEXTO DE UNIDADE, e isso e novo: desde o 8.2 a view chama
+--    `fn_param_int('projecao_horizonte_dias')` para montar a janela, e o
+--    parametro e POR UNIDADE. Sem contexto, `fn_unidade_atual()` e nula, nenhuma
+--    linha de `parametro` casa e a leitura morre com PARAMETRO_AUSENTE — medido
+--    em 05/09/2026, quando esta secao rodava sem contexto nenhum. Usa-se
+--    `como_rotina`, que da a unidade pela GUC SEM trocar de papel: trocar para
+--    `authenticated` tornaria o schema `tests` inalcancavel daqui para a frente
+--    (a mesma pedra da secao 8).
+select tests.como_rotina((select unidade from t_ids));
+
+-- 10.1 — a parcela existe. Sem ela as tres asercoes seguintes comparariam zero
+-- com zero e passariam com a view do card 6.4 intacta.
+select cmp_ok(
+  (select count(*)::bigint from public.v_pedido_sugerido v
+    where v.unidade_id = (select unidade from t_ids) and v.qtd_projetada > 0),
+  '>', 0::bigint,
+  'algum material do pedido sugerido tem parcela projetada > 0 — a coluna deixou de ser reserva');
+
+-- 10.2 — e ela e EXATAMENTE a soma de v_demanda_projetada na janela, material a
+-- material. Somando sobre TODAS as regras: um aluno produz UMA linha por
+-- material (a regra e unica por aluno), entao somar os quatro degraus e somar
+-- alunos distintos, nao contar o mesmo aluno quatro vezes.
+select is_empty(
+  $$ select 1 from public.v_pedido_sugerido v
+      where v.unidade_id = (select tests.unidade('ESCOLA_A'))
+        and v.qtd_projetada <> coalesce((
+              select sum(d.quantidade)::integer from public.v_demanda_projetada d
+               where d.unidade_id = v.unidade_id and d.material_id = v.material_id
+                 and d.mes between date_trunc('month', public.fn_hoje())::date
+                               and date_trunc('month', public.fn_hoje()
+                                     + public.fn_param_int('projecao_horizonte_dias'))::date), 0) $$,
+  'a parcela projetada e a soma de v_demanda_projetada na janela, material a material');
+
+-- 10.3 — e a formula inteira fecha COM ela: imediata + projetada + minimo −
+-- saldo − pendente, com piso zero. A conta e feita sobre as colunas que a
+-- PROPRIA LINHA exibe, que e o que o card 2.3 §2.3 promete a quem olha a tela.
+select is_empty(
+  $$ select 1 from public.v_pedido_sugerido v
+      where v.unidade_id = (select tests.unidade('ESCOLA_A'))
+        and v.qtd_sugerida <> greatest(v.qtd_imediata + v.qtd_projetada
+                                       + v.estoque_minimo - v.saldo
+                                       - v.qtd_pedida_pendente, 0) $$,
+  'o total fecha com as cinco parcelas ao lado dele, e a projetada e uma delas');
+
+select is_empty(
+  $$ select 1 from public.v_pedido_sugerido where qtd_sugerida < 0 $$,
+  'e o piso zero sobreviveu a parcela nova: nenhuma sugestao negativa');
+
+-- 10.4 — a JANELA e de mes inteiro e ela CORTA. Duas linhas de projecao para o
+-- mesmo material, uma no mes anterior ao corrente e outra no mes seguinte ao do
+-- horizonte: nenhuma das duas pode mexer na parcela. Sem o `where` da janela, a
+-- view somaria tudo o que houvesse na tabela e a compra de setembro carregaria a
+-- demanda de dezembro.
+create temporary table sugerido_antes as
+  select v.material_id, v.qtd_projetada, v.qtd_sugerida
+    from public.v_pedido_sugerido v
+   where v.unidade_id = tests.unidade('ESCOLA_A');
+
+insert into public.demanda_projetada (unidade_id, material_id, mes, quantidade, regra)
+select (select unidade from t_ids), a.material_id, m.mes, 99, 'MEDIA_METODO'
+  from (select material_id from sugerido_antes order by material_id limit 1) a
+  cross join (values
+    ((date_trunc('month', public.fn_hoje()) - interval '1 month')::date),
+    ((date_trunc('month', public.fn_hoje()
+       + public.fn_param_int('projecao_horizonte_dias')) + interval '1 month')::date)
+  ) m(mes);
+
+select is_empty(
+  $$ select 1 from public.v_pedido_sugerido v
+       join sugerido_antes a on a.material_id = v.material_id
+      where v.unidade_id = (select tests.unidade('ESCOLA_A'))
+        and (v.qtd_projetada <> a.qtd_projetada or v.qtd_sugerida <> a.qtd_sugerida) $$,
+  'mes fora da janela nao entra na compra: 99 antes e 99 depois do horizonte mudam ZERO');
+
+-- 10.5 — e o `left join` e `left` de proposito: material sem projecao nenhuma
+-- CONTINUA na lista, com a parcela zero. Sumir dali seria o oposto do §2.3 — e o
+-- material sem demanda alguma e justamente o que entra com a sugestao igual ao
+-- minimo, que e o que a planilha perdia.
+select cmp_ok(
+  (select count(*)::bigint from public.v_pedido_sugerido v
+    where v.unidade_id = (select unidade from t_ids) and v.qtd_projetada = 0),
+  '>', 0::bigint,
+  'material sem projecao continua na lista com a parcela zero — o join e left');
+
+select tests.encerrar_sessao();
 
 select * from finish();
 rollback;

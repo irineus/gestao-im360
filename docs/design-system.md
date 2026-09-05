@@ -454,6 +454,20 @@ Regras: mensagens de **validação de campo** aparecem no campo; as demais em ba
   perfil."
 - **Cabeçalho da Projeção:** "calculada em {calculado_em}" — obrigatório (card 2.6 §11); detalhe ao
   vivo com "o detalhe é de agora e pode diferir do total da madrugada".
+- **Carimbo da projeção em Compras → sugerido (card 8.2, 05/09/2026):** a mesma exigência aplicada à
+  coluna Projetada, que deixou de valer zero. São **três** textos, um por estado, e a diferença é o
+  que impede o zero de mentir:
+  - calculada: "Projeção calculada em {dd/mm/aaaa hh:mm}.";
+  - **nunca calculada:** "A projeção ainda não foi calculada, então a coluna Projetada está zerada.
+    Ela é atualizada pela rotina da madrugada." — nunca um traço mudo, pela mesma razão da linha
+    "Projeção" do §7.2: tabela zerada com cara de "sem demanda" é o defeito que o card 2.6 §11
+    nomeou;
+  - carimbo ilegível: "Não foi possível ler quando a projeção foi calculada." — a conta continua na
+    tela, e o que falta é a validade dela.
+
+  Enquanto carrega, **nada** é desenhado: piscar "ainda não foi calculada" por meio segundo diz uma
+  coisa falsa. Em 390 px o texto vai num `Flexible` — a frase da projeção não calculada é a mais
+  longa das três e, sem isso, estoura a `Row` pela mesma via do item 19 do §11.
 
 ---
 

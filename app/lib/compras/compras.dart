@@ -63,9 +63,14 @@ class LinhaSugerida {
   /// Alunos com este material como PRÓXIMO da trilha (card 6.4).
   final int qtdImediata;
 
-  /// Zero até o card 8.1 preencher a projeção. A coluna existe desde o primeiro
-  /// dia, na posição definitiva — mostrar `0` é honesto, e esconder a coluna
-  /// faria a soma exibida não fechar com o total.
+  /// Quantos exemplares a **projeção** prevê para este material na janela do
+  /// horizonte (card 8.2). Disjunta da imediata: a projeção começa no segundo
+  /// item pendente da trilha, porque o primeiro já é a demanda imediata — sem
+  /// isso todo aluno ativo pesaria duas vezes na compra.
+  ///
+  /// Zero aqui significa "sem projeção calculada para este material nesta
+  /// janela", e é por isso que a tela mostra ao lado **quando** a projeção foi
+  /// calculada: número de projeção sem a data do cálculo é número sem validade.
   final int qtdProjetada;
 
   /// `qtd_pedida − qtd_recebida` dos itens de pedidos ENVIADO e PARCIAL, com
@@ -413,6 +418,24 @@ const vazioSugerido =
 
 /// O mesmo painel com filtro ligado — o texto padrão das listas filtradas.
 const vazioSugeridoFiltro = 'Nenhum material com esses filtros.';
+
+/// §7.3, "Cabeçalho da Projeção", aplicado à coluna Projetada desta aba
+/// (wireframe §10.1: "quando a parcela for preenchida, a tela também mostra o
+/// `calculado_em` da projeção"). Recebe a data já formatada.
+String projecaoCalculadaEmTexto(String quando) =>
+    'Projeção calculada em $quando.';
+
+/// A projeção nunca rodou nesta unidade. **Não é um traço mudo**: a coluna
+/// Projetada mostra zero em toda linha, e sem esta frase o zero pareceria uma
+/// escola que não vai precisar de apostila nenhuma.
+const projecaoNaoCalculada =
+    'A projeção ainda não foi calculada, então a coluna Projetada está zerada. '
+    'Ela é atualizada pela rotina da madrugada.';
+
+/// Não conseguimos ler o carimbo. A conta continua na tela; o que falta é a
+/// validade dela, e é isso que a frase diz.
+const erroProjecaoCalculadaEm =
+    'Não foi possível ler quando a projeção foi calculada.';
 
 /// §7.2, linha "Compras → pedidos".
 const vazioPedidos = 'Nenhum pedido. Crie a partir do Pedido sugerido.';

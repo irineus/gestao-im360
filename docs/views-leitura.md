@@ -327,7 +327,7 @@ materializada não mude nada acima dela.
 
 ---
 
-## 6. `v_pedido_sugerido` — card 6.4, completada em 8.2
+## 6. `v_pedido_sugerido` — card 6.4, **completada em 05/09/2026 pelo card 8.2**
 
 ```
 sugerido = imediata + projetada(H) + estoque_mínimo − estoque_atual − pedido não recebido
@@ -344,11 +344,11 @@ select e.unidade_id,
        e.saldo,
        e.estoque_minimo,
        coalesce(di.qtd_alunos, 0)::integer         as qtd_imediata,
-       0::integer                                  as qtd_projetada,   -- card 8.1 substitui (§6.2)
+       coalesce(dp.qtd_projetada, 0)::integer      as qtd_projetada,   -- card 8.2 (§6.2)
        coalesce(pp.qtd_pendente, 0)::integer       as qtd_pedida_pendente,
        greatest(
          coalesce(di.qtd_alunos, 0)
-         + 0                                                            -- idem
+         + coalesce(dp.qtd_projetada, 0)                                -- idem
          + e.estoque_minimo
          - e.saldo
          - coalesce(pp.qtd_pendente, 0),
@@ -365,6 +365,15 @@ select e.unidade_id,
           where pc.status in ('ENVIADO','PARCIAL')
           group by pi.unidade_id, pi.material_id
        ) pp on pp.unidade_id = e.unidade_id and pp.material_id = e.material_id
+  left join (
+         select d.unidade_id, d.material_id, sum(d.quantidade)::integer as qtd_projetada
+           from public.v_demanda_projetada d
+          where d.mes between date_trunc('month', public.fn_hoje())::date
+                          and date_trunc('month',
+                                public.fn_hoje()
+                                + public.fn_param_int('projecao_horizonte_dias'))::date
+          group by d.unidade_id, d.material_id
+       ) dp on dp.unidade_id = e.unidade_id and dp.material_id = e.material_id
  where e.ativo;
 ```
 
@@ -412,6 +421,30 @@ replace view` que troca **duas expressões** e nada mais:
 
 O zero é honesto e está documentado como reserva: até a Fase 8, o pedido sugerido é a v1 do plano, e
 a tela mostra a coluna projetada zerada em vez de fingir que ela não existe.
+
+✅ **A reserva foi consumida em 05/09/2026 (card 8.2), e o roteiro acima valeu à risca.** O
+entregável é um `create or replace view` de **duas expressões** e um `left join` —
+`supabase/migrations/20260905180000_pedido_sugerido_projetada.sql` —, sem `drop`, sem cascata e sem
+mexer no nome, no tipo ou na posição de nenhuma das doze colunas. Quatro coisas que só a execução
+mostrou, e que ficam registradas aqui:
+
+1. **A view passou a depender de contexto de unidade.** `fn_param_int('projecao_horizonte_dias')` é
+   por unidade: com `fn_unidade_atual()` nula a leitura não devolve zero — ela **morre** com
+   `PARAMETRO_AUSENTE`. O app sempre lê autenticado, então em produção isso nunca acontece; quem
+   esbarra é teste que lê a view como `postgres` sem sessão, e foi o que o 080 §10 fez em 05/09/2026
+   antes de ganhar o `tests.como_rotina`. Se algum dia `fn_param_int` deixar de ser `security
+   definer`, a janela desta view colapsa em silêncio.
+2. **`left join`, nunca `join`.** Material sem projeção nenhuma continua na lista com a parcela zero:
+   é ele que entra com a sugestão igual ao mínimo, que é o que a planilha perdia (§2.3).
+3. **A janela `between` funciona porque `mes` tem `check (mes = date_trunc('month', mes)::date)`** —
+   o dia é sempre 1, então o limite superior não corta meio mês.
+4. **`calculado_em` NÃO virou 13ª coluna.** É carimbo da projeção inteira, não de um material:
+   repeti-lo em toda linha mudaria a forma que o §6.2 fixou e que o teste 095 §13 assere. A tela de
+   Compras o lê de `v_demanda_projetada` numa consulta própria.
+
+As três asserções que medem isto vivem no **080 §10** (a suíte que roda a rotina antes), e as três
+contraprovas foram vistas vermelhas em 05/09/2026: revertendo só o `greatest`, revertendo só a coluna
+e alargando a janela em 400 dias para os dois lados.
 
 ✅ **A reserva deixou de ser parágrafo em 04/09/2026 (card 6.4).** O teste `095` assere a **posição**
 pelo catálogo — `qtd_projetada` é a 10ª coluna e a view tem 12, com `qtd_sugerida` na última —, que

@@ -175,6 +175,15 @@ class ComprasFalso implements ComprasRepositorio {
   /// Se definido, toda **escrita** lança isto.
   Object? falhaAoGravar;
 
+  /// Quando a projeção foi calculada (card 8.2). `null` é a projeção que nunca
+  /// rodou — o padrão da fixture, que não tem parcela projetada nenhuma.
+  DateTime? projecaoEm;
+
+  /// Se definido, só a leitura do CARIMBO da projeção lança isto — o mesmo
+  /// desenho de [falhaAoLerItens]: é como o teste verifica que o erro fica no
+  /// lugar dele e não derruba a lista inteira.
+  Object? falhaAoLerProjecao;
+
   final chamadas = <String>[];
 
   static PostgrestException erro(
@@ -221,17 +230,28 @@ class ComprasFalso implements ComprasRepositorio {
           saldo: m.saldo,
           estoqueMinimo: m.minimo,
           qtdImediata: m.imediata,
-          // A parcela do card 8.1 — zero até lá, na posição definitiva.
-          qtdProjetada: 0,
+          qtdProjetada: m.projetada,
           qtdPedidaPendente: _pendenteDe(m.id),
           qtdSugerida: _sugerida(m),
         ),
     ];
   }
 
-  /// A fórmula de `v_pedido_sugerido` §6, com o `greatest(…, 0)`.
+  @override
+  Future<DateTime?> projecaoCalculadaEm() async {
+    chamadas.add('projecaoCalculadaEm');
+    final falha = falhaAoLerProjecao ?? falhaAoLer;
+    if (falha != null) throw falha;
+    return projecaoEm;
+  }
+
+  /// A fórmula de `v_pedido_sugerido` §6, **com a parcela projetada** (card 8.2)
+  /// e o `greatest(…, 0)`. Derivada aqui pela mesma razão de sempre: uma cópia
+  /// escrita à mão deixaria os números livres para divergirem dentro do próprio
+  /// teste, e o defeito que este card mais teme é uma conta que não fecha.
   int _sugerida(MaterialFalso m) {
-    final bruto = m.imediata + m.minimo - m.saldo - _pendenteDe(m.id);
+    final bruto =
+        m.imediata + m.projetada + m.minimo - m.saldo - _pendenteDe(m.id);
     return bruto < 0 ? 0 : bruto;
   }
 
@@ -537,8 +557,9 @@ class MaterialFalso {
     this.nome,
     this.saldo,
     this.minimo,
-    this.imediata,
-  );
+    this.imediata, [
+    this.projetada = 0,
+  ]);
 
   final String id;
   final String metodoId;
@@ -547,4 +568,8 @@ class MaterialFalso {
   final int saldo;
   final int minimo;
   final int imediata;
+
+  /// A parcela do card 8.2. Opcional e zero por omissão para que a fixture
+  /// continue medindo o que media — quem exercita a projeção a informa.
+  final int projetada;
 }

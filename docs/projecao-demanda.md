@@ -680,6 +680,12 @@ previstas, somando `quantidade` sobre **todas as regras e todos os meses da jane
        ) dp on dp.unidade_id = e.unidade_id and dp.material_id = e.material_id
 ```
 
+✅ **Feito em 05/09/2026** (`supabase/migrations/20260905180000_pedido_sugerido_projetada.sql`), nesta
+forma exata e sem nada além dela. As três confirmações abaixo se sustentaram; o que a execução
+acrescentou está em `docs/views-leitura.md` §6.2 — a dependência nova de contexto de unidade (o
+`fn_param_int` da janela), o `left join` que mantém na lista o material sem projeção, e a decisão de
+**não** pendurar `calculado_em` como 13ª coluna.
+
 Confirmações que este documento fecha para o card 8.2:
 
 - `sum` sobre a `regra` é correto porque um aluno produz **uma** linha por material (a regra é única

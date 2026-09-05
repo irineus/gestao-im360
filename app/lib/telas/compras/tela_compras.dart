@@ -146,7 +146,7 @@ class _AbaSugeridoState extends ConsumerState<AbaSugerido> {
     final exibidas = filtrarSugerido(todas, filtro);
     final haSugestao = todas.any((l) => l.qtdSugerida > 0);
 
-    return TabelaIm360<LinhaSugerida>(
+    final tabela = TabelaIm360<LinhaSugerida>(
       filtros: _FiltrosSugerido(
         filtro: filtro,
         metodos: metodos,
@@ -290,6 +290,66 @@ class _AbaSugeridoState extends ConsumerState<AbaSugerido> {
           ? (l) => _criar(context, [l])
           : null,
       aoRepetir: ref.read(versaoComprasProvider.notifier).incrementar,
+    );
+
+    // A coluna Projetada deixou de valer zero (card 8.2), e com ela veio a
+    // obrigação do wireframe §10.1: dizer QUANDO a projeção foi calculada.
+    // Número de projeção sem a data do cálculo é número sem validade — a mesma
+    // regra do cabeçalho da tela de Projeção (design-system §7.3).
+    //
+    // ⚠️ Fica ACIMA da barra de filtros, e não dentro da tabela: o carimbo vale
+    // para a coluna inteira, não para as linhas que o filtro deixou passar.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _CarimboDaProjecao(),
+        Expanded(child: tabela),
+      ],
+    );
+  }
+}
+
+/// "Projeção calculada em …" — a validade da coluna Projetada.
+///
+/// Os três estados são diferentes de propósito (design-system §7.2): a projeção
+/// que **nunca rodou** não é a mesma coisa que a que rodou e não previu nada, e
+/// nenhuma das duas é um traço mudo. Enquanto carrega não desenha nada — piscar
+/// "ainda não foi calculada" por meio segundo é dizer uma coisa falsa.
+class _CarimboDaProjecao extends ConsumerWidget {
+  const _CarimboDaProjecao();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cores = Theme.of(context).colorScheme;
+    final quando = ref.watch(projecaoCalculadaEmProvider);
+
+    final texto = quando.when(
+      loading: () => null,
+      error: (_, _) => erroProjecaoCalculadaEm,
+      data: (em) => em == null
+          ? projecaoNaoCalculada
+          : projecaoCalculadaEmTexto(formatarDataHora(em)),
+    );
+    if (texto == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Dim.e16, Dim.e12, Dim.e16, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.update_outlined, size: 16, color: cores.onSurfaceVariant),
+          const SizedBox(width: Dim.e8),
+          // `Flexible`, e não largura fixa: em 390 px a frase da projeção não
+          // calculada ocupa três linhas, e sem isto ela estoura a `Row`
+          // (a mesma família do item 19 do design-system §11).
+          Flexible(
+            child: Text(
+              texto,
+              style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
