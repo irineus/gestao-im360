@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../erros/erro_app.dart';
 import '../sessao/sessao_provider.dart';
+import '../turmas/modular.dart';
+import '../turmas/modular_provider.dart';
 import 'dashboard.dart';
 import 'dashboard_repositorio.dart';
 
@@ -62,6 +64,26 @@ final metodoVisivelProvider = Provider<TotalMetodo?>(
   (ref) => metodoVisivel(
     ref.watch(totaisPorMetodoProvider),
     ref.watch(metodoDashboardProvider),
+  ),
+);
+
+/// A lotação Modular por curso (card 7.4), derivada de `turmasModularProvider`.
+///
+/// ⚠️ **Nenhum repositório novo, e é decisão.** A fonte é a mesma
+/// `v_turma_modular_lotacao` que a tela 5 já lê (card 7.3): um segundo
+/// repositório com uma segunda leitura da mesma view daria à mesma pergunta
+/// duas respostas capazes de divergir — e o `DashboardRepositorio` existe para
+/// a grade, cuja view é outra. Reusar também herda o `versaoModularProvider`:
+/// admitir alguém na tela 5 e voltar ao dashboard mostra o número novo.
+///
+/// Sem guarda de permissão: a rota do dashboard exige `turmas.ler` +
+/// `salas.ler` + `materiais.ler` (docs/permissoes-matriz.md §6), que é
+/// exatamente o conjunto desta view (`views-leitura.md` §11) — quem chega aqui
+/// lê a lotação inteira. É o oposto de `alunosModularProvider`, cuja permissão
+/// a rota **não** exige.
+final lotacaoModularProvider = Provider<List<LotacaoCurso>>(
+  (ref) => lotacaoPorCurso(
+    ref.watch(turmasModularProvider).value ?? const <TurmaModular>[],
   ),
 );
 

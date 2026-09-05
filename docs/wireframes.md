@@ -936,6 +936,15 @@ concluir", que tem cara de problema de rede. `TURMA_LOTADA` é código próprio 
 `BLOCO_LOTADO` porque a saída é outra — no bloco a capacidade vem dos PCs da sala, aqui é digitada na
 própria turma.
 
+### Divergências do card 7.4 (05/09/2026) — a lotação Modular no Dashboard
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 36 | **O §5 escreve a lotação como `Massagem 8/10`** | O cartão diz **"8 de 10 ocupados"**, por extenso. É a mesma correção que a revisão da fase 05 já aplicou ao cartão do método (`30 de 40 ocupados`) e pela mesma razão, na mesma tela: a poucos pixels dali a célula da grade diz `n/m` com `n` sendo **vaga livre** — a leitura oposta —, e a barra convida a ler as duas do mesmo jeito. O número grande do cartão é a **vaga livre**, como no cartão do método, e a ocupação vem na linha de apoio |
+| 37 | **O §5 diz que "a linha Modular abre a turma"** | O cartão é de um **curso** (é o que a Nota do card pede e o que o desenho mostra: `Massagem`, `Eletricista`, `Depilação` são cursos), e um curso com três turmas não tem uma turma a abrir. O atalho leva à **tela 5 filtrada por aquele curso** (`filtroTurmasModularProvider`), como a célula da grade leva a Turmas com método e semana acertados. Eleger uma turma em silêncio entre as três seria o defeito que o card 5.8 já pagou uma vez |
+| 38 | **`vagas_livres` é somado, e a lotação por curso NÃO é `capacidade − alocados`** | A view tem piso zero (card 7.3), então uma turma com 16 numa capacidade de 15 faria a diferença dar **−1** e o curso apareceria devendo vaga; com duas turmas, o excesso de uma **abateria** a vaga real da outra. É a mesma armadilha do card 5.9, e aqui ela está medida nos dois níveis — `dashboard_test` (vista vermelha com a soma trocada pela diferença) e `tela_dashboard_test` |
+| 39 | **O §5 não diz o que a região faz quando a leitura FALHA** | Erro **não vira zero**: a região mostra a frase em vez dos números, como as pendências abertas (design-system §7.2). "0 ocupados" por falha de rede faz a direção ler "as turmas estão vazias" quando ninguém sabe. Sem turma Modular ativa nenhuma, a região **diz** isso em vez de sumir |
+
 ---
 
 ## 18. Mapa tela → cards de implementação
@@ -943,7 +952,7 @@ própria turma.
 | Tela | Wireframe | Cards que a implementam |
 |---|---|---|
 | 1 Login/unidade | §4 | 3.5 / 3.7 |
-| 2 Dashboard | §5 | 5.9 (v1) / 8.7 (completo) |
+| 2 Dashboard | §5 | 5.9 (v1) / 7.4 (lotação Modular) / 8.7 (completo) |
 | 3 Alunos (lista + ficha) | §6 | 4.6 (lista/ficha) / 6.6 (trilha) / 5.7 (turmas do aluno) / 8.6 (certificado) |
 | 4 Turmas por horário | §7 | 5.6 (grade) / 5.7 (bloco) |
 | 5 Turmas Modular | §8 | 7.3 |

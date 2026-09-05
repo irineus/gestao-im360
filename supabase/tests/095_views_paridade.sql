@@ -50,13 +50,17 @@
 --     perfis, e aqui isso deixa de ser parágrafo e vira asserção. O card 5.9
 --     acrescentou o terceiro `join` interno, `metodo`/`materiais.ler`, que é o
 --     bloqueante nº 1 de docs/permissoes-matriz.md §7 — escrito em 01/09/2026 e
---     nunca executado até aqui.
+--     nunca executado até aqui. O card **7.4** acrescentou a segunda das cinco
+--     views daquele bloqueante, `v_turma_modular_lotacao`, que o dashboard
+--     passou a ler: o `join` interno ali é em `curso`, e sem `materiais.ler` a
+--     região "Lotação Modular" aparece sem curso nenhum, com cara de escola sem
+--     turma Modular. Restam as três `v_dashboard_*` do card 8.7.
 --
 -- Roda com begin/rollback: nada daqui sobrevive para o próximo arquivo.
 -- =============================================================================
 
 begin;
-select plan(86);
+select plan(89);
 
 -- ===========================================================================
 -- 1. As premissas da fixture, que são o que dá sentido aos números abaixo
@@ -375,6 +379,18 @@ select is(
   0::bigint,
   'sem materiais.ler a grade vem VAZIA — o join interno em metodo (bloqueante 1 do card 2.4 §7)');
 
+-- CARD 7.4 — a MESMA armadilha na view de lotação Modular, que é a segunda das
+-- cinco do bloqueante nº 1 e a que o dashboard passou a ler hoje. Aqui o `join`
+-- interno é em `curso`, e o efeito é idêntico: sem `materiais.ler` a região
+-- "Lotação Modular" do dashboard aparece sem curso NENHUM, com cara de escola
+-- que não tem turma Modular — e sem erro em lugar nenhum. Restam as três
+-- `v_dashboard_*` do card 8.7.
+select is(
+  tests.conta_como(tests.uid('semmateriais@escola-a.test'),
+                   'select 1 from public.v_turma_modular_lotacao'),
+  0::bigint,
+  'sem materiais.ler a lotacao Modular vem VAZIA — o join interno em curso (bloqueante 1, card 7.4)');
+
 insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
 select tests.unidade('ESCOLA_A'), pe.id, pm.id
   from public.perfil pe, public.permissao pm
@@ -389,6 +405,22 @@ select is(
   tests.conta_como(tests.uid('direcao@escola-a.test'),
                    'select 1 from public.v_bloco_vagas_semana'),
   'e volta INTEIRA com materiais.ler: a causa e a permissao, e nao outra coisa do perfil');
+
+select is(
+  tests.conta_como(tests.uid('semmateriais@escola-a.test'),
+                   'select 1 from public.v_turma_modular_lotacao'),
+  tests.conta_como(tests.uid('direcao@escola-a.test'),
+                   'select 1 from public.v_turma_modular_lotacao'),
+  'e a lotacao Modular tambem volta INTEIRA — contraprova da assercao acima (card 7.4)');
+
+-- Contraprova da contraprova: se a fixture nao tivesse turma Modular ATIVA
+-- nenhuma, as duas assercoes acima comparariam zero com zero e passariam de
+-- graca. A camada `modular` do seed (card 7.1) poe DUAS turmas na ESCOLA_A.
+select cmp_ok(
+  tests.conta_como(tests.uid('direcao@escola-a.test'),
+                   'select 1 from public.v_turma_modular_lotacao'),
+  '>', 0::bigint,
+  'a direcao VE turma Modular: sem isto o par acima seria zero comparado a zero');
 
 -- ===========================================================================
 -- 8. Bloco inativo sai da grade (e continua na tabela)

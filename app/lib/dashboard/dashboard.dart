@@ -15,6 +15,7 @@ library;
 import 'package:flutter/foundation.dart';
 
 import '../pendencias/pendencias.dart';
+import '../turmas/modular.dart';
 import '../turmas/turmas.dart';
 
 export '../turmas/turmas.dart'
@@ -290,6 +291,127 @@ List<TotalSeveridade> totaisPorSeveridade(Iterable<Pendencia> abertas) {
     for (final s in ordem)
       TotalSeveridade(severidade: s, qtd: contagem[s] ?? 0),
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Lotação Modular, por curso — card 7.4
+// ---------------------------------------------------------------------------
+
+/// A lotação de **um curso** Modular: as turmas ativas dele somadas.
+///
+/// O card 7.4 é **consumidor e não criador**, como o 5.9 foi de
+/// `v_bloco_vagas_semana`: a fonte é `v_turma_modular_lotacao`, que nasceu no
+/// card 7.3 (docs/views-leitura.md §7.2), e nada aqui recalcula lotação, vaga
+/// ou módulo corrente — os três chegam prontos, e uma segunda conta em Dart
+/// divergiria em silêncio (card 2.3 §4.1).
+@immutable
+class LotacaoCurso {
+  const LotacaoCurso({
+    required this.cursoId,
+    required this.cursoNome,
+    required this.turmas,
+    required this.capacidade,
+    required this.alocados,
+    required this.vagasLivres,
+    required this.turmasAcimaCapacidade,
+    required this.turmasAtrasadas,
+  });
+
+  final String cursoId;
+
+  /// O nome vem da **própria view** (`curso_nome`), não de uma segunda consulta
+  /// ao catálogo: o cartão não pode ficar sem nome porque outra leitura não
+  /// voltou. Mesma razão do `metodo_codigo` em [TotalMetodo].
+  final String cursoNome;
+
+  final int turmas;
+  final int capacidade;
+  final int alocados;
+  final int vagasLivres;
+
+  /// Quantas turmas do curso estão **acima** da capacidade — estado real, que o
+  /// importador do card 9.1 pode trazer.
+  final int turmasAcimaCapacidade;
+
+  /// Quantas estão com a previsão do módulo corrente vencida. Vem da coluna
+  /// `modulo_atrasado` da view, medida com `fn_hoje()` — nunca do relógio do
+  /// aparelho, que poria a turma em atraso um dia antes ou depois.
+  final int turmasAtrasadas;
+
+  bool get temAlerta => turmasAcimaCapacidade > 0;
+  bool get temAtraso => turmasAtrasadas > 0;
+
+  String get vagasTexto =>
+      '$vagasLivres ${vagasLivres == 1 ? 'vaga livre' : 'vagas livres'}';
+
+  /// "8 de 10 ocupados". Por extenso, e não `8/10` como o wireframe §5 desenha:
+  /// esta região fica na mesma tela da grade de vagas, cujas células dizem
+  /// `n/m` com `n` sendo **vaga livre** — a leitura oposta. É a correção que o
+  /// card 5.11 já aplicou ao cartão do método, pela mesma razão e na mesma
+  /// tela; divergência registrada em `docs/wireframes.md` §17.
+  String get ocupacaoPorExtenso => '$alocados de $capacidade ocupados';
+
+  String get turmasTexto => '$turmas ${turmas == 1 ? 'turma' : 'turmas'}';
+
+  String get atrasoTexto =>
+      '$turmasAtrasadas ${turmasAtrasadas == 1 ? 'turma com módulo atrasado' : 'turmas com módulo atrasado'}';
+
+  /// "1 turma acima da capacidade" — com o substantivo, e não só
+  /// "1 acima da capacidade" como no cartão do método: as duas regiões dividem
+  /// a mesma tela, e ali o número conta **blocos de horário**.
+  String get acimaTexto =>
+      '$turmasAcimaCapacidade ${turmasAcimaCapacidade == 1 ? 'turma acima da capacidade' : 'turmas acima da capacidade'}';
+}
+
+/// Um total por curso, em ordem alfabética de curso.
+///
+/// Alfabética e não por tamanho, ao contrário de [totaisPorMetodo]: lá a ordem
+/// decide **qual grade abre**, e aqui não decide nada — os cartões são todos
+/// visíveis. Uma lista que se reordena a cada matrícula é uma lista que se
+/// reaprende todo dia.
+///
+/// ⚠️ **`vagasLivres` é a SOMA das parcelas, nunca `capacidade − alocados`.**
+/// É a mesma armadilha de [totaisPorMetodo], e aqui ela é ainda mais fácil de
+/// cair porque a capacidade da turma Modular é **coluna**: `vagas_livres` da
+/// view tem piso zero (card 7.3), então uma turma com 16 em 15 faria a
+/// diferença dar **−1** e o curso apareceria devendo vaga — ou, com outra turma
+/// ao lado, faria o excesso de uma **abater** a vaga real da outra.
+List<LotacaoCurso> lotacaoPorCurso(Iterable<TurmaModular> turmas) {
+  final porCurso = <String, LotacaoCurso>{};
+  for (final t in turmas) {
+    final atual = porCurso[t.cursoId];
+    porCurso[t.cursoId] = LotacaoCurso(
+      cursoId: t.cursoId,
+      cursoNome: t.cursoNome,
+      turmas: (atual?.turmas ?? 0) + 1,
+      capacidade: (atual?.capacidade ?? 0) + t.capacidade,
+      alocados: (atual?.alocados ?? 0) + t.alocados,
+      vagasLivres: (atual?.vagasLivres ?? 0) + t.vagasLivres,
+      turmasAcimaCapacidade:
+          (atual?.turmasAcimaCapacidade ?? 0) + (t.acimaCapacidade ? 1 : 0),
+      turmasAtrasadas:
+          (atual?.turmasAtrasadas ?? 0) + (t.moduloAtrasado ? 1 : 0),
+    );
+  }
+  return porCurso.values.toList()..sort((a, b) {
+    final nome = a.cursoNome.toLowerCase().compareTo(b.cursoNome.toLowerCase());
+    return nome != 0 ? nome : a.cursoId.compareTo(b.cursoId);
+  });
+}
+
+/// O cartão é uma pilha de números; sem isto a leitura de tela anuncia
+/// "Eletricista 44 vagas livres 1 de 45 ocupados 3 turmas" sem separar o que é
+/// o quê (design-system §8.5).
+String descricaoLotacaoCurso(LotacaoCurso curso) {
+  final partes = <String>[
+    curso.cursoNome,
+    curso.vagasTexto,
+    curso.ocupacaoPorExtenso,
+    curso.turmasTexto,
+    if (curso.temAlerta) curso.acimaTexto,
+    if (curso.temAtraso) curso.atrasoTexto,
+  ];
+  return partes.join(', ');
 }
 
 /// O que a leitura de tela anuncia numa célula — a grade é uma matriz de

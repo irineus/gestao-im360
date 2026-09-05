@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/dashboard/dashboard.dart';
+import 'package:gestao_im360/turmas/modular.dart';
 
 import 'apoio/dashboard_falso.dart';
+import 'apoio/modular_falso.dart';
 import 'apoio/turmas_falso.dart';
 
 /// A lógica pura do dashboard (card 5.9): a soma das parcelas que o banco já
@@ -217,6 +219,87 @@ void main() {
     expect(quarta.blocos, 1);
     expect(quarta.capacidade, 10);
     expect(quarta.vagasLivres, 0);
+  });
+
+  // ---------------------------------------------------------------------
+  // Card 7.4 — lotação Modular por curso
+  // ---------------------------------------------------------------------
+
+  group('lotação Modular por curso', () {
+    Future<List<TurmaModular>> turmasDaFixture() =>
+        ModularFalso.fixture().turmas();
+
+    test('soma as turmas ATIVAS de cada curso, em ordem alfabética', () async {
+      final cursos = lotacaoPorCurso(await turmasDaFixture());
+
+      expect(cursos.length, 2);
+      expect(
+        cursos.first.cursoNome,
+        'Depilação',
+        reason:
+            'a ordem é alfabética de curso, e não por tamanho como a dos '
+            'métodos: aqui a ordem não decide qual grade abre',
+      );
+
+      final eletricista = cursos.last;
+      expect(eletricista.cursoNome, 'Eletricista Instalador');
+      expect(eletricista.turmas, 3, reason: '2026.1, 2025.2 e 2026.2');
+      expect(eletricista.capacidade, 45);
+      expect(eletricista.alocados, 1, reason: 'só Eduarda Lima');
+      expect(eletricista.vagasLivres, 44);
+      expect(eletricista.turmasAtrasadas, 1, reason: 'a 2025.2, vencida');
+      expect(eletricista.turmasAcimaCapacidade, 0);
+      expect(eletricista.temAlerta, isFalse);
+      expect(eletricista.temAtraso, isTrue);
+    });
+
+    test('vagas é a SOMA das parcelas, e não capacidade − alocados', () async {
+      final depilacao = lotacaoPorCurso(await turmasDaFixture()).first;
+
+      // A turma de Depilação tem 16 numa capacidade de 15. `vagas_livres` da
+      // view tem piso zero (card 7.3), então a soma dá 0; a diferença daria
+      // −1, e o curso apareceria DEVENDO vaga — número plausível e errado.
+      expect(depilacao.alocados, 16);
+      expect(depilacao.capacidade, 15);
+      expect(depilacao.vagasLivres, 0);
+      expect(
+        depilacao.capacidade - depilacao.alocados,
+        -1,
+        reason: 'é o número ERRADO: por isso não se recalcula',
+      );
+      expect(depilacao.turmasAcimaCapacidade, 1);
+      expect(depilacao.temAlerta, isTrue);
+    });
+
+    test('a ocupação é por extenso, e a vaga nunca aparece como n/m', () async {
+      final cursos = lotacaoPorCurso(await turmasDaFixture());
+
+      // `8/10` na mesma tela em que a célula da grade diz `n/m` com n sendo
+      // VAGA é a leitura oposta a poucos pixels de distância — é a correção
+      // que o card 5.11 já fez no cartão do método.
+      expect(cursos.last.ocupacaoPorExtenso, '1 de 45 ocupados');
+      expect(cursos.last.turmasTexto, '3 turmas');
+      expect(cursos.first.turmasTexto, '1 turma');
+      expect(cursos.last.vagasTexto, '44 vagas livres');
+      expect(cursos.first.vagasTexto, '0 vagas livres');
+      expect(cursos.last.atrasoTexto, '1 turma com módulo atrasado');
+      // Com o substantivo: o cartão do método, na mesma tela, diz
+      // "1 acima da capacidade" contando BLOCOS DE HORÁRIO.
+      expect(cursos.first.acimaTexto, '1 turma acima da capacidade');
+    });
+
+    test('sem turma nenhuma a lista é vazia — não há curso a inventar', () {
+      expect(lotacaoPorCurso(const []), isEmpty);
+    });
+
+    test('a leitura de tela separa o que é cada número', () async {
+      final depilacao = lotacaoPorCurso(await turmasDaFixture()).first;
+      expect(
+        descricaoLotacaoCurso(depilacao),
+        'Depilação, 0 vagas livres, 16 de 15 ocupados, 1 turma, '
+        '1 turma acima da capacidade',
+      );
+    });
   });
 
   test(
