@@ -123,3 +123,13 @@ ALUNO_NAO_MODULAR
 TURMA_SEM_CRONOGRAMA
 TURMA_SEM_MODULO_CORRENTE
 DATA_OBRIGATORIA
+# 3 do card 8.3 (checklist de certificado).
+# CERTIFICADO_INEXISTENTE e da familia de PC_INEXISTENTE / TURMA_INEXISTENTE:
+# vale tambem para aluno de OUTRA unidade, porque a leitura e invoker. Ele
+# distingue "este aluno nao tem checklist" de "nada mudou", que e o que um
+# update de zero linhas nao sabe dizer.
+CERTIFICADO_INEXISTENTE
+# Os dois de enumeracao. Sem eles, item ou status invalido chegaria a tela como
+# o 23514 cru do check da coluna — o que o card 2.2 §1.2 proibe.
+ITEM_CERTIFICADO_INVALIDO
+STATUS_CERTIFICADO_INVALIDO

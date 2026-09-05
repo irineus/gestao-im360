@@ -168,7 +168,15 @@ create temporary view p_esperada (tabela, cmd) as values
   -- mensal é imutável. `demanda_projetada_hist` também não tem `delete`, pela
   -- mesma razão de aluno_status_hist — a imutabilidade AQUI é a ausência.
   ('demanda_projetada','r'),      ('demanda_projetada','a'),      ('demanda_projetada','d'),
-  ('demanda_projetada_hist','r'), ('demanda_projetada_hist','a');
+  ('demanda_projetada_hist','r'), ('demanda_projetada_hist','a'),
+  -- card 8.3 — o checklist do certificado. Sem DELETE, e a ausência é a decisão
+  -- (card 2.4 §4): checklist que a secretaria já trabalhou não some. O único
+  -- apagamento legítimo — o estorno que tira o aluno do FIM antes de qualquer
+  -- item marcado — é fn_certificado_reavaliar_estorno, `security definer`, e é
+  -- PRECISAMENTE porque não há política que ela precisa ser definer.
+  -- O `update` aceita o `or` de TRÊS permissões, e esta asserção não vê essa
+  -- diferença: quem a vê é o C11 abaixo e a guarda de coluna, medida no 081 §4.
+  ('certificado_checklist','r'), ('certificado_checklist','a'), ('certificado_checklist','w');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text
@@ -266,7 +274,16 @@ create temporary view p_codigo_catalogo (codigo) as values
   -- achado 9 do card 2.4 §7 descreve.
   ('estoque.ler'), ('estoque.lancar_saida'), ('estoque.estornar'), ('estoque.ajustar'),
   ('compras.ler'), ('compras.criar'), ('compras.editar'), ('compras.excluir'),
-  ('compras.receber');
+  ('compras.receber'),
+  -- card 8.3 — os CINCO do domínio `certificados`, e aqui o domínio inteiro
+  -- aparece em política, sem a ausência deliberada que `alunos`, `turmas`,
+  -- `compras` e `estoque` têm. Não é acaso: as três de marcar guardam GRUPOS DE
+  -- COLUNA da mesma tabela, então as três precisam estar na `using` do mesmo
+  -- update — é justamente por isso que o achado 8 do card 2.4 §7 exige a guarda
+  -- de coluna, e é ela que devolve a cada código o sentido que o `or` dissolve.
+  ('certificados.ler'), ('certificados.criar'),
+  ('certificados.marcar_pedagogico'), ('certificados.marcar_financeiro'),
+  ('certificados.alterar_status');
 
 select is(
   (select coalesce(string_agg(msg, '; ' order by msg), '')

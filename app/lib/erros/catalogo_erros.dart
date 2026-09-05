@@ -221,6 +221,23 @@ abstract final class CatalogoErros {
         'acrescente módulos ao cronograma.',
     'DATA_OBRIGATORIA': 'Informe a data para continuar.',
 
+    // --- card 8.3 (checklist de certificado)
+    // `CERTIFICADO_INEXISTENTE` vale também para aluno de OUTRA unidade, pela
+    // mesma razão de `PC_INEXISTENTE` e `TURMA_INEXISTENTE`. A mensagem diz a
+    // saída, porque quem tem `certificados.criar` pode abrir o checklist ali
+    // mesmo — e quem não tem precisa saber a quem pedir.
+    'CERTIFICADO_INEXISTENTE':
+        'Este aluno ainda não tem checklist de certificado. Ele é aberto '
+        'quando a última apostila da trilha é entregue.',
+    // Os dois de enumeração: sem eles, item ou status inválido chegaria à tela
+    // como o erro cru do `check` da coluna.
+    'ITEM_CERTIFICADO_INVALIDO':
+        'Item do checklist inválido. Os itens são pedagógico, financeiro e '
+        'formatura.',
+    'STATUS_CERTIFICADO_INVALIDO':
+        'Situação de certificado inválida. As situações são não pedido, '
+        'pedido e entregue.',
+
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':
         'Não deu para saber em que unidade cadastrar esta pessoa. Informe a '

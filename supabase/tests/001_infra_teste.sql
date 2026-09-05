@@ -16,7 +16,7 @@
 -- =============================================================================
 
 begin;
-select plan(30);
+select plan(31);
 
 -- ===========================================================================
 -- 1. O portão: a fixture está em dia com o schema?
@@ -225,27 +225,41 @@ select is(
 --
 -- A sentinela era `public.material` até o card 4.1, `public.aluno` até o 4.2,
 -- `public.pc` até o 4.3, `public.bloco_aluno` até o 5.1, `public.movimento_estoque`
--- até o 6.1 e `public.turma_modular_aluno` até o **7.1**; de lá em diante essas
--- tabelas EXISTEM, o `create table` morreria com "already exists" e a asserção
--- deixaria de dizer o que promete. A sentinela acompanha a fronteira: agora é
--- `public.certificado_checklist`, a tabela da camada `certificados` (card 8.3),
--- que é a última declarada.
+-- até o 6.1, `public.turma_modular_aluno` até o 7.1 e
+-- `public.certificado_checklist` até o **8.3**; de lá em diante essas tabelas
+-- EXISTEM, o `create table` morreria com "already exists" e a asserção deixaria
+-- de dizer o que promete.
 --
--- ⚠️ E cada troca seguiu à risca a instrução que este comentário já trazia —
+-- ⚠️ DIVERGÊNCIA REGISTRADA (card 8.3): a instrução que este comentário trazia —
 --    «quando ela for aplicada, esta asserção precisa de uma camada NOVA para
---    vigiar, e não de uma sentinela nova». O card 6.1 aplicou `trilha_estoque` e
---    declarou `modular` no mesmo commit; o **7.1** aplicou `modular` e declarou
---    `certificados` no mesmo commit. Sem a camada nova, o portão ficaria sem
---    sentinela e esta prova por construção viraria decoração — que é a crítica
---    que o card 2.8 faz à suíte que existe e não reprova nada.
-create table public.certificado_checklist (id uuid primary key);
+--    vigiar, e não de uma sentinela nova» — DEIXOU DE SER APLICÁVEL, e não por
+--    descuido. Ela pressupunha que sempre haveria uma tabela futura para
+--    declarar. `certificado_checklist` é a ÚLTIMA tabela do DDL do card 2.1 (o
+--    mapa do §11 termina nela, no card 8.3): os cards que restam são função
+--    (8.4), tela (8.5–8.7) e importação (9.1), e nenhum cria tabela. Declarar uma
+--    camada para uma tabela que ninguém pediu seria escopo inventado.
+--
+--    A prova por construção continua — e ficou MAIS FORTE, porque deixou de
+--    depender de haver uma próxima camada. Em vez de criar a tabela de uma camada
+--    futura, o portão desmarca uma camada JÁ APLICADA dentro da própria
+--    transação: a condição `devida_se` dela vale (a tabela existe), `aplicada`
+--    passa a ser falsa, e `fixture_camadas_devidas()` tem de acusá-la. É
+--    exatamente o mecanismo que o portão vigia — "camada devida e não escrita" —,
+--    atacado pelo outro lado. O `update` some no `rollback` com o resto.
+update tests.fixture_camada set aplicada = false where camada = 'certificados';
 
 select is(
   (select string_agg(camada, ',' order by camada) from tests.fixture_camadas_devidas()),
   'certificados',
-  'criada a tabela que a camada povoa, o portao acusa a camada que ficou para tras');
+  'desmarcada uma camada cuja tabela existe, o portao acusa a camada que ficou para tras');
 
-drop table public.certificado_checklist;
+update tests.fixture_camada set aplicada = true where camada = 'certificados';
+
+select is(
+  (select coalesce(string_agg(camada, ',' order by camada), '')
+     from tests.fixture_camadas_devidas()),
+  '',
+  'e remarcada, o portao volta a ficar em silencio — a assercao mede a marca, nao o acaso');
 
 select * from finish();
 rollback;

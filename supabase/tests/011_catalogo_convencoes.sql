@@ -292,7 +292,39 @@ select is(
             -- para uma decisão de lotação — quem não pode ler o aluno recebe
             -- nulo, que é fail-CLOSED. Mesma decisão de
             -- fn_turma_modular_modulo_corrente (7.2) e fn_vagas_livres (5.2).
-            'rt_projecao_demanda'
+            'rt_projecao_demanda',
+            -- card 8.3 — as duas do certificado, e cada uma por um motivo
+            -- diferente.
+            --
+            -- `fn_certificado_reavaliar_estorno` é chamada como EFEITO COLATERAL
+            -- na transação de quem estorna (`estoque.estornar`) e precisa APAGAR
+            -- linha de uma tabela que não tem política de delete PARA NINGUÉM
+            -- (card 2.4 §4). Como invoker, o `delete` afetaria zero linhas sem
+            -- erro nenhum — a redução silenciosa do card 2.3 §3.4 —, e o sintoma
+            -- seria um checklist aberto para um aluno que voltou a ter livro
+            -- pendente, na fila que o card 8.6 lê. Mesmo desenho e mesmo motivo de
+            -- fn_pendencia_abrir (5.5). Filtra unidade no corpo e trata unidade
+            -- nula como ERRO.
+            --
+            -- `fn_aluno_pode_formar` VIROU definer neste card, e a mudança é a
+            -- decisão: ela passou a ler `certificado_checklist`, cuja política de
+            -- select exige `certificados.ler`. Como invoker, um perfil com
+            -- `alunos.alterar_status` e sem `certificados.ler` receberia
+            -- FORMATURA_SEM_CERTIFICADO com o certificado ENTREGUE na mão — e a
+            -- leitura óbvia do erro seria FALSA, que é literalmente o sintoma que
+            -- o card 4.2 escreveu como inaceitável. Mesmo raciocínio de
+            -- fn_capacidade_efetiva (5.2) e fn_turma_modular_ocupacao (7.2):
+            -- decisão derivada aplicada em tela não pode depender do que o leitor
+            -- enxerga. Filtra unidade no corpo, e `tem_permissao` continua
+            -- avaliando o CHAMADOR (ela lê auth.uid(), que definer não muda).
+            --
+            -- As três funções de aplicação do card (fn_certificado_abrir,
+            -- fn_certificado_marcar, fn_certificado_status) NÃO estão aqui, e é o
+            -- ponto: definer as tiraria da RLS de certificado_checklist, e a
+            -- permissão POR ITEM — que é a razão de existirem três códigos em vez
+            -- de um — deixaria de ter segunda camada. Os três triggers também não:
+            -- eles operam sobre a linha que recebem.
+            'fn_certificado_reavaliar_estorno', 'fn_aluno_pode_formar'
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'
