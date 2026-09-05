@@ -302,6 +302,115 @@ void main() {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // Card 8.7 — alunos por método, tipos na turma e conclusões por semestre
+  // -------------------------------------------------------------------------
+
+  group('painéis por método', () {
+    test('casa os tipos por metodo_id, e NUNCA por posição', () {
+      final paineis = paineisPorMetodo(alunosDeFixture, tiposDeFixture);
+
+      // ⚠️ É o defeito que esta função existe para não ter: `v_dashboard_tipos_bloco`
+      // só devolve linha para método com alocação ativa (na fixture, uma), e a
+      // de alunos devolve três. Casar por posição poria as 19 alocações do
+      // Interativo no cartão do primeiro método da outra lista.
+      final porCodigo = {for (final p in paineis) p.metodoCodigo: p};
+      expect(porCodigo['INTERATIVO']!.tipos!.alocacoes, 19);
+      expect(porCodigo['INGLES']!.tipos, isNull);
+      expect(porCodigo['MODULAR']!.tipos, isNull);
+    });
+
+    test('ordena pelos alunos EM CURSO, com o código desempatando', () {
+      final paineis = paineisPorMetodo(alunosDeFixture, tiposDeFixture);
+      // Interativo 19, Modular 2, Inglês 1 (0 ativos + 1 em aceleração) — e é
+      // `emCurso`, não `ativos`: por ativos o Inglês, que tem zero, cairia para
+      // o fim mesmo tendo aluno acelerando.
+      expect(paineis.map((p) => p.metodoCodigo).toList(), [
+        'INTERATIVO',
+        'MODULAR',
+        'INGLES',
+      ]);
+    });
+
+    test('sem tipo nenhum os painéis continuam de pé', () {
+      // A leitura de tipos pode falhar sozinha: os cartões continuam, sem a
+      // linha REM/PRE/REP/NOVO.
+      final paineis = paineisPorMetodo(alunosDeFixture, const []);
+      expect(paineis, hasLength(3));
+      expect(paineis.every((p) => p.tipos == null), isTrue);
+    });
+
+    test('o resumo dos tipos sai na ordem do desenho', () {
+      expect(tiposDeFixture.first.resumo, 'REM 15 · PRE 2 · REP 1 · NOVO 1');
+    });
+
+    test('a leitura de tela separa o que é cada número', () {
+      final interativo = paineisPorMetodo(
+        alunosDeFixture,
+        tiposDeFixture,
+      ).first;
+      expect(
+        descricaoAlunosMetodo(interativo),
+        'INTERATIVO, 19 ativos, 0 em aceleração, 0 em standby, 1 trancado, '
+        '0 no último livro, 16 sem previsão de conclusão, '
+        '19 alocações: REM 15 · PRE 2 · REP 1 · NOVO 1',
+      );
+    });
+  });
+
+  group('conclusões por semestre', () {
+    test('agrupa os métodos e soma alunos e vencidas', () {
+      final semestres = conclusoesPorSemestre(conclusoesDeFixture);
+
+      expect(semestres, hasLength(2));
+      expect(semestres.first.rotulo, '2026/2');
+      expect(semestres.first.qtdAlunos, 3);
+      // ⚠️ A vencida é SOMADA, não descartada: previsão no passado fica no
+      // semestre dela (docs/views-leitura.md §8.2). Filtrá-la faria a soma dos
+      // semestres deixar de bater com o total de ativos.
+      expect(semestres.first.qtdVencidas, 1);
+      expect(semestres.last.rotulo, '2027/1');
+      expect(semestres.last.temVencidas, isFalse);
+    });
+
+    test('a ordem é CRONOLÓGICA, e não por tamanho', () {
+      // Ao contrário dos painéis por método: aqui o eixo é o tempo, e uma barra
+      // que se reordena a cada matrícula não se lê. O semestre vencido vem
+      // primeiro, que é onde a direção precisa vê-lo.
+      final embaralhado = [
+        conclusoesDeFixture[2],
+        conclusoesDeFixture[1],
+        conclusoesDeFixture[0],
+      ];
+      expect(conclusoesPorSemestre(embaralhado).map((s) => s.rotulo).toList(), [
+        '2026/2',
+        '2027/1',
+      ]);
+    });
+
+    test('a quebra por método vai do maior para o menor', () {
+      final semestre = conclusoesPorSemestre(conclusoesDeFixture).first;
+      expect(semestre.resumoMetodos, 'INTERATIVO 2 · INGLES 1');
+    });
+
+    test('sem linha nenhuma a lista é vazia — não há semestre a inventar', () {
+      expect(conclusoesPorSemestre(const []), isEmpty);
+    });
+
+    test('o "sem previsão" soma os métodos', () {
+      expect(totalSemPrevisao(alunosDeFixture), 18);
+      expect(totalSemPrevisao(const []), 0);
+    });
+
+    test('a leitura de tela separa o que é cada número', () {
+      expect(
+        descricaoSemestre(conclusoesPorSemestre(conclusoesDeFixture).first),
+        '2026/2, 3 alunos, 1 vencida — previsão no passado, '
+        'INTERATIVO 2 · INGLES 1',
+      );
+    });
+  });
+
   test(
     'a fixture do dashboard descreve a MESMA escola que a de turmas',
     () async {

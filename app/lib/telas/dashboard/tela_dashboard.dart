@@ -11,7 +11,9 @@ import '../../theme/tipografia.dart';
 import '../../turmas/turmas.dart';
 import '../../turmas/turmas_provider.dart';
 import '../../widgets/estados.dart';
+import 'cartoes_alunos.dart';
 import 'cartoes_metodo.dart';
+import 'conclusoes_semestre.dart';
 import 'grade_vagas.dart';
 import 'lotacao_modular.dart';
 import 'pendencias_abertas.dart';
@@ -44,11 +46,23 @@ import 'pendencias_abertas.dart';
 /// **A lotação Modular por curso entrou no card 7.4**, também sem migração: a
 /// fonte é `v_turma_modular_lotacao`, entregue pelo card 7.3 com a tela 5.
 ///
-/// **O que ainda não está aqui é do card 8.7** (alunos por método, conclusões
-/// por semestre e tipos por bloco): as três `v_dashboard_*` são dele
-/// (docs/views-leitura.md §12), e é por elas que `alunos.ler` segue no conjunto
-/// mínimo sem consumidor até lá. A tela diz isso em rodapé em vez de deixar o
-/// espaço vazio parecendo defeito.
+/// **O card 8.7 completou a tela** e foi o primeiro a trazer migração para cá:
+/// alunos por método, conclusões previstas por semestre e os totais
+/// REM/PRE/REP/NOVO saem das três `v_dashboard_*` (docs/views-leitura.md §8),
+/// que ninguém tinha criado até então. Com elas o `alunos.ler` do conjunto
+/// mínimo desta rota ganhou consumidor — ele estava lá, sem nenhum, desde o
+/// card 3.7.
+///
+/// **A ordem das regiões é a do wireframe §5**, e não a de chegada: alunos por
+/// método, conclusões, vagas, e depois lotação Modular ao lado das pendências.
+/// A leitura da tela começa em quantos alunos a escola tem, não em quantas
+/// cadeiras sobram.
+///
+/// ⚠️ **Divergência registrada: são DUAS fileiras de cartão por método**, e o
+/// §5 desenha uma. A de cima conta alunos e cada número dela abre a lista
+/// filtrada; a de baixo conta vagas e **é o seletor** da grade — o cartão em
+/// destaque é o método que a grade mostra (card 5.9). Fundi-las faria o mesmo
+/// toque significar duas coisas: escolher a grade e navegar para outra tela.
 class TelaDashboard extends ConsumerWidget {
   const TelaDashboard({super.key});
 
@@ -71,6 +85,15 @@ class TelaDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // As duas regiões do card 8.7 abrem a tela, na ordem do wireframe §5.
+          // Cada uma tem a própria leitura e falha sozinha: a de vagas cair não
+          // pode levar embora a contagem de alunos (design-system §7.2).
+          const CartoesAlunos(),
+          const SizedBox(height: Dim.e24),
+          const ConclusoesSemestre(),
+          const SizedBox(height: Dim.e24),
+          const Divider(),
+          const SizedBox(height: Dim.e8),
           SizedBox(
             height: vagas.hasValue && grade != null && visivel != null
                 ? null
@@ -155,8 +178,6 @@ class TelaDashboard extends ConsumerWidget {
                     ],
                   ),
           ),
-          const SizedBox(height: Dim.e24),
-          _NotaDoQueFalta(linhas: vagas.value?.length),
         ],
       ),
     );
@@ -250,43 +271,7 @@ class _TituloSemana extends StatelessWidget {
   }
 }
 
-/// O placeholder de tela inteira (`TelaEmConstrucao`) diz qual card entrega a
-/// tela para não virar destino permanente (wireframes §18). Aqui a tela existe e
-/// é **parcial**, então quem diz é esta linha — sem ela, a secretaria reporta
-/// como defeito a metade que ainda não foi escrita (é o aviso que o marco 4.8
-/// registrou nas Notas).
-class _NotaDoQueFalta extends StatelessWidget {
-  const _NotaDoQueFalta({required this.linhas});
-
-  /// Nulo enquanto a leitura não voltou (ou falhou) — aí não há contagem a
-  /// afirmar, e "0 blocos ativos" seria número errado com cara de certo.
-  final int? linhas;
-
-  @override
-  Widget build(BuildContext context) {
-    final cores = Theme.of(context).colorScheme;
-    final n = linhas;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Divider(),
-        const SizedBox(height: Dim.e8),
-        Text(
-          textoRestanteDoDashboard,
-          style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
-        ),
-        if (n != null)
-          Text(
-            '$n ${n == 1 ? 'bloco de horário ativo' : 'blocos de horário '
-                      'ativos'} nesta semana.',
-            style: Tipografia.numero(Tipografia.apoio)
-                .copyWith(color: cores.onSurfaceVariant),
-          ),
-      ],
-    );
-  }
-}
-
-const textoRestanteDoDashboard =
-    'Alunos por método, conclusões por semestre e tipos por bloco chegam numa '
-    'próxima versão.';
+// O rodapé "o resto chega numa próxima versão" (card 5.9) saiu em 06/09/2026
+// com o card 8.7: alunos por método, conclusões por semestre e tipos por bloco
+// existem agora, e um aviso que sobrevive ao que ele anunciava vira ruído — a
+// secretaria passaria a ler "falta coisa" olhando a tela completa.

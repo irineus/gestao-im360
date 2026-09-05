@@ -87,6 +87,54 @@ final lotacaoModularProvider = Provider<List<LotacaoCurso>>(
   ),
 );
 
+// ---------------------------------------------------------------------------
+// Alunos por método, tipos na turma e conclusões por semestre — card 8.7
+// ---------------------------------------------------------------------------
+
+/// Os alunos por status e por método (`v_dashboard_alunos_metodo`).
+///
+/// Sem guarda de permissão, pela mesma razão de [vagasSemanaProvider]: só a
+/// tela do dashboard o lê, e a rota dela já exige `alunos.ler` **e**
+/// `materiais.ler` (docs/permissoes-matriz.md §6) — que é exatamente o conjunto
+/// desta view (docs/views-leitura.md §11). Quem chega aqui lê as contagens
+/// inteiras; quem não chega vê a tela "Sem acesso" dizendo o que falta.
+final alunosPorMetodoProvider = FutureProvider<List<AlunosMetodo>>(
+  (ref) => _traduzindo(ref.watch(dashboardRepositorioProvider).alunosPorMetodo),
+);
+
+/// As alocações ativas por tipo (`v_dashboard_tipos_bloco`). Conjunto da view:
+/// `turmas.ler` + `materiais.ler`, também subconjunto da rota.
+final tiposPorBlocoProvider = FutureProvider<List<TiposBloco>>(
+  (ref) => _traduzindo(ref.watch(dashboardRepositorioProvider).tiposPorBloco),
+);
+
+/// As conclusões previstas (`v_dashboard_conclusoes_semestre`).
+final conclusoesPrevistasProvider = FutureProvider<List<ConclusaoSemestre>>(
+  (ref) =>
+      _traduzindo(ref.watch(dashboardRepositorioProvider).conclusoesPrevistas),
+);
+
+/// Os cartões por método: as contagens de aluno com os tipos na turma ao lado.
+///
+/// ⚠️ **A junção espera os alunos, não os tipos.** Enquanto
+/// [tiposPorBlocoProvider] não voltou — ou se ele falhar —, `tipos` fica nulo e
+/// a linha REM/PRE/REP/NOVO **some**, em vez de aparecer zerada: `.value ?? []`
+/// aqui faria toda a escola parecer sem alocação nenhuma, que é o defeito B1 do
+/// card 5.11 (`AsyncValue` que decide texto precisa dos três estados).
+final paineisMetodoProvider = Provider<List<PainelMetodo>>(
+  (ref) => paineisPorMetodo(
+    ref.watch(alunosPorMetodoProvider).value ?? const <AlunosMetodo>[],
+    ref.watch(tiposPorBlocoProvider).value ?? const <TiposBloco>[],
+  ),
+);
+
+/// Os semestres com os métodos somados e a quebra por método ao lado.
+final semestresConclusaoProvider = Provider<List<SemestreConclusoes>>(
+  (ref) => conclusoesPorSemestre(
+    ref.watch(conclusoesPrevistasProvider).value ?? const <ConclusaoSemestre>[],
+  ),
+);
+
 /// A grade de vagas do método visível, já montada em dia × horário.
 ///
 /// A semana sai de `data_referencia`, isto é, do **banco** — ver

@@ -282,8 +282,11 @@ TabelaIm360<T>(
 ### 5.5 `CardDashboard`
 
 Existe em `lib/widgets/card_dashboard.dart` desde 04/09/2026 (antes era privado dentro dos cartões
-por método do card 5.9; o card **7.4** foi o primeiro a reusá-lo, na lotação Modular por curso, e o
-card 8.7 traz mais cinco).
+por método do card 5.9; o card **7.4** foi o primeiro a reusá-lo, na lotação Modular por curso).
+✅ **O card 8.7 acrescentou os dois últimos usos** — alunos por método e conclusões por semestre —,
+e com isso são **quatro** regiões de cartão na mesma tela. ⚠️ A previsão de "mais cinco" era por
+cartão e não por região: o número de cartões é **dado**, não desenho (um por método, um por
+semestre com previsão), e é por isso que a grade do §3 os deixa quebrar em `Wrap`.
 
 - Superfície com borda (sem sombra), raio 8, padding 12; título `rotulo` em texto secundário;
   valor principal `titulo` (24/700, tnum); linhas secundárias `corpoTabela` com badge/ícone de
@@ -895,6 +898,15 @@ dizer com mais precisão:
 | 31 | **O §7.2 dá o vazio de Certificados ("Ninguém chegando ao fim do curso agora.") e não prevê o vazio POR FILTRO** | Ganhou o par de sempre — "Nenhum aluno com esses filtros." + **Limpar filtros** —, como as demais linhas da tabela já fazem. E ganhou um terceiro texto que não é vazio de tela: o aluno **sem checklist** dentro do painel, que é um passo que ainda não aconteceu e não uma lista sem itens; ali a frase explica **por que** é normal e oferece abrir |
 | 32 | **Nenhuma marca de "sim/não" do §5 tinha forma definida**, e o `wireframes.md` §12.1 desenha `✓` e `─` | `✓` é U+2713, dentro da faixa que o portão `texto_de_tela_test` proíbe desde o card 5.5,5: o app empacota só Inter e Roboto e a CSP bloqueia a fonte de emoji, então o glifo viraria caixa vazia. As marcas são **ícones do Material** (`check_box_outlined` / `check_box_outline_blank`) com a sigla ao lado e a leitura por extenso na semântica e no tooltip — cor não é portadora única (§8.2), e aqui nem cor sozinha há |
 | 33 | **O §5.7 manda o controle sem permissão NÃO ser renderizado**, e o checklist do `wireframes.md` §12.2 tem de ficar **inteiro** à vista do monitor | A regra vale para **botão**; o item do checklist é informação. Sem a permissão do item, a caixa vira **indicador de leitura** com o rótulo e o "quem/quando" ao lado — esconder o Pedagógico deixaria o monitor sem saber se ele já foi assinado. O que continua fora é o controle **desabilitado**, que sugere que preencher algo o destrava: o seletor de status também vira texto para quem não pode alterá-lo |
+
+### Divergências do card 8.7 (06/09/2026) — o Dashboard completo
+
+| # | Divergência | Como ficou |
+|---|---|---|
+| 34 | **O §5.5 diz "o card inteiro é clicável" e "números secundários com alerta também são alvos individuais", e os dois não cabem juntos no mesmo `CardDashboard`** | Enquanto o cartão tinha **um** destino (vagas, lotação Modular), a primeira metade bastava. O cartão de alunos tem **cinco** (cada status abre Alunos com o filtro daquele status), e um alvo por cima de outro deixa a pessoa sem saber qual dos dois pegou o toque. Aqui o cartão **não** é alvo: cada linha é, inclusive a do nome do método, que abre a lista sem filtro de status. Os cartões de vaga e de lotação continuam como estavam |
+| 35 | **`CardDashboard` apagava os filhos da leitura de tela** | O componente nasceu com `excludeSemantics: true` — certo quando ele é **um** botão com um rótulo montado à mão (§8.5). Com alvos internos isso apaga os filhos, e os cinco atalhos deixariam de existir para quem navega por leitor de tela, **sem nada em tela dizendo**. Parâmetro novo `alvosInternos`: ligado, o cartão vira grupo rotulado com nós filhos explícitos (`container` + `explicitChildNodes`), e o rótulo do §8.5 continua sendo lido de uma vez. Default preserva o comportamento dos três usos anteriores; medido em `tela_dashboard_test` |
+| 36 | **O §7.2 diz "região mostra zero real, nunca some" e o card 5.11 diz que `AsyncValue` que decide texto precisa dos três estados** | As duas regras se encontram e a segunda vence onde o número **não foi medido**: a linha REM/PRE/REP/NOVO some quando a leitura de tipos não voltou (ou falhou), e a linha do "sem previsão" some quando a de alunos não voltou. Zero real continua na tela — "0 em standby" fica. A diferença é entre *medi e deu zero* e *não deu para medir*, e é ela que o §7.2 não separava |
+| 37 | **O §6 reserva o vermelho para "acima da capacidade" e o §7.2 não diz que cor tem uma previsão vencida** | **Âmbar** (`Cores.atencao` / `atencaoEscuro`), com ícone e texto — a mesma escolha do "módulo atrasado" do card 7.4, na mesma tela e pela mesma razão: a previsão passou e o aluno continua em curso, o que é atenção e não dado inconsistente. O vermelho desta tela fica com a turma acima da capacidade, que é o único caso em que o número em si está errado |
 
 
 ---

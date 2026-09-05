@@ -569,12 +569,34 @@ e não some da lotação.
 
 ## 8. Dashboard — cards 5.9 (v1) e 8.7 (completo)
 
+✅ **As três views desta seção nasceram em 06/09/2026, no card 8.7**, em
+`20260906070000_views_dashboard.sql`, **palavra por palavra como escritas abaixo** — nenhuma
+redecisão. Com elas o `alunos.ler` do conjunto mínimo da rota do dashboard
+(`permissoes-matriz.md` §6) ganhou consumidor: ele estava lá, sem nenhum, desde o card 3.7. O rodapé
+"o resto chega numa próxima versão" saiu da tela no mesmo commit.
+
 ⚠️ **As três views desta seção são do card 8.7, e o 5.9 não tocou em nenhuma (04/09/2026).** A v1 do
 dashboard é **vaga**: totais por método e grade dia × horário, tudo lido de `v_bloco_vagas_semana`
 (§7) e somado na tela a partir de parcelas que já vieram prontas. Ela saiu **sem migração** — o §12
 já dizia "o 5.9 já cria as de vaga", e a leitura certa daquela linha é que as de vaga nasceram no
 5.6. Alunos por método, conclusões por semestre e tipos por bloco continuam integralmente no 8.7, e
 a tela do 5.9 **diz isso em rodapé** em vez de deixar o espaço vazio parecendo defeito.
+
+**O que a execução do 8.7 acrescentou ao que estava escrito** (nenhuma linha de SQL mudou):
+
+- **A invariante que amarra as duas primeiras views virou asserção**, e é o motivo de `sem_previsao`
+  existir: para **cada método**, `ativos + acelerar = sem_previsao + Σ qtd_alunos dos semestres`. No
+  total ela passaria mesmo com os métodos trocados entre si — por isso é por método
+  (`supabase/tests/084_dashboard_views.sql` §3).
+- **`v_dashboard_tipos_bloco` conta alocações, e a fixture não prova isso sozinha.** Os dois blocos
+  cheios do card 5.1 têm alunos **disjuntos** de propósito, então "19 alocações" e "19 alunos" são o
+  mesmo número na partida: uma view que contasse `distinct aluno_id` passaria por qualquer asserção
+  de contagem. O teste **cria a aceleração** (um segundo bloco para Ana Paula, por
+  `fn_bloco_admitir`) e só então os dois se separam — 20 alocações para 19 alunos.
+- **O ano e o semestre nunca viram literal no teste.** As datas da fixture são relativas a
+  `fn_hoje()`, e um `2026/2` escrito numa asserção reprovaria sozinho num dia de junho — falha de
+  calendário com cara de regressão. O teste lê o ano e o semestre da **própria** `prev_conclusao_curso`
+  do aluno.
 
 ### 8.1 `v_dashboard_alunos_metodo`
 
@@ -749,8 +771,16 @@ não esvazia, **mente** (a grade vem cheia e sem professor nenhum). As rotas do 
 desde os cards 5.6 e 3.7 (`docs/permissoes-matriz.md` §6 e `app/lib/rotas/rotas.dart`) — o que estava
 errado era só esta tabela, que é o contrato declarado. ✅ Para `v_bloco_vagas_semana` isto deixou de
 ser parágrafo em 04/09/2026: `supabase/tests/095_views_paridade.sql` ganhou o perfil `SEM_MATERI`, que
-vê a grade **vazia** e a recebe **inteira** de volta assim que `materiais.ler` é concedida. As outras
-quatro continuam com os cards 7.4 e 8.7.
+vê a grade **vazia** e a recebe **inteira** de volta assim que `materiais.ler` é concedida. ✅ **As
+outras quatro fecharam:** `v_turma_modular_lotacao` no card **7.4** (05/09/2026) e as **três
+`v_dashboard_*`** no card **8.7** (06/09/2026), no mesmo perfil e no mesmo par vazia → inteira, com a
+contraprova da direção antes (senão o par compararia zero com zero) e a contraprova vermelha trocando
+o `join` interno em `metodo` por `left join`. **Com isso o achado nº 1 de `permissoes-matriz.md` §7
+está inteiro medido, e nenhuma das cinco views depende de uma linha de documento para valer.**
+⚠️ **Uma sutileza do 8.7 que vale para quem escrever o próximo par:** o `SEM_MATERI` precisou ganhar
+`alunos.ler`, que ele não tinha. Sem isso as duas views de aluno viriam vazias **por falta de
+`alunos.ler`**, e o par mediria a permissão errada — verde provando outra coisa. A concessão não
+afrouxa as duas asserções anteriores: nem a grade nem a lotação Modular leem aluno.
 
 ⚠️ **`professores.ler` SAIU da linha de `v_bloco_vagas_semana` em 04/09/2026** (card 5.11, decisão de
 Irineu). A permissão foi declarada aqui pelo achado nº 2 do §7 — o `left join` em professor mente em
@@ -794,7 +824,7 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | `demanda_projetada`, `v_demanda_projetada` | 8.1 | 8 |
 | `v_pedido_sugerido` — troca do literal `0` pela parcela projetada | 8.2 | 8 |
 | `v_projecao_material_mes`, `v_projecao_aluno_detalhe` e a coluna `v_projecao_aluno.ritmo_dias` | **8.5** ✅ — `20260906010000_views_projecao_tela.sql`, as duas views sem uma linha de dado; ver §12.1 | 8 |
-| `v_dashboard_alunos_metodo`, `v_dashboard_conclusoes_semestre`, `v_dashboard_tipos_bloco` | 8.7 (o 5.9 já cria as de vaga) | 8 |
+| `v_dashboard_alunos_metodo`, `v_dashboard_conclusoes_semestre`, `v_dashboard_tipos_bloco` | **8.7** ✅ — `20260906070000_views_dashboard.sql`, as três **sem uma linha de dado** e cópia palavra por palavra do §8. ⚠️ A coluna "o 5.9 já cria as de vaga" desta linha sempre esteve errada e o §8 já registrava a correção em 04/09/2026: as de vaga nasceram no **5.6**, com a grade; o 5.9 foi consumidor. Teste em `084_dashboard_views`, 23 asserções, mais 7 no `095` | 8 |
 
 ### 12.1 Views de tela, que pertencem aos seus próprios cards
 

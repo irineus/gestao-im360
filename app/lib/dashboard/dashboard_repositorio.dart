@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../turmas/turmas.dart';
+// `dashboard.dart` reexporta `CelulaGrade` e o resto do modelo de turmas.
+import 'dashboard.dart';
 
 /// Acesso ao dashboard (card 5.9). Interface para o teste injetar **dados**,
 /// nunca um cliente HTTP falso (card 2.8 §9.3).
@@ -22,6 +23,15 @@ import '../turmas/turmas.dart';
 abstract interface class DashboardRepositorio {
   /// As vagas da semana corrente, um registro por bloco ativo.
   Future<List<CelulaGrade>> vagasDaSemana();
+
+  /// Os alunos contados por status e por método (card 8.7).
+  Future<List<AlunosMetodo>> alunosPorMetodo();
+
+  /// As alocações ativas por tipo e por método (card 8.7).
+  Future<List<TiposBloco>> tiposPorBloco();
+
+  /// As conclusões previstas, por método e por semestre (card 8.7).
+  Future<List<ConclusaoSemestre>> conclusoesPrevistas();
 }
 
 class DashboardRepositorioSupabase implements DashboardRepositorio {
@@ -54,5 +64,47 @@ class DashboardRepositorioSupabase implements DashboardRepositorio {
         .order('dia_semana', ascending: true)
         .order('hora_inicio', ascending: true);
     return linhas.map(CelulaGrade.deLinha).toList();
+  }
+
+  /// ⚠️ **Três leituras e não uma**, e não há como ser diferente: são três
+  /// views distintas, cada uma com o seu `group by`, e o PostgREST lê uma
+  /// relação por requisição. O que **não** se faz é derivar uma da outra em
+  /// Dart — os alunos por status e as alocações por tipo são perguntas
+  /// diferentes sobre tabelas diferentes (card 2.3 §4.1).
+  ///
+  /// As três regiões falham de forma independente de propósito: a de vagas
+  /// cair não pode levar embora os alunos por método, que é a regra do
+  /// design-system §7.2 para o dashboard.
+  @override
+  Future<List<AlunosMetodo>> alunosPorMetodo() async {
+    final linhas = await _cliente
+        .from('v_dashboard_alunos_metodo')
+        .select(
+          'metodo_id, metodo_codigo, ativos, acelerar, standby, trancados, '
+          'cancelados, formados, em_ultimo_livro, em_fim, sem_previsao',
+        );
+    return linhas.map(AlunosMetodo.deLinha).toList();
+  }
+
+  @override
+  Future<List<TiposBloco>> tiposPorBloco() async {
+    final linhas = await _cliente
+        .from('v_dashboard_tipos_bloco')
+        .select('metodo_id, metodo_codigo, rem, pre, rep, novo, alocacoes');
+    return linhas.map(TiposBloco.deLinha).toList();
+  }
+
+  /// Ordenado no **banco**, por ano e semestre: é o eixo do tempo, e ordenar
+  /// depois em Dart daria o mesmo resultado com uma segunda regra para manter.
+  @override
+  Future<List<ConclusaoSemestre>> conclusoesPrevistas() async {
+    final linhas = await _cliente
+        .from('v_dashboard_conclusoes_semestre')
+        .select(
+          'metodo_id, metodo_codigo, ano, semestre, qtd_alunos, qtd_vencidas',
+        )
+        .order('ano', ascending: true)
+        .order('semestre', ascending: true);
+    return linhas.map(ConclusaoSemestre.deLinha).toList();
   }
 }

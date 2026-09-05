@@ -19,6 +19,7 @@ class CardDashboard extends StatelessWidget {
     this.selecionado = false,
     this.aoTocar,
     this.largura,
+    this.alvosInternos = false,
   });
 
   final Widget filho;
@@ -33,6 +34,18 @@ class CardDashboard extends StatelessWidget {
   /// Nula = ocupa a largura que o pai der. É o que o mobile usa: dois cartões
   /// lado a lado numa tela de 430 px é o oposto de "mobile empilha" (§3).
   final double? largura;
+
+  /// Quando o cartão tem **alvos próprios dentro** — o §5.5 escreve "números
+  /// secundários com alerta também são alvos individuais", e o wireframe §5 dá
+  /// o exemplo: o "9 standby" abre a lista de alunos filtrada.
+  ///
+  /// ⚠️ Muda a semântica, e é o ponto: com `excludeSemantics: true` (o padrão,
+  /// que os cartões de vaga e de lotação usam) a leitura de tela **apaga** os
+  /// filhos e anuncia só o rótulo do cartão — os botões de dentro deixariam de
+  /// existir para quem navega por leitor de tela, sem nada em tela dizendo.
+  /// Ligado, o cartão vira um GRUPO rotulado com nós filhos explícitos: o
+  /// rótulo continua sendo lido de uma vez e cada número segue alcançável.
+  final bool alvosInternos;
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +69,9 @@ class CardDashboard extends StatelessWidget {
       button: aoTocar != null,
       selected: selecionado,
       label: semantica,
-      excludeSemantics: true,
+      container: alvosInternos,
+      explicitChildNodes: alvosInternos,
+      excludeSemantics: !alvosInternos,
       child: aoTocar == null
           ? conteudo
           : InkWell(

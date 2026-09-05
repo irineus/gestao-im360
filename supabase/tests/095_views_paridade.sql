@@ -60,7 +60,7 @@
 -- =============================================================================
 
 begin;
-select plan(90);
+select plan(97);
 
 -- ===========================================================================
 -- 1. As premissas da fixture, que são o que dá sentido aos números abaixo
@@ -369,7 +369,12 @@ select tests.unidade('ESCOLA_A'), pe.id, pm.id
  where pe.unidade_id = tests.unidade('ESCOLA_A')
    and pm.unidade_id = tests.unidade('ESCOLA_A')
    and pe.codigo = 'SEM_MATERI'
-   and pm.codigo in ('turmas.ler', 'salas.ler', 'professores.ler');
+   -- ⚠️ `alunos.ler` entrou em 06/09/2026 (card 8.7) e não afrouxa nada acima:
+   --    `v_bloco_vagas_semana` e `v_turma_modular_lotacao` não leem aluno. Ele
+   --    existe para ISOLAR a causa nas duas views de aluno do dashboard — sem
+   --    ele, elas viriam vazias por falta de `alunos.ler` e o par
+   --    vazia → inteira mediria a permissão errada.
+   and pm.codigo in ('turmas.ler', 'salas.ler', 'professores.ler', 'alunos.ler');
 
 select tests.criar_usuario('semmateriais@escola-a.test', 'SEM_MATERI');
 
@@ -390,6 +395,42 @@ select is(
                    'select 1 from public.v_turma_modular_lotacao'),
   0::bigint,
   'sem materiais.ler a lotacao Modular vem VAZIA — o join interno em curso (bloqueante 1, card 7.4)');
+
+-- CARD 8.7 — AS TRÊS ÚLTIMAS DO BLOQUEANTE Nº 1, e com elas o achado FECHA.
+-- As três `v_dashboard_*` fazem `join` interno em `metodo`, e a consequência é a
+-- mesma das duas acima: sem `materiais.ler` o dashboard abre com cara de escola
+-- sem aluno nenhum, sem erro em lugar nenhum. Antes disto o achado estava
+-- escrito em `permissoes-matriz.md` §7 desde 01/09/2026 e medido pela metade.
+--
+-- ⚠️ A contraprova do zero contra zero vem primeiro: sem ela, "vem vazia" e
+--    "volta inteira" passariam de graça numa escola sem aluno e sem alocação.
+select cmp_ok(
+  tests.conta_como(tests.uid('direcao@escola-a.test'),
+                   'select 1 from public.v_dashboard_alunos_metodo')
+  + tests.conta_como(tests.uid('direcao@escola-a.test'),
+                     'select 1 from public.v_dashboard_conclusoes_semestre')
+  + tests.conta_como(tests.uid('direcao@escola-a.test'),
+                     'select 1 from public.v_dashboard_tipos_bloco'),
+  '>', 0::bigint,
+  'a direcao VE as tres views do dashboard: sem isto os pares abaixo comparariam zero com zero');
+
+select is(
+  tests.conta_como(tests.uid('semmateriais@escola-a.test'),
+                   'select 1 from public.v_dashboard_alunos_metodo'),
+  0::bigint,
+  'sem materiais.ler os alunos por metodo vem VAZIOS — e o perfil TEM alunos.ler (card 8.7)');
+
+select is(
+  tests.conta_como(tests.uid('semmateriais@escola-a.test'),
+                   'select 1 from public.v_dashboard_conclusoes_semestre'),
+  0::bigint,
+  'idem nas conclusoes por semestre: a regiao que decide o planejamento vem vazia, nao errada');
+
+select is(
+  tests.conta_como(tests.uid('semmateriais@escola-a.test'),
+                   'select 1 from public.v_dashboard_tipos_bloco'),
+  0::bigint,
+  'idem nos tipos na turma, e aqui o perfil ate tem turmas.ler — quem esvazia e o metodo');
 
 insert into public.perfil_permissao (unidade_id, perfil_id, permissao_id)
 select tests.unidade('ESCOLA_A'), pe.id, pm.id
@@ -421,6 +462,29 @@ select cmp_ok(
                    'select 1 from public.v_turma_modular_lotacao'),
   '>', 0::bigint,
   'a direcao VE turma Modular: sem isto o par acima seria zero comparado a zero');
+
+-- E as três do card 8.7 voltam INTEIRAS pela mesma concessão: a causa é a
+-- permissão, e não outra coisa do perfil.
+select is(
+  tests.conta_como(tests.uid('semmateriais@escola-a.test'),
+                   'select 1 from public.v_dashboard_alunos_metodo'),
+  tests.conta_como(tests.uid('direcao@escola-a.test'),
+                   'select 1 from public.v_dashboard_alunos_metodo'),
+  'com materiais.ler os alunos por metodo voltam INTEIROS (bloqueante 1, card 8.7)');
+
+select is(
+  tests.conta_como(tests.uid('semmateriais@escola-a.test'),
+                   'select 1 from public.v_dashboard_conclusoes_semestre'),
+  tests.conta_como(tests.uid('direcao@escola-a.test'),
+                   'select 1 from public.v_dashboard_conclusoes_semestre'),
+  'e as conclusoes por semestre tambem');
+
+select is(
+  tests.conta_como(tests.uid('semmateriais@escola-a.test'),
+                   'select 1 from public.v_dashboard_tipos_bloco'),
+  tests.conta_como(tests.uid('direcao@escola-a.test'),
+                   'select 1 from public.v_dashboard_tipos_bloco'),
+  'e os tipos na turma tambem — com isto as CINCO views do achado nº 1 estao medidas');
 
 -- ===========================================================================
 -- 8. Bloco inativo sai da grade (e continua na tabela)

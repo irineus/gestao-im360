@@ -4,10 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/dashboard/dashboard.dart';
 import 'package:gestao_im360/dashboard/dashboard_provider.dart';
+import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/pendencias/pendencias.dart';
 import 'package:gestao_im360/pendencias/pendencias_provider.dart';
 import 'package:gestao_im360/pendencias/pendencias_repositorio.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
+import 'package:gestao_im360/alunos/alunos_provider.dart';
+import 'package:gestao_im360/telas/dashboard/cartoes_alunos.dart';
+import 'package:gestao_im360/telas/dashboard/cartoes_metodo.dart';
+import 'package:gestao_im360/telas/dashboard/conclusoes_semestre.dart';
 import 'package:gestao_im360/telas/dashboard/grade_vagas.dart';
 import 'package:gestao_im360/telas/dashboard/lotacao_modular.dart';
 import 'package:gestao_im360/telas/dashboard/pendencias_abertas.dart';
@@ -118,8 +123,16 @@ void main() {
   testWidgets('os cartões somam por método e abrem no maior', (tester) async {
     await montar(tester);
 
-    expect(find.text('INTERATIVO'), findsOneWidget);
-    expect(find.text('INGLES'), findsOneWidget);
+    // ⚠️ Restrito à região das VAGAS: desde o card 8.7 os cartões de aluno
+    // ficam acima e também trazem o código do método — contar a tela inteira
+    // mediria as duas fileiras de uma vez.
+    Finder naRegiaoDeVagas(String texto) => find.descendant(
+      of: find.byType(CartoesMetodo),
+      matching: find.text(texto),
+    );
+
+    expect(naRegiaoDeVagas('INTERATIVO'), findsOneWidget);
+    expect(naRegiaoDeVagas('INGLES'), findsOneWidget);
     // Interativo: 4 turmas, 30 alocados em 40 lugares, 11 vagas livres — e
     // 40 − 30 = 10, que é o número errado (card 5.2 não devolve vaga negativa).
     expect(
@@ -134,6 +147,13 @@ void main() {
     await montar(tester);
     expect(find.text('1/10'), findsOneWidget);
 
+    // ⚠️ `ensureVisible` desde o card 8.7: as duas regiões novas empurraram os
+    // cartões de vaga para baixo da dobra, e `tap` num alvo fora da vista
+    // reprova (ou, pior, acerta outra coisa).
+    await tester.ensureVisible(
+      find.text('4 de 6 ocupados · 1 bloco de horário'),
+    );
+    await carregar(tester);
     await tester.tap(find.text('4 de 6 ocupados · 1 bloco de horário'));
     await carregar(tester);
 
@@ -188,13 +208,6 @@ void main() {
     expect(find.text('Ir para Turmas'), findsNothing);
   });
 
-  testWidgets('a tela diz qual card entrega o resto do dashboard', (
-    tester,
-  ) async {
-    await montar(tester);
-    expect(find.text(textoRestanteDoDashboard), findsOneWidget);
-  });
-
   testWidgets('as pendências abertas saem por severidade, com o zero real', (
     tester,
   ) async {
@@ -203,7 +216,16 @@ void main() {
     await montar(tester);
     expect(find.text('Pendências abertas'), findsOneWidget);
     expect(find.text('ALTA'), findsOneWidget);
-    expect(find.text('3'), findsOneWidget);
+    // ⚠️ Restrito à região desde o card 8.7: o cartão do semestre 2026/2 também
+    // mostra um `3` (dois alunos de Interativo mais um de Inglês), e contar a
+    // tela inteira passaria a medir os dois números de uma vez.
+    expect(
+      find.descendant(
+        of: find.byType(PendenciasAbertas),
+        matching: find.text('3'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('MÉDIA'), findsOneWidget);
     expect(find.text('BAIXA'), findsOneWidget);
 
@@ -238,10 +260,17 @@ void main() {
     expect(find.text(vazioDashboard), findsOneWidget);
     expect(find.text('Pendências abertas'), findsOneWidget);
     expect(
-      find.text('3'),
+      find.descendant(
+        of: find.byType(PendenciasAbertas),
+        matching: find.text('3'),
+      ),
       findsOneWidget,
       reason: 'as três ALTA continuam ali',
     );
+    // E as duas regiões do card 8.7 também: elas têm leitura própria e não
+    // dependem de bloco de horário nenhum.
+    expect(find.text(tituloAlunosPorMetodo), findsOneWidget);
+    expect(find.text(tituloConclusoes), findsOneWidget);
   });
 
   // A forma do mobile passou a ser a MESMA da tela de Turmas — abas Seg–Sáb,
@@ -314,6 +343,8 @@ void main() {
     );
     await carregar(tester);
 
+    await tester.ensureVisible(find.text('1/10'));
+    await carregar(tester);
     await tester.tap(find.text('1/10'));
     await carregar(tester);
 
@@ -332,15 +363,17 @@ void main() {
     await montar(tester, repositorio: DashboardFalso.queFalha());
 
     // A regra do design-system §7.2 para o dashboard é "região nunca some", e
-    // ela vale também quando a região FALHA: as pendências e o rodapé não
-    // dependem da consulta de vagas.
+    // ela vale também quando a região FALHA: as pendências e as duas regiões do
+    // card 8.7 não dependem da consulta de vagas.
     expect(find.text('Pendências abertas'), findsOneWidget);
-    expect(find.text(textoRestanteDoDashboard), findsOneWidget);
+    expect(find.text(tituloAlunosPorMetodo), findsOneWidget);
+    expect(find.text(tituloConclusoes), findsOneWidget);
+    expect(
+      find.text('19'),
+      findsOneWidget,
+      reason: 'os alunos ativos do Interativo continuam contados',
+    );
     expect(find.text('Tentar de novo'), findsOneWidget);
-
-    // E nada de contagem inventada: "0 blocos ativos" seria número errado com
-    // cara de certo.
-    expect(find.textContaining('blocos de horário ativos'), findsNothing);
   });
 
   testWidgets('o EstadoErro é ESTÁVEL — não pisca entre erro e esqueleto', (
@@ -394,6 +427,8 @@ void main() {
     // O número é botão: tocá-lo abre a central filtrada por aquela severidade
     // (wireframes §5 e §3.3). Antes ele dizia quantas são e mandava
     // procurá-las de novo.
+    await tester.ensureVisible(find.text('ALTA'));
+    await carregar(tester);
     await tester.tap(find.text('ALTA'));
     await carregar(tester);
     expect(container.read(filtroPendenciasProvider).severidade, 'ALTA');
@@ -537,6 +572,8 @@ void main() {
     // O cartão é de um CURSO, então o destino é a tela 5 filtrada por ele — e
     // não uma turma eleita em silêncio entre as três (divergência com o §5,
     // registrada em wireframes §17).
+    await tester.ensureVisible(find.text('1 de 45 ocupados · 3 turmas'));
+    await carregar(tester);
     await tester.tap(find.text('1 de 45 ocupados · 3 turmas'));
     await carregar(tester);
     expect(container.read(filtroTurmasModularProvider).cursoId, 'c-ele');
@@ -560,17 +597,210 @@ void main() {
     semantica.dispose();
   });
 
-  testWidgets('o rodapé conta BLOCOS DE HORÁRIO — o mesmo nome do cartão', (
+  // -------------------------------------------------------------------------
+  // Card 8.7 — alunos por método, tipos na turma e conclusões por semestre
+  // -------------------------------------------------------------------------
+
+  testWidgets('o cartão do método mostra o ÚLTIMO LIVRO, não o "em fim"', (
     tester,
   ) async {
     await montar(tester);
+
+    // ⚠️ É a distinção do card 2.3 §8.1, e é onde esta tela erraria sem dar
+    // erro: `em_ultimo_livro` é UM item pendente (o aluno está recebendo a
+    // última apostila e ainda tem aula) e `em_fim` é NENHUM — que vale também
+    // para quem nunca teve trilha. Na fixture o Interativo tem 0 no primeiro e
+    // 1 no segundo, então trocar as colunas produziria um número plausível e
+    // errado.
+    expect(find.text(tituloAlunosPorMetodo), findsOneWidget);
     expect(
-      find.textContaining('blocos de horário ativos nesta semana.'),
-      findsOneWidget,
-      reason:
-          'o cartão dizia "4 turmas" e o rodapé "4 blocos ativos" — o '
-          'mesmo objeto com dois nomes na mesma tela',
+      find.descendant(
+        of: find.byType(CartoesAlunos),
+        matching: find.text('0 no último livro'),
+      ),
+      findsNWidgets(2),
+      reason: 'Interativo e Modular; o Inglês é quem tem alguém lá',
     );
+    expect(
+      find.textContaining('em fim'),
+      findsNothing,
+      reason: 'em_fim não é número de cartão — a fila de formandos é a tela 9',
+    );
+    // O Inglês é quem tem alguém no último livro.
+    expect(find.text('1 no último livro'), findsOneWidget);
+  });
+
+  testWidgets('os tipos na turma dizem que contam ALOCAÇÕES', (tester) async {
+    await montar(tester);
+
+    // 15 + 2 + 1 + 1 = 19 alocações ativas, e o Interativo tem 19 ATIVOS: sem a
+    // legenda os dois números parecem a mesma coisa por coincidência da
+    // fixture, e na escola real a soma passa dos alunos porque quem acelera
+    // ocupa dois horários.
+    expect(find.text('REM 15 · PRE 2 · REP 1 · NOVO 1'), findsOneWidget);
+    expect(find.text(legendaAlocacoes), findsOneWidget);
+  });
+
+  testWidgets('sem alocação no método, a linha de tipos SOME em vez de zerar', (
+    tester,
+  ) async {
+    await montar(tester);
+
+    // A fixture só tem bloco de horário no Interativo. Uma junção posicional
+    // entre as duas views poria "REM 15" no cartão do Inglês — números
+    // plausíveis dos dois lados, e ninguém repararia.
+    expect(
+      find.text('REM 0 · PRE 0 · REP 0 · NOVO 0'),
+      findsNothing,
+      reason: 'zero que ninguém mediu é pior que linha ausente',
+    );
+    expect(find.textContaining('REM '), findsOneWidget);
+  });
+
+  testWidgets('as conclusões somam o semestre e mostram as VENCIDAS', (
+    tester,
+  ) async {
+    await montar(tester);
+
+    expect(find.text(tituloConclusoes), findsOneWidget);
+    expect(find.text('2026/2'), findsOneWidget);
+    expect(find.text('2027/1'), findsOneWidget);
+    // Previsão no passado fica no semestre dela e é DITA (wireframes §5) —
+    // escondê-la é o que faria a conferência contra a planilha não fechar.
+    expect(find.text('1 vencida'), findsOneWidget);
+    // A quebra por método é o que cumpre o "(por método)" do título.
+    expect(find.text('INTERATIVO 2 · INGLES 1'), findsOneWidget);
+  });
+
+  testWidgets('o "sem previsão" fecha a conta com o total de ativos', (
+    tester,
+  ) async {
+    await montar(tester);
+
+    // 16 + 0 + 2 = 18 alunos em curso sem data informada. Sem esta linha a soma
+    // dos semestres (4) não bate com os 22 em curso, e ninguém sabe se faltou
+    // aluno ou faltou data (docs/views-leitura.md §8.1).
+    expect(find.text(textoSemPrevisao(18)), findsOneWidget);
+    expect(find.text('16 sem previsão de conclusão'), findsOneWidget);
+  });
+
+  testWidgets('falha ao ler os alunos NÃO vira zero, e não leva as vizinhas', (
+    tester,
+  ) async {
+    final repositorio = DashboardFalso()
+      ..erroAlunos = const ErroApp(mensagem: 'sem rede', traduzido: true);
+    await montar(tester, repositorio: repositorio);
+
+    expect(find.text(erroAlunosPorMetodo), findsOneWidget);
+    expect(
+      find.text('19'),
+      findsNothing,
+      reason: 'nenhum número inventado no lugar do que não deu para ler',
+    );
+    // ⚠️ E a linha do "sem previsão" some junto: `0 sem previsão` diria que
+    // está tudo preenchido — o defeito B1 do card 5.11 numa região nova.
+    expect(find.textContaining('sem previsão de conclusão'), findsNothing);
+    // As vizinhas continuam inteiras.
+    expect(find.text('Pendências abertas'), findsOneWidget);
+    expect(find.text('2026/2'), findsOneWidget);
+  });
+
+  testWidgets('sem aluno nenhum as duas regiões DIZEM por que não há número', (
+    tester,
+  ) async {
+    await montar(tester, repositorio: DashboardFalso.semAlunos());
+
+    expect(find.text(vazioAlunosPorMetodo), findsOneWidget);
+    expect(find.text(vazioConclusoes), findsOneWidget);
+    expect(
+      find.text(tituloAlunosPorMetodo),
+      findsOneWidget,
+      reason: 'a região não some: espaço em branco no dashboard parece defeito',
+    );
+    // Com zero alunos a conta fecha do outro lado, e a frase muda.
+    expect(find.text(textoSemPrevisao(0)), findsOneWidget);
+  });
+
+  testWidgets('o "standby" é atalho para Alunos JÁ filtrado', (tester) async {
+    final container = ProviderContainer(
+      retry: semRetryAutomatico,
+      overrides: [
+        dashboardRepositorioProvider.overrideWithValue(DashboardFalso()),
+        pendenciasRepositorioProvider.overrideWithValue(
+          PendenciasFalso.fixture(),
+        ),
+        modularRepositorioProvider.overrideWithValue(ModularFalso.fixture()),
+        permissoesProvider.overrideWithValue(comTurmas),
+        unidadeAtualProvider.overrideWithValue('unidade-teste'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: appDeTeste(
+          construtor: (filho) => filho,
+          conteudo: const Scaffold(body: TelaDashboard()),
+        ),
+      ),
+    );
+    await carregar(tester);
+
+    // Wireframes §5, com todas as letras: «o "9 standby" abre Alunos filtrado».
+    // O do Inglês é o único diferente de zero.
+    await tester.tap(find.text('1 em standby'));
+    await carregar(tester);
+
+    final filtro = container.read(filtroAlunosProvider);
+    expect(filtro.status, 'STANDBY');
+    expect(filtro.metodoId, 'm-ing');
+    expect(
+      filtro.ocultarEncerrados,
+      isFalse,
+      reason:
+          'o atalho tem de mostrar exatamente os alunos que o número contou, e '
+          'a lista abre ocultando os encerrados por padrão',
+    );
+  });
+
+  testWidgets('o cartão do método anuncia o que cada número significa', (
+    tester,
+  ) async {
+    final semantica = tester.ensureSemantics();
+    await montar(tester);
+
+    // ⚠️ O cartão está em `alvosInternos`, e é aqui que isso se mede: com o
+    // `excludeSemantics` padrão a leitura de tela apagaria os filhos e os
+    // atalhos de dentro deixariam de existir para quem navega assim.
+    expect(
+      find.bySemanticsLabel(RegExp('^INTERATIVO, 19 ativos, ')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('1 em standby, abrir a lista'),
+      findsOneWidget,
+    );
+    semantica.dispose();
+  });
+
+  testWidgets('o cartão do semestre anuncia o que cada número significa', (
+    tester,
+  ) async {
+    final semantica = tester.ensureSemantics();
+    await montar(tester);
+
+    expect(
+      find.bySemanticsLabel(
+        '2026/2, 3 alunos, 1 vencida — previsão no passado, '
+        'INTERATIVO 2 · INGLES 1',
+      ),
+      findsOneWidget,
+    );
+    semantica.dispose();
   });
 
   // ---------------------------------------------------------------------------
