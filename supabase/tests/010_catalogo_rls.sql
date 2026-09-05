@@ -176,7 +176,19 @@ create temporary view p_esperada (tabela, cmd) as values
   -- PRECISAMENTE porque não há política que ela precisa ser definer.
   -- O `update` aceita o `or` de TRÊS permissões, e esta asserção não vê essa
   -- diferença: quem a vê é o C11 abaixo e a guarda de coluna, medida no 081 §4.
-  ('certificado_checklist','r'), ('certificado_checklist','a'), ('certificado_checklist','w');
+  ('certificado_checklist','r'), ('certificado_checklist','a'), ('certificado_checklist','w'),
+  -- card 9.1 — importação. As três estão fora do padrão de quatro, e as
+  -- ausências são a decisão: nenhuma tem DELETE (relatório da migração e mapa de
+  -- chave externa são a explicação de como a escola entrou no sistema — apagar
+  -- um deles apaga a explicação, e apagar o mapa faz a importação SEGUINTE
+  -- duplicar movimento, que é imutável), e só `importacao` tem UPDATE, porque só
+  -- ela muda depois de nascer (status, totais e os dois carimbos, escritos pelas
+  -- próprias funções). As seis usam o MESMO guarda, fn_importacao_pode() — o
+  -- conjunto exato da rota 13 —, e é por isso que a tela é da direção e só dela:
+  -- `admin.ler` está dentro do conjunto.
+  ('importacao','r'),            ('importacao','a'),            ('importacao','w'),
+  ('importacao_ocorrencia','r'), ('importacao_ocorrencia','a'),
+  ('importacao_referencia','r'), ('importacao_referencia','a');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text

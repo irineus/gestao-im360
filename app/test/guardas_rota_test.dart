@@ -37,12 +37,44 @@ const _esperado = <String, Set<String>>{
   'salas': {'salas.ler', 'professores.ler'},
   'pendencias': {'pendencias.ler'},
   'administracao': {'admin.ler'},
-  'importacao': {'admin.ler'},
+  // ⚠️ Quinze desde o card 9.1 (06/09/2026): é o "admin.ler + os domínios do
+  // que se importa" que o card 2.4 §7 item 4 deixou em aberto em 01/09/2026, e
+  // o card 9.1 é quem sabe o que o arquivo traz. Os quatorze de escrita estão
+  // aqui porque as funções da importação são `invoker` — quem importa escreve
+  // sob a própria RLS, e a política de cada tabela cobra o código dela; e
+  // `admin.ler` está aqui porque é ele, e só ele, que faz a tela ser da
+  // direção: os quatorze de escrita a secretaria também tem (§5).
+  'importacao': {
+    'admin.ler',
+    'materiais.criar',
+    'materiais.editar',
+    'alunos.criar',
+    'alunos.editar',
+    'alunos.editar_trilha',
+    'salas.criar',
+    'salas.editar',
+    'salas.registrar_manutencao',
+    'professores.criar',
+    'turmas.criar',
+    'turmas.alocar',
+    'estoque.lancar_saida',
+    'estoque.ajustar',
+    'compras.receber',
+  },
 };
 
-/// A matriz inicial do card 2.4 §5, reduzida às permissões de leitura que
-/// guardam rota. Serve para a asserção que interessa ao usuário: **cada perfil
-/// abre exatamente as telas que o card 2.4 §6 diz que abre.**
+/// A matriz inicial do card 2.4 §5, reduzida ao que guarda rota. Serve para a
+/// asserção que interessa ao usuário: **cada perfil abre exatamente as telas
+/// que o card 2.4 §6 diz que abre.**
+///
+/// ⚠️ Até o card 9.1 esta tabela tinha só as permissões de LEITURA, porque só
+/// elas guardavam rota. A rota 13 trouxe quatorze de escrita, e com elas a
+/// tabela ficou obrigada a distinguir os perfis também por escrita — do
+/// contrário a asserção "só a direção abre Importação" passaria por um motivo
+/// falso (a secretaria não abriria por falta de `materiais.criar`, que ela
+/// tem). Os quatorze estão aqui exatamente como o §5 os distribui, e é isso que
+/// faz a asserção medir o que ela diz medir: a secretaria tem os quatorze e
+/// **mesmo assim** não abre, por causa de `admin.ler`.
 const _matrizPerfis = <String, Set<String>>{
   'direcao': {
     'unidades.ler',
@@ -56,6 +88,20 @@ const _matrizPerfis = <String, Set<String>>{
     'certificados.ler',
     'pendencias.ler',
     'admin.ler',
+    'materiais.criar',
+    'materiais.editar',
+    'alunos.criar',
+    'alunos.editar',
+    'alunos.editar_trilha',
+    'salas.criar',
+    'salas.editar',
+    'salas.registrar_manutencao',
+    'professores.criar',
+    'turmas.criar',
+    'turmas.alocar',
+    'estoque.lancar_saida',
+    'estoque.ajustar',
+    'compras.receber',
   },
   'secretaria': {
     'unidades.ler',
@@ -68,6 +114,21 @@ const _matrizPerfis = <String, Set<String>>{
     'compras.ler',
     'certificados.ler',
     'pendencias.ler',
+    // Os quatorze de escrita da rota 13, todos — e nenhum `admin.ler`.
+    'materiais.criar',
+    'materiais.editar',
+    'alunos.criar',
+    'alunos.editar',
+    'alunos.editar_trilha',
+    'salas.criar',
+    'salas.editar',
+    'salas.registrar_manutencao',
+    'professores.criar',
+    'turmas.criar',
+    'turmas.alocar',
+    'estoque.lancar_saida',
+    'estoque.ajustar',
+    'compras.receber',
   },
   'pedagogico': {
     'unidades.ler',
@@ -79,6 +140,12 @@ const _matrizPerfis = <String, Set<String>>{
     'estoque.ler',
     'certificados.ler',
     'pendencias.ler',
+    'alunos.criar',
+    'alunos.editar',
+    'alunos.editar_trilha',
+    'professores.criar',
+    'turmas.criar',
+    'turmas.alocar',
   },
   'monitor': {
     'unidades.ler',
@@ -90,6 +157,8 @@ const _matrizPerfis = <String, Set<String>>{
     'estoque.ler',
     'certificados.ler',
     'pendencias.ler',
+    'salas.registrar_manutencao',
+    'estoque.lancar_saida',
   },
 };
 

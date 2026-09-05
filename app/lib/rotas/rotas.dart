@@ -185,16 +185,38 @@ const rotasAplicacao = <Rota>[
     grupo: GrupoMenu.administracao,
     exige: {'admin.ler'},
   ),
-  // Tela 13 — "admin.ler + os domínios do que se importa". Os domínios entram
-  // no card 9.1, quando existir o que importar; guardar hoje pelo que já se
-  // sabe é melhor do que guardar por nada.
+  // Tela 13 — "admin.ler + os domínios do que se importa" (card 2.4 §7, item
+  // 4). ⚠️ O conjunto exato entrou no card 9.1 e é **cópia literal** de
+  // `fn_importacao_conjunto()`, que as políticas das três tabelas de importação
+  // e o guarda das duas funções também leem: uma segunda lista aqui divergiria
+  // para o lado silencioso — a tela abriria e a aplicação morreria no meio.
+  //
+  // `admin.ler` é o que faz esta tela ser da DIREÇÃO: os quatorze códigos de
+  // escrita a secretaria também tem (permissoes-matriz.md §5), e sem ele a tela
+  // que carrega a escola inteira abriria para ela.
   Rota(
     id: 'importacao',
     caminho: '/importacao',
     titulo: 'Importação',
     icone: Icons.upload_file_outlined,
     grupo: GrupoMenu.administracao,
-    exige: {'admin.ler'},
+    exige: {
+      'admin.ler',
+      'materiais.criar',
+      'materiais.editar',
+      'alunos.criar',
+      'alunos.editar',
+      'alunos.editar_trilha',
+      'salas.criar',
+      'salas.editar',
+      'salas.registrar_manutencao',
+      'professores.criar',
+      'turmas.criar',
+      'turmas.alocar',
+      'estoque.lancar_saida',
+      'estoque.ajustar',
+      'compras.receber',
+    },
   ),
 ];
 

@@ -824,6 +824,7 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | `demanda_projetada`, `v_demanda_projetada` | 8.1 | 8 |
 | `v_pedido_sugerido` — troca do literal `0` pela parcela projetada | 8.2 | 8 |
 | `v_projecao_material_mes`, `v_projecao_aluno_detalhe` e a coluna `v_projecao_aluno.ritmo_dias` | **8.5** ✅ — `20260906010000_views_projecao_tela.sql`, as duas views sem uma linha de dado; ver §12.1 | 8 |
+| `v_importacao`, `v_importacao_ocorrencia` | **9.1** ✅ — `20260906120000_importacao.sql`, as duas sem uma linha de dado, sobre três tabelas que o DDL do card 2.1 não previa (`docs/importacao.md` §2.4); ver §12.1. Teste em `100_importacao`, 33 asserções | 9 |
 | `v_dashboard_alunos_metodo`, `v_dashboard_conclusoes_semestre`, `v_dashboard_tipos_bloco` | **8.7** ✅ — `20260906070000_views_dashboard.sql`, as três **sem uma linha de dado** e cópia palavra por palavra do §8. ⚠️ A coluna "o 5.9 já cria as de vaga" desta linha sempre esteve errada e o §8 já registrava a correção em 04/09/2026: as de vaga nasceram no **5.6**, com a grade; o 5.9 foi consumidor. Teste em `084_dashboard_views`, 23 asserções, mais 7 no `095` | 8 |
 
 ### 12.1 Views de tela, que pertencem aos seus próprios cards
@@ -831,8 +832,17 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6) ✅,
 `v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7) ✅, `v_pedido_compra` e `v_pedido_item`
 (6.8) ✅, `v_turma_modular_cronograma` e `v_turma_modular_aluno` (7.3) ✅,
-`v_projecao_material_mes` e `v_projecao_aluno_detalhe` (8.5) ✅, `v_certificado_fila` (8.6) ✅.
+`v_projecao_material_mes` e `v_projecao_aluno_detalhe` (8.5) ✅, `v_certificado_fila` (8.6) ✅,
+`v_importacao` e `v_importacao_ocorrencia` (9.1) ✅.
 São views de listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+
+⚠️ **As duas do card 9.1 (06/09/2026)** leem tabelas que o DDL do card 2.1 não previa
+(`importacao`, `importacao_ocorrencia`; ver `docs/importacao.md` §2.4). Duas decisões de contrato:
+`v_importacao` **não devolve a coluna `dados`** — o arquivo inteiro numa lista de lotes seriam
+megabytes por linha, e quem precisa dele lê a tabela —, e o `left join` em `usuario` é `left` porque
+lote não aplicado não tem autor: nulo ali é "ainda não foi aplicado", não falta de dado. A ordem
+final das ocorrências é da tela (ERRO primeiro); a da view existe só para o relatório não chegar
+embaralhado de leitura para leitura.
 
 ⚠️ **`v_certificado_fila` nasceu em 06/09/2026** (`20260906040000_view_certificado_fila.sql`), e três
 decisões merecem registro:

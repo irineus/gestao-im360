@@ -238,6 +238,18 @@ abstract final class CatalogoErros {
         'Situação de certificado inválida. As situações são não pedido, '
         'pedido e entregue.',
 
+    // --- card 9.1 (importação)
+    'IMPORTACAO_INEXISTENTE': 'Esta importação não foi encontrada.',
+    'ARQUIVO_INVALIDO':
+        'O arquivo enviado não tem o formato esperado. Ele é gerado pelo '
+        'script de extração da planilha.',
+    'IMPORTACAO_REPROVADA':
+        'Esta importação tem erros que precisam ser corrigidos no arquivo '
+        'antes de aplicar.',
+    'IMPORTACAO_JA_APLICADA':
+        'Esta importação já foi aplicada. Para reexecutar o snapshot, envie o '
+        'arquivo de novo.',
+
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':
         'Não deu para saber em que unidade cadastrar esta pessoa. Informe a '

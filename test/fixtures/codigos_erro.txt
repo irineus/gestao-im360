@@ -133,3 +133,17 @@ CERTIFICADO_INEXISTENTE
 # o 23514 cru do check da coluna — o que o card 2.2 §1.2 proibe.
 ITEM_CERTIFICADO_INVALIDO
 STATUS_CERTIFICADO_INVALIDO
+# 4 do card 9.1 (importacao).
+# IMPORTACAO_INEXISTENTE e da familia de PC_INEXISTENTE / CERTIFICADO_INEXISTENTE:
+# lote de OUTRA unidade e indistinguivel de inexistente, porque a leitura e
+# invoker.
+IMPORTACAO_INEXISTENTE
+# O arquivo que nao da para mandar ao banco: raiz que nao e objeto, ou objeto
+# sem nenhuma entidade conhecida. O segundo caso e o que impede a importacao de
+# responder "0 linhas aplicadas, tudo certo" quando o extrator renomeia uma aba.
+ARQUIVO_INVALIDO
+# Aplicar lote que tem ocorrencia de ERRO. Nao e o mesmo que reexecutar o
+# snapshot, que e obrigatorio e se faz enviando o arquivo de novo — dai o
+# segundo codigo, que fala do LOTE e nao do arquivo.
+IMPORTACAO_REPROVADA
+IMPORTACAO_JA_APLICADA
