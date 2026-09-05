@@ -1009,8 +1009,8 @@ corrida com a interface.
 | Tipo | `chave_dedup` | Severidade | Aberta por | Fechada por |
 |---|---|---|---|---|
 | `ALUNO_SEM_TURMA` | `ALUNO_SEM_TURMA:<aluno_id>` | ALTA | `rt_pendencias_diaria` | alocação em bloco/turma, ou saída de ATIVO/ACELERAR |
-| `STANDBY_PROLONGADO` | `STANDBY:<aluno_id>` | MEDIA | `rt_pendencias_diaria` (`status_desde` + `standby_alerta_dias`) | mudança de status |
-| `PREVISAO_VENCIDA` | `PREVISAO:<aluno_id>` | MEDIA | `rt_pendencias_diaria` | nova `prev_conclusao_curso` ou formatura |
+| `STANDBY_PROLONGADO` | `STANDBY:<aluno_id>` | MEDIA | `rt_pendencias_diaria` (`status_desde` + `standby_alerta_dias`) ✅ **8.4** | mudança de status |
+| `PREVISAO_VENCIDA` | `PREVISAO:<aluno_id>` | MEDIA | `rt_pendencias_diaria` ✅ **8.4** | nova `prev_conclusao_curso` ou formatura |
 | `ACELERAR_SEM_2O_BLOCO` | `ACELERAR:<aluno_id>` | **BAIXA** (INFO não existe no `check` do DDL — card 2.3 §10 #4, corrigido no 5.5) | `rt_pendencias_diaria` | 2º bloco ativo, ou volta a ATIVO |
 | `BLOCO_ACIMA_CAPACIDADE` | `CAPACIDADE:<bloco_id>` | ALTA | `fn_revalidar_blocos_sala` | a própria função, quando normaliza |
 | `COMPRA_SEM_ESTOQUE` | `COMPRA_SEM_ESTOQUE:<aluno_id>` | ALTA | `fn_registrar_entrega` (trilha sem estoque nenhum) | `tg_movimento_resolve_pendencia` |
@@ -1018,7 +1018,7 @@ corrida com a interface.
 | `PC_SEM_SUBSTITUTO` | `PC_SEM_SUBST:<pc_id>` | MEDIA | `fn_revalidar_blocos_sala` | fim da manutenção, ou substituto informado |
 | **novos — ver §14** | | | | |
 | `ESTOQUE_ZERO` | `ESTOQUE_ZERO:<material_id>` | MEDIA | `fn_registrar_entrega` (item pulado) | `tg_movimento_resolve_pendencia` |
-| `ESTOQUE_ABAIXO_MINIMO` | `MINIMO:<material_id>` | BAIXA | `rt_pendencias_diaria` | saldo ≥ mínimo |
+| `ESTOQUE_ABAIXO_MINIMO` | `MINIMO:<material_id>` | BAIXA | `rt_pendencias_diaria` ⚠️ **sem dono — card 8.4,5** | saldo ≥ mínimo |
 | `SUGERIR_FORMADO` | `FORMADO:<aluno_id>` | BAIXA | `tg_certificado_sugere_formado` | aluno vira FORMADO |
 | `TRILHA_DIVERGENTE_COMBO` | `TRILHA_COMBO:<aluno_id>` | MEDIA | `tg_aluno_combo_alterado` | resolução manual |
 | `CERTIFICADO_INCONSISTENTE` | `CERT_INCONS:<aluno_id>` | MEDIA | `fn_estornar_entrega` | resolução manual |
@@ -1032,6 +1032,20 @@ DDL escolheu, e que esta especificação adota: **`COMPRA_SEM_ESTOQUE`** (não "
 `fn_revalidar_blocos_sala`: um PC em manutenção sem substituto é a causa da queda de capacidade, e
 merece pendência própria além da do bloco. Os sete seguintes exigem `alter table` no `check` —
 consolidados em §14.
+
+> **Card 8.4 (05/09/2026) — `STANDBY_PROLONGADO` e `PREVISAO_VENCIDA` passaram a ter quem os abra**
+> (`20260905233000_alertas_aluno.sql`). Os dois já estavam no `check` desde o card 5.5, já eram
+> traduzidos pelo app e já tinham ação e aba de destino desde o 5.8: faltava só o produtor, e sem
+> produtor tudo aquilo era decoração testada. São **pendências de tempo** — o que muda não é uma
+> escrita, é o calendário —, e por isso moram na rotina e não num trigger. O limiar do STANDBY sai de
+> `standby_alerta_dias` por `fn_param_int`, sem default, e a borda é **`>`** ("há mais de N dias"):
+> no N-ésimo dia o prazo ainda está correndo. `PREVISAO_VENCIDA` só olha ATIVO/ACELERAR, e é essa
+> metade do `where` que faz a formatura fechá-la sozinha na execução seguinte.
+>
+> ⚠️ **Divergência registrada:** `ESTOQUE_ABAIXO_MINIMO` também tem `rt_pendencias_diaria` como dono
+> nesta tabela e **continua sem ser aberto por ninguém**. Ele não entrou no 8.4 porque a nota do card
+> nomeia dois tipos, os dois de aluno, e o de estoque é do domínio de compras — escrevê-lo de carona
+> seria escopo que ninguém pediu. Virou o card **8.4,5** do board.
 
 ---
 

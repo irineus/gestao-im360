@@ -36,11 +36,14 @@
 -- =============================================================================
 
 begin;
--- Continua 49 depois do card 7.1 (05/09/2026), por coincidência aritmética que
--- vale explicar: o portão condicional do §13 perdeu uma asserção (três viraram
--- duas, porque a tabela que ele esperava passou a existir) e o §2 ganhou uma, a
--- que fixa por que Eduarda Lima saiu da lista de ALUNO_SEM_TURMA.
-select plan(49);
+-- 49 → 60 no card 8.4 (05/09/2026): as §15 e §16, dos dois alertas de TEMPO do
+-- aluno que `rt_pendencias_diaria` passou a abrir.
+--
+-- Era 49 desde o card 7.1, por coincidência aritmética que vale explicar: o
+-- portão condicional do §13 perdeu uma asserção (três viraram duas, porque a
+-- tabela que ele esperava passou a existir) e o §2 ganhou uma, a que fixa por
+-- que Eduarda Lima saiu da lista de ALUNO_SEM_TURMA.
+select plan(60);
 
 -- ===========================================================================
 -- 1. As premissas da fixture, que dão sentido a todos os números de baixo
@@ -83,8 +86,15 @@ select is(
   'e nenhuma pendencia de aluno ou de bloco: essas nascem das rotinas, mais abaixo');
 
 -- ===========================================================================
--- 2. rt_pendencias_diaria abre os três tipos desta fase
+-- 2. rt_pendencias_diaria abre os tipos de TEMPO do catálogo §10.1
 -- ===========================================================================
+-- ⚠️ MUDOU NO CARD 8.4 (05/09/2026), e esta asserção é o portão que obrigou:
+--    ela lista TUDO o que a rotina abriu, sem filtrar por tipo, então acrescentar
+--    um tipo à rotina sem passar por aqui é impossível. Entraram
+--    PREVISAO_VENCIDA (Diego, previsão 15 dias no passado) e STANDBY_PROLONGADO
+--    (Gabriela, em STANDBY há 45 dias, acima dos 30 do parâmetro) — as duas
+--    marcas que a fixture do card 4.2 já carregava e que ninguém lia. O detalhe
+--    de cada uma, com contraprova, está nas §15 e §16.
 select public.rt_pendencias_diaria();
 
 select is(
@@ -93,8 +103,8 @@ select is(
      from public.pendencia p
      join public.aluno a on a.id = p.aluno_id
     where p.unidade_id = tests.unidade('ESCOLA_A') and p.resolvida_em is null),
-  'ACELERAR_SEM_2O_BLOCO:BAIXA:Felipe Nunes | ALUNO_SEM_TURMA:ALTA:Aluno Modular 01 | ALUNO_SEM_TURMA:ALTA:Felipe Nunes',
-  'abre ALUNO_SEM_TURMA (ALTA) para quem nao tem turma nenhuma e ACELERAR_SEM_2O_BLOCO (BAIXA) para o de ACELERAR');
+  'ACELERAR_SEM_2O_BLOCO:BAIXA:Felipe Nunes | ALUNO_SEM_TURMA:ALTA:Aluno Modular 01 | ALUNO_SEM_TURMA:ALTA:Felipe Nunes | PREVISAO_VENCIDA:MEDIA:Diego Alves | STANDBY_PROLONGADO:MEDIA:Gabriela Souza',
+  'abre os QUATRO tipos de tempo: sem turma (ALTA), aceleracao sem 2o bloco (BAIXA), previsao vencida e STANDBY prolongado (MEDIA)');
 
 -- ⚠️ EDUARDA LIMA SAIU DESTA LISTA EM 05/09/2026, e não é regressão: é o portão
 --    do card 5.5 sendo cobrado. Até o card 7.1 ela era MODULAR sem `bloco_aluno`
@@ -152,13 +162,14 @@ select public.rt_pendencias_diaria();
 -- `aluno_id is not null` desde o card 5.4: a PC_SEM_SUBSTITUTO da seção 1 é da
 -- fixture e não tem nada a ver com a idempotência que se está medindo aqui.
 -- Três linhas desde o card 7.4,5 e não duas: o `Aluno Modular 01` da camada
--- `modular` traz uma ALUNO_SEM_TURMA própria. O que se mede continua sendo o
--- mesmo — o número não muda com a terceira execução da rotina.
+-- `modular` traz uma ALUNO_SEM_TURMA própria. CINCO desde o card 8.4, com os
+-- dois alertas de tempo. O que se mede continua sendo o mesmo — o número não
+-- muda com a terceira execução da rotina.
 select is(
   (select count(*)::bigint from public.pendencia
     where unidade_id = tests.unidade('ESCOLA_A') and aluno_id is not null),
-  3::bigint,
-  'tres execucoes, tres linhas: o indice parcial pendencia_aberta_uk faz a deduplicacao');
+  5::bigint,
+  'tres execucoes, cinco linhas: o indice parcial pendencia_aberta_uk faz a deduplicacao');
 
 -- ===========================================================================
 -- 4. A condição aparece e some — e o fechamento é POR CHAVE
@@ -756,6 +767,202 @@ select is(
                    'select 1 from public.v_pendencias_abertas v join public.pendencia p on p.id = v.pendencia_id where p.resolvida_em is not null'),
   0::bigint,
   'v_pendencias_abertas nao mostra pendencia fechada, e a tabela continua guardando o historico');
+
+-- ===========================================================================
+-- 15. STANDBY_PROLONGADO — card 8.4, e a borda que só o parâmetro revela
+-- ===========================================================================
+-- Estas duas seções ficam no FIM do arquivo de propósito, e não ao lado da §2
+-- onde a leitura pediria: as seções são numeradas pela história do arquivo, e
+-- outros documentos e migrações citam "teste 090 §13", "§2" e "§14" pelo número.
+-- Renumerar por estética quebraria referência escrita em cinco lugares.
+--
+-- O que a §2 prova é que os dois tipos ENTRARAM na rotina. O que se prova aqui é
+-- que eles entraram com a regra certa — e as três armadilhas medidas são:
+--   • o filtro é de STATUS, não só de tempo (Henrique está parado há 75 dias, e
+--     TRANCADO não é STANDBY: quem está trancado já teve a decisão tomada);
+--   • o limiar é o PARÂMETRO e não um 30 literal — medido movendo o parâmetro,
+--     que é o único jeito de distinguir os dois mundos;
+--   • a borda é `>` e não `>=`, e ela some no uso: com o parâmetro em 45 a aluna
+--     de 45 dias tem de SAIR da lista, porque "há mais de 45 dias" ainda não é
+--     verdade.
+select tests.encerrar_sessao();
+select tests.como_rotina(tests.unidade('ESCOLA_A'));
+select public.rt_pendencias_diaria();
+
+select is(
+  (select format('%s/%s/%s/%s', p.severidade,
+                 p.chave_dedup = 'STANDBY:' || a.id::text,
+                 p.descricao like '%3007%',
+                 p.descricao like '%45 dia(s)%30 configurados%')
+     from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Gabriela Souza' and a.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'STANDBY_PROLONGADO' and p.resolvida_em is null),
+  'MEDIA/t/t/t',
+  'STANDBY ha 45 dias abre a pendencia MEDIA, com o codigo SGF e os DOIS numeros (dias e limiar) na descricao');
+
+-- Henrique Dias está parado há 75 dias — MAIS que Gabriela — e não recebe nada,
+-- porque está TRANCADO. Sem esta linha, uma regra que ignorasse o status
+-- passaria na asserção de cima: o tempo dele é maior, o resultado seria o mesmo.
+select is(
+  (select count(*)::bigint from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Henrique Dias' and a.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'STANDBY_PROLONGADO' and p.resolvida_em is null),
+  0::bigint,
+  'TRANCADO ha 75 dias NAO abre STANDBY_PROLONGADO — o filtro e de status, nao so de tempo');
+
+-- A borda, e a prova de que o limiar sai do `parametro`. 45 dias com o parâmetro
+-- em 45 não é "há mais de 45 dias": a rotina fecha o que ela mesma abriu.
+update public.parametro set valor = '45'
+ where unidade_id = tests.unidade('ESCOLA_A') and chave = 'standby_alerta_dias';
+
+select public.rt_pendencias_diaria();
+
+select is(
+  (select count(*)::bigint from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Gabriela Souza' and a.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'STANDBY_PROLONGADO' and p.resolvida_em is null),
+  0::bigint,
+  'com o parametro em 45 a aluna de 45 dias SAI da lista: a borda e >, nao >= — e o limiar vem do parametro');
+
+update public.parametro set valor = '44'
+ where unidade_id = tests.unidade('ESCOLA_A') and chave = 'standby_alerta_dias';
+
+select public.rt_pendencias_diaria();
+
+select is(
+  (select count(*)::bigint from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Gabriela Souza' and a.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'STANDBY_PROLONGADO' and p.resolvida_em is null),
+  1::bigint,
+  'um dia a menos no parametro e ela volta: e o parametro que decide, nao um 30 escrito na funcao');
+
+update public.parametro set valor = '30'
+ where unidade_id = tests.unidade('ESCOLA_A') and chave = 'standby_alerta_dias';
+
+-- "Fechada por mudança de status" (catálogo §10.1) NÃO é um trigger: é a mesma
+-- reavaliação diária. Trancar a aluna — que é justamente o que a pendência
+-- sugere — tira a chave da lista, e o fechamento é AUTOMÁTICO (resolvida_por
+-- nula), do jeito que a §4 mede para ALUNO_SEM_TURMA.
+update public.aluno set status = 'TRANCADO'
+ where unidade_id = tests.unidade('ESCOLA_A') and nome = 'Gabriela Souza';
+
+select public.rt_pendencias_diaria();
+
+-- ⚠️ São DUAS linhas de história, e não uma — o que este arquivo já dizia na §5
+--    sobre a pendência ignorada: reabrir não reaproveita a linha fechada, abre
+--    outra (o `pendencia_aberta_uk` é PARCIAL, só sobre as abertas). Aqui a
+--    aluna abriu, fechou na borda do parâmetro, reabriu e fechou de novo. Uma
+--    asserção escrita como `select ... where tipo = ...` sem agregado morre em
+--    "more than one row" — foi o que aconteceu na primeira execução deste teste.
+select is(
+  (select format('%s/%s/%s',
+                 count(*) filter (where p.resolvida_em is null),
+                 count(*),
+                 bool_and(p.resolucao = 'RESOLVIDA' and p.resolvida_por is null))
+     from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Gabriela Souza' and a.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'STANDBY_PROLONGADO'),
+  '0/2/t',
+  'trancar a aluna fecha a pendencia sozinha na execucao seguinte, e as DUAS linhas da historia sao RESOLVIDA sem pessoa — sem trigger de fechamento');
+
+-- ===========================================================================
+-- 16. PREVISAO_VENCIDA — card 8.4
+-- ===========================================================================
+-- Diego Alves tem `prev_conclusao_curso` 15 dias no passado (fixture do card
+-- 4.2), e é o mesmo dado que a projeção do card 8.1 RECUSA como base: com passo
+-- negativo, o degrau PREVISAO_CURSO despejaria a trilha inteira no mês corrente,
+-- então `v_projecao_aluno` cai para MEDIA_METODO e segue em silêncio. Esta
+-- pendência é o que tira o silêncio dali — sem ela, o aluno é projetado como
+-- quem não tem previsão nenhuma e ninguém nunca fica sabendo que há uma data a
+-- corrigir.
+select is(
+  (select format('%s/%s/%s/%s', p.severidade,
+                 p.chave_dedup = 'PREVISAO:' || a.id::text,
+                 p.descricao like '%3004%',
+                 p.descricao like '%' || to_char(a.prev_conclusao_curso, 'DD/MM/YYYY') || '%15 dia(s)%')
+     from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Diego Alves' and a.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'PREVISAO_VENCIDA' and p.resolvida_em is null),
+  'MEDIA/t/t/t',
+  'previsao 15 dias no passado abre a pendencia MEDIA, com a DATA vencida e ha quantos dias na descricao');
+
+-- Bruno (+90) e Carla (+120) têm previsão informada e FUTURA, e são o contraste
+-- que falta na asserção de cima: sem eles, uma regra que abrisse para toda
+-- previsão preenchida passaria igual.
+select is(
+  (select count(*)::bigint from public.pendencia
+    where unidade_id = tests.unidade('ESCOLA_A')
+      and tipo = 'PREVISAO_VENCIDA' and resolvida_em is null),
+  1::bigint,
+  'e SO ele: os dois alunos com previsao futura nao abrem nada — o criterio e a data, nao o campo preenchido');
+
+-- O filtro de status, medido do lado que importa: é ele que faz a formatura
+-- fechar a pendência sozinha (catálogo §10.1, "fechada por ... formatura"), sem
+-- trigger nenhum. Henrique está TRANCADO e ganha uma previsão vencida de 60
+-- dias — o dobro da de Diego — e continua sem pendência.
+update public.aluno set prev_conclusao_curso = public.fn_hoje() - 60
+ where unidade_id = tests.unidade('ESCOLA_A') and nome = 'Henrique Dias';
+
+select public.rt_pendencias_diaria();
+
+select is(
+  (select count(*)::bigint from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Henrique Dias' and a.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'PREVISAO_VENCIDA' and p.resolvida_em is null),
+  0::bigint,
+  'previsao vencida de quem NAO e ATIVO/ACELERAR nao abre pendencia: nao ha o que pedir a ninguem');
+
+-- Corrigir a data — que é a ação que a pendência pede — fecha sozinha.
+update public.aluno set prev_conclusao_curso = public.fn_hoje() + 45
+ where unidade_id = tests.unidade('ESCOLA_A') and nome = 'Diego Alves';
+
+select public.rt_pendencias_diaria();
+
+select is(
+  (select format('%s/%s', p.resolucao, p.resolvida_por is null)
+     from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Diego Alves' and a.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'PREVISAO_VENCIDA'),
+  'RESOLVIDA/t',
+  'nova prev_conclusao_curso no futuro fecha a pendencia automaticamente');
+
+-- E reabre enquanto a condição valer, como toda pendência de tempo (§5).
+update public.aluno set prev_conclusao_curso = public.fn_hoje() - 15
+ where unidade_id = tests.unidade('ESCOLA_A') and nome = 'Diego Alves';
+
+select public.rt_pendencias_diaria();
+
+select is(
+  (select count(*)::bigint from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Diego Alves' and a.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'PREVISAO_VENCIDA' and p.resolvida_em is null),
+  1::bigint,
+  'e a data vencida de volta reabre a pendencia: o caminho de ida e volta existe nos dois tipos novos');
+
+-- Sair de ATIVO/ACELERAR fecha pela MESMA expressão que fecharia na formatura —
+-- CANCELADO só evita depender do gate de certificado do card 8.3 para provar o
+-- que é uma propriedade do `where`, não do status escolhido.
+update public.aluno set status = 'CANCELADO'
+ where unidade_id = tests.unidade('ESCOLA_A') and nome = 'Diego Alves';
+
+select public.rt_pendencias_diaria();
+
+select is(
+  (select count(*)::bigint from public.pendencia p
+     join public.aluno a on a.id = p.aluno_id
+    where a.nome = 'Diego Alves' and a.unidade_id = tests.unidade('ESCOLA_A')
+      and p.tipo = 'PREVISAO_VENCIDA' and p.resolvida_em is null),
+  0::bigint,
+  'e sair de ATIVO/ACELERAR fecha: e a mesma metade do where que faz a formatura fechar sozinha');
 
 select * from finish();
 rollback;
