@@ -683,11 +683,35 @@ RLS; qualquer política exigindo permissão que o seed não cria (é o C11 — n
 
 **Pré-condições automatizadas:** suítes `010`–`060` verdes **e** a suíte de concorrência (§7) verde —
 esta é a única pré-condição que não é negociável por prazo, porque o defeito que ela pega (saldo −1,
-11 alunos em 10 PCs) é invisível em uso normal e corrompe dado.
+11 alunos em 10 PCs) é invisível em uso normal e corrompe dado. ✅ **As duas foram medidas verdes em
+04/09/2026 (sessão do card 6.9):** `supabase test db` = 927/927 em 25 arquivos, e os **dois** scripts
+de `tests_concorrencia/` (entregáveis dos cards 5.3 e 6.3) saindo `rc=0` — bloco fechando em 10/10 e
+saldo fechando em 0. Enquanto a suíte de concorrência não existia, esta linha era o único bloqueante
+aberto da pendência 9.8 das Decisões vigentes.
 
-**Roteiro:** matricular no combo (trilha gerada) → alocar em bloco → tentar alocar em bloco lotado →
-receber um pedido (ENTRADA) → registrar entrega (SAIDA) → registrar entrega de material sem estoque →
-zerar a trilha inteira e tentar de novo → estornar.
+**Roteiro, e AGORA COM O ATOR DE CADA PASSO:**
+
+| # | Passo | Quem |
+|---|---|---|
+| 1 | Matricular no combo (a trilha nasce sozinha) | secretaria |
+| 2 | Alocar em bloco, e depois tentar um bloco **lotado** | secretaria |
+| 3 | Criar, enviar e **receber** um pedido (ENTRADA) | secretaria |
+| 4 | Registrar entrega (SAIDA) — **no celular** | **monitor** |
+| 5 | Registrar entrega de material sem estoque (REORDENADA) | **monitor** |
+| 6 | Zerar a trilha inteira e tentar de novo (BLOQUEADA) | **monitor** |
+| 7 | Duas entregas simultâneas, em duas janelas | monitor + secretaria |
+| 8 | Estornar | secretaria |
+
+⚠️ **A coluna "quem" foi acrescentada em 04/09/2026 (sessão do card 6.9), e a falta dela era um
+defeito do critério, não do sistema.** O roteiro original era uma sequência corrida com o critério 8
+("o monitor completa a jornada inteira") logo abaixo, e isso se lê como se os oito passos fossem do
+monitor. Medida a matriz inicial, **três não são**: o monitor tem `estoque.lancar_saida`,
+`estoque.ler` e `alunos.ler`, e **não** tem `estoque.estornar`, `turmas.alocar` nem `compras.receber`.
+Sem a coluna, o monitor bate em `SEM_PERMISSAO` no estorno e reporta como defeito a matriz do card
+2.4 funcionando exatamente como foi desenhada — a mesma classe de erro do critério 1 do M1, que
+reprovava software correto por estar escrito errado. **Isto não muda o critério 8**, que reprova
+"passo que exija a **direção** para o que é jornada do monitor": estorno, alocação e recebimento são
+da **secretaria** também, então nenhum deles exige direção.
 
 **Aprova se, e só se:**
 
@@ -704,6 +728,23 @@ zerar a trilha inteira e tentar de novo → estornar.
 
 **Reprova se:** saldo negativo em qualquer momento; entrega que grave movimento sem marcar a trilha
 (ou o contrário); qualquer passo que exija a direção para o que é jornada do monitor.
+
+⚠️ **Três pré-condições que não são automatizáveis, e são de Irineu** (achado da sessão do card 6.9,
+04/09/2026). Valem além das duas do §15.1, que continuam abertas:
+
+1. **O M2 não roda antes dos cadastros do M1.** O roteiro começa em "matricular num combo", e o combo
+   é entregável do roteiro do M1. Contado no dev nesta data: `aluno`, `material`, `curso`, `combo`,
+   `sala`, `pc`, `professor`, `bloco_horario`, `aluno_material`, `movimento_estoque` e `pedido_compra`
+   **todos em 0** (só `metodo` = 3, que é configuração). Não é defeito — é a decisão de 02/09/2026
+   funcionando —, mas põe **os dois marcos em fila, não em paralelo**.
+2. ⚠️ **Um usuário que seja SÓ monitor, e ele não existe.** Os três usuários do homolog são duas
+   direções e uma conta com os **quatro** perfis. `tem_permissao` é a **união** dos perfis, então essa
+   conta tem as 50 permissões da direção: com ela o critério 8 ("o monitor completa a jornada **com o
+   perfil dele**, sem esbarrar em RLS") **passaria sem medir nada**, porque não haveria RLS de monitor
+   agindo. É o modo de falha que este §15 existe para impedir. Vale igual para os critérios 2, 3 e 4
+   do M1.
+3. **Duas janelas para o critério 7.** Duas anônimas do mesmo navegador bastam; não precisa de duas
+   pessoas.
 
 ### 15.3 M3 — Dashboard e projeção (card 8.8)
 

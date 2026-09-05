@@ -67,6 +67,7 @@ A planilha original (`Gestão Interativo.xlsx`, snapshot 29/08/2026) está no pr
 
 O que **é** card está no board do Notion — use a skill `proxima-tarefa`. O que está aqui são pendências que não têm card e some da vista se ninguém as escrever.
 
+0. ⚠️ **De Irineu, e é o que segura DOIS marcos (4.8 e 6.9):** em `homolog.gestaoim360.com`, (a) fazer os cadastros do roteiro do M1 — o dev está com **todas** as tabelas de negócio em 0, então o roteiro do M2, que começa em "matricular num combo", não tem por onde começar; e (b) deixar **um usuário com um perfil só**. Hoje são três contas: duas direções e uma com os **quatro** perfis — e como `tem_permissao` é a **união** dos perfis, essa conta é uma direção com outro nome. Com ela o critério 8 do M2 e os critérios 2, 3 e 4 do M1 passam **sem medir nada**. Medido em 04/09/2026 pela sessão do card 6.9; detalhe em `estrategia-testes.md` §15.2 e na subpágina de resultado do card.
 1. ⚠️ **De Irineu:** cadastrar o secret `SENTRY_DSN` do repositório. Até lá o app publica sem observabilidade e o `deploy-web` avisa em vez de reprovar (card 3.12).
 2. ⚠️ **De Irineu:** desabilitar "Automatically expose new tables" nos dois projetos Supabase (Settings → API). O schema já existe; a mitigação atual é RLS em toda tabela.
 3. O `default public.fn_hoje()` no lugar de `current_date` continua pendente nas colunas do **card 7.1** (card 2.3, §10). Os cards 4.2 e 5.1 já o aplicaram.
