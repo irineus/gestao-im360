@@ -801,8 +801,29 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha` (6.6) ✅,
 `v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7) ✅, `v_pedido_compra` e `v_pedido_item`
 (6.8) ✅, `v_turma_modular_cronograma` e `v_turma_modular_aluno` (7.3) ✅,
-`v_projecao_material_mes` e `v_projecao_aluno_detalhe` (8.5) ✅, `v_certificado_fila` (8.6).
+`v_projecao_material_mes` e `v_projecao_aluno_detalhe` (8.5) ✅, `v_certificado_fila` (8.6) ✅.
 São views de listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+
+⚠️ **`v_certificado_fila` nasceu em 06/09/2026** (`20260906040000_view_certificado_fila.sql`), e três
+decisões merecem registro:
+
+- **Ela exige TRILHA existente, e é a única leitura do sistema que faz isso.** `fn_trilha_em_fim` e a
+  coluna `em_fim` do §8.1 devolvem `true` para aluno **sem trilha nenhuma** — é "nenhum item
+  pendente", e as duas são iguais de propósito, para o dashboard e a ficha não discordarem. O card
+  6.2 escreveu a saída: *"quem precisa distinguir 'acabou' de 'nunca começou' pergunta pela trilha,
+  não por esta função"*. A fila de formandos precisa: sem o `exists`, dois ATIVOS sem trilha da
+  fixture aparecem como prontos para o certificado, e na escola real seria todo recém-matriculado.
+- **As duas situações do §8.1 viram uma coluna `situacao`** (`FIM` / `ULTIMO_LIVRO`), com o mesmo
+  critério das duas colunas do dashboard — `pend.qtd = 0` e `= 1` — e o mesmo filtro de status
+  (`ATIVO`/`ACELERAR`). Uma terceira leitura do "último livro" é o que o §4.1 proíbe; esta é a mesma,
+  transposta de contagem para lista.
+- **`left join` em `certificado_checklist`, e o nulo é informação.** Quem está em `ULTIMO_LIVRO` ainda
+  não tem checklist (ele nasce no passo 9 da entrega), e as cinco colunas vêm nulas — a tela desenha
+  um traço, não uma caixa vazia. Um `join` interno esconderia justamente a metade da fila que existe
+  para dar **tempo** de pedir o certificado. Consequência de RLS medida no `083` §6.1: sem
+  `certificados.ler` as **linhas continuam** e o checklist inteiro vira nulo — a fila diria "ninguém
+  abriu checklist para ninguém" com os checklists abertos. É por isso que `certificados.ler` está no
+  conjunto da rota, e não só na política.
 
 ⚠️ **As duas do card 8.5 nasceram em 05/09/2026** (`20260906010000_views_projecao_tela.sql`), e três
 decisões merecem registro:

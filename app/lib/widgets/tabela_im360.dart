@@ -58,6 +58,7 @@ class CartaoIm360 {
     this.corApoio,
     this.destaque,
     this.badge,
+    this.acao,
   });
 
   final String titulo;
@@ -81,6 +82,19 @@ class CartaoIm360 {
   /// Badge à direita do título (design-system §5.2: "título, linha
   /// secundária, badge") — o status do aluno, no card 4.6.
   final Widget? badge;
+
+  /// Um controle **acionável** na borda direita do cartão, depois do destaque.
+  ///
+  /// ⚠️ Nasceu no card 8.6 e é uma extensão declarada do §5.2, que descreve o
+  /// cartão como "título, linha secundária, badge". O wireframe §12.2 pede a
+  /// caixa Financeiro acionável **na própria lista** do celular, com alvo ≥
+  /// 44 px, "sem precisar abrir o checklist completo" — a jornada nº 2 do
+  /// monitor. Sem o slot, essa jornada existiria só no desktop, que é onde o
+  /// monitor não está. Divergência registrada em docs/design-system.md §11.
+  ///
+  /// O toque nele **não** abre a linha: o gesto do controle é o mais interno e
+  /// vence o `InkWell` do cartão.
+  final Widget? acao;
 }
 
 /// Tabela com filtros e os quatro estados num contrato único
@@ -421,6 +435,10 @@ class TabelaIm360<T> extends StatelessWidget {
                         dados.destaque!,
                         style: Tipografia.numero(Tipografia.rotulo),
                       ),
+                    ],
+                    if (dados.acao != null) ...[
+                      const SizedBox(width: Dim.e8),
+                      dados.acao!,
                     ],
                   ],
                 ),

@@ -27,7 +27,13 @@ const _esperado = <String, Set<String>>{
   // junta `metodo` internamente. Sem ele a tela não vem errada — vem VAZIA.
   // `permissoes-matriz.md` §6 registrava três e foi corrigido no mesmo commit.
   'projecao': {'materiais.ler', 'estoque.ler', 'alunos.ler', 'turmas.ler'},
-  'certificados': {'certificados.ler', 'alunos.ler'},
+  // ⚠️ Três desde o card 8.6 (06/09/2026), e o terceiro é `materiais.ler`:
+  // `v_certificado_fila` junta `metodo` internamente — é o método que a linha
+  // mostra e o que o filtro do wireframe §12.1 oferece. Sem ele a fila não vem
+  // errada, vem VAZIA. `permissoes-matriz.md` §6 registrava dois e foi corrigido
+  // no mesmo commit; os quatro perfis já têm a permissão, então nenhum perde a
+  // tela — é o que a asserção de `_matrizPerfis` abaixo confere.
+  'certificados': {'certificados.ler', 'alunos.ler', 'materiais.ler'},
   'salas': {'salas.ler', 'professores.ler'},
   'pendencias': {'pendencias.ler'},
   'administracao': {'admin.ler'},

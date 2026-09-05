@@ -16,15 +16,16 @@ import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
+import '../certificados/checklist_certificado.dart';
 import 'aba_trilha.dart';
 import 'aba_turmas.dart';
 import 'formularios.dart';
 
 /// A ficha do aluno (docs/wireframes.md §6.2) — cabeçalho com status e as
 /// ações do dia a dia, e as abas. Existem **Dados** e **Histórico** desde o
-/// card 4.6, **Turmas** desde o 5.7 e **Trilha** desde o 6.6; Certificado (8.6)
-/// fica no lugar, dizendo qual card a entrega, para a ordem das abas não mudar
-/// debaixo de quem já aprendeu a tela.
+/// card 4.6, **Turmas** desde o 5.7, **Trilha** desde o 6.6 e **Certificado**
+/// desde o 8.6 — com isso as cinco abas do wireframe §6.2 estão todas de pé, e
+/// nenhuma delas mudou de posição no caminho.
 ///
 /// É uma **página** (`/alunos/:id`), e não um painel sobre a lista: a ficha é
 /// o destino de deep-link e o ponto de partida da jornada nº 1 do monitor
@@ -216,8 +217,11 @@ class _Ficha extends ConsumerWidget {
                 AbaTrilha(aluno: aluno),
                 AbaTurmas(aluno: aluno),
                 AbaHistorico(aluno: aluno),
-                // A aba Certificado é entregue pelo card 8.6 do board.
-                const _AbaFutura(nome: 'Certificado'),
+                // O MESMO componente do painel da tela 9 (wireframe §6.6), e
+                // não uma segunda escrita do checklist: as jornadas é que são
+                // diferentes — a fila é "quem está chegando ao fim", a ficha é
+                // "este aluno".
+                AbaCertificado(alunoId: aluno.id!),
               ],
             ),
           ),
@@ -404,27 +408,3 @@ class AbaHistorico extends ConsumerWidget {
 }
 
 const vazioHistorico = 'Nenhuma mudança de status registrada.';
-
-/// Aba que ainda não foi escrita — diz isso, e nada mais.
-///
-/// ⚠️ O texto dizia "aba do card 8.6": **jargão do board na tela**, que a
-/// secretaria não tem como entender e que envelhece junto com o board. O
-/// portão `texto_de_tela_test` varria `card \d` e a interpolação passava por
-/// baixo dele — agora ele varre a interpolação também (item C1). O destino
-/// continua o da divergência 13 do §17; o que muda é a frase, que passa a ser
-/// a mesma do rodapé do dashboard.
-class _AbaFutura extends StatelessWidget {
-  const _AbaFutura({required this.nome});
-
-  final String nome;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Text(
-      '$nome — chega numa próxima versão.',
-      style: Tipografia.apoio.copyWith(
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-    ),
-  );
-}

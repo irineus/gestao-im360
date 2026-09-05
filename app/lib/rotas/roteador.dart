@@ -9,6 +9,7 @@ import '../telas/acesso_bloqueado.dart';
 import '../telas/administracao/tela_administracao.dart';
 import '../telas/alunos/ficha_aluno.dart';
 import '../telas/alunos/tela_alunos.dart';
+import '../telas/certificados/tela_certificados.dart';
 import '../telas/compras/tela_compras.dart';
 import '../telas/dashboard/tela_dashboard.dart';
 import '../telas/em_construcao.dart';
@@ -61,6 +62,11 @@ final _telaDaRota = <String, Widget Function(GoRouterState)>{
   // drill-down daquele material, em vez de largar a pessoa na grade inteira.
   'projecao': (estado) =>
       TelaProjecao(materialId: estado.uri.queryParameters['material']),
+  // `?aluno=` segue o desenho de `?material=` e `?turma=`: a tela 9 abre já com
+  // o checklist daquele aluno. Quem o usa é a pendência
+  // `CERTIFICADO_INCONSISTENTE` quando o destino for a fila, e não a ficha.
+  'certificados': (estado) =>
+      TelaCertificados(alunoId: estado.uri.queryParameters['aluno']),
   'administracao': (_) => const TelaAdministracao(),
   // A rota 3b (card 2.4 §6) desde o card 6.6: `/alunos/:id/trilha` é o
   // deep-link para a aba Trilha, e não uma tela separada. Ele existe como rota
@@ -103,13 +109,10 @@ List<RouteBase> _subRotas(Rota rota) => switch (rota.id) {
 /// é a lista que encolhe a cada fase entregue.
 ///
 /// Saíram daqui: o dashboard, no card 5.9 (a tela existe e é parcial — quem
-/// nomeia o que falta é o rodapé dela), Turmas Modular, no 7.3, e a Projeção de
-/// demanda, no 8.5.
+/// nomeia o que falta é o rodapé dela), Turmas Modular, no 7.3, a Projeção de
+/// demanda, no 8.5, e os Certificados, no 8.6.
 // ignore: unused_element
-const _cardDaRota = <String, String>{
-  'certificados': '8.6',
-  'importacao': '9.1',
-};
+const _cardDaRota = <String, String>{'importacao': '9.1'};
 
 final roteadorProvider = Provider<GoRouter>((ref) {
   final controlador = ref.watch(sessaoProvider.notifier);
