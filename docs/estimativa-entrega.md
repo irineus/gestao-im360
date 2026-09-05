@@ -66,15 +66,16 @@ não medição. Vigente desde 02/09/2026: **fins de semana + algumas noites** = 
 
 ### Blocos de latência (dias corridos)
 
-| Card | Bloco | Dias |
-|---|---|---|
-| 4.8, 6.9, 8.8 | marco de validação com secretaria/monitor/direção | 4 cada |
-| 9.3 | revisão das exceções pelo pedagógico | 7 |
-| 9.4 | dry-run e conferência de totais | 3 |
-| 9.6 | treinamento dos 4 perfis | 7 |
-| 9.7 | janela de virada (fim de semana) | 2 |
-| 10.2 | abertura das contas de desenvolvedor | 5 |
-| 10.6 | revisão de Google Play e App Store | 14 por rodada |
+| Card | Bloco | Dias declarados | Medido |
+|---|---|---|---|
+| 4.8 | marco de validação com a secretaria | 4 | ⚠️ **≥ 4 e ainda aberto** — 06/09/2026, card 8.9 |
+| 6.9, 8.8 | marco de validação com monitor/secretaria/direção | 4 cada | — |
+| 9.3 | revisão das exceções pelo pedagógico | 7 | — |
+| 9.4 | dry-run e conferência de totais | 3 | — |
+| 9.6 | treinamento dos 4 perfis | 7 | — |
+| 9.7 | janela de virada (fim de semana) | 2 | — |
+| 10.2 | abertura das contas de desenvolvedor | 5 | — |
+| 10.6 | revisão de Google Play e App Store | 14 por rodada | — |
 
 No P50 assume-se que **60%** da latência não se sobrepõe ao desenvolvimento; no P80, **100%** (nada
 se sobrepõe) e a revisão das lojas vai a **duas** rodadas.
@@ -93,7 +94,15 @@ de bloco que não pode começar NÃO se abate do bloco.** O `6.9` está "aberto"
 suas próprias Notas ele não anda enquanto o roteiro do M1 não for aceito — os dias que passam nele
 não consomem os 4 declarados, consomem nada. Abater-os seria creditar progresso que não houve e
 encurtar a data por artefato de contagem. **Regra: o bloco de trás só começa a contar quando o da
-frente é aceito.** O `4.8`, esse sim, consumiu: 3 dos 4 dias em 05/09/2026.
+frente é aceito.** O `4.8`, esse sim, consumiu: 3 dos 4 dias em 05/09/2026, e os 4 em 06/09/2026.
+
+⚠️ **Bloco que ESGOTA o valor declarado sem fechar entra com PISO de 1 dia, e o piso é marcado como
+piso** (regra escrita em 06/09/2026, card 8.9, no dia em que o primeiro bloco da série fez isso). A
+instrução acima — "ao fechar cada um, anotar os dias que consumiu" — supunha que o bloco fecharia.
+O `4.8` chegou a 4 de 4 **sem aceite**, então não há medição final para anotar, e a alternativa
+ingênua é pior que o piso: carregar **0 dias restantes** para um bloco exausto e aberto encurta a
+data tratando como pronto o que não terminou. **Piso de 1 dia, sempre marcado como piso e nunca como
+estimativa** — a rodada que o usa tem de dizer que o valor verdadeiro é desconhecido e maior.
 
 ### Como sair de P50 e P80
 
@@ -161,6 +170,29 @@ preparações que faltam (todas de Irineu, em homologação) não têm começo r
 declaração. **Obrigação da rodada 8.9: abrir por esta seção, anotar quantos dias o `4.8` de fato
 consumiu e corrigir a tabela de blocos do §3 com esse número.** É a medição que o método persegue
 desde 03/09 e a única que reduz de verdade a incerteza da data.
+
+**Em 06/09/2026 (card 8.9) a obrigação foi cumprida, e a resposta é a menos confortável das duas
+previstas: o `4.8` ESTOUROU.** Chegou a **4 de 4 dias declarados sem aceite**, com as três
+preparações de Irineu em homologação ainda sem começo registrado. Três consequências, e nenhuma
+delas é opinião:
+
+1. **O 4 declarado deixou de ser estimativa e virou piso, com n = 1.** A única medição que o projeto
+   tem de um bloco de latência diz que ele é **maior** que o declarado — não diz quanto. O §3 ganhou
+   a coluna "Medido" e a regra do piso de 1 dia para bloco exausto e aberto.
+2. **A latência restante NÃO caiu com um dia de calendário — a primeira vez na série.** Foi 31 → 28
+   por medição em 05/09 e ficou em **28** em 06/09: passou um dia, e o único bloco que corria não
+   tinha mais orçamento para gastar. Todo o ganho de data desta rodada veio do esforço, que é a
+   metade que já não decide nada.
+3. **A margem contra outubro é o que sobrevive disso, e ela melhorou.** Não porque a latência tenha
+   melhorado, mas porque o esforço restante caiu de 60 para 25 pontos: o alvo agora suporta **2× em
+   qualquer das duas metades** da latência (marcos ou fase 09) — o que já valia — e o caso novo,
+   calculado nesta rodada, é que **não suporta 2× nas duas ao mesmo tempo** (P80 iria a 07/11).
+
+⚠️ **A maior incerteza continua sendo a tabela de blocos, e agora se sabe em que direção ela erra.**
+Até 05/09 a tabela era declaração pura, sem sinal; hoje há um sinal, e ele aponta para **mais dias,
+não menos**. Os seis blocos que restam (`6.9`, `8.8`, `9.3`, `9.4`, `9.6`, `9.7`) seguem sem
+medição, e o único que já se pôde observar não coube no que dizia — o que é motivo para tratar a
+tabela como otimista até o segundo bloco fechar, e não para reescrevê-la por extrapolação de n = 1.
 
 ⚠️ **A segunda maior incerteza mudou de lugar nesta rodada: é a taxa de descoberta de escopo.** O
 §7(c) a promoveu a parâmetro depois de duas medições próximas (4,2 e 4,6). A terceira deu **7,4** —
@@ -410,3 +442,48 @@ aritmética: **os três marcos (`4.8`, `6.9`, `8.8`) teriam de rodar ~11 dias co
 os 4 declarados, para o P80 sair de outubro/2026.** A 2× (8 dias cada) o P80 vai a 21/10 e o alvo
 ainda cabe. Toda rodada daqui em diante publica essa margem, e não só as duas datas: margem é o que
 permite decidir, data é o que vira promessa.
+
+## 10. Sexta rodada (06/09/2026, card 8.9) — o que mudou no método
+
+Os **números** continuam morando na subpágina Notion "Estimativa de entrega" do card 3.13. Aqui, só
+o que mudou no método. É a **última rodada antes do go-live**: o que resta depois desta é o `9.8`,
+já com a fase 09 fechada.
+
+**(a) A regra do bloco exausto, escrita no §3, é a mudança principal — e ela nasceu de um caso, não
+de uma precaução.** O `4.8` chegou a 4 de 4 sem aceite, e o §3 não dizia o que fazer com isso: dizia
+o que anotar **quando o bloco fechasse**. Sem regra, as duas saídas disponíveis eram ruins — carregar
+0 dias restantes (trata bloco exausto e aberto como pronto, e encurta a data por artefato) ou
+reescrever o bloco declarado para 8 ou 11 (extrapola de n = 1 uma duração que ninguém observou).
+**Piso de 1 dia, marcado como piso**, é a única das três que não afirma o que não se sabe. O detalhe
+da medição está no §4.
+
+**(b) O divisor do P80 cruzou o limiar da própria irrelevância — o terceiro parâmetro a cair, depois
+da velocidade (§8a) e do passo 2 (§9b).** O §3 manda revê-lo a cada rodada, e a revisão desta é
+dupla. Pelo teste de sempre (§7b): o que o 1,5 precifica é a fase 09 (`9.1`, `9.2`) e a fase 10, e a
+fase 08 exercitou `Tela`, `Função/regra` e `View`, todos já medidos — **fica em 1,5**, sexta rodada
+seguida. Mas há um argumento novo do outro lado, e ele merecia resposta: o divisor hoje cobre uma
+fatia **muito maior** do que resta — **16 dos 25 pontos de esforço (64%) são os dois `GG` não
+medidos da fase 09**, contra 16 de 60 (27%) na rodada anterior. Pela proporção, caberia subir.
+**Medido: subir o divisor de 1,5 para 2,0 move o P80 em 0,8 dia.** São 25 pontos de esforço contra
+28 dias de latência; o divisor não tem mais por onde mexer na data. **Consequência para o `9.8`: a
+revisão obrigatória do §3 se cumpre com o teste de uma linha, e o tempo da rodada vai inteiro para a
+tabela de blocos.**
+
+**(c) A cadeia de precedência do go-live está fechada, e nenhum bloco de latência se sobrepõe a
+outro.** O card `8.8` mediu em 06/09 a ordem real — **M1 → M2 → 9.1 → 9.2 → 9.4 → M3** —, e com ela
+o `8.8` deixa de ser candidato a rodar em paralelo com o `9.3` ou o `9.6`: ele vem **depois** do
+`9.4`. A **soma** de dias não muda (o modelo já somava os blocos em série), então a data não se
+mexe; o que muda é o que se pode esperar do modelo. **Os 60% de sobreposição do P50 valem entre
+latência e desenvolvimento, nunca entre dois blocos de latência** — isso estava implícito e agora
+está medido. É também o que torna a premissa 4 a única fonte de incerteza que sobrou.
+
+**(d) O passo 2 devolveu, pela segunda vez na série, uma descida REFUTADA por medição direta — e
+desta vez por `grep`, não por documento.** O `9.5` era candidato claro a descer de `M` para `P`,
+pelo precedente do `8.2` (que desceu por ter o SQL pronto e **saiu em `P`**, confirmado em 05/09): a
+Nota do card diz *"NÃO É MIGRAÇÃO: é update em parametro"* e o procedimento é rodar
+`fn_ritmo_metodo_observado` por método. **A função não existe.** Ela está escrita em
+`docs/projecao-demanda.md` §9.1 e o §12 do mesmo documento a atribui ao card `9.5` — o card `8.1`
+entregou `v_ritmo_aluno` e `fn_ritmo_aluno` e não esta. O `9.5` tem de **construir** a função, o que
+é migração, antes de rodar o `update`. Fica em `M`. **Regra que fica, e é o §8(d) na direção
+oposta: antes de descer um card por "o artefato já existe", procurar o artefato no repositório.**
+Custa um `grep` e é a diferença entre reúso medido e reúso suposto.
