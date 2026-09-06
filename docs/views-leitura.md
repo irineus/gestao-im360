@@ -865,6 +865,15 @@ decisões merecem registro:
   abriu checklist para ninguém" com os checklists abertos. É por isso que `certificados.ler` está no
   conjunto da rota, e não só na política.
 
+⚠️ **Pendência de migração para `v_projecao_material_mes` (06/09/2026, card 9.2,5, divergência 70 do
+`wireframes.md` §17):** a view traz `metodo_id` e não `metodo_codigo`/`metodo_nome`, e a tela 8
+depende de `metodosProvider` para dar nome ao método — o Dashboard decidiu no card 5.9 que *"o
+código vem da própria view: o cartão não pode ficar sem nome porque outra consulta não voltou"*.
+Expor as duas colunas é `create or replace view` acrescentando **no fim** (o precedente é o
+`ritmo_dias` abaixo). Fica para o próximo card que mexer nas views de projeção — o **9.5** é
+candidato —, porque o 9.2,5 não tem migração. Até lá a tela trata os três estados do catálogo (em
+erro a coluna diz "não lido", nunca o traço).
+
 ⚠️ **As duas do card 8.5 nasceram em 05/09/2026** (`20260906010000_views_projecao_tela.sql`), e três
 decisões merecem registro:
 

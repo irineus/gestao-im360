@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/erros/erro_app.dart';
+import 'package:gestao_im360/pendencias/pendencias_provider.dart';
+import 'package:gestao_im360/widgets/barra_filtros.dart';
 import 'package:gestao_im360/projecao/projecao.dart';
 import 'package:gestao_im360/projecao/projecao_provider.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
@@ -302,8 +304,10 @@ void main() {
 
       expect(find.text('Você não tem permissão para esta ação.'), findsWidgets);
       expect(find.text('Tentar de novo'), findsOneWidget);
-      // O cabeçalho diz o que perdeu: a validade, não a conta.
-      expect(find.text(erroProjecaoCalculadaEm), findsOneWidget);
+      // O cabeçalho NÃO repete o erro (item B5 da revisão das telas 08/09): o
+      // carimbo sai da mesma leitura que a grade, e a tabela já mostra a
+      // mensagem com "Tentar de novo" — duas frases para uma falha só.
+      expect(find.text(erroProjecaoCalculadaEm), findsNothing);
     });
   });
 
@@ -346,6 +350,94 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text(vazioProjecaoRotinaFalhou), findsOneWidget);
+    });
+  });
+
+  group('revisão das telas 08/09 (itens B1, B2, B3, D3 e D4)', () {
+    testWidgets(
+      'em 390 px o campo de busca da folha mede o que os menus medem',
+      (tester) async {
+        // Medido antes: campo de 240 px ao lado de três menus de 358 (item B1).
+        await montar(tester, tamanho: const Size(390, 800));
+        await tester.tap(find.text('Filtrar'));
+        await carregar(tester);
+
+        final busca = tester.getSize(
+          find.descendant(
+            of: find.byType(CampoBusca),
+            matching: find.byType(TextField),
+          ),
+        );
+        final menu = tester.getSize(find.byType(DropdownMenu<String>).first);
+        expect(busca.width, menu.width);
+      },
+    );
+
+    testWidgets('"Ver pendências" define o filtro por tipo antes de navegar', (
+      tester,
+    ) async {
+      projecao = ProjecaoFalso.vazio(rotinaFalhou: true);
+      await montar(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TelaProjecao)),
+      );
+
+      await tester.tap(find.text('Ver pendências'));
+      await carregar(tester);
+
+      expect(ultimaRota, '/pendencias');
+      expect(container.read(filtroPendenciasProvider).tipo, 'ROTINA_FALHOU');
+    });
+
+    testWidgets(
+      'métodos em erro: a coluna diz "não lido" e a tela diz por quê',
+      (tester) async {
+        // Antes: `—` em toda linha e o filtro só com "Todos", para sempre e sem
+        // nenhum erro em tela (item B3).
+        catalogo.falhaAoLer = const ErroApp(
+          mensagem: 'sem rede',
+          traduzido: true,
+        );
+        await montar(tester);
+
+        expect(find.text(erroMetodosNaoLidos), findsOneWidget);
+        expect(find.text(metodoNaoLido), findsWidgets);
+        expect(find.text('Interativo'), findsNothing);
+        // A grade continua de pé.
+        expect(find.text('Informática Essencial 2'), findsOneWidget);
+
+        catalogo.falhaAoLer = null;
+        await tester.tap(find.text('Tentar de novo'));
+        await carregar(tester);
+        expect(find.text(erroMetodosNaoLidos), findsNothing);
+        expect(find.text(metodoNaoLido), findsNothing);
+        expect(find.text('Interativo'), findsWidgets);
+      },
+    );
+
+    testWidgets('a célula do mês tem o alvo mínimo do desktop', (tester) async {
+      final semantica = tester.ensureSemantics();
+      await montar(tester);
+
+      final celula = find.bySemanticsLabel(RegExp(r'^3 em out.*ver os alunos'));
+      expect(celula, findsOneWidget);
+      expect(tester.getSize(celula).height, greaterThanOrEqualTo(40));
+      semantica.dispose();
+    });
+
+    testWidgets('a linha do aluno no drill-down anuncia que abre a ficha', (
+      tester,
+    ) async {
+      final semantica = tester.ensureSemantics();
+      await montar(tester);
+      await tester.tap(find.text('3').first);
+      await carregar(tester);
+
+      expect(
+        find.bySemanticsLabel('Aluno 1 (3001), abrir a ficha'),
+        findsOneWidget,
+      );
+      semantica.dispose();
     });
   });
 }

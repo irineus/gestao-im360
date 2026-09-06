@@ -9,6 +9,7 @@ import '../../sessao/sessao_provider.dart';
 import '../../theme/cores.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../util/async_valor.dart';
 import '../../util/datas.dart';
 import '../../widgets/abertura_por_url.dart';
 import '../../widgets/botoes.dart';
@@ -280,7 +281,7 @@ class _AbaMateriaisState extends ConsumerState<AbaMateriais>
       ],
       // Método e código: a planilha numera cada catálogo do zero, então
       // ordenar só por código intercala os três métodos.
-      linhas: estoque.whenData(
+      linhas: estoque.derivar(
         (lista) =>
             filtrarEstoque(
               lista,
@@ -548,7 +549,7 @@ class AbaCursos extends ConsumerWidget {
           larguraMin: 100,
         ),
       ],
-      linhas: cursos.whenData((lista) => filtrarCursos(lista, filtro)),
+      linhas: cursos.derivar((lista) => filtrarCursos(lista, filtro)),
       cartao: (c) => CartaoIm360(
         titulo: c.nome,
         subtitulo: metodosPorId[c.metodoId]?.nome ?? '—',
@@ -657,7 +658,7 @@ class AbaCombos extends ConsumerWidget {
           larguraMin: 100,
         ),
       ],
-      linhas: combos.whenData((lista) => filtrarCombos(lista, filtro)),
+      linhas: combos.derivar((lista) => filtrarCombos(lista, filtro)),
       cartao: (c) => CartaoIm360(
         titulo: c.nome,
         subtitulo: metodosPorId[c.metodoId]?.nome ?? '—',

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../infraestrutura/infraestrutura.dart';
 import '../../infraestrutura/infraestrutura_provider.dart';
 import '../../sessao/sessao_provider.dart';
+import '../../util/async_valor.dart';
 import '../../widgets/abertura_por_url.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
@@ -204,7 +205,7 @@ class _AbaSalasState extends ConsumerState<AbaSalas>
           larguraMin: 100,
         ),
       ],
-      linhas: salas.whenData((lista) => filtrarSalas(lista, filtro)),
+      linhas: salas.derivar((lista) => filtrarSalas(lista, filtro)),
       cartao: (s) => CartaoIm360(
         titulo: s.nome,
         subtitulo:
@@ -283,9 +284,7 @@ class AbaProfessores extends ConsumerWidget {
           larguraMin: 100,
         ),
       ],
-      linhas: professores.whenData(
-        (lista) => filtrarProfessores(lista, filtro),
-      ),
+      linhas: professores.derivar((lista) => filtrarProfessores(lista, filtro)),
       cartao: (p) =>
           CartaoIm360(titulo: p.nome, apoio: p.ativo ? null : 'Inativo'),
       estadoVazio: haCadastro

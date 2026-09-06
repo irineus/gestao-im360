@@ -46,8 +46,11 @@ class _BlocoChecklistState extends ConsumerState<BlocoChecklist> {
   /// marcações (design-system §5.4).
   bool _executando = false;
 
+  /// A escrita é a de `AcoesCertificado` (tradução + versão, uma vez só para
+  /// o painel e para a lista — item F2); o que é deste bloco é a trava, o
+  /// banner e a confirmação.
   Future<void> _escrever(
-    Future<void> Function() acao,
+    Future<void> Function(AcoesCertificado acoes) acao,
     String confirmacao,
   ) async {
     if (_executando) return;
@@ -56,8 +59,7 @@ class _BlocoChecklistState extends ConsumerState<BlocoChecklist> {
       _erro = null;
     });
     try {
-      await acao();
-      ref.read(versaoCertificadosProvider.notifier).incrementar();
+      await acao(ref.read(acoesCertificadoProvider));
       if (mounted) confirmarEfemero(context, confirmacao);
     } catch (erro) {
       final traduzido = erro is ErroApp ? erro : traduzirErro(erro);
@@ -108,9 +110,7 @@ class _BlocoChecklistState extends ConsumerState<BlocoChecklist> {
         ? 'Abrir checklist'
         : null,
     aoAgir: () => _escrever(
-      () => ref
-          .read(certificadosRepositorioProvider)
-          .abrirChecklist(widget.alunoId),
+      (acoes) => acoes.abrirChecklist(widget.alunoId),
       confirmacaoChecklistAberto,
     ),
   );
@@ -136,9 +136,11 @@ class _BlocoChecklistState extends ConsumerState<BlocoChecklist> {
             podeMarcar: permissoes.contains(item.permissao),
             executando: _executando,
             aoMarcar: (valor) => _escrever(
-              () => ref
-                  .read(certificadosRepositorioProvider)
-                  .marcarItem(widget.alunoId, item: item.codigo, valor: valor),
+              (acoes) => acoes.marcarItem(
+                widget.alunoId,
+                item: item.codigo,
+                valor: valor,
+              ),
               confirmacaoItemMarcado,
             ),
           ),
@@ -149,9 +151,7 @@ class _BlocoChecklistState extends ConsumerState<BlocoChecklist> {
           podeAlterar: permissoes.contains('certificados.alterar_status'),
           executando: _executando,
           aoEscolher: (status) => _escrever(
-            () => ref
-                .read(certificadosRepositorioProvider)
-                .alterarStatus(widget.alunoId, status: status),
+            (acoes) => acoes.alterarStatus(widget.alunoId, status: status),
             confirmacaoStatusAlterado,
           ),
         ),

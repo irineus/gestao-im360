@@ -139,8 +139,18 @@ class CertificadosFalso implements CertificadosRepositorio {
   /// item e o valor certos".
   final escritas = <String>[];
 
+  /// Atraso da leitura da fila. Zero deixa a recarga terminar antes do frame
+  /// seguinte — e aí a tela nunca é construída no estado "recarregando com o
+  /// valor anterior", que é onde o banco de verdade a apanha (item A2).
+  Duration atrasoLeitura = Duration.zero;
+
+  /// Atraso de cada escrita — é o que deixa um segundo toque chegar ANTES de a
+  /// primeira escrita voltar (item A3).
+  Duration atrasoEscrita = Duration.zero;
+
   @override
   Future<List<LinhaFilaCertificado>> fila() async {
+    if (atrasoLeitura > Duration.zero) await Future.delayed(atrasoLeitura);
     final erro = erroDaFila;
     if (erro != null) throw erro;
     return List.of(fila_);
@@ -152,7 +162,7 @@ class CertificadosFalso implements CertificadosRepositorio {
 
   @override
   Future<void> abrirChecklist(String alunoId) async {
-    _conferirErro();
+    await _conferirErro();
     escritas.add('abrir:$alunoId');
     checklists_[alunoId] = ChecklistCertificado(
       id: 'cc-$alunoId',
@@ -172,7 +182,7 @@ class CertificadosFalso implements CertificadosRepositorio {
     required String item,
     required bool valor,
   }) async {
-    _conferirErro();
+    await _conferirErro();
     escritas.add('marcar:$alunoId:$item:$valor');
     final atual = checklists_[alunoId];
     if (atual == null) return;
@@ -198,7 +208,7 @@ class CertificadosFalso implements CertificadosRepositorio {
 
   @override
   Future<void> alterarStatus(String alunoId, {required String status}) async {
-    _conferirErro();
+    await _conferirErro();
     escritas.add('status:$alunoId:$status');
     final atual = checklists_[alunoId];
     if (atual == null) return;
@@ -216,7 +226,8 @@ class CertificadosFalso implements CertificadosRepositorio {
     _sincronizarFila(alunoId);
   }
 
-  void _conferirErro() {
+  Future<void> _conferirErro() async {
+    if (atrasoEscrita > Duration.zero) await Future.delayed(atrasoEscrita);
     final erro = erroDaEscrita;
     if (erro != null) throw erro;
   }

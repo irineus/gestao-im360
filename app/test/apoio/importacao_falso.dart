@@ -16,6 +16,8 @@ class ImportacaoFalso implements ImportacaoRepositorio {
     this.totais = const {},
     this.falhaAoAplicar,
     this.erroAoRegistrar,
+    this.erroAoLerLote,
+    this.atrasoLeitura = Duration.zero,
   }) : ocorrencias_ = List.of(ocorrencias);
 
   /// O que a validação do banco devolveria para o próximo arquivo enviado.
@@ -31,6 +33,15 @@ class ImportacaoFalso implements ImportacaoRepositorio {
   /// Erro traduzido que `registrar` deve lançar (SEM_PERMISSAO, por exemplo).
   final Object? erroAoRegistrar;
 
+  /// Erro que a leitura de UM lote lança — registrar funciona, e o lote não
+  /// pode ser lido depois (item A4 da revisão das telas 08/09).
+  final Object? erroAoLerLote;
+
+  /// Atraso das leituras do relatório: é o que deixa a tela ser vista no
+  /// estado "carregando", onde o motivo do botão de baixar tem de mudar
+  /// (item B4).
+  final Duration atrasoLeitura;
+
   final _lotes = <String, LoteImportacao>{};
   var _sequencia = 0;
 
@@ -44,11 +55,16 @@ class ImportacaoFalso implements ImportacaoRepositorio {
   Future<List<LoteImportacao>> lotes() async => _lotes.values.toList();
 
   @override
-  Future<LoteImportacao?> lote(String id) async => _lotes[id];
+  Future<LoteImportacao?> lote(String id) async {
+    if (erroAoLerLote != null) throw erroAoLerLote!;
+    return _lotes[id];
+  }
 
   @override
-  Future<List<OcorrenciaImportacao>> ocorrencias(String importacaoId) async =>
-      ocorrencias_;
+  Future<List<OcorrenciaImportacao>> ocorrencias(String importacaoId) async {
+    if (atrasoLeitura > Duration.zero) await Future.delayed(atrasoLeitura);
+    return ocorrencias_;
+  }
 
   @override
   Future<String> registrar({

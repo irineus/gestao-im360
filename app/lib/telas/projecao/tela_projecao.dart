@@ -4,13 +4,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../catalogo/catalogo.dart';
 import '../../catalogo/catalogo_provider.dart';
+import '../../pendencias/pendencias.dart';
+import '../../pendencias/pendencias_provider.dart';
 import '../../projecao/projecao.dart';
 import '../../projecao/projecao_provider.dart';
 import '../../rotas/rotas.dart';
 import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
-import '../../util/datas.dart';
+import '../../util/async_valor.dart';
+import '../../widgets/abertura_por_url.dart';
 import '../../widgets/barra_filtros.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
@@ -57,22 +60,12 @@ class _Grade extends ConsumerStatefulWidget {
   ConsumerState<_Grade> createState() => _GradeState();
 }
 
-class _GradeState extends ConsumerState<_Grade> {
-  /// O material que veio na URL e ainda não foi aberto. Zerado depois de abrir,
-  /// senão fechar o painel o reabriria em seguida.
-  String? _pendenteDaUrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _pendenteDaUrl = widget.materialId;
-  }
-
+class _GradeState extends ConsumerState<_Grade> with AberturaPorUrl {
   @override
   void didUpdateWidget(_Grade anterior) {
     super.didUpdateWidget(anterior);
     if (widget.materialId != null && widget.materialId != anterior.materialId) {
-      _pendenteDaUrl = widget.materialId;
+      reabrirNaProxima();
     }
   }
 
@@ -88,8 +81,17 @@ class _GradeState extends ConsumerState<_Grade> {
 
   @override
   Widget build(BuildContext context) {
-    final metodos = ref.watch(metodosProvider).value ?? const <Metodo>[];
+    // ⚠️ Os três estados do catálogo, e não `.value ?? []` (item B3): em erro
+    // a coluna Método mostrava `—` em TODA linha e o filtro oferecia só
+    // "Todos", para sempre e sem nenhum erro em tela. A saída definitiva é a
+    // view expor o código do método (divergência E1, migração, fora deste
+    // card); até lá a coluna diz "não lido" e a tela diz por quê.
+    final catalogo = ref.watch(metodosProvider);
+    final metodos = catalogo.value ?? const <Metodo>[];
+    final metodosNaoLidos = catalogo.hasError;
     final metodosPorId = {for (final m in metodos) m.id: m};
+    String nomeDoMetodo(String metodoId) =>
+        metodosNaoLidos ? metodoNaoLido : metodosPorId[metodoId]?.nome ?? '—';
     final grade = ref.watch(gradeProjecaoProvider);
     final filtro = ref.watch(filtroProjecaoProvider);
     final rotinaFalhou = ref.watch(rotinaProjecaoFalhouProvider).value ?? false;
@@ -105,13 +107,12 @@ class _GradeState extends ConsumerState<_Grade> {
     final linhas = pivotar(filtrarCelulas(todas, filtro));
 
     // Chegou por `?material=`: abre o painel assim que a grade tiver dado, uma
-    // vez só.
-    final pendente = _pendenteDaUrl;
-    if (pendente != null && grade.hasValue) {
-      _pendenteDaUrl = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _abrir(CelulaPedida(materialId: pendente));
-      });
+    // vez só (o mixin `AberturaPorUrl`, item F1).
+    if (grade.hasValue) {
+      abrirUmaVez(
+        widget.materialId,
+        (id) => _abrir(CelulaPedida(materialId: id)),
+      );
     }
 
     final tabela = TabelaIm360<LinhaProjecao>(
@@ -137,7 +138,7 @@ class _GradeState extends ConsumerState<_Grade> {
         ),
         ColunaIm360(
           titulo: 'Método',
-          texto: (l) => metodosPorId[l.metodoId]?.nome ?? '—',
+          texto: (l) => nomeDoMetodo(l.metodoId),
           prioridade: 4,
           larguraMin: 120,
         ),
@@ -176,7 +177,7 @@ class _GradeState extends ConsumerState<_Grade> {
           larguraMin: 80,
         ),
       ],
-      linhas: grade.whenData((_) => linhas),
+      linhas: grade.derivar((_) => linhas),
       // A linha inteira abre o material — é o alvo do celular, onde não há
       // célula de mês para tocar, e a saída do teclado no desktop.
       aoTocarLinha: (l) => _abrir(CelulaPedida(materialId: l.materialId)),
@@ -184,7 +185,7 @@ class _GradeState extends ConsumerState<_Grade> {
         titulo: l.nome,
         subtitulo: [
           l.codigo,
-          metodosPorId[l.metodoId]?.nome ?? '—',
+          nomeDoMetodo(l.metodoId),
           l.categoria,
         ].join(' · '),
         apoio: [
@@ -208,6 +209,15 @@ class _GradeState extends ConsumerState<_Grade> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Cabecalho(grade: grade),
+        if (metodosNaoLidos)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Dim.e16, Dim.e12, Dim.e16, 0),
+            child: AvisoTonal(
+              mensagem: erroMetodosNaoLidos,
+              rotuloAcao: 'Tentar de novo',
+              aoAgir: () => ref.invalidate(metodosProvider),
+            ),
+          ),
         Expanded(child: tabela),
       ],
     );
@@ -244,7 +254,16 @@ class _GradeState extends ConsumerState<_Grade> {
         rotuloAcao: permissoes.contains('pendencias.ler')
             ? 'Ver pendências'
             : null,
-        aoAgir: () => context.go(caminhoDeRota('pendencias')),
+        // Com o filtro por TIPO definido antes de navegar (item B2): sem ele o
+        // botão largava a pessoa na central inteira, para procurar de novo a
+        // pendência que a tela acabou de nomear — o D3 do card 8.1,5 fechou o
+        // mesmo caso na aba Trilha.
+        aoAgir: () {
+          ref
+              .read(filtroPendenciasProvider.notifier)
+              .definir(const FiltroPendencias(tipo: 'ROTINA_FALHOU'));
+          context.go(caminhoDeRota('pendencias'));
+        },
       );
     }
     return const EstadoVazio(
@@ -257,10 +276,15 @@ class _GradeState extends ConsumerState<_Grade> {
 /// "Projeção calculada em …" — a validade de tudo o que está abaixo, e
 /// obrigatória (design-system §7.3).
 ///
-/// Os três estados são diferentes de propósito: a que **nunca rodou** não é a
-/// que rodou e não previu nada, e nenhuma das duas é um traço mudo. Enquanto
-/// carrega não desenha nada — piscar "ainda não foi calculada" por meio segundo
-/// é dizer uma coisa falsa.
+/// **Dois** estados aqui, e não os três de Compras (item B5 da revisão das
+/// telas 08/09): o carimbo sai da MESMA leitura que a grade, então "não foi
+/// possível ler quando foi calculada" nunca acontece sozinho — quando a grade
+/// falha, a tabela já mostra o erro com "Tentar de novo", e uma segunda frase
+/// de erro para a mesma falha seria dizer duas vezes. A que **nunca rodou** não
+/// é a que rodou e não previu nada, e nenhuma das duas é um traço mudo.
+/// Enquanto carrega (a primeira vez) não desenha nada — piscar "ainda não foi
+/// calculada" por meio segundo é dizer uma coisa falsa; na recarga o carimbo
+/// anterior fica (item A2).
 class _Cabecalho extends StatelessWidget {
   const _Cabecalho({required this.grade});
 
@@ -270,8 +294,9 @@ class _Cabecalho extends StatelessWidget {
   Widget build(BuildContext context) {
     final cores = Theme.of(context).colorScheme;
     final texto = grade.when(
+      skipLoadingOnReload: true,
       loading: () => null,
-      error: (_, _) => erroProjecaoCalculadaEm,
+      error: (_, _) => null,
       data: (celulas) {
         final quando = calculadoEmDe(celulas);
         return quando == null
@@ -342,17 +367,22 @@ class _CelulaMes extends StatelessWidget {
           button: true,
           label: '${linha.quantidadeEm(mes)} em $rotulo, ver os alunos',
           excludeSemantics: true,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: Dim.e8,
-              vertical: Dim.e4,
-            ),
-            child: Text(
-              '${linha.quantidadeEm(mes)}',
-              style: Tipografia.numero(Tipografia.corpoTabela).copyWith(
-                color: cores.primary,
-                decoration: TextDecoration.underline,
-                decorationColor: cores.primary,
+          // O alvo ocupa a altura da linha, e não só o número (item D3): com o
+          // padding de 4 px o `InkWell` media ~28 px numa linha de 44, contra
+          // o mínimo de 40 do design-system §8.4.
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: Dim.alturaBotao),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Dim.e8),
+                child: Text(
+                  '${linha.quantidadeEm(mes)}',
+                  style: Tipografia.numero(Tipografia.corpoTabela).copyWith(
+                    color: cores.primary,
+                    decoration: TextDecoration.underline,
+                    decorationColor: cores.primary,
+                  ),
+                ),
               ),
             ),
           ),
@@ -403,26 +433,14 @@ class _FiltrosProjecaoState extends ConsumerState<_FiltrosProjecao> {
       runSpacing: Dim.e8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        SizedBox(
-          width: 240,
-          child: TextField(
-            controller: _busca,
-            style: Tipografia.corpo,
-            decoration: InputDecoration(
-              labelText: 'Código ou material',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: filtro.busca.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Limpar busca',
-                      icon: const Icon(Icons.clear),
-                      onPressed: () =>
-                          controlador.definir(filtro.copiar(busca: '')),
-                    ),
-            ),
-            onChanged: (valor) =>
-                controlador.definir(filtro.copiar(busca: valor)),
-          ),
+        // O `CampoBusca` do card 8.1,5, e não um `TextField` de 240 px cru
+        // (item B1): dentro da folha "Filtrar" do celular ele mede a largura da
+        // folha, como os três menus ao lado.
+        CampoBusca(
+          controlador: _busca,
+          rotulo: 'Código ou material',
+          aoMudar: (valor) => controlador.definir(filtro.copiar(busca: valor)),
+          aoLimpar: () => controlador.definir(filtro.copiar(busca: '')),
         ),
         FiltroSuspenso<String>(
           key: ValueKey('metodo-${filtro.metodoId}'),

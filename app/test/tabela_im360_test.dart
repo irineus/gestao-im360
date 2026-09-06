@@ -266,4 +266,81 @@ void main() {
       },
     );
   });
+
+  group('recarga (item A2 da revisão das telas 08/09)', () {
+    // Um provider de verdade, e não um `AsyncValue` montado à mão: o estado
+    // "carregando COM o valor anterior" é o que o Riverpod produz quando a
+    // versão que o provider observa muda, e é exatamente esse estado que toda
+    // escrita seguida de `versaoX++` põe na tabela. Antes ela mostrava o
+    // esqueleto, a rolagem voltava ao topo e a próxima caixa que o monitor ia
+    // tocar mudava de lugar.
+    final versao = NotifierProvider<_Versao, int>(_Versao.new);
+    final linhasLentas = FutureProvider<List<String>>((ref) async {
+      ref.watch(versao);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      return itens;
+    });
+
+    Future<ProviderContainer> montarComProvider(WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: [permissoesProvider.overrideWithValue(const {})],
+      );
+      addTearDown(container.dispose);
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: temaClaro(),
+            home: Scaffold(
+              body: Consumer(
+                builder: (_, ref, _) => TabelaIm360<String>(
+                  colunas: colunas,
+                  linhas: ref.watch(linhasLentas),
+                  estadoVazio: const EstadoVazio(mensagem: 'Nada por aqui.'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      return container;
+    }
+
+    testWidgets('a PRIMEIRA carga tem esqueleto, e a recarga NÃO', (
+      tester,
+    ) async {
+      final container = await montarComProvider(tester);
+      expect(find.byType(EstadoCarregando), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Informática 1'), findsOneWidget);
+
+      container.read(versao.notifier).incrementar();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // Recarregando: as linhas ficam, sem esqueleto, e a barra fina diz que
+      // algo está chegando.
+      expect(find.text('Informática 1'), findsOneWidget);
+      expect(find.text('Informática 2'), findsOneWidget);
+      expect(find.byType(EstadoCarregando), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(find.text('Informática 1'), findsOneWidget);
+    });
+  });
+}
+
+/// A versão que o provider lento observa — o mesmo desenho das `VersaoX` do
+/// app.
+class _Versao extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void incrementar() => state++;
 }

@@ -10,6 +10,8 @@ import 'package:gestao_im360/pendencias/pendencias_provider.dart';
 import 'package:gestao_im360/pendencias/pendencias_repositorio.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/alunos/alunos_provider.dart';
+import 'package:gestao_im360/certificados/certificados.dart';
+import 'package:gestao_im360/certificados/certificados_provider.dart';
 import 'package:gestao_im360/telas/dashboard/cartoes_alunos.dart';
 import 'package:gestao_im360/telas/dashboard/cartoes_metodo.dart';
 import 'package:gestao_im360/telas/dashboard/conclusoes_semestre.dart';
@@ -49,6 +51,9 @@ void main() {
     'pendencias.ler',
   };
   const comTurmas = {...leitura, 'professores.ler'};
+  // O conjunto da rota de Certificados (docs/permissoes-matriz.md §6, linha
+  // 9), que é o que faz o atalho "N no último livro" existir.
+  const comCertificados = {...comTurmas, 'certificados.ler'};
 
   Future<DashboardFalso> montar(
     WidgetTester tester, {
@@ -288,7 +293,11 @@ void main() {
     // O conteúdo à vista é o de HOJE, e só o dele: numa matriz os quatro
     // apareceriam juntos.
     const vagasDoDia = {1: '10/10', 2: '1/10'};
-    final hoje = hojeSaoPaulo().weekday;
+    // ⚠️ No DOMINGO não há aba de hoje (a matriz vai de segunda a sábado) e
+    // ela abre na primeira, a de segunda — sem isto o teste reprovava um dia
+    // por semana, medido em 06/09/2026 (um domingo), sem defeito nenhum.
+    final diaDaSemana = hojeSaoPaulo().weekday;
+    final hoje = diaDaSemana == DateTime.sunday ? DateTime.monday : diaDaSemana;
     for (final entrada in vagasDoDia.entries) {
       expect(
         find.text(entrada.value),
@@ -765,6 +774,66 @@ void main() {
           'o atalho tem de mostrar exatamente os alunos que o número contou, e '
           'a lista abre ocultando os encerrados por padrão',
     );
+  });
+
+  testWidgets('o "N no último livro" abre Certificados JÁ filtrado', (
+    tester,
+  ) async {
+    // Medido antes da correção (item A1 da revisão das telas 08/09): depois
+    // do toque `filtroCertificadosProvider` ficava com método e situação
+    // nulos, e a tela 9 abria com FIM + ÚLTIMO LIVRO de todos os métodos para
+    // um número que é de um método e de uma situação.
+    final container = ProviderContainer(
+      retry: semRetryAutomatico,
+      overrides: [
+        dashboardRepositorioProvider.overrideWithValue(DashboardFalso()),
+        pendenciasRepositorioProvider.overrideWithValue(
+          PendenciasFalso.fixture(),
+        ),
+        modularRepositorioProvider.overrideWithValue(ModularFalso.fixture()),
+        permissoesProvider.overrideWithValue(comCertificados),
+        unidadeAtualProvider.overrideWithValue('unidade-teste'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: appDeTeste(
+          construtor: (filho) => filho,
+          conteudo: const Scaffold(body: TelaDashboard()),
+        ),
+      ),
+    );
+    await carregar(tester);
+
+    await tester.tap(find.text('1 no último livro'));
+    await carregar(tester);
+
+    final filtro = container.read(filtroCertificadosProvider);
+    expect(filtro.metodoId, 'm-ing');
+    expect(filtro.situacao, situacaoUltimoLivro);
+  });
+
+  testWidgets('os números do cartão têm o alvo mínimo do §8.4 (item D1)', (
+    tester,
+  ) async {
+    // Medido antes: "1 em standby" = 24 px de altura, contra 40 no desktop e
+    // 44 no celular — e no celular estes são os únicos atalhos do Dashboard.
+    final semantica = tester.ensureSemantics();
+    await montar(tester);
+    final alvo = find.bySemanticsLabel('1 em standby, abrir a lista');
+    expect(tester.getSize(alvo).height, greaterThanOrEqualTo(40));
+
+    await montar(tester, tamanho: const Size(390, 800));
+    await tester.ensureVisible(alvo);
+    await carregar(tester);
+    expect(tester.getSize(alvo).height, greaterThanOrEqualTo(44));
+    semantica.dispose();
   });
 
   testWidgets('o cartão do método anuncia o que cada número significa', (

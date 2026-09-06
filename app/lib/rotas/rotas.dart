@@ -261,10 +261,16 @@ String caminhoFichaAluno(String id, {String? aba}) =>
 /// Sem o id, "Ver turma" leva a uma grade inteira e a pessoa procura de novo o
 /// que a lista já sabia.
 String caminhoDeRota(String rotaId, {String? parametro, String? valor}) {
-  final rota = rotasAplicacao.firstWhere((r) => r.id == rotaId);
+  final rota = rotaDe(rotaId);
   if (parametro == null || valor == null) return rota.caminho;
   return '${rota.caminho}?$parametro=${Uri.encodeQueryComponent(valor)}';
 }
+
+/// A rota de aplicação pelo `id` — para quem precisa da `Rota` inteira (a
+/// guarda `podeAbrir`), e não só do caminho. Um lugar só para o `firstWhere`,
+/// que o Dashboard reimplementava por conta própria (item B6 da revisão das
+/// telas 08/09).
+Rota rotaDe(String rotaId) => rotasAplicacao.firstWhere((r) => r.id == rotaId);
 
 /// Todas as rotas guardadas, incluindo a seleção de unidade — é a tabela que o
 /// teste `guardas_rota_test.dart` percorre (card 2.8 §9.1).

@@ -5,6 +5,7 @@ import '../../pendencias/pendencias.dart';
 import '../../pendencias/pendencias_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../util/async_valor.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
@@ -157,7 +158,7 @@ class TelaPendencias extends ConsumerWidget {
           larguraMin: 110,
         ),
       ],
-      linhas: pendencias.whenData((lista) => filtrarPendencias(lista, filtro)),
+      linhas: pendencias.derivar((lista) => filtrarPendencias(lista, filtro)),
       cartao: (p) => CartaoIm360(
         titulo: rotuloPendencia(p),
         subtitulo: p.descricao,

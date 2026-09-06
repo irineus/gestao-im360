@@ -12,6 +12,7 @@ import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../turmas/turmas.dart';
 import '../../turmas/turmas_provider.dart';
+import '../../util/async_valor.dart';
 import '../../widgets/badge_status.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
@@ -154,7 +155,7 @@ class TelaAlunos extends ConsumerWidget {
             larguraMin: 170,
           ),
       ],
-      linhas: alunos.whenData((lista) => filtrarAlunos(lista, filtro)),
+      linhas: alunos.derivar((lista) => filtrarAlunos(lista, filtro)),
       cartao: (a) => CartaoIm360(
         titulo: a.nome,
         subtitulo: [

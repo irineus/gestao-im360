@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
 import 'package:gestao_im360/compras/compras.dart';
 import 'package:gestao_im360/compras/compras_provider.dart';
+import 'package:gestao_im360/estoque/estoque_provider.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/rotas/rotas.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
@@ -675,5 +676,31 @@ void main() {
     expect(find.text(projecaoNaoCalculada), findsOneWidget);
     await abrirPedidos(tester);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('o carimbo NÃO some durante a recarga da aba (item A2)', (
+    tester,
+  ) async {
+    // Antes, `quando.when(loading: () => null)` apagava o carimbo a cada
+    // recarga e o desenhava de novo meio segundo depois.
+    compras = comProjecao(em: DateTime(2026, 9, 5, 3, 10))
+      ..atrasoDoCarimbo = const Duration(milliseconds: 300);
+    await montar(tester);
+    // Só o carimbo demora, e nada agenda frame enquanto ele carrega — o
+    // `pumpAndSettle` de `carregar` para antes dos 300 ms. O relógio anda à
+    // mão.
+    await tester.pump(const Duration(milliseconds: 400));
+    final carimbo = find.text(projecaoCalculadaEmTexto('05/09/2026 03:10'));
+    expect(carimbo, findsOneWidget);
+
+    final container = ProviderScope.containerOf(tester.element(carimbo));
+    container.read(versaoEstoqueProvider.notifier).incrementar();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // Recarregando: o carimbo anterior fica no lugar.
+    expect(carimbo, findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(carimbo, findsOneWidget);
   });
 }

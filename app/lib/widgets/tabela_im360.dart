@@ -195,8 +195,21 @@ class TabelaIm360<T> extends StatelessWidget {
               ),
               child: _barra(context, mobile),
             ),
+          // ⚠️ A recarga NÃO volta ao esqueleto (item A2 da revisão das telas
+          // 08/09). Toda escrita seguida de `versaoX++` faz o provider
+          // recarregar, e o padrão do Riverpod é mostrar `loading` mesmo com o
+          // valor anterior em mãos: a lista sumia pelo tempo de uma ida ao
+          // banco, a rolagem voltava ao topo e a próxima caixa que o monitor
+          // ia tocar mudava de lugar — medido em 390 px, na jornada nº 2 dele,
+          // que é marcar vários alunos em sequência. Com o valor anterior as
+          // linhas ficam na tela e a barra fina de cima diz que algo chega; a
+          // primeira carga continua com esqueleto, e o erro continua vindo
+          // antes de tudo.
+          if (linhas.isLoading && linhas.hasValue)
+            const LinearProgressIndicator(minHeight: 2),
           Expanded(
             child: linhas.when(
+              skipLoadingOnReload: true,
               loading: () => const EstadoCarregando(),
               error: (erro, _) {
                 final traduzido = erro is ErroApp ? erro : traduzirErro(erro);

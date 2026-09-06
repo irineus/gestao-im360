@@ -9,6 +9,7 @@ import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../util/datas.dart';
 import '../../util/seletor_arquivo.dart';
+import '../../util/texto.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
@@ -48,6 +49,18 @@ class _TelaImportacaoState extends ConsumerState<TelaImportacao> {
   bool _ocupado = false;
 
   final _snapshot = TextEditingController();
+
+  /// O passo 3, para rolar até ele quando um lote é retomado pelo histórico.
+  final _chaveRelatorio = GlobalKey();
+
+  /// A altura das três tabelas da tela (relatório, totais e histórico) — uma
+  /// constante, e não `360` três vezes (item F4). A altura FIXA dentro da
+  /// página rolável é aceita de propósito: a tela 13 é de desktop (wireframes
+  /// §16, e o §17 registra que no celular não há seletor de arquivo), e uma
+  /// lista de ocorrências que crescesse com o conteúdo empurraria os passos 4
+  /// e o histórico para fora de vista num arquivo de mil linhas. Divergência
+  /// registrada em `docs/design-system.md` §11 (item D5).
+  static const _alturaTabela = 360.0;
 
   @override
   void dispose() {
@@ -109,11 +122,37 @@ class _TelaImportacaoState extends ConsumerState<TelaImportacao> {
     if (mounted) setState(() => _resultado = resultado);
   });
 
+  /// Retoma um lote pelo histórico (item A5): o estado do assistente morre com
+  /// a página, e sem isto um lote VALIDADA ficava órfão depois de um F5 — nem
+  /// relatório, nem totais, nem Simular/Aplicar. Os providers já são por id;
+  /// o que faltava era ligar. O passo 3 lê o relatório daquele lote; o 4
+  /// mostra os totais de um APLICADA e Simular/Aplicar de um VALIDADA.
+  void _retomar(LoteImportacao lote) {
+    setState(() {
+      _loteId = lote.id;
+      _resultado = null;
+      _erro = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final contexto = _chaveRelatorio.currentContext;
+      if (contexto != null && mounted) Scrollable.ensureVisible(contexto);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final lote = _loteId == null
+    // ⚠️ O `AsyncValue` INTEIRO, e não `.value` (item A4): `loading` e `error`
+    // viravam `null`, e `null` era tratado como "ainda não há lote" — depois de
+    // Validar, com a leitura do lote falhando, o passo 4 mandava "valide no
+    // passo 2" a quem acabou de validar; e o mesmo texto piscava em toda
+    // validação normal, entre o `registrar` voltar e o lote chegar. É o B1 do
+    // 5.11 e o A3 do 8.1,5 outra vez: `AsyncValue` que decide texto precisa
+    // dos três estados.
+    final loteId = _loteId;
+    final loteAsync = loteId == null
         ? null
-        : ref.watch(loteImportacaoProvider(_loteId!)).value;
+        : ref.watch(loteImportacaoProvider(loteId));
+    final lote = loteAsync?.value;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(Dim.e16),
@@ -141,20 +180,21 @@ class _TelaImportacaoState extends ConsumerState<TelaImportacao> {
                 filho: _passoValidacao(),
               ),
               _Passo(
+                key: _chaveRelatorio,
                 numero: 3,
                 titulo: 'Relatório',
                 ativo: _loteId != null,
-                filho: _passoRelatorio(lote),
+                filho: _passoRelatorio(loteAsync),
               ),
               _Passo(
                 numero: 4,
                 titulo: 'Aplicar',
                 ativo: lote?.podeAplicar ?? false,
-                filho: _passoAplicar(context, lote),
+                filho: _passoAplicar(context, loteAsync),
                 ultimo: true,
               ),
               const SizedBox(height: Dim.e24),
-              const _Historico(),
+              _Historico(aoAbrir: _retomar),
             ],
           ),
         ),
@@ -231,7 +271,8 @@ class _TelaImportacaoState extends ConsumerState<TelaImportacao> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '${lido.totalLinhas} linhas em ${lido.contagens.length} entidades.',
+          '${plural(lido.totalLinhas, 'linha', 'linhas')} em '
+          '${plural(lido.contagens.length, 'entidade', 'entidades')}.',
           style: Tipografia.corpo,
         ),
         const SizedBox(height: Dim.e8),
@@ -275,29 +316,62 @@ class _TelaImportacaoState extends ConsumerState<TelaImportacao> {
   // -------------------------------------------------------------------------
   // ③ Relatório
   // -------------------------------------------------------------------------
-  Widget _passoRelatorio(LoteImportacao? lote) {
+  Widget _passoRelatorio(AsyncValue<LoteImportacao?>? loteAsync) {
     final id = _loteId;
-    if (id == null) {
+    if (id == null || loteAsync == null) {
       return const Text(
         textoImportacaoAguardandoValidacao,
         style: Tipografia.apoio,
       );
     }
+    // `hasError` antes de tudo (design-system §5.6), e o carregamento sem
+    // valor com esqueleto — nunca o texto de "valide no passo 2".
+    if (loteAsync.hasError) return _erroDoLote(id);
+    final lote = loteAsync.value;
+    if (lote == null) return const EstadoCarregando(linhas: 1);
+
     final ocorrencias = ref.watch(ocorrenciasImportacaoProvider(id));
+    final resumo = resumoPorCodigo(ocorrencias.value ?? const []);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (lote != null)
-          Text(
-            '${lote.erros} erro(s) · ${lote.avisos} aviso(s) — '
-            '${rotuloStatusLote(lote.status)}.',
-            style: Tipografia.corpo,
-          ),
+        Text(
+          '${plural(lote.erros, 'erro', 'erros')} · '
+          '${plural(lote.avisos, 'aviso', 'avisos')} — '
+          '${rotuloStatusLote(lote.status)}.',
+          style: Tipografia.corpo,
+        ),
         const SizedBox(height: Dim.e4),
         const Text(textoImportacaoSeveridade, style: Tipografia.apoio),
+        // O resumo POR CÓDIGO (item E2): é a leitura do §16 ("20 sem turma ·
+        // 2 códigos divergentes") sem view nova — contagem em Dart sobre a
+        // lista já carregada, e é o que a revisão das exceções (card 9.3)
+        // quer ver primeiro. Chips no molde do passo 2.
+        if (resumo.isNotEmpty) ...[
+          const SizedBox(height: Dim.e8),
+          Wrap(
+            spacing: Dim.e8,
+            runSpacing: Dim.e8,
+            children: [
+              for (final item in resumo)
+                Chip(
+                  avatar: Icon(
+                    item.bloqueia
+                        ? Icons.error_outline
+                        : Icons.warning_amber_outlined,
+                    size: 16,
+                  ),
+                  label: Text(
+                    '${item.total} × ${rotuloCodigoOcorrencia(item.codigo)}',
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: Dim.e12),
         SizedBox(
-          height: 360,
+          height: _alturaTabela,
           child: TabelaIm360<OcorrenciaImportacao>(
             colunas: [
               ColunaIm360(
@@ -338,39 +412,69 @@ class _TelaImportacaoState extends ConsumerState<TelaImportacao> {
           ),
         ),
         const SizedBox(height: Dim.e12),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: BotaoAcao(
-            rotulo: 'Baixar relatório',
-            icone: Icons.download_outlined,
-            nivel: NivelBotao.terciario,
-            aoTocar: (ocorrencias.value?.isEmpty ?? true)
-                ? null
-                : () => baixarTexto(
-                    'relatorio-importacao.csv',
-                    relatorioEmCsv(ocorrencias.value ?? const []),
-                  ),
-            desabilitado: (ocorrencias.value?.isEmpty ?? true)
-                ? const DesabilitadoCom(textoImportacaoNadaParaBaixar)
-                : (baixarDisponivel
-                      ? null
-                      : const DesabilitadoCom(textoImportacaoSemDownload)),
+        // O motivo do botão acompanha o ESTADO da leitura (item B4): "não há
+        // ocorrências" enquanto carrega afirmaria o que ainda não se sabe, e
+        // em erro o botão fica ausente — a tabela já mostra o `EstadoErro`.
+        if (!ocorrencias.hasError)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: BotaoAcao(
+              rotulo: 'Baixar relatório',
+              icone: Icons.download_outlined,
+              nivel: NivelBotao.terciario,
+              aoTocar: _motivoParaBaixar(ocorrencias) != null
+                  ? null
+                  : () => baixarTexto(
+                      'relatorio-importacao.csv',
+                      relatorioEmCsv(ocorrencias.value ?? const []),
+                    ),
+              desabilitado: _motivoParaBaixar(ocorrencias),
+            ),
           ),
-        ),
       ],
     );
   }
 
+  DesabilitadoCom? _motivoParaBaixar(
+    AsyncValue<List<OcorrenciaImportacao>> ocorrencias,
+  ) {
+    final lista = ocorrencias.value;
+    if (lista == null) {
+      return const DesabilitadoCom(textoImportacaoRelatorioCarregando);
+    }
+    if (lista.isEmpty) {
+      return const DesabilitadoCom(textoImportacaoNadaParaBaixar);
+    }
+    if (!baixarDisponivel) {
+      return const DesabilitadoCom(textoImportacaoSemDownload);
+    }
+    return null;
+  }
+
+  /// O lote não pôde ser lido: erro compacto com "Tentar de novo", nos passos
+  /// 3 e 4 (item A4).
+  Widget _erroDoLote(String id) => EstadoErro(
+    mensagem: textoImportacaoLoteNaoLido,
+    aoRepetir: () => ref.invalidate(loteImportacaoProvider(id)),
+  );
+
   // -------------------------------------------------------------------------
   // ④ Aplicar — simulação primeiro, e o ambiente no rótulo do botão
   // -------------------------------------------------------------------------
-  Widget _passoAplicar(BuildContext context, LoteImportacao? lote) {
-    if (lote == null) {
+  Widget _passoAplicar(
+    BuildContext context,
+    AsyncValue<LoteImportacao?>? loteAsync,
+  ) {
+    final id = _loteId;
+    if (id == null || loteAsync == null) {
       return const Text(
         textoImportacaoAguardandoValidacao,
         style: Tipografia.apoio,
       );
     }
+    if (loteAsync.hasError) return _erroDoLote(id);
+    final lote = loteAsync.value;
+    if (lote == null) return const EstadoCarregando(linhas: 1);
     if (lote.aplicado) {
       return _totais(lote.totais, aplicado: true);
     }
@@ -498,7 +602,7 @@ class _TelaImportacaoState extends ConsumerState<TelaImportacao> {
         ),
         const SizedBox(height: Dim.e8),
         SizedBox(
-          height: 360,
+          height: _alturaTabela,
           child: TabelaIm360<TotalImportacao>(
             colunas: [
               ColunaIm360(
@@ -597,8 +701,16 @@ class FaixaAmbiente extends StatelessWidget {
 
 /// Um passo do assistente. Numerado porque o §16 é numerado: quem acompanha a
 /// carga por telefone precisa dizer "parei no 3".
+///
+/// ⚠️ O passo inativo esmaece **a moldura e o número**, nunca o texto (item D2
+/// da revisão das telas 08/09). Antes era `Opacity(0.6)` no passo inteiro, e
+/// isso derrubava o `onSurfaceVariant` (5,06:1 sobre branco) para **2,36:1** —
+/// abaixo do 4,5:1 do design-system §8.1 — justamente nos textos "Valide o
+/// arquivo no passo 2…" e "Escolha um arquivo no passo 1…", que são os que a
+/// pessoa precisa ler para saber o que falta.
 class _Passo extends StatelessWidget {
   const _Passo({
+    super.key,
     required this.numero,
     required this.titulo,
     required this.filho,
@@ -615,45 +727,64 @@ class _Passo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cores = Theme.of(context).colorScheme;
-    return Opacity(
-      // Passo ainda inalcançável fica esmaecido, e não escondido: sumir muda a
-      // numeração e a pessoa perde a referência do que vem depois.
-      opacity: ativo ? 1 : 0.6,
-      child: Container(
-        margin: EdgeInsets.only(bottom: ultimo ? 0 : Dim.e16),
-        padding: const EdgeInsets.all(Dim.e16),
-        decoration: BoxDecoration(
-          border: Border.all(color: cores.outlineVariant),
-          borderRadius: BorderRadius.circular(Dim.raio),
+    // Passo ainda inalcançável fica esmaecido, e não escondido: sumir muda a
+    // numeração e a pessoa perde a referência do que vem depois.
+    return Container(
+      margin: EdgeInsets.only(bottom: ultimo ? 0 : Dim.e16),
+      padding: const EdgeInsets.all(Dim.e16),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: ativo
+              ? cores.outlineVariant
+              : cores.outlineVariant.withValues(alpha: 0.5),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 12,
-                  backgroundColor: cores.secondaryContainer,
-                  child: Text(
-                    '$numero',
-                    style: Tipografia.badge.copyWith(
-                      color: cores.onSecondaryContainer,
-                    ),
+        borderRadius: BorderRadius.circular(Dim.raio),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 12,
+                backgroundColor: ativo
+                    ? cores.secondaryContainer
+                    : cores.surfaceContainerHighest,
+                child: Text(
+                  '$numero',
+                  style: Tipografia.badge.copyWith(
+                    color: ativo
+                        ? cores.onSecondaryContainer
+                        : cores.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(width: Dim.e8),
-                // `Expanded`, e não `Text` solto: em 390 px o título do passo
-                // 4 ("Aplicar") vem acompanhado do círculo do número, e o
-                // conjunto estourava a `Row` pela mesma via do item 19 do §11
-                // do design-system — a barra de ações da TabelaIm360, medida no
-                // card 8.1,5.
-                Expanded(child: Text(titulo, style: Tipografia.subtitulo)),
-              ],
-            ),
-            const SizedBox(height: Dim.e12),
-            filho,
-          ],
-        ),
+              ),
+              const SizedBox(width: Dim.e8),
+              // `Expanded`, e não `Text` solto: em 390 px o título do passo
+              // 4 ("Aplicar") vem acompanhado do círculo do número, e o
+              // conjunto estourava a `Row` pela mesma via do item 19 do §11
+              // do design-system — a barra de ações da TabelaIm360, medida no
+              // card 8.1,5.
+              Expanded(
+                child: Text(
+                  titulo,
+                  style: Tipografia.subtitulo.copyWith(
+                    color: ativo ? null : cores.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Dim.e12),
+          // O texto do passo inativo em `onSurfaceVariant` PLENO — é o par
+          // verificado, e ele continua legível.
+          ativo
+              ? filho
+              : DefaultTextStyle.merge(
+                  style: TextStyle(color: cores.onSurfaceVariant),
+                  child: filho,
+                ),
+        ],
       ),
     );
   }
@@ -665,8 +796,13 @@ class _Passo extends StatelessWidget {
 /// que a migração seja AUDITÁVEL, a tabela `importacao` guarda cada lote com o
 /// relatório dele, e sem esta lista o histórico existiria e não teria tela.
 /// Divergência registrada em `docs/wireframes.md` §17.
+///
+/// A linha **abre** o lote no assistente (item A5): é daqui que se retoma um
+/// VALIDADA depois de um F5, e que se comparam os totais de dois dry-runs.
 class _Historico extends ConsumerWidget {
-  const _Historico();
+  const _Historico({required this.aoAbrir});
+
+  final void Function(LoteImportacao lote) aoAbrir;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -675,9 +811,11 @@ class _Historico extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text('Importações anteriores', style: Tipografia.subtitulo),
+        const SizedBox(height: Dim.e4),
+        const Text(textoImportacaoHistoricoAbre, style: Tipografia.apoio),
         const SizedBox(height: Dim.e8),
         SizedBox(
-          height: 360,
+          height: _TelaImportacaoState._alturaTabela,
           child: TabelaIm360<LoteImportacao>(
             colunas: [
               ColunaIm360(titulo: 'Arquivo', texto: (l) => l.arquivo, flex: 3),
@@ -719,11 +857,13 @@ class _Historico extends ConsumerWidget {
               ),
             ],
             linhas: lotes,
+            aoTocarLinha: aoAbrir,
             cartao: (l) => CartaoIm360(
               titulo: l.arquivo,
               subtitulo:
                   '${rotuloStatusLote(l.status)} · '
-                  '${l.erros} erro(s) · ${l.avisos} aviso(s)',
+                  '${plural(l.erros, 'erro', 'erros')} · '
+                  '${plural(l.avisos, 'aviso', 'avisos')}',
             ),
             estadoVazio: const EstadoVazio(
               mensagem: textoImportacaoSemHistorico,

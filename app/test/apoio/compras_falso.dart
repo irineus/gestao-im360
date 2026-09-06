@@ -237,9 +237,15 @@ class ComprasFalso implements ComprasRepositorio {
     ];
   }
 
+  /// Atraso da leitura do carimbo da projeção: com zero a recarga termina
+  /// antes do frame seguinte, e a tela nunca é vista "recarregando com o valor
+  /// anterior" (item A2 da revisão das telas 08/09).
+  Duration atrasoDoCarimbo = Duration.zero;
+
   @override
   Future<DateTime?> projecaoCalculadaEm() async {
     chamadas.add('projecaoCalculadaEm');
+    if (atrasoDoCarimbo > Duration.zero) await Future.delayed(atrasoDoCarimbo);
     final falha = falhaAoLerProjecao ?? falhaAoLer;
     if (falha != null) throw falha;
     return projecaoEm;

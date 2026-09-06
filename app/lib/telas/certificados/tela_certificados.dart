@@ -9,11 +9,13 @@ import '../../erros/erro_app.dart';
 import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../util/async_valor.dart';
 import '../../util/datas.dart';
 import '../../widgets/badge_status.dart';
 import '../../widgets/barra_filtros.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
+import '../../widgets/abertura_por_url.dart';
 import '../../widgets/formulario.dart';
 import '../../widgets/painel_detalhe.dart';
 import '../../widgets/tabela_im360.dart';
@@ -43,22 +45,26 @@ class TelaCertificados extends ConsumerStatefulWidget {
   ConsumerState<TelaCertificados> createState() => _TelaCertificadosState();
 }
 
-class _TelaCertificadosState extends ConsumerState<TelaCertificados> {
-  /// O aluno que veio na URL e ainda não foi aberto. Zerado depois de abrir,
-  /// senão fechar o painel o reabriria em seguida.
-  String? _pendenteDaUrl;
+class _TelaCertificadosState extends ConsumerState<TelaCertificados>
+    with AberturaPorUrl {
+  /// Alunos com escrita em curso pela caixa da LISTA. Enquanto o aluno está
+  /// aqui a caixa dele fica desabilitada com o motivo — dois toques mandavam
+  /// DUAS escritas (item A3 da revisão das telas 08/09), porque o segundo
+  /// toque, dado para "desfazer" quando a caixa não reage, chegava antes de a
+  /// primeira voltar. O painel já tinha esta trava (`BlocoChecklist`); a lista
+  /// não.
+  final _gravando = <String>{};
 
-  @override
-  void initState() {
-    super.initState();
-    _pendenteDaUrl = widget.alunoId;
-  }
+  /// Erro da última escrita feita pela lista, com o nome do aluno. É banner
+  /// acima da tabela, e não snackbar: o painel usa `AvisoTonal(erro: true)`, e
+  /// um `SEM_PERMISSAO` de 4 s some antes de ser lido.
+  String? _erroDaLista;
 
   @override
   void didUpdateWidget(TelaCertificados anterior) {
     super.didUpdateWidget(anterior);
     if (widget.alunoId != null && widget.alunoId != anterior.alunoId) {
-      _pendenteDaUrl = widget.alunoId;
+      reabrirNaProxima();
     }
   }
 
@@ -70,29 +76,52 @@ class _TelaCertificadosState extends ConsumerState<TelaCertificados> {
 
   /// A caixa Financeiro acionável **na própria lista** — a jornada nº 2 do
   /// monitor (wireframe §12.2): marcar "financeiro OK" sem abrir o checklist
-  /// completo.
+  /// completo. A escrita é a mesma do painel (`AcoesCertificado`); o que é
+  /// desta tela é a trava por aluno e os textos com o nome.
   Future<void> _marcarFinanceiro(LinhaFilaCertificado linha, bool valor) async {
+    if (_gravando.contains(linha.alunoId)) return;
+    setState(() {
+      _gravando.add(linha.alunoId);
+      _erroDaLista = null;
+    });
     try {
       await ref
-          .read(certificadosRepositorioProvider)
+          .read(acoesCertificadoProvider)
           .marcarItem(
             linha.alunoId,
             item: ItemChecklist.financeiro.codigo,
             valor: valor,
           );
-      ref.read(versaoCertificadosProvider.notifier).incrementar();
-      if (mounted) confirmarEfemero(context, confirmacaoItemMarcado);
+      if (mounted) {
+        confirmarEfemero(
+          context,
+          confirmacaoFinanceiroNaLista(linha.alunoNome, marcado: valor),
+        );
+      }
     } catch (erro) {
       final traduzido = erro is ErroApp ? erro : traduzirErro(erro);
-      // Erro de uma marca não derruba a fila: a mensagem é efêmera e a lista
-      // continua onde estava.
-      if (mounted) confirmarEfemero(context, traduzido.mensagem);
+      // Erro de uma marca não derruba a fila: o banner fica acima da lista,
+      // que continua onde estava.
+      if (mounted) {
+        setState(
+          () => _erroDaLista = erroEscritaNaLista(
+            linha.alunoNome,
+            traduzido.mensagem,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _gravando.remove(linha.alunoId));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final metodos = ref.watch(metodosProvider).value ?? const <Metodo>[];
+    // ⚠️ Os três estados do catálogo, e não `.value ?? []` (item B3): em erro
+    // o filtro Método ficaria só com "Todos", para sempre e sem nenhum erro em
+    // tela. A fila em si não depende dele — a view já traz `metodo_nome`.
+    final catalogo = ref.watch(metodosProvider);
+    final metodos = catalogo.value ?? const <Metodo>[];
     final fila = ref.watch(filaCertificadosProvider);
     final filtro = ref.watch(filtroCertificadosProvider);
     final permissoes = ref.watch(permissoesProvider);
@@ -103,19 +132,14 @@ class _TelaCertificadosState extends ConsumerState<TelaCertificados> {
     final todas = fila.value ?? const <LinhaFilaCertificado>[];
     final linhas = filtrarFila(todas, filtro);
 
-    // Chegou por `?aluno=`: abre o painel assim que a fila tiver dado, uma vez.
-    final pendente = _pendenteDaUrl;
-    if (pendente != null && fila.hasValue) {
-      _pendenteDaUrl = null;
-      final alvo = todas.where((l) => l.alunoId == pendente);
-      if (alvo.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _abrir(alvo.first);
-        });
-      }
+    // Chegou por `?aluno=`: abre o painel assim que a fila tiver dado, uma vez
+    // (o mixin `AberturaPorUrl`, item F1 — o mesmo das telas 4, 5, 6, 7 e 10).
+    if (fila.hasValue) {
+      final alvo = todas.where((l) => l.alunoId == widget.alunoId);
+      abrirUmaVez(alvo.isEmpty ? null : alvo.first, _abrir);
     }
 
-    return TabelaIm360<LinhaFilaCertificado>(
+    final tabela = TabelaIm360<LinhaFilaCertificado>(
       filtros: _FiltrosCertificados(
         filtro: filtro,
         metodos: metodos,
@@ -162,7 +186,7 @@ class _TelaCertificadosState extends ConsumerState<TelaCertificados> {
           larguraMin: 120,
         ),
       ],
-      linhas: fila.whenData((_) => linhas),
+      linhas: fila.derivar((_) => linhas),
       aoTocarLinha: _abrir,
       cartao: (l) => CartaoIm360(
         titulo: l.rotuloAluno,
@@ -179,6 +203,7 @@ class _TelaCertificadosState extends ConsumerState<TelaCertificados> {
         acao: podeMarcarFinanceiro && l.temChecklist
             ? _CaixaFinanceiro(
                 linha: l,
+                gravando: _gravando.contains(l.alunoId),
                 aoMarcar: (valor) => _marcarFinanceiro(l, valor),
               )
             : null,
@@ -195,6 +220,31 @@ class _TelaCertificadosState extends ConsumerState<TelaCertificados> {
               icone: Icons.workspace_premium_outlined,
             ),
       aoRepetir: ref.read(versaoCertificadosProvider.notifier).incrementar,
+    );
+
+    final erroDaLista = _erroDaLista;
+    final metodosNaoLidos = catalogo.hasError;
+    if (erroDaLista == null && !metodosNaoLidos) return tabela;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (metodosNaoLidos)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Dim.e16, Dim.e12, Dim.e16, 0),
+            child: AvisoTonal(
+              mensagem: erroMetodosNaoLidos,
+              rotuloAcao: 'Tentar de novo',
+              aoAgir: () => ref.invalidate(metodosProvider),
+            ),
+          ),
+        if (erroDaLista != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Dim.e16, Dim.e12, Dim.e16, 0),
+            child: AvisoTonal(mensagem: erroDaLista, erro: true),
+          ),
+        Expanded(child: tabela),
+      ],
     );
   }
 }
@@ -313,22 +363,34 @@ class _Marca extends StatelessWidget {
 /// monitor). Alvo de 44 px, e o tooltip diz o que ela faz — no celular a linha
 /// inteira abre o painel, e sem o alvo próprio o toque cairia lá.
 class _CaixaFinanceiro extends StatelessWidget {
-  const _CaixaFinanceiro({required this.linha, required this.aoMarcar});
+  const _CaixaFinanceiro({
+    required this.linha,
+    required this.gravando,
+    required this.aoMarcar,
+  });
 
   final LinhaFilaCertificado linha;
+
+  /// Escrita em curso: a caixa fica desabilitada **com o motivo** — é estado,
+  /// não permissão (design-system §5.7), e o segundo toque não manda nada.
+  final bool gravando;
   final ValueChanged<bool> aoMarcar;
 
   @override
   Widget build(BuildContext context) {
     final marcado = linha.financeiroOk == true;
     return Tooltip(
-      message: marcado ? 'Desmarcar Financeiro OK' : 'Marcar Financeiro OK',
+      message: gravando
+          ? motivoGravando
+          : marcado
+          ? 'Desmarcar Financeiro OK'
+          : 'Marcar Financeiro OK',
       child: SizedBox(
         width: Dim.alvoMobile,
         height: Dim.alvoMobile,
         child: Checkbox(
           value: marcado,
-          onChanged: (valor) => aoMarcar(valor ?? false),
+          onChanged: gravando ? null : (valor) => aoMarcar(valor ?? false),
           semanticLabel: ItemChecklist.financeiro.rotulo,
         ),
       ),

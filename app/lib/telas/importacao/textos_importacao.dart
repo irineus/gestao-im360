@@ -42,6 +42,68 @@ const textoImportacaoAguardandoArquivo =
 const textoImportacaoAguardandoValidacao =
     'Valide o arquivo no passo 2 para ver o relatório.';
 
+/// O lote não pôde ser lido depois de validar (item A4 da revisão das telas
+/// 08/09). É erro, e não "valide de novo": a pessoa acabou de validar.
+const textoImportacaoLoteNaoLido =
+    'Não foi possível ler o resultado da validação. Tente de novo; se '
+    'continuar, o lote está registrado e aparece nas importações anteriores.';
+
+/// O motivo do "Baixar relatório" enquanto as ocorrências carregam (item B4):
+/// "não há ocorrências" seria afirmar o que ainda não se sabe.
+const textoImportacaoRelatorioCarregando = 'O relatório ainda está carregando.';
+
+/// O rótulo de cada código de ocorrência, para o resumo por código do passo 3
+/// (item E2: o §16 desenha "265 alunos lidos · 20 sem turma · 2 códigos
+/// divergentes", e um resumo por código é o que o 9.3 quer ver primeiro). A
+/// lista é a das dezesseis verificações de `docs/importacao.md` §5; código que
+/// a tela não conhece aparece como está, porque esconder seria pior.
+String rotuloCodigoOcorrencia(String codigo) => switch (codigo) {
+  'ENTIDADE_INVALIDA' => 'Entidade em formato inválido',
+  'ENTIDADE_DESCONHECIDA' => 'Entidade desconhecida',
+  'CAMPO_OBRIGATORIO' => 'Campo obrigatório vazio',
+  'VALOR_INVALIDO' => 'Valor inválido',
+  'DATA_INVALIDA' => 'Data inválida',
+  'CHAVE_DUPLICADA' => 'Chave duplicada no arquivo',
+  'REFERENCIA_AUSENTE' => 'Referência inexistente',
+  'METODO_INCOMPATIVEL' => 'Método incompatível',
+  'ALUNO_INATIVO' => 'Aluno inativo em turma',
+  'SALDO_NEGATIVO' => 'Saldo negativo',
+  'ALUNO_SEM_TURMA' => 'Aluno sem turma',
+  'PREVISAO_ATIPICA' => 'Previsão atípica',
+  'ENTREGA_SEM_SAIDA' => 'Entrega sem saída de estoque',
+  'SAIDA_SEM_ENTREGA' => 'Saída de estoque sem entrega',
+  'PC_SEM_MANUTENCAO' => 'PC em manutenção sem registro',
+  'SAIDA_SEM_ALUNO' => 'Saída de estoque sem aluno',
+  'STATUS_DIVERGENTE' => 'Status divergente do sistema',
+  _ => codigo,
+};
+
+/// "20 × Aluno sem turma" — as contagens por código, ERRO primeiro e depois
+/// por quantidade, derivadas da lista já carregada. É contagem de tela, não
+/// regra: a severidade e o código vieram do banco.
+List<({String codigo, bool bloqueia, int total})> resumoPorCodigo(
+  List<OcorrenciaImportacao> ocorrencias,
+) {
+  final contagens = <String, ({bool bloqueia, int total})>{};
+  for (final o in ocorrencias) {
+    final atual = contagens[o.codigo];
+    contagens[o.codigo] = (
+      bloqueia: (atual?.bloqueia ?? false) || o.bloqueia,
+      total: (atual?.total ?? 0) + 1,
+    );
+  }
+  final resumo = [
+    for (final e in contagens.entries)
+      (codigo: e.key, bloqueia: e.value.bloqueia, total: e.value.total),
+  ];
+  resumo.sort((a, b) {
+    if (a.bloqueia != b.bloqueia) return a.bloqueia ? -1 : 1;
+    if (a.total != b.total) return b.total.compareTo(a.total);
+    return a.codigo.compareTo(b.codigo);
+  });
+  return resumo;
+}
+
 String textoEntidadesDesconhecidas(List<String> chaves) =>
     'O arquivo traz ${chaves.join(', ')}, que a importação não conhece. '
     'Essas listas serão ignoradas — confira se o script de extração é o desta '
@@ -55,6 +117,11 @@ const textoImportacaoSeveridade =
 
 const textoImportacaoSemOcorrencias =
     'Nenhum erro e nenhum aviso — o arquivo pode ser aplicado.';
+
+/// O que o toque numa linha do histórico faz (item A5).
+const textoImportacaoHistoricoAbre =
+    'Toque numa importação para abrir o relatório e os totais dela. Um lote '
+    'validado e ainda não aplicado pode ser simulado e aplicado daqui.';
 
 const textoImportacaoSemHistorico =
     'Nenhuma importação ainda. A primeira será a carga da planilha.';
