@@ -9,6 +9,7 @@ import '../../compras/compras_provider.dart';
 import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../util/async_valor.dart';
 import '../../util/datas.dart';
 import '../../rotas/rotas.dart';
 import '../../widgets/abertura_por_url.dart';
@@ -249,7 +250,7 @@ class _AbaSugeridoState extends ConsumerState<AbaSugerido> {
       ],
       // A conta não se refaz aqui: `qtd_sugerida` vem da view. A ordenação, sim
       // — maior sugestão primeiro, que é a ordem em que a compra se decide.
-      linhas: sugerido.whenData(
+      linhas: sugerido.derivar(
         (_) => [...exibidas]
           ..sort((a, b) {
             final porSugestao = b.qtdSugerida.compareTo(a.qtdSugerida);
@@ -323,7 +324,11 @@ class _CarimboDaProjecao extends ConsumerWidget {
     final cores = Theme.of(context).colorScheme;
     final quando = ref.watch(projecaoCalculadaEmProvider);
 
+    // `skipLoadingOnReload`: na recarga da aba o carimbo anterior fica no
+    // lugar em vez de sumir e voltar (item A2 da revisão das telas 08/09).
+    // Só a PRIMEIRA carga não desenha nada.
     final texto = quando.when(
+      skipLoadingOnReload: true,
       loading: () => null,
       error: (_, _) => erroProjecaoCalculadaEm,
       data: (em) => em == null
@@ -595,7 +600,7 @@ class _AbaPedidosState extends ConsumerState<AbaPedidos>
           larguraMin: 120,
         ),
       ],
-      linhas: pedidos.whenData((lista) => filtrarPedidos(lista, filtro)),
+      linhas: pedidos.derivar((lista) => filtrarPedidos(lista, filtro)),
       linhaSelecionada: (p) => p.pedidoId == _selecionado,
       cartao: (p) => CartaoIm360(
         titulo: '${p.numero} · ${rotuloStatusPedido(p.status)}',

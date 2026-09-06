@@ -148,59 +148,67 @@ class _LinhaAluno extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cores = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: () => context.go(caminhoFichaAluno(aluno.alunoId)),
-      child: ConstrainedBox(
-        // Alvo de 44 px nas jornadas do celular (design-system §8.4).
-        constraints: const BoxConstraints(minHeight: Dim.alvoMobile),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: Dim.e8),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      aluno.rotuloAluno,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Tipografia.corpoTabela,
-                    ),
-                    Text(
-                      '${rotuloRegra(aluno.regra)} · ${rotuloPosicao(aluno)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Tipografia.apoio.copyWith(
-                        color: cores.onSurfaceVariant,
+    // `Semantics(button:)` (item D4): sem ele o leitor de tela lia o nome e a
+    // regra sem dizer que dá para abrir a ficha (design-system §8.5) — ao
+    // contrário dos alvos do Dashboard.
+    return Semantics(
+      button: true,
+      label: '${aluno.rotuloAluno}, abrir a ficha',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: () => context.go(caminhoFichaAluno(aluno.alunoId)),
+        child: ConstrainedBox(
+          // Alvo de 44 px nas jornadas do celular (design-system §8.4).
+          constraints: const BoxConstraints(minHeight: Dim.alvoMobile),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: Dim.e8),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        aluno.rotuloAluno,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Tipografia.corpoTabela,
                       ),
-                    ),
-                  ],
+                      Text(
+                        '${rotuloRegra(aluno.regra)} · ${rotuloPosicao(aluno)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Tipografia.apoio.copyWith(
+                          color: cores.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: Dim.e8),
-              Expanded(
-                child: Text(
-                  formatarData(aluno.dataPrevista),
-                  textAlign: TextAlign.end,
-                  style: Tipografia.numero(Tipografia.corpoTabela),
+                const SizedBox(width: Dim.e8),
+                Expanded(
+                  child: Text(
+                    formatarData(aluno.dataPrevista),
+                    textAlign: TextAlign.end,
+                    style: Tipografia.numero(Tipografia.corpoTabela),
+                  ),
                 ),
-              ),
-              const SizedBox(width: Dim.e8),
-              SizedBox(
-                width: 56,
-                child: Text(
-                  // O traço diz que aquele degrau não usa ritmo. Mostrar o do
-                  // método aqui seria exibir um número que não gerou esta data.
-                  rotuloRitmo(aluno.ritmoDias),
-                  textAlign: TextAlign.end,
-                  style: Tipografia.numero(Tipografia.corpoTabela)
-                      .copyWith(color: cores.onSurfaceVariant),
+                const SizedBox(width: Dim.e8),
+                SizedBox(
+                  width: 56,
+                  child: Text(
+                    // O traço diz que aquele degrau não usa ritmo. Mostrar o do
+                    // método aqui seria exibir um número que não gerou esta data.
+                    rotuloRitmo(aluno.ritmoDias),
+                    textAlign: TextAlign.end,
+                    style: Tipografia.numero(Tipografia.corpoTabela)
+                        .copyWith(color: cores.onSurfaceVariant),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

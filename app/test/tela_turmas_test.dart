@@ -254,7 +254,11 @@ void main() {
     // A aba inicial é a de HOJE, e não sempre segunda (design-system §6): a
     // grade de segunda é a resposta errada para quem abre o app na quinta.
     const ocupacaoDoDia = {1: '0/10', 2: '9/10', 3: '10/10', 4: '11/10'};
-    final hoje = hojeSaoPaulo().weekday;
+    // ⚠️ No DOMINGO não há aba de hoje (a matriz vai de segunda a sábado) e
+    // ela abre na primeira, a de segunda — sem isto o teste reprovava um dia
+    // por semana, medido em 06/09/2026 (um domingo), sem defeito nenhum.
+    final diaDaSemana = hojeSaoPaulo().weekday;
+    final hoje = diaDaSemana == DateTime.sunday ? DateTime.monday : diaDaSemana;
     for (final entrada in ocupacaoDoDia.entries) {
       expect(
         find.text(entrada.value),

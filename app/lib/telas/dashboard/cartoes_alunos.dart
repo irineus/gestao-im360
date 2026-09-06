@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../alunos/alunos.dart';
 import '../../alunos/alunos_provider.dart';
+import '../../certificados/certificados.dart';
+import '../../certificados/certificados_provider.dart';
 import '../../dashboard/dashboard.dart';
 import '../../dashboard/dashboard_provider.dart';
 import '../../rotas/rotas.dart';
@@ -163,7 +165,26 @@ class _CartaoAlunos extends ConsumerWidget {
               ocultarEncerrados: status == null,
             ),
           );
-      context.go(_rotaAlunos.caminho);
+      context.go(caminhoDeRota('alunos'));
+    }
+
+    // ⚠️ Filtrado pelo método E pela situação (item A1): o número é
+    // `em_ultimo_livro` de um método — UM item pendente, que na fila é
+    // exatamente `ULTIMO_LIVRO` —, e a tela 9 aberta sem filtro mostrava FIM +
+    // ÚLTIMO LIVRO de todos os métodos para um número que é de um método e de
+    // uma situação. O atalho tem de mostrar exatamente o que acabou de contar,
+    // como `abrirAlunos` já faz para os cinco status (e como o 5.8 pagou com o
+    // `?bloco=`).
+    void abrirCertificados() {
+      ref
+          .read(filtroCertificadosProvider.notifier)
+          .definir(
+            FiltroCertificados(
+              metodoId: a.metodoId,
+              situacao: situacaoUltimoLivro,
+            ),
+          );
+      context.go(caminhoDeRota('certificados'));
     }
 
     return CardDashboard(
@@ -237,9 +258,7 @@ class _CartaoAlunos extends ConsumerWidget {
             // A fila de quem está chegando ao fim é a tela de Certificados —
             // mas a rota dela pede uma permissão que a desta não pede, e botão
             // que leva a "Sem acesso" ensina a não clicar nos outros (card 5.8).
-            aoTocar: podeVerCertificados
-                ? () => context.go(_rotaCertificados.caminho)
-                : null,
+            aoTocar: podeVerCertificados ? abrirCertificados : null,
           ),
           // Sem atalho: não há filtro de "sem previsão" na lista de alunos, e
           // inventar um aqui seria uma tela prometendo o que a outra não faz. O
@@ -288,6 +307,11 @@ class _LinhaNumero extends StatelessWidget {
 /// Um alvo de toque dentro do cartão, com o rótulo que a leitura de tela
 /// anuncia. O `Semantics` é próprio porque o cartão está em `alvosInternos`:
 /// sem ele o número seria lido sem dizer que dá para abrir a lista dali.
+///
+/// ⚠️ Altura mínima de 40 px no desktop e 44 no celular (design-system §8.4,
+/// item D1 da revisão das telas 08/09): com `Padding(vertical: 4)` em volta de
+/// um texto de apoio o alvo media **24 px** — e no celular estes são os únicos
+/// atalhos do Dashboard (wireframes §3.3, "toda célula/número é atalho").
 class _Alvo extends StatelessWidget {
   const _Alvo({
     required this.rotulo,
@@ -300,23 +324,32 @@ class _Alvo extends StatelessWidget {
   final Widget filho;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: rotulo,
-    excludeSemantics: true,
-    child: InkWell(
-      onTap: aoTocar,
-      borderRadius: BorderRadius.circular(Dim.raioBadge),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: Dim.e4),
-        child: filho,
+  Widget build(BuildContext context) {
+    final mobile = faixaDe(MediaQuery.sizeOf(context).width) == Faixa.mobile;
+    return Semantics(
+      button: true,
+      label: rotulo,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: aoTocar,
+        borderRadius: BorderRadius.circular(Dim.raioBadge),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: mobile ? Dim.alvoMobile : Dim.alturaBotao,
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: Dim.e8),
+              child: filho,
+            ),
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
-Rota get _rotaAlunos =>
-    rotasAplicacao.firstWhere((rota) => rota.id == 'alunos');
-
-Rota get _rotaCertificados =>
-    rotasAplicacao.firstWhere((rota) => rota.id == 'certificados');
+/// A rota de Certificados, para a guarda do atalho: `podeAbrir` precisa da
+/// `Rota`, e não só do caminho.
+Rota get _rotaCertificados => rotaDe('certificados');

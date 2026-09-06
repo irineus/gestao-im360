@@ -318,15 +318,29 @@ class _FormularioIm360State extends State<FormularioIm360> {
 
 /// Banner tonal: atenção (padrão) ou erro. O mesmo par de cores do banner da
 /// tela de login, componentizado uma vez.
+///
+/// Com [rotuloAcao] e [aoAgir] ganha um botão à direita — "Tentar de novo" de
+/// uma leitura secundária que falhou (o catálogo de métodos da Projeção, item
+/// B3 da revisão das telas 08/09), sem derrubar a tela em `EstadoErro`.
 class AvisoTonal extends StatelessWidget {
-  const AvisoTonal({super.key, required this.mensagem, this.erro = false});
+  const AvisoTonal({
+    super.key,
+    required this.mensagem,
+    this.erro = false,
+    this.rotuloAcao,
+    this.aoAgir,
+  });
 
   final String mensagem;
   final bool erro;
+  final String? rotuloAcao;
+  final VoidCallback? aoAgir;
 
   @override
   Widget build(BuildContext context) {
     final cores = Theme.of(context).colorScheme;
+    final corTexto = erro ? cores.error : cores.onTertiaryContainer;
+    final rotulo = rotuloAcao;
     return Container(
       padding: const EdgeInsets.all(Dim.e12),
       decoration: BoxDecoration(
@@ -339,17 +353,23 @@ class AvisoTonal extends StatelessWidget {
           Icon(
             erro ? Icons.error_outline : Icons.info_outline,
             size: 18,
-            color: erro ? cores.error : cores.onTertiaryContainer,
+            color: corTexto,
           ),
           const SizedBox(width: Dim.e8),
           Expanded(
             child: Text(
               mensagem,
-              style: Tipografia.corpoTabela.copyWith(
-                color: erro ? cores.error : cores.onTertiaryContainer,
-              ),
+              style: Tipografia.corpoTabela.copyWith(color: corTexto),
             ),
           ),
+          if (rotulo != null && aoAgir != null) ...[
+            const SizedBox(width: Dim.e8),
+            TextButton(
+              onPressed: aoAgir,
+              style: TextButton.styleFrom(foregroundColor: corTexto),
+              child: Text(rotulo),
+            ),
+          ],
         ],
       ),
     );

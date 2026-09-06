@@ -59,6 +59,47 @@ final checklistAlunoProvider =
       (ref, alunoId) => _traduzindo(() => _repositorio(ref).checklist(alunoId)),
     );
 
+/// As três escritas do certificado, num lugar só — tradução do erro e versão
+/// (o molde de `AcoesImportacao`, card 9.1).
+///
+/// Nasceu na revisão das telas 08/09 (item F2): a lista da tela 9 e o
+/// `BlocoChecklist` faziam, cada um, a mesma tradução + versão, e duas cópias
+/// da mesma escrita é o que fica livre para divergir. A **confirmação** continua
+/// com cada tela, porque o texto é dela (na lista diz o nome do aluno; no painel
+/// o nome está no título).
+class AcoesCertificado {
+  const AcoesCertificado(this._ref);
+
+  final Ref _ref;
+
+  Future<void> abrirChecklist(String alunoId) =>
+      _escrever((repositorio) => repositorio.abrirChecklist(alunoId));
+
+  Future<void> marcarItem(
+    String alunoId, {
+    required String item,
+    required bool valor,
+  }) => _escrever(
+    (repositorio) => repositorio.marcarItem(alunoId, item: item, valor: valor),
+  );
+
+  Future<void> alterarStatus(String alunoId, {required String status}) =>
+      _escrever(
+        (repositorio) => repositorio.alterarStatus(alunoId, status: status),
+      );
+
+  Future<void> _escrever(
+    Future<void> Function(CertificadosRepositorio repositorio) acao,
+  ) => _traduzindo(() async {
+    await acao(_ref.read(certificadosRepositorioProvider));
+    _ref.read(versaoCertificadosProvider.notifier).incrementar();
+  });
+}
+
+final acoesCertificadoProvider = Provider<AcoesCertificado>(
+  AcoesCertificado.new,
+);
+
 /// Filtro da fila — estado da tela, sobrevive à navegação de ida e volta dentro
 /// da sessão (design-system §5.3).
 class FiltroCertificadosNotifier extends Notifier<FiltroCertificados> {

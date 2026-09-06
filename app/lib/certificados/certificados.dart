@@ -433,6 +433,25 @@ const confirmacaoChecklistAberto = 'Checklist aberto.';
 const confirmacaoItemMarcado = 'Checklist atualizado.';
 const confirmacaoStatusAlterado = 'Status do certificado atualizado.';
 
+/// A confirmação da caixa Financeiro **na lista** diz de quem foi: com dez
+/// alunos na fila, "Checklist atualizado." não diz qual (item C2 da revisão das
+/// telas 08/09). No painel o nome está no título, e a genérica basta.
+String confirmacaoFinanceiroNaLista(String nome, {required bool marcado}) =>
+    'Financeiro OK ${marcado ? 'marcado' : 'desmarcado'} para $nome.';
+
+/// O banner de uma escrita da lista que falhou — com o nome, pela mesma razão.
+String erroEscritaNaLista(String nome, String mensagem) =>
+    'Não foi possível atualizar o checklist de $nome. $mensagem';
+
+/// O motivo da caixa desabilitada enquanto a escrita corre (design-system §5.7:
+/// é estado, não permissão).
+const motivoGravando = 'Gravando…';
+
+/// O catálogo de métodos não veio (item B3): o filtro fica só com "Todos" e a
+/// tela diz isso, em vez de oferecer menos opções em silêncio.
+const erroMetodosNaoLidos =
+    'Não foi possível ler os métodos: o filtro por método está indisponível.';
+
 /// "por Paula, 20/08" · "20/08" · "—" (wireframe §12.2).
 String rotuloAutoria(AutoriaItem autoria, String Function(DateTime) formatar) {
   final quando = autoria.quando;

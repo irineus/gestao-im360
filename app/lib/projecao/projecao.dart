@@ -427,6 +427,17 @@ const vazioProjecaoRotinaFalhou =
 
 const vazioProjecaoFiltro = 'Nenhum material com esses filtros.';
 
+/// O catálogo de métodos não veio (item B3 da revisão das telas 08/09): a
+/// coluna Método diz "não lido" em cada linha, o filtro fica só com "Todos", e
+/// a tela diz por quê — antes disso era um `—` mudo em toda linha, para sempre.
+const erroMetodosNaoLidos =
+    'Não foi possível ler os métodos: a coluna Método e o filtro por método '
+    'estão indisponíveis.';
+
+/// O que a coluna Método diz enquanto o catálogo não foi lido — nunca o traço,
+/// que é a forma de "este material não tem método".
+const metodoNaoLido = 'não lido';
+
 /// O drill-down de uma célula que não devolveu aluno nenhum. Só acontece quando
 /// o total é da madrugada e o detalhe, de agora, já não tem aquele aluno — uma
 /// entrega registrada hoje de manhã basta —, e é exatamente a defasagem que o

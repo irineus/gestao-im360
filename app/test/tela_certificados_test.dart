@@ -9,6 +9,7 @@ import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/telas/certificados/tela_certificados.dart';
 import 'package:gestao_im360/theme/tema.dart';
+import 'package:gestao_im360/widgets/estados.dart';
 
 import 'apoio/carregar.dart';
 import 'apoio/catalogo_falso.dart';
@@ -330,6 +331,109 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(Dialog), findsOneWidget);
       expect(find.text('Fim do curso: 18/08/2026'), findsOneWidget);
+    });
+  });
+
+  group('a caixa Financeiro da lista (itens A2 e A3 da revisão 08/09)', () {
+    testWidgets('marcar na lista NÃO faz a fila sumir para o esqueleto', (
+      tester,
+    ) async {
+      // Medido em 390 px antes da correção: durante a recarga
+      // `EstadoCarregando = 1` e o cartão de Bianca = 0. Na jornada nº 2 do
+      // monitor — marcar vários alunos em sequência — a lista sumia pelo tempo
+      // de uma ida ao banco e a próxima caixa mudava de lugar.
+      certificados.atrasoLeitura = const Duration(milliseconds: 300);
+      await montar(tester, permissoes: monitor, tamanho: const Size(390, 800));
+
+      await tester.tap(find.byType(Checkbox).at(1));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // A escrita já foi; a fila está recarregando — e continua na tela.
+      expect(certificados.escritas, ['marcar:aluno-2:FINANCEIRO:true']);
+      expect(find.text('Bianca Moraes (4501)'), findsOneWidget);
+      expect(find.byType(EstadoCarregando), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+
+      await carregar(tester);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(find.textContaining('P ok · F ok'), findsWidgets);
+    });
+
+    testWidgets('dois toques rápidos mandam UMA escrita, e a caixa diz por quê', (
+      tester,
+    ) async {
+      // Medido antes da correção: dois toques com 50 ms de intervalo e escrita
+      // de 300 ms → duas escritas iguais. O segundo toque, que a pessoa dá
+      // para "desfazer" quando a caixa não reage, mandava `true` de novo.
+      certificados.atrasoEscrita = const Duration(milliseconds: 300);
+      await montar(tester, permissoes: monitor, tamanho: const Size(390, 800));
+
+      final caixa = find.byType(Checkbox).at(1);
+      await tester.tap(caixa);
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // Enquanto grava, a caixa está desabilitada COM o motivo — é estado, não
+      // permissão (design-system §5.7).
+      expect(tester.widget<Checkbox>(caixa).onChanged, isNull);
+      expect(find.byTooltip(motivoGravando), findsOneWidget);
+      await tester.tap(caixa, warnIfMissed: false);
+      await carregar(tester);
+
+      expect(certificados.escritas, ['marcar:aluno-2:FINANCEIRO:true']);
+      expect(find.byTooltip(motivoGravando), findsNothing);
+      // E a confirmação diz DE QUEM foi (item C2).
+      expect(
+        find.text(confirmacaoFinanceiroNaLista('Bianca Moraes', marcado: true)),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('erro de escrita vira banner com o nome, e não snackbar', (
+      tester,
+    ) async {
+      certificados.erroDaEscrita = const ErroApp(
+        mensagem: 'Você não tem permissão para esta ação.',
+        traduzido: true,
+      );
+      await montar(tester, permissoes: monitor, tamanho: const Size(390, 800));
+
+      await tester.tap(find.byType(Checkbox).at(1));
+      await carregar(tester);
+
+      expect(
+        find.text(
+          erroEscritaNaLista(
+            'Bianca Moraes',
+            'Você não tem permissão para esta ação.',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(SnackBar), findsNothing);
+      // A fila continua onde estava.
+      expect(find.text('Bianca Moraes (4501)'), findsOneWidget);
+    });
+  });
+
+  group('o catálogo de métodos (item B3)', () {
+    testWidgets('em erro a tela diz que o filtro está indisponível', (
+      tester,
+    ) async {
+      catalogo.falhaAoLer = const ErroApp(
+        mensagem: 'sem rede',
+        traduzido: true,
+      );
+      await montar(tester);
+
+      expect(find.text(erroMetodosNaoLidos), findsOneWidget);
+      // A fila em si não depende do catálogo: a view traz `metodo_nome`.
+      expect(find.text('Bianca Moraes (4501)'), findsOneWidget);
+
+      catalogo.falhaAoLer = null;
+      await tester.tap(find.text('Tentar de novo'));
+      await carregar(tester);
+      expect(find.text(erroMetodosNaoLidos), findsNothing);
     });
   });
 }

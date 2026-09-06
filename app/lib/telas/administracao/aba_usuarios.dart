@@ -6,6 +6,7 @@ import '../../administracao/administracao_provider.dart';
 import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../util/async_valor.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
@@ -122,7 +123,7 @@ class AbaUsuarios extends ConsumerWidget {
           larguraMin: 140,
         ),
       ],
-      linhas: usuarios.whenData((lista) => filtrarUsuarios(lista, filtro)),
+      linhas: usuarios.derivar((lista) => filtrarUsuarios(lista, filtro)),
       cartao: (u) => CartaoIm360(
         titulo: u.nome,
         subtitulo: u.email,
