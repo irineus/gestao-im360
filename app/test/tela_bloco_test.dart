@@ -438,4 +438,11 @@ void main() {
     expect(find.textContaining('Interativo'), findsWidgets);
     expect(find.textContaining('INTERATIVO'), findsNothing);
   });
+
+  // Card 9.2,73: o painel do bloco só tinha desktop.
+  testWidgets('390 px: o bloco abre sem estouro (card 9.2,73)', (tester) async {
+    await montar(tester, tamanho: const Size(390, 800));
+    expect(find.text('Ana Paula Ribeiro'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
 }

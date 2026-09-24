@@ -511,4 +511,48 @@ void main() {
       expect(find.text('03/09/2026 10:15'), findsOneWidget);
     });
   });
+
+  // Card 9.2,73: a obrigação do §13 que tinha ficado para trás.
+  group('390 px, erro e vazio (card 9.2,73)', () {
+    testWidgets('390 px: a lista de usuários abre sem estouro', (tester) async {
+      await montar(
+        tester,
+        repositorio: AdministracaoFalso.fixture(),
+        tamanho: const Size(390, 800),
+      );
+      expect(find.text('Débora Lima'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a lista de usuários que FALHA diz que falhou, com '
+        '"Tentar de novo"', (tester) async {
+      await montar(
+        tester,
+        repositorio: AdministracaoFalso.fixture()
+          ..leiturasQueFalham.add('usuarios'),
+      );
+      expect(find.text('Tentar de novo'), findsWidgets);
+      expect(find.text('Débora Lima'), findsNothing);
+    });
+
+    testWidgets('só quem está logado: "Só você por aqui", e não uma tabela '
+        'muda', (tester) async {
+      // Só para quem pode convidar: a frase manda para "Convidar usuário".
+      await montar(
+        tester,
+        permissoes: {...leitura, 'admin.gerir_usuarios'},
+        repositorio: AdministracaoFalso(
+          usuarios: const [
+            UsuarioAdmin(
+              id: 'u-direcao',
+              nome: 'Direção A',
+              email: 'direcao@escola-a.test',
+              perfisIds: {'p-direcao'},
+            ),
+          ],
+        ),
+      );
+      expect(find.text(soVocePorAqui), findsOneWidget);
+    });
+  });
 }

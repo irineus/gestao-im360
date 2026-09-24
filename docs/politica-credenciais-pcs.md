@@ -284,7 +284,7 @@ Comportamento (card 4.3/4.5):
 | 3 | `salas.acessar_credencial` no seed de permissões e na matriz (direção, monitor) | 3.6 | ✔ | ✅ 01/09/2026 |
 | 4 | Tabela `pc_credencial_acesso` com as políticas fora do padrão do §6 | 4.3 | ✔ | ✅ 02/09/2026 |
 | 5 | `PC_INEXISTENTE` no catálogo de erros do card 2.2 e no fixture de contrato | 2.2 / 3.7 | ✔ | ✅ 01/09/2026 |
-| 6 | C4, C8 e C12 atualizados; C14 e C15 criados | 3.4.5 / 3.9 | ✔ | ✅ C4/C8/C14/C15 em 02/09/2026; **C12 continua aberto** (a suíte `012_catalogo_contratos` ainda não existe) |
+| 6 | C4, C8 e C12 atualizados; C14 e C15 criados | 3.4.5 / 3.9 | ✔ | ✅ C4/C8/C14/C15 em 02/09/2026; ✅ **C12 fechado no card 9.2,73 (24/09/2026)**: `supabase/tests/012_catalogo_contratos.sql` compara o que as funções levantam com a lista dele, e `app/test/catalogo_erros_test.dart` amarra essa lista ao fixture |
 | 7 | Trigger de limpeza do Vault | 4.3 | | ✅ 02/09/2026, como `fn_pc_credencial_apagar` + `tg_pc_credencial_apaga` |
 | 8 | Ficha do PC com carimbo, botão e diálogo do §8 | 4.5 | | aberto |
 | 9 | Extrator descarta a coluna de senha; planilha congelada sanitizada | 9.2 / 9.7 | | aberto |

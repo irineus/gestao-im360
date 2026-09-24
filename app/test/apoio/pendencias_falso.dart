@@ -108,9 +108,15 @@ class PendenciasFalso implements PendenciasRepositorio {
   /// `PENDENCIA_INEXISTENTE`, `MOTIVO_OBRIGATORIO`. Nulo = caminho feliz.
   ErroApp? erroAoResolver;
 
+  /// Falha a leitura das abertas — o quarto estado da central (card 9.2,73).
+  ErroApp? falhaAoLer;
+
   @override
   Future<List<Pendencia>> abertas() async {
     leituras++;
+    // Card 9.2,73: o estado de erro da central.
+    final falha = falhaAoLer;
+    if (falha != null) throw falha;
     final atraso = atrasoLeitura;
     if (atraso != null) await Future<void>.delayed(atraso);
     return ordenarPendencias(pendencias_);

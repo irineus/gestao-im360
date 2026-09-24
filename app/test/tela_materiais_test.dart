@@ -453,4 +453,23 @@ void main() {
     expect(find.text('abaixo do mínimo'), findsWidgets);
     expect(find.text('saldo negativo'), findsOneWidget);
   });
+
+  // Card 9.2,73: o estado de erro das abas Cursos e Combos.
+  for (final (aba, leitura, dado) in [
+    ('Cursos', 'cursos', 'Informática Essencial'),
+    ('Combos', 'combos', 'Combo Informática'),
+  ]) {
+    testWidgets('a aba $aba que FALHA diz que falhou (card 9.2,73)', (
+      tester,
+    ) async {
+      await montar(
+        tester,
+        repositorio: CatalogoFalso.fixture()..leiturasQueFalham.add(leitura),
+      );
+      await tester.tap(find.text(aba));
+      await carregar(tester);
+      expect(find.text('Tentar de novo'), findsWidgets);
+      expect(find.text(dado), findsNothing);
+    });
+  }
 }
