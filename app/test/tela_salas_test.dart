@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/widgets/estados.dart';
+import 'package:gestao_im360/telas/salas/detalhe_sala.dart';
+import 'package:gestao_im360/util/async_valor.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/infraestrutura/infraestrutura.dart';
 import 'package:gestao_im360/infraestrutura/infraestrutura_provider.dart';
@@ -83,6 +86,43 @@ void main() {
     expect(find.text('4'), findsOneWidget);
   });
 
+  // Card 9.2,62: os PCs eram lidos com `.value ?? []` — a coluna dizia "0/0"
+  // e a efetiva "0" enquanto carregava e para sempre se a leitura falhasse.
+  testWidgets('PCs que FALHAM: "não lido" nas duas colunas, nunca 0/0', (
+    tester,
+  ) async {
+    final repositorio = InfraestruturaFalso.fixture()
+      ..leiturasQueFalham.add('pcs');
+    await montar(tester, repositorio: repositorio);
+    expect(find.text('Laboratório 1'), findsOneWidget);
+    expect(find.text('0/0'), findsNothing);
+    expect(find.text(textoNaoLido), findsWidgets);
+  });
+
+  testWidgets('PCs CARREGANDO: nenhuma contagem afirmada', (tester) async {
+    final repositorio = InfraestruturaFalso.fixture()
+      ..leiturasPendentes.add('pcs');
+    await montar(tester, repositorio: repositorio);
+    expect(find.text('Laboratório 1'), findsOneWidget);
+    expect(find.text('0/0'), findsNothing);
+    expect(find.text('…'), findsWidgets);
+  });
+
+  testWidgets('em 390 px o cartão diz "não lido" em vez de "0/0 PCs"', (
+    tester,
+  ) async {
+    final repositorio = InfraestruturaFalso.fixture()
+      ..leiturasQueFalham.add('pcs');
+    await montar(
+      tester,
+      repositorio: repositorio,
+      tamanho: const Size(390, 800),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('0/0 PCs'), findsNothing);
+    expect(find.textContaining(textoNaoLido), findsWidgets);
+  });
+
   testWidgets('sem salas.criar os botões "Nova sala" e "Novo PC" não são '
       'renderizados', (tester) async {
     await montar(tester, repositorio: InfraestruturaFalso.fixture());
@@ -140,6 +180,33 @@ void main() {
   });
 
   group('painel da sala', () {
+    // Card 9.2,62: as manutenções eram lidas com `.value ?? []` — a
+    // manutenção aberta do LAB2-05 sumia e o PC parado aparecia como
+    // operacional, com a ação errada.
+    testWidgets('manutenções que FALHAM: a lista diz que não leu, e não mostra '
+        'PC parado como operacional', (tester) async {
+      final repositorio = InfraestruturaFalso.fixture()
+        ..leiturasQueFalham.add('manutencoes');
+      await montar(tester, repositorio: repositorio);
+      await abrirSala(tester, 'Laboratório 2');
+      expect(find.text(erroManutencoesNaoLidas), findsOneWidget);
+      expect(find.text('LAB2-05'), findsNothing);
+      expect(find.text('Tentar de novo'), findsOneWidget);
+    });
+
+    testWidgets('manutenções CARREGANDO: nenhuma linha de PC afirmada', (
+      tester,
+    ) async {
+      final repositorio = InfraestruturaFalso.fixture()
+        ..leiturasPendentes.add('manutencoes');
+      await montar(tester, repositorio: repositorio);
+      await tester.tap(find.text('Laboratório 2'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('LAB2-05'), findsNothing);
+      expect(find.byType(EstadoCarregando), findsWidgets);
+    });
+
     testWidgets('lista os PCs com a manutenção aberta e, sem permissão, '
         'nenhuma ação', (tester) async {
       await montar(tester, repositorio: InfraestruturaFalso.fixture());

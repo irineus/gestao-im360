@@ -425,6 +425,13 @@ const vazioProjecaoRotinaFalhou =
     'A projeção não foi calculada: a rotina diária falhou. Veja a pendência '
     '"Rotina diária falhou" na central de Pendências.';
 
+/// Tabela vazia e a leitura da pendência `ROTINA_FALHOU` falhou (card 9.2,62):
+/// não dá para dizer qual dos dois vazios do §7.2 é o verdadeiro, e a tela diz
+/// isso em vez de escolher um.
+const vazioProjecaoRotinaNaoLida =
+    'A projeção está vazia e não foi possível saber se a rotina diária rodou. '
+    'Tente de novo.';
+
 const vazioProjecaoFiltro = 'Nenhum material com esses filtros.';
 
 /// O catálogo de métodos não veio (item B3 da revisão das telas 08/09): a

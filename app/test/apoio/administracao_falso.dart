@@ -1,3 +1,4 @@
+import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/administracao/administracao.dart';
 import 'package:gestao_im360/administracao/administracao_repositorio.dart';
 
@@ -203,8 +204,14 @@ class AdministracaoFalso implements AdministracaoRepositorio {
   int _contador = 0;
   String _novoId(String prefixo) => '$prefixo-novo-${++_contador}';
 
+  /// Leituras que falham SOZINHAS, pelo nome (card 9.2,62).
+  final Set<String> leiturasQueFalham = {};
+
   Future<T> _ler<T>(String nome, T valor) async {
     chamadas.add(nome);
+    if (leiturasQueFalham.contains(nome)) {
+      throw const ErroApp(mensagem: 'Não foi possível ler.', traduzido: true);
+    }
     final falha = falhaAoLer;
     if (falha != null) throw falha;
     return valor;

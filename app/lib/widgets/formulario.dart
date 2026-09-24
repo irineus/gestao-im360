@@ -130,6 +130,10 @@ class FormularioIm360 extends StatefulWidget {
 }
 
 class _FormularioIm360State extends State<FormularioIm360> {
+  /// O banner de erro — é por ela que o formulário rola até o erro depois de
+  /// uma recusa do banco (card 9.2,62).
+  final _chaveErro = GlobalKey();
+
   bool _executando = false;
   String? _erro;
 
@@ -189,6 +193,20 @@ class _FormularioIm360State extends State<FormularioIm360> {
       if (!mounted) return;
       widget.aoErro?.call(traduzido);
       setState(() => _erro = traduzido.mensagem);
+      // ⚠️ Pendência 9.13(b), card 9.2,62: o banner era o ÚLTIMO item do
+      // `SingleChildScrollView`, e num formulário alto (matrícula, bloco, PC)
+      // nascia abaixo da dobra — a pessoa tocava em Salvar, nada visível
+      // mudava e ela concluía que o sistema travou. Agora ele nasce no TOPO
+      // e a rolagem o traz à vista depois do quadro que o desenha.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final alvo = _chaveErro.currentContext;
+        if (alvo != null && alvo.mounted) {
+          Scrollable.ensureVisible(
+            alvo,
+            duration: const Duration(milliseconds: 200),
+          );
+        }
+      });
     } finally {
       if (mounted) setState(() => _executando = false);
     }
@@ -228,16 +246,19 @@ class _FormularioIm360State extends State<FormularioIm360> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // O erro vem PRIMEIRO (card 9.2,62): é a resposta ao toque em
+                  // Salvar, e o toque foi no rodapé — no fim da rolagem ele
+                  // ficava fora da vista.
+                  if (_erro != null) ...[
+                    AvisoTonal(key: _chaveErro, mensagem: _erro!, erro: true),
+                    const SizedBox(height: Dim.e16),
+                  ],
                   for (final campo in widget.campos) ...[
                     campo,
                     const SizedBox(height: Dim.e16),
                   ],
                   if (widget.aviso != null) ...[
                     AvisoTonal(mensagem: widget.aviso!),
-                    const SizedBox(height: Dim.e16),
-                  ],
-                  if (_erro != null) ...[
-                    AvisoTonal(mensagem: _erro!, erro: true),
                     const SizedBox(height: Dim.e16),
                   ],
                   if (widget.legendaObrigatorio && !widget.somenteLeitura)
@@ -341,6 +362,17 @@ class AvisoTonal extends StatelessWidget {
     final cores = Theme.of(context).colorScheme;
     final corTexto = erro ? cores.error : cores.onTertiaryContainer;
     final rotulo = rotuloAcao;
+    // O erro é ANUNCIADO ao leitor de tela quando aparece (card 9.2,62): sem
+    // `liveRegion` quem não vê a tela tocava em Salvar e não ouvia nada —
+    // só o `EstadoErro` de `estados.dart` anunciava.
+    return Semantics(
+      liveRegion: erro,
+      container: true,
+      child: _corpo(cores, corTexto, rotulo),
+    );
+  }
+
+  Widget _corpo(ColorScheme cores, Color corTexto, String? rotulo) {
     return Container(
       padding: const EdgeInsets.all(Dim.e12),
       decoration: BoxDecoration(

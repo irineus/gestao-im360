@@ -253,4 +253,109 @@ void main() {
     final dialogo = tester.getSize(find.byType(Dialog));
     expect(dialogo.width, 390);
   });
+
+  // Pendência 9.13(b), card 9.2,62: o banner de erro era o ÚLTIMO item da
+  // rolagem e, num formulário alto, nascia abaixo da dobra.
+  group('erro do banco num formulário ALTO', () {
+    Future<void> abrirAlto(
+      WidgetTester tester,
+      Size tamanho, {
+      bool rolarAteOFim = false,
+    }) async {
+      tester.view.physicalSize = tamanho;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final chave = GlobalKey<FormState>();
+      await tester.pumpWidget(
+        ProviderScope(
+          retry: semRetryAutomatico,
+          child: MaterialApp(
+            theme: temaClaro(),
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => mostrarFormulario<Object>(
+                    context,
+                    construtor: (_) => FormularioIm360(
+                      titulo: 'Matrícula',
+                      chave: chave,
+                      campos: [
+                        for (var i = 1; i <= 14; i++)
+                          TextFormField(
+                            decoration: InputDecoration(labelText: 'Campo $i'),
+                          ),
+                      ],
+                      aoSalvar: () async => throw const ErroApp(
+                        mensagem: 'O banco recusou a matrícula.',
+                        traduzido: true,
+                      ),
+                    ),
+                  ),
+                  child: const Text('abrir'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('abrir'));
+      await tester.pumpAndSettle();
+      // ⚠️ A primeira versão deste teste SÓ rolava até o fim — e ali o banner
+      // antigo, último item da rolagem, já estava à vista: a sabotagem passou
+      // verde. O caso real é quem está no TOPO e toca Salvar no rodapé fixo.
+      if (rolarAteOFim) {
+        await tester.drag(
+          find.byType(SingleChildScrollView),
+          const Offset(0, -3000),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Campo 1').hitTestable(), findsNothing);
+      } else {
+        expect(
+          find.text('Campo 14').hitTestable(),
+          findsNothing,
+          reason: 'premissa: o fim do formulário está abaixo da dobra',
+        );
+      }
+      await tester.tap(find.byKey(chaveBotaoSalvar));
+      await tester.pumpAndSettle();
+    }
+
+    for (final (tamanho, rolar) in const [
+      (Size(1400, 700), false),
+      (Size(390, 700), false),
+      (Size(390, 700), true),
+    ]) {
+      testWidgets(
+        'o banner aparece À VISTA depois da recusa '
+        '(${tamanho.width.toInt()} px, ${rolar ? 'rolado até o fim' : 'no topo'})',
+        (tester) async {
+          await abrirAlto(tester, tamanho, rolarAteOFim: rolar);
+          expect(tester.takeException(), isNull);
+          final banner = find.text('O banco recusou a matrícula.');
+          expect(banner, findsOneWidget);
+          expect(
+            banner.hitTestable(),
+            findsOneWidget,
+            reason: 'o erro tem de estar dentro da área visível',
+          );
+        },
+      );
+    }
+
+    testWidgets('o banner de erro é anunciado ao leitor de tela (liveRegion)', (
+      tester,
+    ) async {
+      final semantica = tester.ensureSemantics();
+      await abrirAlto(tester, const Size(1400, 700));
+      expect(
+        tester.getSemantics(find.text('O banco recusou a matrícula.')),
+        matchesSemantics(
+          isLiveRegion: true,
+          label: 'O banco recusou a matrícula.',
+        ),
+      );
+      semantica.dispose();
+    });
+  });
 }

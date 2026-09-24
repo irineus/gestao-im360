@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/util/async_valor.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/administracao/administracao.dart';
 import 'package:gestao_im360/administracao/administracao_provider.dart';
@@ -80,6 +81,20 @@ void main() {
       expect(find.text('Sem perfil (1)'), findsOneWidget);
       // Desativado fica fora por padrão ("Só ativos").
       expect(find.text('Antigo Diretor'), findsNothing);
+    });
+
+    // Card 9.2,62: os perfis eram lidos com `.value ?? []` e o nome de cada
+    // um virava "?" — sem aviso nenhum.
+    testWidgets('perfis que FALHAM: "não lido" no lugar do nome, e "sem '
+        'perfil" continua valendo', (tester) async {
+      final repositorio = AdministracaoFalso.fixture()
+        ..leiturasQueFalham.add('perfis');
+      await montar(tester, repositorio: repositorio);
+      expect(find.text('Débora Lima'), findsOneWidget);
+      expect(find.text('SECRETARIA'), findsNothing);
+      expect(find.text('?'), findsNothing);
+      expect(find.text(textoNaoLido), findsWidgets);
+      expect(find.text('sem perfil'), findsOneWidget);
     });
 
     testWidgets('sem admin.gerir_usuarios não há "Convidar usuário" e a ficha '

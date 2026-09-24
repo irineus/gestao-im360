@@ -1036,7 +1036,11 @@ class DialogoTurmasInativas extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cores = Theme.of(context).colorScheme;
-    final inativas = ref.watch(turmasModularInativasProvider).value ?? const [];
+    // ⚠️ Os três estados (card 9.2,62): com `.value ?? []` o diálogo dizia
+    // "Nenhuma turma inativa." enquanto carregava e quando a leitura falhava —
+    // e desativar voltava a ser porta de mão única, calada.
+    final leitura = ref.watch(turmasModularInativasProvider);
+    final inativas = leitura.value ?? const [];
     final cursos = {
       for (final c in ref.watch(cursosProvider).value ?? const <Curso>[])
         c.id: c.nome,
@@ -1049,9 +1053,16 @@ class DialogoTurmasInativas extends ConsumerWidget {
       filho: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (inativas.isEmpty)
+          if (leitura.hasError)
+            EstadoErro(
+              mensagem: erroTurmasInativas,
+              aoRepetir: () => ref.invalidate(turmasModularInativasProvider),
+            )
+          else if (!leitura.hasValue)
+            const EstadoCarregando(linhas: 2)
+          else if (inativas.isEmpty)
             Text(
-              'Nenhuma turma inativa.',
+              vazioTurmasInativas,
               style: Tipografia.corpo.copyWith(color: cores.onSurfaceVariant),
             ),
           for (final turma in inativas)
@@ -1126,3 +1137,8 @@ Future<void> mostrarResultadoAvanco(
     ],
   ),
 );
+
+/// Card 9.2,62: textos únicos do diálogo de inativas, para a tela e o teste.
+const vazioTurmasInativas = 'Nenhuma turma inativa.';
+const erroTurmasInativas =
+    'Não foi possível ler as turmas inativas. Tente de novo.';

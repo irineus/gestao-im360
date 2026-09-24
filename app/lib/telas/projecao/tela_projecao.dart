@@ -94,7 +94,10 @@ class _GradeState extends ConsumerState<_Grade> with AberturaPorUrl {
         metodosNaoLidos ? metodoNaoLido : metodosPorId[metodoId]?.nome ?? '—';
     final grade = ref.watch(gradeProjecaoProvider);
     final filtro = ref.watch(filtroProjecaoProvider);
-    final rotinaFalhou = ref.watch(rotinaProjecaoFalhouProvider).value ?? false;
+    // ⚠️ Os três estados, e não `.value ?? false` (card 9.2,62): em carga e em
+    // erro o `false` fazia a tela afirmar "Sem demanda projetada" — exatamente
+    // o que o design-system §7.2 proíbe quando não se sabe se a rotina falhou.
+    final rotina = ref.watch(rotinaProjecaoFalhouProvider);
 
     final todas = grade.value ?? const <CelulaProjecao>[];
 
@@ -198,7 +201,7 @@ class _GradeState extends ConsumerState<_Grade> with AberturaPorUrl {
       estadoVazio: _vazio(
         temDado: todas.isNotEmpty,
         filtrado: filtro.ativos > 0,
-        rotinaFalhou: rotinaFalhou,
+        rotina: rotina,
       ),
       aoRepetir: ref.read(versaoProjecaoProvider.notifier).incrementar,
     );
@@ -227,7 +230,7 @@ class _GradeState extends ConsumerState<_Grade> with AberturaPorUrl {
   Widget _vazio({
     required bool temDado,
     required bool filtrado,
-    required bool rotinaFalhou,
+    required AsyncValue<bool> rotina,
   }) {
     if (temDado && filtrado) {
       return EstadoVazio(
@@ -244,7 +247,18 @@ class _GradeState extends ConsumerState<_Grade> with AberturaPorUrl {
     // este texto diz; sem a pendência, é a escola que de fato não tem demanda no
     // horizonte. Sem os dois estados separados, um vazio honesto viraria um
     // alarme falso, e um alarme viraria silêncio.
-    if (rotinaFalhou) {
+    // Sem saber se a rotina falhou, nenhum dos dois vazios de baixo é verdade:
+    // "sem demanda" seria alarme calado, "a rotina falhou" seria alarme falso.
+    if (rotina.hasError) {
+      return EstadoVazio(
+        mensagem: vazioProjecaoRotinaNaoLida,
+        icone: Icons.help_outline,
+        rotuloAcao: 'Tentar de novo',
+        aoAgir: () => ref.invalidate(rotinaProjecaoFalhouProvider),
+      );
+    }
+    if (!rotina.hasValue) return const EstadoCarregando(linhas: 3);
+    if (rotina.value!) {
       final permissoes = ref.watch(permissoesProvider);
       return EstadoVazio(
         mensagem: vazioProjecaoRotinaFalhou,

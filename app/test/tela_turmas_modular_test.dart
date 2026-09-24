@@ -490,6 +490,36 @@ void main() {
     expect(find.text('Eletricista 2024.1'), findsOneWidget);
   });
 
+  // Card 9.2,62: o diálogo lia `.value ?? []` e dizia "Nenhuma turma
+  // inativa." quando a leitura falhava — desativar voltava a ser porta de mão
+  // única, calada.
+  testWidgets('turmas inativas que FALHAM: o diálogo diz que não leu, nunca '
+      '"nenhuma"', (tester) async {
+    final modular = ModularFalso.fixture()
+      ..falhaInativas = const ErroApp(
+        mensagem: 'Não foi possível ler.',
+        traduzido: true,
+      );
+    await tester.pumpWidget(
+      ProviderScope(
+        retry: semRetryAutomatico,
+        overrides: [
+          modularRepositorioProvider.overrideWithValue(modular),
+          catalogoRepositorioProvider.overrideWithValue(
+            CatalogoFalso.fixture(),
+          ),
+          permissoesProvider.overrideWithValue(secretaria),
+          unidadeAtualProvider.overrideWithValue('unidade-teste'),
+        ],
+        child: const MaterialApp(home: Scaffold(body: DialogoTurmasInativas())),
+      ),
+    );
+    await carregar(tester);
+    expect(find.text(vazioTurmasInativas), findsNothing);
+    expect(find.text(erroTurmasInativas), findsOneWidget);
+    expect(find.text('Tentar de novo'), findsOneWidget);
+  });
+
   testWidgets('só um cartão fica aberto por vez', (tester) async {
     await montar(tester);
     await abrir(tester, 'Eletricista 2026.1');

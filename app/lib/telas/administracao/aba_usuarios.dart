@@ -58,11 +58,23 @@ class AbaUsuarios extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final usuarios = ref.watch(usuariosAdminProvider);
-    final perfis = ref.watch(perfisProvider).value ?? const <Perfil>[];
+    // ⚠️ Os três estados (card 9.2,62): com `.value ?? []` o nome de cada
+    // perfil virava "?" enquanto carregava e para sempre quando a leitura
+    // falhava, sem aviso nenhum. "sem perfil" continua valendo nos dois — é
+    // fato do próprio usuário, não depende do catálogo.
+    final perfisAsync = ref.watch(perfisProvider);
+    final perfis = perfisAsync.value ?? const <Perfil>[];
     final perfisPorId = {
       for (final p in perfis)
         if (p.id != null) p.id!: p,
     };
+    String perfisDe(UsuarioAdmin u) => u.semPerfil
+        ? rotuloPerfis(u, const {})
+        : perfisAsync.hasError
+        ? textoNaoLido
+        : !perfisAsync.hasValue
+        ? '…'
+        : rotuloPerfis(u, perfisPorId);
     final filtro = ref.watch(filtroUsuariosProvider);
     final permissoes = ref.watch(permissoesProvider);
     final sessao = ref.watch(resumoUsuarioProvider);
@@ -105,9 +117,7 @@ class AbaUsuarios extends ConsumerWidget {
         ),
         ColunaIm360(
           titulo: 'Perfis',
-          texto: (u) => u.ativo && u.semPerfil
-              ? 'sem perfil'
-              : rotuloPerfis(u, perfisPorId),
+          texto: (u) => u.ativo && u.semPerfil ? 'sem perfil' : perfisDe(u),
           flex: 3,
           larguraMin: 160,
         ),
@@ -127,7 +137,12 @@ class AbaUsuarios extends ConsumerWidget {
       cartao: (u) => CartaoIm360(
         titulo: u.nome,
         subtitulo: u.email,
-        apoio: apoioUsuario(u, perfisPorId),
+        // A mesma leitura em três estados que a coluna (card 9.2,62).
+        apoio: !u.ativo
+            ? 'Desativado'
+            : u.convitePendente
+            ? '${perfisDe(u)} · convite pendente'
+            : perfisDe(u),
       ),
       estadoVazio: EstadoVazio(
         mensagem: vazioUsuariosFiltro,

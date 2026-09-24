@@ -11,6 +11,7 @@ import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../util/async_valor.dart';
 import '../../util/datas.dart';
+import '../../util/texto.dart';
 import '../../widgets/abertura_por_url.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
@@ -500,7 +501,9 @@ class AbaCursos extends ConsumerWidget {
     final metodos = ref.watch(metodosProvider).value ?? const <Metodo>[];
     final metodosPorId = {for (final m in metodos) m.id: m};
     final cursos = ref.watch(cursosProvider);
-    final apostilas = ref.watch(apostilasPorCursoProvider).value ?? const {};
+    // Os três estados (card 9.2,62): `.value ?? {}` fazia a coluna dizer "0"
+    // enquanto carregava e para sempre quando a leitura falhava.
+    final apostilas = ref.watch(apostilasPorCursoProvider);
     final filtro = ref.watch(filtroCursosProvider);
     final permissoes = ref.watch(permissoesProvider);
     final haCadastro = cursos.value?.isNotEmpty ?? false;
@@ -535,7 +538,7 @@ class AbaCursos extends ConsumerWidget {
         ),
         ColunaIm360(
           titulo: 'Apostilas',
-          texto: (c) => '${apostilas[c.id] ?? 0}',
+          texto: (c) => contagemDe(apostilas, c.id, (n) => '$n'),
           numerica: true,
           prioridade: 2,
           flex: 1,
@@ -554,7 +557,11 @@ class AbaCursos extends ConsumerWidget {
         titulo: c.nome,
         subtitulo: metodosPorId[c.metodoId]?.nome ?? '—',
         apoio: c.ativo ? null : 'Inativo',
-        destaque: '${apostilas[c.id] ?? 0} apost.',
+        destaque: contagemDe(
+          apostilas,
+          c.id,
+          (n) => plural(n, 'apostila', 'apostilas'),
+        ),
       ),
       estadoVazio: haCadastro
           ? EstadoVazio(
@@ -609,7 +616,8 @@ class AbaCombos extends ConsumerWidget {
     final metodos = ref.watch(metodosProvider).value ?? const <Metodo>[];
     final metodosPorId = {for (final m in metodos) m.id: m};
     final combos = ref.watch(combosProvider);
-    final cursos = ref.watch(cursosPorComboProvider).value ?? const {};
+    // Os três estados (card 9.2,62), como em Cursos.
+    final cursos = ref.watch(cursosPorComboProvider);
     final filtro = ref.watch(filtroCombosProvider);
     final permissoes = ref.watch(permissoesProvider);
     final haCadastro = combos.value?.isNotEmpty ?? false;
@@ -644,7 +652,7 @@ class AbaCombos extends ConsumerWidget {
         ),
         ColunaIm360(
           titulo: 'Cursos',
-          texto: (c) => '${cursos[c.id] ?? 0}',
+          texto: (c) => contagemDe(cursos, c.id, (n) => '$n'),
           numerica: true,
           prioridade: 2,
           flex: 1,
@@ -663,7 +671,7 @@ class AbaCombos extends ConsumerWidget {
         titulo: c.nome,
         subtitulo: metodosPorId[c.metodoId]?.nome ?? '—',
         apoio: c.ativo ? null : 'Inativo',
-        destaque: '${cursos[c.id] ?? 0} curso(s)',
+        destaque: contagemDe(cursos, c.id, (n) => plural(n, 'curso', 'cursos')),
       ),
       estadoVazio: haCadastro
           ? EstadoVazio(
