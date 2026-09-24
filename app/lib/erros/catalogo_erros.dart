@@ -249,6 +249,10 @@ abstract final class CatalogoErros {
     'IMPORTACAO_JA_APLICADA':
         'Esta importação já foi aplicada. Para reexecutar o snapshot, envie o '
         'arquivo de novo.',
+    // card 9.2,68 — a validação roda uma vez, dentro do registro.
+    'IMPORTACAO_JA_VALIDADA':
+        'Esta importação já foi validada. Para validar de novo, envie o '
+        'arquivo de novo.',
 
     // --- card 3.5 (espelho auth.users -> usuario)
     'USUARIO_SEM_UNIDADE':

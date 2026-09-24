@@ -18,7 +18,7 @@
 --   • **A SEGUNDA IMPORTAÇÃO DO MESMO SNAPSHOT NÃO DUPLICA NADA.** Dezessete
 --     entidades se reconhecem por chave natural; `movimento_estoque`, que não
 --     tem nenhuma e é IMUTÁVEL, se reconhece pelo mapa `importacao_referencia`.
---     A seção 6 aplica o mesmo arquivo de novo e exige `no_sistema` idêntico.
+--     A seção 5 aplica o mesmo arquivo de novo e exige `no_sistema` idêntico.
 --
 --   • **ERRO DE TRIGGER DESFAZ TUDO E VIRA RELATÓRIO.** A seção 7 importa dois
 --     alunos para um bloco de duas vagas com uma ocupada. `tg_bloco_aluno_

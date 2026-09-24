@@ -23,6 +23,7 @@ voz alta no log e no resumo da execução, em vez de passar calado.
 | `admissao_ultima_vaga.sh` ✅ | **5.3** (03/09/2026) | `fn_bloco_admitir` — duas admissões simultâneas no último lugar |
 | `entrega_ultimo_exemplar.sh` ✅ | **6.3** (04/09/2026) | `fn_registrar_entrega` — duas saídas simultâneas do mesmo material |
 | `admissao_turma_modular.sh` ✅ | **7.4,5** (05/09/2026) | `fn_turma_modular_admitir` — duas admissões simultâneas na única vaga da turma Modular |
+| `importacao_aplicar_dupla.sh` ✅ | **9.2,68** (24/09/2026) | `fn_importacao_aplicar` — duas aplicações simultâneas do mesmo lote: a segunda espera (`for update`) e recebe `IMPORTACAO_JA_APLICADA`; sem a trava ela aplicava de novo e devolvia APLICADA |
 | `rotina_diaria_dupla.sh` ✅ | **9.2,65** (24/09/2026) | `fn_rotina_diaria_executar` / `rt_diaria` — duas execuções da rotina diária da mesma unidade: a segunda recebe `JA_EM_EXECUCAO` sem esperar (`pg_try_advisory_xact_lock`) |
 
 ## O que o primeiro script ensinou (card 5.3)
