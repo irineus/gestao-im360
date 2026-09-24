@@ -324,6 +324,35 @@ saber por quê, com um arquivo de milhares de linhas na mão.
 
 ---
 
+## 7.1 O arquivo do extrator passando por aqui (card 9.2,67, 24/09/2026)
+
+Até o 9.2,67, `100_importacao.sql` usava JSON escrito à mão e o extrator declarava cobrir "a outra
+metade": os dois só se conheciam pelo §3. `supabase/tests_ponta_a_ponta/extrator_importador.mjs`
+(passo próprio no job `banco`) faz o arquivo do extrator — o `.xlsx` sintético, o CLI de verdade, o
+JSON escrito no disco — passar por `fn_importacao_registrar` e `fn_importacao_aplicar`, na unidade
+`MATRIZ` (a real da configuração, onde a virada vai importar), numa transação com rollback. Dois
+cenários:
+
+- **a fixture como está** — o lote sai REPROVADA, e todo ERRO desta validação já estava no
+  relatório do extrator com o mesmo código e a mesma chave (nenhuma surpresa no dry-run);
+- **com a entrada de abertura e os PCs cadastrados antes** (numa pré-carga só de `sala` + `pc`,
+  pelo próprio importador) — VALIDADA sem ERRO, APLICADA, cada entidade com o total do arquivo
+  (`aluno_material` com pelo menos, pela trilha que o combo gera), e a segunda importação do mesmo
+  arquivo com `no_sistema` idêntico.
+
+**O que a primeira execução achou, com a própria fixture do extrator:**
+
+1. **V10 reprovava o arquivo** — INTERATIVO/2 tinha um ajuste −1 e uma saída −1 e nenhuma entrada:
+   o histórico que começa depois do estoque inicial. O extrator não dizia nada; agora diz
+   (`SALDO_NEGATIVO`).
+2. **A aplicação caía inteira com `BLOCO_LOTADO` "0 de 0 vagas"** — o arquivo traz a sala do
+   laboratório com capacidade nominal 10 e nenhum PC, e a vaga é contada pelos PCs operacionais.
+   **A validação passava**: o susto seria no botão "Aplicar". Agora o extrator diz (`SALA_SEM_PC`).
+
+⚠️ **Como o estoque de abertura e os PCs entram na virada é decisão do 9.3/9.4**, não deste teste.
+O cenário B presume o caminho mais curto (entrada de abertura na planilha, PCs cadastrados antes
+do arquivo) só para provar que, resolvidos os dois, o resto do arquivo entra inteiro.
+
 ## 8. Limites assumidos
 
 - **O arquivo inteiro vai numa chamada.** Um snapshot da escola tem alguns milhares de linhas e cabe

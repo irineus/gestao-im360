@@ -234,3 +234,37 @@ describe('bloco e alocação', () => {
     assert.equal(doCodigo('ABA_AUSENTE').length, 0);
   });
 });
+
+describe('saldo (card 9.2,67)', () => {
+  // O mesmo veredito do V10 do importador, dito no relatório que o 9.3 revisa:
+  // a fixture tem, para INTERATIVO/2, um ajuste −1 e uma saída −1 e nenhuma
+  // entrada — o histórico que começa depois do estoque inicial.
+  const saldos = (fonte) => extrair(fonte, SNAPSHOT).ocorrencias
+    .filter((o) => o.codigo === 'SALDO_NEGATIVO');
+
+  it('material cujos movimentos somam negativo vira ERRO, com a chave do importador', () => {
+    const [o, ...resto] = saldos(planilha());
+    assert.equal(resto.length, 0);
+    assert.equal(o.severidade, 'ERRO');
+    assert.equal(o.chave, 'INTERATIVO/2');
+    assert.match(o.detalhe, /somam -2/);
+  });
+
+  it('com a entrada de abertura o saldo fecha e o ERRO some', () => {
+    assert.deepEqual(saldos(planilha([], [['2026-02-01', 2, 5]])), []);
+  });
+});
+
+describe('sala sem PC (card 9.2,67)', () => {
+  // A capacidade nominal não dá vaga: o sistema conta os PCs operacionais. Com
+  // alocação e sem PC no arquivo, o importador recusaria a primeira alocação e
+  // desfaria tudo — e só na aplicação.
+  it('alocação numa sala sem PC no arquivo vira ERRO, dizendo quantas', () => {
+    const { arquivo, ocorrencias } = extrair(planilha(), SNAPSHOT);
+    const [o, ...resto] = ocorrencias.filter((x) => x.codigo === 'SALA_SEM_PC');
+    assert.equal(resto.length, 0);
+    assert.equal(o.severidade, 'ERRO');
+    assert.match(o.detalhe, new RegExp(`^${arquivo.bloco_aluno.length} alocações`));
+    assert.match(o.detalhe, /BLOCO_LOTADO/);
+  });
+});

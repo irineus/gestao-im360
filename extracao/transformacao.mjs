@@ -440,9 +440,23 @@ class Extracao {
     }] : [];
     if (blocos.length) {
       this.diz(AVISO, 'SALA_PRESUMIDA', 'sala', this.sala,
-        'a aba PCS não está mapeada: a sala saiu com o nome padrão e capacidade '
+        'a aba PCS não está mapeada: a sala saiu com o nome padrão e capacidade nominal '
         + `${L.SALA_LABORATORIO_CAPACIDADE} (os 10 PCs do laboratório, resposta 8 da `
         + 'análise). Conferir o nome real antes do dry-run.');
+    }
+    // SALA_SEM_PC (card 9.2,67): a capacidade nominal NÃO dá vaga nenhuma. No
+    // sistema a vaga é contada pelos PCs OPERACIONAIS da sala
+    // (fn_capacidade_efetiva), e sem PC a primeira alocação é recusada pelo
+    // trigger de admissão com BLOCO_LOTADO ("0 de 0 vagas") — o que desfaz a
+    // importação INTEIRA, e só na aplicação: a validação passa. Foi o que o teste
+    // ponta a ponta mediu em 24/09/2026. Como os PCs entram na virada (cadastro
+    // no app antes, ou a aba PCS mapeada) é decisão do 9.3.
+    if (alocacoes.length && !(this.entidades.pc?.length)) {
+      this.diz(ERRO, 'SALA_SEM_PC', 'bloco_aluno', this.sala,
+        `${alocacoes.length} alocações numa sala sem PC nenhum no arquivo. A vaga é contada `
+        + 'pelos PCs operacionais, não pela capacidade nominal: sem os PCs da sala já '
+        + 'cadastrados no sistema, o importador recusa a primeira alocação (BLOCO_LOTADO) '
+        + 'e desfaz a importação inteira.');
     }
     this.entidades.bloco_horario = blocos;
     this.entidades.bloco_aluno = alocacoes;
@@ -554,6 +568,43 @@ class Extracao {
       }
     }
     this.conferirEntregaContraSaida();
+    this.conferirSaldo();
+  }
+
+  /**
+   * SALDO_NEGATIVO — o mesmo veredito do V10 do importador, dito ANTES dele
+   * (card 9.2,67).
+   *
+   * O importador recusa o arquivo INTEIRO quando a soma dos movimentos de um
+   * material deixaria o saldo negativo (`fn_importacao_validar`, V10: estrear o
+   * sistema violando a invariante de `v_estoque_atual` não é opção). Sem esta
+   * conferência, o extrator entregava um arquivo que ele próprio sabia reprovado
+   * — e a primeira pessoa a descobrir seria quem estivesse na sala do dry-run
+   * do 9.4. Foi o que o teste ponta a ponta mediu em 24/09/2026 com a própria
+   * fixture desta suíte.
+   *
+   * O caso real é o histórico que começa DEPOIS do estoque inicial: a planilha
+   * registra saídas de um material cuja entrada é anterior ao primeiro
+   * lançamento. Como o estoque de abertura entra no arquivo é decisão do 9.3 —
+   * aqui só se garante que ninguém descubra isso no importador.
+   *
+   * A soma é a do ARQUIVO, e é a certa para a virada: o sistema de produção
+   * nasce sem movimento nenhum (card 9.7).
+   */
+  conferirSaldo() {
+    const soma = new Map();
+    for (const m of this.entidades.movimento_estoque ?? []) {
+      const chave = `${m.metodo}/${m.material}`;
+      soma.set(chave, (soma.get(chave) ?? 0) + m.quantidade);
+    }
+    for (const chave of [...soma.keys()].sort()) {
+      if (soma.get(chave) < 0) {
+        this.diz(ERRO, 'SALDO_NEGATIVO', 'movimento_estoque', chave,
+          `os movimentos de ${chave} somam ${soma.get(chave)}: o importador recusaria o `
+          + 'arquivo inteiro (V10). Falta a entrada que precede o primeiro lançamento da '
+          + 'planilha — o estoque de abertura.');
+      }
+    }
   }
 
   /**
