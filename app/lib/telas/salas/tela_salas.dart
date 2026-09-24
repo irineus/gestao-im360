@@ -21,10 +21,10 @@ import 'formularios.dart';
 /// 2.9 §8) e, na segunda aba, os professores — que moram aqui, junto do uso, e
 /// não na Administração (card 2.6, apontamento 1).
 ///
-/// O que fica para a Fase 5, e a tela diz onde: o impacto da manutenção nos
-/// blocos de horário ("Blocos desta sala" do wireframe) é a grade do card 5.6,
-/// e amarrar `pc.status` à manutenção em aberto é a regra do card 5.4. Aqui a
-/// capacidade efetiva é **informativa** — PCs operacionais até o teto nominal.
+/// O impacto da manutenção nos blocos ("Blocos desta sala" do wireframe) mora
+/// na grade do card 5.6, e o `pc.status` amarrado à manutenção em aberto é a
+/// regra do card 5.4 — as duas entregues. Aqui a capacidade efetiva é
+/// **informativa** — PCs operacionais até o teto nominal.
 class TelaSalas extends StatelessWidget {
   const TelaSalas({super.key, this.pcId});
 

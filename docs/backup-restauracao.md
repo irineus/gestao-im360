@@ -358,6 +358,6 @@ descobrir o que o arquivo contém.
 |---|---|---|---|
 | 1 | ~~Criar o bucket R2 e os dois secrets do §6~~ | ✅ feito 02/09/2026 por Irineu | resolvido |
 | 2 | ~~Exercitar o `workflow_dispatch` até o verde e registrar o que a execução ensinou~~ | ✅ feito 02/09/2026, quatro execuções — §8 | resolvido |
-| 3 | Vigiar a **idade do backup mais novo no R2** a partir do vigia (Cloudflare), fechando o modo de falha do §7 — exige binding de R2 no Worker | card 3.12 | não |
+| 3 | ~~Vigiar a **idade do backup mais novo no R2** a partir do vigia (Cloudflare), fechando o modo de falha do §7 — exige binding de R2 no Worker~~ | ✅ feito no card 3.12 (worker-vigia.md §9) | resolvido |
 | 4 | Pré-condição do go-live "backup restaurado em teste" (card 2.8 §15) passa a ser satisfeita pelo ensaio semanal; conferir a redação do critério | card 9.7 | não |
 | 5 | Depois do cutover, reavaliar frequência e retenção com dado de negócio em produção | card 9.8 | não |

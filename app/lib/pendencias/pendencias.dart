@@ -341,10 +341,10 @@ String? idDaAcao(Pendencia p) => switch (acaoDe(p.tipo)) {
 /// quando a ação não navega.
 ///
 /// ⚠️ Divergência registrada com o wireframe §14.3: as três de estoque apontam
-/// para **Materiais** e não para Compras, que é a tela 7 do card **6.8** e ainda
-/// não existe. Os três tipos também só passam a ser abertos na fase 6, então
-/// nenhuma dessas linhas tem efeito hoje; quando Compras nascer, é aqui que a
-/// linha muda — em um lugar só.
+/// para **Materiais**, e não para Compras. Compras existe desde o card 6.8, e a
+/// troca não foi feita: na ficha do material está o saldo e o histórico que a
+/// pendência pede para conferir. Mudar o destino é decisão de tela — e é aqui,
+/// em um lugar só (comentário atualizado no card 9.2,76).
 String? rotaDaAcao(AcaoPendencia acao) => switch (acao) {
   AcaoPendencia.verAluno => 'alunos',
   AcaoPendencia.verBloco => 'turmas',

@@ -143,8 +143,9 @@ Passando o gancho, `deveRelatar` decide. Vai para o Sentry **o que o app não so
 * **Erro do catálogo não vai.** Os 25 códigos do card 2.7 §7.1 são resultados de regra de negócio, não
   defeitos: `BLOCO_LOTADO` é a turma cheia, e a turma encher é o sistema funcionando.
 * **Erro de Auth não vai.** Senha errada é o evento mais frequente que existe num sistema com senha, e
-  não há o que investigar nele. O catálogo não cobre os códigos do GoTrue (pendência do card 4.7), e
-  sem esta cláusula eles passariam pela primeira.
+  não há o que investigar nele. Desde o card 4.7 os códigos do GoTrue que chegam à tela têm
+  tradução (`app/lib/erros/erro_app.dart`) — ✅ a pendência fechou —, e a cláusula continua porque um
+  código novo do GoTrue ainda chegaria sem tradução e passaria pela primeira.
 * **O resto vai**, inclusive erro de rede — sem código e sem tradução, e persistente é notícia.
 
 O evento é agrupado pelo **código**, nunca pela mensagem: mensagem é texto de tela e muda sem aviso

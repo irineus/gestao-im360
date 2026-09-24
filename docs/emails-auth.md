@@ -224,8 +224,8 @@ o app usam, e a leitura do que chegou pelo Mailpit:
 
 ## 7. O que este card deixa em aberto
 
-1. **Aplicar nos dois painéis** — de Irineu, §4. Enquanto não for feito, dev e prod seguem mandando
-   o template padrão em inglês; o que este card entregou é o conteúdo e a ferramenta.
+1. ✅ **Aplicado nos dois painéis em 03/09/2026** (pendência 9.16 das Decisões vigentes). ~~Aplicar nos dois painéis — de Irineu, §4. Enquanto não for feito, dev e prod seguem mandando
+   o template padrão em inglês; o que este card entregou é o conteúdo e a ferramenta.~~
 2. **O logotipo em produção depende da promoção** que publica `app/web/marca/`. Até lá, texto
    alternativo nos e-mails dos dois ambientes.
 3. **`otp_expiry` e a frase das 24 horas** mudam juntos — não há teste que amarre os dois. Um

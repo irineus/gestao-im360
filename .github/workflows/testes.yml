@@ -150,7 +150,12 @@ jobs:
         # que aplica migração em produção). A suíte fixa os casos que ele tem de
         # separar, inclusive os que precisam PASSAR: guarda que reprova o
         # `db reset` local mata a suíte pgTAP inteira.
-        run: node .claude/hooks/guarda-destrutivos.teste.mjs
+        # Card 9.2,76: são DUAS suítes, com casos diferentes, e até aqui só a
+        # `.teste.mjs` rodava — a `.test.mjs` (a do `node --test`) nunca era
+        # exercitada no CI. Rodam as duas.
+        run: |
+          node .claude/hooks/guarda-destrutivos.teste.mjs
+          node --test .claude/hooks/guarda-destrutivos.test.mjs
 
   # ---------------------------------------------------------------------------
   # Extração da planilha: o produtor do arquivo do importador (card 9.2)

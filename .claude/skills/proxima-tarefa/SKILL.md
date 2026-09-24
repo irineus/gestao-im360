@@ -42,6 +42,18 @@ MCP do Notion conectado na sessão. Se não estiver, parar e avisar Irineu (sem 
 
    Abre-se **a do domínio da tarefa**, e só ela: mexendo em estoque, a de estoque. Ler as nove na partida desfaz o que o card 6.2,5 pagou US$ 34 para conseguir.
 
+   O card 6.2,6 repetiu a cirurgia na **§1** e na **§5**, e deixou mais **cinco subpáginas** de detalhe — catorze no total:
+
+   | Subpágina | Seção | Quando abrir |
+   |---|---|---|
+   | Deploy web, CI/CD e portão de migrações | §1 | workflow, Cloudflare Pages, `varredor.mjs` |
+   | Vigia, backup e observabilidade | §1 | `worker-vigia`, backup, Sentry |
+   | Fluxo de entrega, guarda de destrutivos e Edge Function | §1 | branch/PR/merge, `guarda-destrutivos.mjs` |
+   | Ajustes por card e achados transferidos | §5 | pendência herdada de outro card |
+   | Configuração de Irineu, promoções e estimativa | §5 | ação manual, promoção a `main`, estimativa |
+
+   ⚠️ **A §2 tem piso** (card 6.2,7): 70 enunciados + 111 armadilhas, ~64 KB; não adianta repetir a cirurgia, e a página inteira (~120 KB) **não cabe num `notion-fetch` só** — lê-se em fatias ou abre-se a subpágina do domínio.
+
    ⚠️ **Ao encerrar tarefa que gere decisão**, o enunciado curto vai para a §2 (respeitando o teto de 6 linhas) e o raciocínio vai para a **subpágina do domínio** — nunca tudo na página-mãe, que foi como ela chegou a 146 KB.
 
 ## Consultar o board

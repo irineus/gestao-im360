@@ -188,7 +188,8 @@ class TransicaoStatus {
 // Filtros — estado da tela, desligável e visível (design-system §5.3)
 // ---------------------------------------------------------------------------
 
-/// Os filtros do plano (método, status, combo; turma entra na Fase 5) mais a
+/// Os filtros do plano (método, status, combo — o de turma, previsto para a
+/// Fase 5, não entrou: a coluna Turmas mostra os vínculos, card 9.2,6) mais a
 /// busca por nome/`codigo_sgf`. "Ocultar formados e cancelados" vem ligado por
 /// padrão: os terminais se acumulam e a lista do dia a dia é de quem está em
 /// curso; "Limpar filtros" mostra **tudo** (card 4.4 (g)).

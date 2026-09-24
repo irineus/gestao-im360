@@ -12,7 +12,6 @@ import '../telas/alunos/tela_alunos.dart';
 import '../telas/certificados/tela_certificados.dart';
 import '../telas/compras/tela_compras.dart';
 import '../telas/dashboard/tela_dashboard.dart';
-import '../telas/em_construcao.dart';
 import '../telas/importacao/tela_importacao.dart';
 import '../telas/login.dart';
 import '../telas/materiais/tela_materiais.dart';
@@ -40,6 +39,11 @@ const _caminhoAcesso = '/acesso';
 /// para a tela de destino abrir já no que a pendência descreve. Sem o
 /// parâmetro, "Ver turma" levava à grade inteira e a pessoa procurava de novo o
 /// que a lista já sabia.
+/// Há tela para a rota [id]? Para o `guardas_rota_test` conferir que nenhuma
+/// rota do menu cai no erro abaixo (card 9.2,76).
+@visibleForTesting
+bool temTelaDaRota(String id) => _telaDaRota.containsKey(id);
+
 final _telaDaRota = <String, Widget Function(GoRouterState)>{
   'dashboard': (_) => const TelaDashboard(),
   'alunos': (_) => const TelaAlunos(),
@@ -102,20 +106,6 @@ List<RouteBase> _subRotas(Rota rota) => switch (rota.id) {
   ],
   _ => const [],
 };
-
-/// Cards que entregam cada tela — registro de CÓDIGO, não texto de tela
-/// (docs/wireframes.md §18).
-///
-/// ⚠️ O número do card era exibido pelo placeholder ("Tela do card 8.5."), e
-/// jargão do board não vai para a tela de quem usa o sistema (item C1). O mapa
-/// fica porque continua respondendo *quem entrega o quê* a quem lê o código, e
-/// é a lista que encolhe a cada fase entregue.
-///
-/// Saíram daqui: o dashboard, no card 5.9 (a tela existe e é parcial — quem
-/// nomeia o que falta é o rodapé dela), Turmas Modular, no 7.3, a Projeção de
-/// demanda, no 8.5, e os Certificados, no 8.6.
-// ignore: unused_element
-const _cardDaRota = <String, String>{'importacao': '9.1'};
 
 final roteadorProvider = Provider<GoRouter>((ref) {
   final controlador = ref.watch(sessaoProvider.notifier);
@@ -277,8 +267,14 @@ class _TelaGuardada extends ConsumerWidget {
         paraOndeIr: primeiraRotaPermitida(permissoes)?.caminho,
       );
     }
+    // Card 9.2,76: toda rota do app tem tela desde o card 9.1, e o
+    // placeholder "em construção" (e o mapa `_cardDaRota` que o alimentava)
+    // saiu. Rota nova sem tela é defeito de quem a criou — e o
+    // `guardas_rota_test` reprova antes de chegar aqui.
     final construtor = this.construtor ?? _telaDaRota[rota.id];
-    if (construtor != null) return construtor(estado);
-    return TelaEmConstrucao(rota: rota);
+    if (construtor == null) {
+      throw StateError('A rota "${rota.id}" não tem tela em _telaDaRota.');
+    }
+    return construtor(estado);
   }
 }

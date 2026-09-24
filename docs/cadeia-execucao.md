@@ -273,6 +273,7 @@ texto de tela, portão de migrações, suítes): repetir a máquina custa turno 
    medida; anotar junto da recalibração (cards `X.10`).
 3. **Sessão longa demais.** Um card `GG` com laço de CI pode passar de uma hora. Não há hoje corte por
    tempo no driver; se virar problema, o alvo é um teto por sessão, não o teto de cards.
-4. **A bateria do guarda não roda no CI.** Ela existe e é verde, mas ninguém a executa fora da
+4. ✅ **Resolvido — a bateria do guarda roda no CI** (job `migrações` do `testes.yml`; desde o card
+   9.2,76 as DUAS suítes, `.teste.mjs` e `.test.mjs`). ~~A bateria do guarda não roda no CI.~~ Ela existe e é verde, mas ninguém a executa fora da
    máquina de quem mexeu — e o `testes.yml` é o lugar dela. Enquanto isso não for feito, uma regex
    afrouxada passa despercebida no PR, que é exatamente o que a bateria existe para impedir.
