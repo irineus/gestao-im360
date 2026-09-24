@@ -19,6 +19,12 @@ const _esquemaClaro = ColorScheme.light(
   surfaceContainerHighest: Cores.grafite100,
   onSurfaceVariant: Cores.grafite500,
   outline: Cores.grafite200,
+  // ⚠️ Card 9.2,62 (achado do 9.2,61 no navegador): sem `outlineVariant` o
+  // Flutter devolve `onSurface` — quase preto —, e TODA borda e divisor que o
+  // usa (as células das duas grades, os cartões, os divisores de lista) saía
+  // escura em vez do token "Borda e divisor" do §2.1. Mesma família do
+  // `tertiary` do card 8.1,5.
+  outlineVariant: Cores.grafite200,
   error: Cores.erro,
   onError: Colors.white,
   errorContainer: Cores.erroFundo,
@@ -46,6 +52,9 @@ const _esquemaEscuro = ColorScheme.dark(
   surfaceContainerHighest: Cores.superficieElevada,
   onSurfaceVariant: Cores.textoEscuroSec,
   outline: Cores.divisorEscuro,
+  // O par do escuro, pela mesma razão (card 9.2,62): token "Borda e divisor"
+  // do §2.3.
+  outlineVariant: Cores.divisorEscuro,
   error: Cores.erroEscuro,
   onError: Cores.grafite900,
   // ⚠️ Sem estes dois o Flutter devolve `error` no lugar de `errorContainer`, e
