@@ -30,8 +30,12 @@ class BadgeStatus extends StatelessWidget {
           tema.colorScheme.onSurfaceVariant,
           tema.colorScheme.surfaceContainerHighest,
         );
+    // `excludeSemantics` (card 9.2,72): sem ele o leitor de tela lia o rótulo
+    // E o texto do filho — "Status ATIVO ATIVO", medido na árvore de semântica
+    // da lista de Alunos.
     return Semantics(
       label: 'Status $status',
+      excludeSemantics: true,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: Dim.e8, vertical: 2),
         decoration: BoxDecoration(

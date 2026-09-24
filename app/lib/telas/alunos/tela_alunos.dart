@@ -272,20 +272,35 @@ class _CelulaTurmas extends StatelessWidget {
     final cores = Theme.of(context).colorScheme;
 
     if (estado.erro) {
+      // Card 9.2,72: o alvo era o InkWell do tamanho do ícone de 16 px e do
+      // texto. Agora tem a altura mínima de alvo da faixa (design-system §8.4)
+      // e se anuncia como botão, com a frase inteira.
+      final mobile = faixaDe(MediaQuery.sizeOf(context).width) == Faixa.mobile;
       return Tooltip(
         message: erroColunaTurmas,
-        child: InkWell(
-          onTap: aoRepetir,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.refresh, size: 16, color: cores.error),
-              const SizedBox(width: Dim.e4),
-              Text(
-                estado.texto,
-                style: Tipografia.corpoTabela.copyWith(color: cores.error),
+        child: Semantics(
+          button: true,
+          label: erroColunaTurmas,
+          excludeSemantics: true,
+          child: InkWell(
+            onTap: aoRepetir,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: mobile ? Dim.alvoMobile : Dim.alturaBotao,
+                minWidth: mobile ? Dim.alvoMobile : Dim.alturaBotao,
               ),
-            ],
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh, size: 16, color: cores.error),
+                  const SizedBox(width: Dim.e4),
+                  Text(
+                    estado.texto,
+                    style: Tipografia.corpoTabela.copyWith(color: cores.error),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       );

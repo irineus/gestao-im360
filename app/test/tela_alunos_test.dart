@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gestao_im360/theme/dimensoes.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
@@ -1028,6 +1029,32 @@ void main() {
       await carregar(tester);
       expect(find.textContaining('ficará sem nenhuma turma'), findsNothing);
     });
+  });
+
+  group('coluna Turmas da lista em erro (card 9.2,72)', () {
+    // Só no desktop: no celular a lista é de cartões e a coluna não existe.
+    for (final (nome, tamanho, minimo) in [
+      ('desktop', const Size(1400, 900), Dim.alturaBotao),
+    ]) {
+      testWidgets('$nome: "tentar de novo" é botão com alvo mínimo', (
+        tester,
+      ) async {
+        // Antes: o InkWell do tamanho do ícone de 16 px e do texto.
+        await montar(
+          tester,
+          repositorio: AlunosFalso.fixture(),
+          turmas: TurmasFalso.queFalha(),
+          permissoes: comTurmas,
+          tamanho: tamanho,
+        );
+        final alvo = find.ancestor(
+          of: find.byIcon(Icons.refresh),
+          matching: find.byType(InkWell),
+        );
+        expect(alvo, findsWidgets);
+        expect(tester.getSize(alvo.first).height, greaterThanOrEqualTo(minimo));
+      });
+    }
   });
 
   group('aba Turmas — o quarto estado', () {

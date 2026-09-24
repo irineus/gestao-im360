@@ -147,8 +147,7 @@ class _FormularioAlunoState extends ConsumerState<FormularioAluno> {
           initialValue: _comboId ?? '',
           decoration: const InputDecoration(
             labelText: 'Combo',
-            helperText:
-                'A trilha do aluno nasce do combo na matrícula (Fase 6).',
+            helperText: 'A trilha do aluno nasce do combo na matrícula.',
             helperMaxLines: 3,
           ),
           items: [

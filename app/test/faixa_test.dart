@@ -134,6 +134,26 @@ void main() {
       expect(find.text('Administração'), findsOneWidget);
     });
 
+    testWidgets('a gaveta MARCA a rota em que a pessoa está (card 9.2,72)', (
+      tester,
+    ) async {
+      // A barra inferior e o menu lateral marcavam; a gaveta "Mais" não.
+      await montar(tester, const Size(390, 800));
+      await tester.tap(find.text('Mais'));
+      await tester.pumpAndSettle();
+
+      final noDrawer = find.descendant(
+        of: find.byType(Drawer),
+        matching: find.widgetWithText(ListTile, 'Dashboard'),
+      );
+      expect(tester.widget<ListTile>(noDrawer).selected, isTrue);
+      final outra = find.descendant(
+        of: find.byType(Drawer),
+        matching: find.widgetWithText(ListTile, 'Materiais e estoque'),
+      );
+      expect(tester.widget<ListTile>(outra).selected, isFalse);
+    });
+
     testWidgets('a gaveta diz quem está logado, e tem tema e saída', (
       tester,
     ) async {

@@ -57,7 +57,10 @@ void main() {
         ),
         'entregue 12/05/2026',
       );
-      expect(rotuloSituacao(item(proximo: true, saldo: 7)), 'próxima · est. 7');
+      expect(
+        rotuloSituacao(item(proximo: true, saldo: 7)),
+        'próxima · 7 em estoque',
+      );
       expect(rotuloSituacao(item()), 'pendente');
     });
 

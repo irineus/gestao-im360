@@ -310,8 +310,10 @@ class _Cabecalho extends StatelessWidget {
         child: TituloSecao(
           texto: 'Trilha',
           apoio:
-              '${resumo.texto}. A ordem é a do combo; "próxima" é derivada, '
-              'nunca digitada.',
+              // Card 9.2,72: era "A ordem é a do combo; 'próxima' é
+              // derivada, nunca digitada" — linguagem de especificação.
+              '${resumo.texto}. A ordem vem do combo, e o próximo livro é '
+              'sempre o primeiro ainda não entregue.',
         ),
       ),
       const SizedBox(width: Dim.e8),
@@ -519,10 +521,15 @@ class _LinhaRitmo extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cores = Theme.of(context).colorScheme;
     final async = ref.watch(ritmoAlunoProvider(alunoId));
+    // Card 9.2,72: enquanto carrega não desenha texto — "calculando o
+    // ritmo…" ficava segundos na tela, e é o mesmo caso do carimbo da
+    // projeção (piscar um texto provisório é dizer uma coisa que ainda não se
+    // sabe). A altura fica reservada, para a trilha não pular quando chega.
+    if (!async.hasError && !async.hasValue) {
+      return const SizedBox(height: Dim.e24);
+    }
     final texto = async.hasError
         ? 'ritmo indisponível'
-        : !async.hasValue
-        ? 'calculando o ritmo…'
         : textoRitmo(async.value);
     return Padding(
       padding: const EdgeInsets.only(bottom: Dim.e8),

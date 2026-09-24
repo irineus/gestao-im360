@@ -162,7 +162,7 @@ class ShellIm360 extends ConsumerWidget {
         atual?.titulo ?? 'Gestão IM360',
         acoes: const [_BotaoGaveta()],
       ),
-      endDrawer: _GavetaMais(rotas: naGaveta, altas: altas),
+      endDrawer: _GavetaMais(rotas: naGaveta, altas: altas, atual: atual),
       body: _conteudo(context),
       bottomNavigationBar: fixos.isEmpty && naGaveta.isEmpty
           ? null
@@ -402,10 +402,15 @@ class _BotaoGaveta extends ConsumerWidget {
 /// Ela existe **sempre** no celular, mesmo sem rota sobrando: desde o item H2
 /// é aqui que o nome, a unidade e o "Sair" moram nessa faixa.
 class _GavetaMais extends ConsumerWidget {
-  const _GavetaMais({required this.rotas, required this.altas});
+  const _GavetaMais({required this.rotas, required this.altas, this.atual});
 
   final List<Rota> rotas;
   final int altas;
+
+  /// A rota em que a pessoa está (card 9.2,72): a gaveta a marca como
+  /// selecionada — visualmente e para o leitor de tela —, como a barra
+  /// inferior e o menu lateral já faziam.
+  final Rota? atual;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -462,6 +467,7 @@ class _GavetaMais extends ConsumerWidget {
                     ListTile(
                       leading: iconeComContador(rota, altas),
                       title: Text(rota.titulo, style: Tipografia.corpo),
+                      selected: rota == atual,
                       minTileHeight: Dim.alvoMobile,
                       onTap: () {
                         Navigator.of(context).pop();

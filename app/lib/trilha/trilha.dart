@@ -182,7 +182,8 @@ String rotuloSituacao(ItemTrilha item) => switch (situacaoDe(item)) {
     item.dataEntrega == null
         ? 'entregue'
         : 'entregue ${formatarData(item.dataEntrega!)}',
-  SituacaoItem.proxima => 'próxima · est. ${item.saldo}',
+  // Card 9.2,72: por extenso — "est. 7" era abreviação de planilha.
+  SituacaoItem.proxima => 'próxima · ${item.saldo} em estoque',
   SituacaoItem.pendente => 'pendente',
 };
 
