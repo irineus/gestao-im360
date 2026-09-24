@@ -57,6 +57,14 @@ class AbaTurmas extends ConsumerWidget {
 
     final turmas = ref.watch(turmasProvider);
     final reposicoes = ref.watch(reposicoesAlunoProvider(aluno.id!));
+    // Só com a leitura carregada: em carga e em erro o mapa vem vazio, e a
+    // seção some em vez de afirmar que o aluno não tem turma Modular.
+    final modulares = [
+      for (final v
+          in ref.watch(vinculosPorAlunoProvider)[aluno.id!] ??
+              const <VinculoTurma>[])
+        if (v.modular) v,
+    ];
 
     return ListView(
       padding: const EdgeInsets.all(Dim.e16),
@@ -72,9 +80,23 @@ class AbaTurmas extends ConsumerWidget {
           error: (erro, _) => _Erro(erro: erro),
           data: (_) => _Blocos(
             turmas: ref.watch(turmasPorAlunoProvider)[aluno.id!] ?? const [],
+            modulares: modulares,
             aluno: aluno,
           ),
         ),
+        // A turma Modular (card 9.2,6): até aqui a aba lia só bloco, e o aluno
+        // Modular aparecia "em nenhuma turma" com o aviso de pendência que o
+        // banco, corretamente, não abria.
+        if (modulares.isNotEmpty) ...[
+          const SizedBox(height: Dim.e24),
+          const TituloSecao(
+            texto: 'Turma Modular',
+            apoio:
+                'A turma avança pelos módulos em conjunto. Entrar e sair dela '
+                'se faz na tela Turmas Modular.',
+          ),
+          _Modulares(vinculos: modulares),
+        ],
         const SizedBox(height: Dim.e24),
         _SituacaoRep(aluno: aluno),
         const TituloSecao(
@@ -126,6 +148,13 @@ const avisoTurmaDesativada =
     'grade. Para o sistema ele está sem turma — remova-o aqui e aloque-o num '
     'bloco ativo.';
 
+const semBlocoComModular =
+    'Nenhum bloco de horário — o aluno está na turma Modular abaixo.';
+
+const avisoTurmaModularDesativada =
+    'A turma Modular deste aluno foi desativada. Para o sistema ele está sem '
+    'turma — mova-o para uma turma ativa na tela Turmas Modular.';
+
 const avisoSemTurma =
     'Aluno em curso sem nenhuma turma ativa. A rotina diária abre a pendência '
     '"aluno sem turma" enquanto isso valer.';
@@ -146,9 +175,17 @@ Future<void> _abrirEConfirmar(
 }
 
 class _Blocos extends ConsumerWidget {
-  const _Blocos({required this.turmas, required this.aluno});
+  const _Blocos({
+    required this.turmas,
+    required this.modulares,
+    required this.aluno,
+  });
 
   final List<TurmaDoAluno> turmas;
+
+  /// Os vínculos Modular do aluno — não se listam aqui (têm seção própria),
+  /// mas decidem se "em nenhuma turma" e o aviso de pendência são verdade.
+  final List<VinculoTurma> modulares;
   final Aluno aluno;
 
   @override
@@ -164,8 +201,26 @@ class _Blocos extends ConsumerWidget {
     };
     final orfa = turmas.any((t) => !t.blocoAtivo);
     final ativas = turmas.where((t) => t.blocoAtivo).length;
+    final emModular = modulares.any((v) => v.turmaAtiva);
 
     final acoes = _AcoesDaAba(aluno: aluno);
+
+    // Em turma Modular e sem bloco nenhum é o caso normal do aluno Modular:
+    // nada de "não está em nenhuma turma" nem de aviso de pendência — só a
+    // ação de alocar, para quem a tiver.
+    if (turmas.isEmpty && emModular) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            semBlocoComModular,
+            style: Tipografia.corpo.copyWith(color: cores.onSurfaceVariant),
+          ),
+          const SizedBox(height: Dim.e12),
+          acoes,
+        ],
+      );
+    }
 
     if (turmas.isEmpty) {
       return Column(
@@ -230,22 +285,64 @@ class _Blocos extends ConsumerWidget {
                 construtor: (_) => FormularioRemoverDaTurma(
                   aluno: aluno,
                   turma: turma,
-                  ultimaAtiva: turma.blocoAtivo && ativas <= 1,
+                  // Em turma Modular ativa, sair do último bloco não deixa o
+                  // aluno sem turma (card 9.2,6).
+                  ultimaAtiva: turma.blocoAtivo && ativas <= 1 && !emModular,
                 ),
                 confirmacao: 'Aluno removido da turma.',
               ),
             ),
           ),
-        if (orfa) ...[
+        // "Para o sistema ele está sem turma" só é verdade sem turma Modular
+        // ativa ao lado (card 9.2,6); o badge "bloco desativado" continua.
+        if (orfa && !emModular) ...[
           const SizedBox(height: Dim.e8),
           const AvisoTonal(mensagem: avisoTurmaDesativada),
         ],
-        if (aluno.emAula && ativas == 0 && !orfa) ...[
+        if (aluno.emAula && ativas == 0 && !orfa && !emModular) ...[
           const SizedBox(height: Dim.e8),
           const AvisoTonal(mensagem: avisoSemTurma),
         ],
         const SizedBox(height: Dim.e12),
         acoes,
+      ],
+    );
+  }
+}
+
+/// As turmas Modular do aluno (card 9.2,6): nome, desde quando e, se for o
+/// caso, que a turma foi desativada. Sem ação aqui — admitir e remover passam
+/// pela capacidade da turma e moram na tela 5 (card 7.3).
+class _Modulares extends StatelessWidget {
+  const _Modulares({required this.vinculos});
+
+  final List<VinculoTurma> vinculos;
+
+  @override
+  Widget build(BuildContext context) {
+    final cores = Theme.of(context).colorScheme;
+    final orfa = vinculos.any((v) => !v.turmaAtiva);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final v in vinculos)
+          LinhaTurma(
+            titulo: v.rotulo,
+            badges: [
+              if (!v.turmaAtiva)
+                Text(
+                  'turma desativada',
+                  style: Tipografia.apoio.copyWith(color: cores.error),
+                ),
+            ],
+            apoio: v.dataEntrada == null
+                ? ''
+                : 'na turma desde ${formatarData(v.dataEntrada!)}',
+          ),
+        if (orfa) ...[
+          const SizedBox(height: Dim.e8),
+          const AvisoTonal(mensagem: avisoTurmaModularDesativada),
+        ],
       ],
     );
   }

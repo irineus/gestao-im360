@@ -29,7 +29,9 @@ import 'formularios.dart';
 ///
 /// A coluna **Turmas** e o ⚠ de aluno em curso sem turma entraram no card 5.7.
 /// A fonte continua sendo a tabela `aluno`, com método e combo resolvidos pelo
-/// catálogo já carregado, mais `v_bloco_alunos` para as turmas — e não uma
+/// catálogo já carregado, mais `v_aluno_turmas` para as turmas (bloco e
+/// Modular, card 9.2,6; até ali era `v_bloco_alunos`, e todo aluno Modular
+/// saía "sem turma") — e não uma
 /// `v_aluno_lista`, que juntaria os três num objeto de banco a mais sem tirar
 /// nenhuma consulta da tela (divergência com o card 2.3 §12.1, registrada).
 ///
@@ -64,8 +66,8 @@ class TelaAlunos extends ConsumerWidget {
     final permissoes = ref.watch(permissoesProvider);
     final haCadastro = alunos.value?.isNotEmpty ?? false;
     final mostraTurmas = permissoes.contains('turmas.ler');
-    final turmasAsync = ref.watch(turmasProvider);
-    final turmasPorAluno = ref.watch(turmasPorAlunoProvider);
+    final turmasAsync = ref.watch(vinculosTurmaProvider);
+    final vinculosPorAluno = ref.watch(vinculosPorAlunoProvider);
     final emTurma = ref.watch(alunosEmTurmaProvider);
     final cores = Theme.of(context).colorScheme;
     String metodoDe(Aluno a) => metodosPorId[a.metodoId]?.nome ?? '—';
@@ -73,18 +75,19 @@ class TelaAlunos extends ConsumerWidget {
 
     // ⚠️ **Os três estados da coluna**, e não só o `data`.
     //
-    // `turmasPorAlunoProvider` e `alunosEmTurmaProvider` leem
-    // `turmasProvider.value ?? []`: em `loading` e em `error` o conjunto é
+    // `vinculosPorAlunoProvider` e `alunosEmTurmaProvider` leem
+    // `vinculosTurmaProvider.value ?? []`: em `loading` e em `error` o conjunto é
     // vazio, e o alerta de "sem turma" caía sobre TODO aluno ATIVO/ACELERAR —
     // no erro, para sempre, e sem nada em tela dizendo que a leitura falhou.
     // Alerta falso na tela inteira é a família de falha calada que este projeto
     // cataloga (achado da revisão da fase 05).
     //
     // O mesmo fato da pendência `ALUNO_SEM_TURMA` (card 5.5), visto de onde a
-    // secretaria olha — e com a mesma definição, que desde o card 5.7 mora no
-    // banco (`v_bloco_alunos.bloco_ativo`): alocação em bloco desativado não é
-    // turma. Duas contas diferentes divergiriam na primeira vez que alguém
-    // mexesse numa só (card 5.4 (4)).
+    // secretaria olha — e com a mesma definição, que mora no banco
+    // (`v_aluno_turmas.turma_ativa`, card 9.2,6): bloco OU turma Modular, e
+    // vínculo com turma desativada não conta. Duas contas diferentes divergiram
+    // de fato — até o card 9.2,6 a tela olhava só bloco, e todo aluno Modular
+    // saía "sem turma" com o banco dizendo o contrário.
     EstadoTurmas turmasDe(Aluno a) {
       if (turmasAsync.hasError) return const EstadoTurmas.erro();
       if (!turmasAsync.hasValue) return const EstadoTurmas.carregando();
@@ -92,7 +95,7 @@ class TelaAlunos extends ConsumerWidget {
       return EstadoTurmas(
         texto: semTurma
             ? 'sem turma'
-            : rotuloTurmasDoAluno(turmasPorAluno[a.id] ?? const []),
+            : rotuloTurmasDoAluno(vinculosPorAluno[a.id] ?? const []),
         alerta: semTurma,
       );
     }

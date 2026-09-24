@@ -833,8 +833,20 @@ Ficam nomeadas aqui só para não nascerem com nome conflitante: `v_aluno_trilha
 `v_bloco_alunos` (5.7) ✅, `v_material_movimento` (6.7) ✅, `v_pedido_compra` e `v_pedido_item`
 (6.8) ✅, `v_turma_modular_cronograma` e `v_turma_modular_aluno` (7.3) ✅,
 `v_projecao_material_mes` e `v_projecao_aluno_detalhe` (8.5) ✅, `v_certificado_fila` (8.6) ✅,
-`v_importacao` e `v_importacao_ocorrencia` (9.1) ✅.
+`v_importacao` e `v_importacao_ocorrencia` (9.1) ✅, `v_aluno_turmas` (9.2,6) ✅.
 São views de listagem, sem número derivado — o cuidado de §3 vale, o resto é do card da tela.
+
+⚠️ **`v_aluno_turmas` nasceu em 24/09/2026 (card 9.2,6)** para fechar um defeito medido: a coluna
+Turmas da lista de Alunos e a aba Turmas da ficha liam só `v_bloco_alunos`, e desde o card 7.1 a
+pendência `ALUNO_SEM_TURMA` conta **as duas formas** de turma (bloco ativo **ou** turma Modular
+ativa) — todo aluno Modular saía "sem turma" com o banco dizendo o contrário. A view devolve uma
+linha por vínculo ativo, das duas formas (`forma` = `BLOCO` | `MODULAR`), com `turma_ativa` sendo o
+predicado da rotina letra por letra; vínculo com turma desativada **aparece e não conta**, como
+`bloco_ativo` desde o 5.7. Duas decisões: (a) **a rotina NÃO lê a view** — se lesse, apagar a
+metade Modular daqui deixaria tela e pendência erradas juntas e a paridade do teste `073` passaria
+verde; mantidas independentes, a paridade é o que prende as duas; (b) a metade Modular passa por
+`v_turma_modular_aluno` (join **interno** em `aluno`) para exigir as **mesmas** permissões da metade
+de bloco — metade visível sozinha marcaria a outra como "sem turma".
 
 ⚠️ **As duas do card 9.1 (06/09/2026)** leem tabelas que o DDL do card 2.1 não previa
 (`importacao`, `importacao_ocorrencia`; ver `docs/importacao.md` §2.4). Duas decisões de contrato:

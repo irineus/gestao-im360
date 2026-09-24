@@ -41,9 +41,22 @@ void main() {
   };
   const secretaria = {...leitura, 'turmas.editar', 'turmas.alocar'};
 
+  /// A semana do painel: a PRÓXIMA, relativa a hoje em São Paulo.
+  ///
+  /// ⚠️ Era `DateTime(2026, 9, 7)` fixo, e o formulário de reposição nasce com
+  /// a data da célula: enquanto 09/09/2026 estava no futuro, o aviso de data
+  /// retroativa não aparecia; a partir de 10/09 ele aparecia sozinho e o teste
+  /// "avisa antes do clique" reprovava sem ninguém ter mexido em nada —
+  /// medido em 24/09/2026 (card 9.2,6). Data de teste que vira passado é a
+  /// mesma armadilha do card 8.7 ("ano e semestre nunca viram literal").
+  final proximaSemana = () {
+    final esta = segundaDe(hojeSaoPaulo());
+    return DateTime(esta.year, esta.month, esta.day + 7);
+  }();
+
   /// A célula do bloco cheio da fixture — 10/10, sem professor, quarta 08:00.
   Future<CelulaGrade> celulaDe(TurmasFalso turmas, String blocoId) async {
-    final grade = await turmas.grade(DateTime(2026, 9, 7));
+    final grade = await turmas.grade(proximaSemana);
     return grade.firstWhere((c) => c.blocoId == blocoId);
   }
 
@@ -261,8 +274,13 @@ void main() {
     await tester.tap(find.byKey(chaveBotaoSalvar));
     await carregar(tester);
 
-    // Quarta da semana de 07/09/2026 = 09/09.
-    expect(turmas.reposicoesLancadas, ['b-cheio|al-3001|2026-09-09']);
+    // A quarta da semana do painel.
+    final quarta = DateTime(
+      proximaSemana.year,
+      proximaSemana.month,
+      proximaSemana.day + 2,
+    );
+    expect(turmas.reposicoesLancadas, ['b-cheio|al-3001|${dataIso(quarta)}']);
   });
 
   testWidgets('data no passado sem a permissão retroativa avisa antes do '

@@ -159,30 +159,52 @@ final alunosDoBlocoProvider =
       ),
     );
 
-/// Todas as alocações ativas da unidade, do lado do aluno.
+/// Todos os vínculos ativos da unidade com turma, do lado do aluno, nas DUAS
+/// formas — bloco e Modular (`v_aluno_turmas`, card 9.2,6).
 ///
 /// Devolve vazio para quem não tem `turmas.ler` em vez de deixar a RLS o fazer
 /// em silêncio: a lista de alunos exige só `alunos.ler` + `materiais.ler`
 /// (card 2.4 §6), então um perfil sem `turmas.ler` chega até aqui, e uma lista
 /// vazia vinda da RLS marcaria **todo mundo** com o ⚠ de "sem turma". Quem
 /// esconde a coluna é a tela; este provider não finge que consultou.
-final turmasProvider = FutureProvider<List<TurmaDoAluno>>((ref) {
+final vinculosTurmaProvider = FutureProvider<List<VinculoTurma>>((ref) {
   if (!ref.watch(permissoesProvider).contains('turmas.ler')) {
-    return Future.value(const <TurmaDoAluno>[]);
+    return Future.value(const <VinculoTurma>[]);
   }
-  return _traduzindo(_repositorio(ref).turmas);
+  return _traduzindo(_repositorio(ref).vinculos);
 });
 
-/// `aluno_id` → turmas dele, já ordenadas.
+/// As alocações em BLOCO, a metade de [vinculosTurmaProvider] que a aba Turmas
+/// e os formulários de remover/virar REP usam — derivada, não uma segunda
+/// consulta: os três estados (carga, erro, dado) atravessam inteiros.
+final turmasProvider = FutureProvider<List<TurmaDoAluno>>((ref) async {
+  final vinculos = await ref.watch(vinculosTurmaProvider.future);
+  return [
+    for (final v in vinculos)
+      if (v.bloco != null) v.bloco!,
+  ];
+});
+
+/// `aluno_id` → as alocações em bloco dele, já ordenadas.
 final turmasPorAlunoProvider = Provider<Map<String, List<TurmaDoAluno>>>((ref) {
   final turmas = ref.watch(turmasProvider).value ?? const <TurmaDoAluno>[];
   return agruparPorAluno(turmas);
 });
 
-/// Os alunos que estão em pelo menos uma turma que existe — o complemento
-/// disto, entre os ATIVO/ACELERAR, é o ⚠ da lista (card 5.7).
+/// `aluno_id` → todos os vínculos dele, das duas formas (card 9.2,6).
+final vinculosPorAlunoProvider = Provider<Map<String, List<VinculoTurma>>>((
+  ref,
+) {
+  final vinculos =
+      ref.watch(vinculosTurmaProvider).value ?? const <VinculoTurma>[];
+  return agruparVinculosPorAluno(vinculos);
+});
+
+/// Os alunos que estão em pelo menos uma turma que existe, bloco OU Modular —
+/// o complemento disto, entre os ATIVO/ACELERAR, é o ⚠ da lista (cards 5.7 e
+/// 9.2,6).
 final alunosEmTurmaProvider = Provider<Set<String>>(
-  (ref) => alunosEmTurma(ref.watch(turmasProvider).value ?? const []),
+  (ref) => alunosEmTurma(ref.watch(vinculosTurmaProvider).value ?? const []),
 );
 
 final reposicoesAlunoProvider =
