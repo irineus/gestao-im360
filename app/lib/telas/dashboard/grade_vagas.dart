@@ -5,15 +5,18 @@ import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../util/datas.dart';
 import '../../widgets/matriz_semanal.dart';
+import '../../widgets/ocupacao.dart';
 
-/// A grade de vagas do wireframe §5: dia × horário, cada célula com **vagas
-/// livres / capacidade** — a leitura que responde "onde ainda cabe alguém".
+/// A grade de vagas do wireframe §5: dia × horário, cada célula com **as vagas
+/// livres por extenso** (`2 livres`, `lotado`) e a barra de ocupação — a
+/// leitura que responde "onde ainda cabe alguém".
 ///
-/// ⚠️ É a leitura **oposta** à da célula da tela de Turmas (card 5.6), que
-/// mostra alocados/capacidade. As duas saem da mesma view e nunca divergem em
-/// número; o que pode divergir é quem lê `2/10`. Por isso a legenda é parte da
-/// grade e não um enfeite abaixo dela, e cada célula carrega um `Semantics` que
-/// diz "2 vagas livres de 10" por extenso.
+/// ⚠️ Até o card 9.2,61 a célula dizia `2/10` (vagas/capacidade), e a tela de
+/// Turmas escrevia o mesmo bloco como `8/10` (alocados/capacidade): o bloco
+/// vazio era `0/10` lá e `10/10` aqui. A notação era uma só e a leitura oposta,
+/// e quem lê `n/m` lê "ocupados de total". Nenhuma das duas grades escreve
+/// fração mais; a barra de ocupação é a mesma nas duas, e cada célula carrega
+/// um `Semantics` que diz "2 vagas livres de 10" por extenso.
 ///
 /// A forma — matriz no desktop e no tablet, **abas Seg–Sáb no mobile** — é a
 /// [MatrizSemanal], a mesma da tela de Turmas. As duas telas usavam formas
@@ -51,10 +54,11 @@ class GradeVagas extends StatelessWidget {
   );
 }
 
-/// `2/10` = duas vagas livres de dez lugares. A cor nunca é o único portador do
+/// `2 livres` + a barra de ocupação. A cor nunca é o único portador do
 /// significado (card 1.9): acima da capacidade tem o seu ícone e o seu texto na
-/// legenda; **lotada não tem ícone nenhum**, e isso é a regra do §6 — lotado é
-/// fato, não problema.
+/// legenda; lotada tem ícone **e** texto ([MarcaLotado], card 9.2,61) — antes
+/// era só o peso da fonte, que no print mal se distinguia —, mas continua em
+/// cor neutra: lotado é fato, não problema (§6).
 class _CelulaVagas extends StatelessWidget {
   const _CelulaVagas({
     required this.dia,
@@ -100,6 +104,7 @@ class _CelulaVagas extends StatelessWidget {
       // px ficavam abaixo do mínimo do desktop, quanto mais do celular.
       height: Dim.alturaBotao,
       alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: Dim.e8),
       decoration: BoxDecoration(
         border: Border.all(
           color: vagas.acimaCapacidade ? cores.error : cores.outlineVariant,
@@ -107,33 +112,45 @@ class _CelulaVagas extends StatelessWidget {
         borderRadius: BorderRadius.circular(Dim.raio),
         color: vagas.acimaCapacidade ? cores.errorContainer : null,
       ),
-      child: Row(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            vagas.texto,
-            style: Tipografia.numero(Tipografia.rotulo).copyWith(
-              color: corTexto,
-              // Lotada é **peso**, não cor e não ícone (design-system §6).
-              fontWeight: vagas.lotada ? FontWeight.w600 : FontWeight.w500,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (vagas.lotada)
+                MarcaLotado(cor: corTexto)
+              else
+                Text(
+                  vagas.texto,
+                  style: Tipografia.numero(Tipografia.rotulo)
+                      .copyWith(color: corTexto, fontWeight: FontWeight.w500),
+                ),
+              if (vagas.acimaCapacidade) ...[
+                const SizedBox(width: Dim.e4),
+                Icon(Icons.warning_amber_rounded, size: 14, color: cores.error),
+              ],
+              if (vagas.salas > 1) ...[
+                const SizedBox(width: Dim.e4),
+                Text(
+                  '${vagas.salas}×',
+                  style: Tipografia.apoio.copyWith(
+                    color: vagas.acimaCapacidade
+                        ? cores.onErrorContainer
+                        : cores.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
           ),
-          if (vagas.acimaCapacidade) ...[
-            const SizedBox(width: Dim.e4),
-            Icon(Icons.warning_amber_rounded, size: 14, color: cores.error),
-          ],
-          if (vagas.salas > 1) ...[
-            const SizedBox(width: Dim.e4),
-            Text(
-              '${vagas.salas}×',
-              style: Tipografia.apoio.copyWith(
-                color: vagas.acimaCapacidade
-                    ? cores.onErrorContainer
-                    : cores.onSurfaceVariant,
-              ),
-            ),
-          ],
+          const SizedBox(height: 3),
+          BarraOcupacao(
+            fracao: vagas.fracaoOcupada,
+            acimaCapacidade: vagas.acimaCapacidade,
+          ),
         ],
       ),
     );
@@ -153,8 +170,8 @@ class _CelulaVagas extends StatelessWidget {
   }
 }
 
-/// A legenda existe porque `2/10` tem duas leituras possíveis dentro deste mesmo
-/// sistema, e a grade de Turmas usa a outra.
+/// A legenda diz o que a célula conta — vagas, não alunos — e o que a barra
+/// desenha, que é o mesmo nas duas grades.
 class LegendaVagas extends StatelessWidget {
   const LegendaVagas({super.key});
 
@@ -169,10 +186,8 @@ class LegendaVagas extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Text(rotuloLegendaVagas, style: estilo),
-        Text(
-          'bloco lotado',
-          style: estilo.copyWith(fontWeight: FontWeight.w600),
-        ),
+        Text(rotuloLegendaBarra, style: estilo),
+        MarcaLotado(cor: cores.onSurfaceVariant),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -188,4 +203,7 @@ class LegendaVagas extends StatelessWidget {
 }
 
 /// Texto único, para a tela e o teste lerem a mesma frase.
-const rotuloLegendaVagas = 'Célula: vagas livres / capacidade';
+const rotuloLegendaVagas = 'Célula: vagas livres no horário';
+
+/// A mesma frase na legenda das duas grades (card 9.2,61).
+const rotuloLegendaBarra = 'Barra: lugares ocupados';

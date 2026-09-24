@@ -117,7 +117,7 @@ void main() {
       // Três na lista, capacidade 10 da célula: o número vem da lista, e é por
       // isso que ele fica certo depois de adicionar alguém.
       expect(
-        find.textContaining('Ocupação 3/10 (3 alunos)'),
+        find.textContaining('Ocupação 3 de 10 (3 alunos)'),
         findsOneWidget,
         reason: 'a célula da grade diz 10/10; a lista tem três',
       );

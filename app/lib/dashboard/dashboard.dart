@@ -215,14 +215,37 @@ class VagasNaCelula {
   /// Sem nenhum lugar a oferecer — é o fato que `PC_SEM_SUBSTITUTO` descreve.
   bool get semCapacidade => !semBloco && capacidade == 0 && !acimaCapacidade;
 
-  /// `2/10` — **vagas livres / capacidade**, e não alocados/capacidade.
+  /// `2 livres`, `1 livre`, `lotado` ou `sem lugar` — **nunca fração**
+  /// (card 9.2,61).
   ///
-  /// ⚠️ É a leitura OPOSTA à da célula da tela de Turmas (card 5.6), que mostra
-  /// `ocupacao/capacidade`. As duas nascem da mesma view e por isso nunca
-  /// divergem em número; o que pode divergir é quem lê. Por isso a grade daqui
-  /// nunca aparece sem a legenda, e o `Semantics` de cada célula diz "N vagas
-  /// de M" por extenso.
-  String get texto => '$vagasLivres/$capacidade';
+  /// ⚠️ Até o 9.2,61 era `2/10` (vagas/capacidade), a leitura OPOSTA à da
+  /// célula da tela de Turmas (`ocupacao/capacidade`): o mesmo bloco vazio
+  /// aparecia `0/10` lá e `10/10` aqui, e `n/m` se lê como "ocupados de
+  /// total". A secretaria prometeria vaga num bloco lotado — ou recusaria
+  /// aluno num vazio —, e nenhum teste pegava: os números estavam certos, a
+  /// leitura é que se invertia. Agora o texto diz a palavra, e a ocupação é
+  /// desenhada pela mesma barra nas duas grades ([fracaoOcupada]).
+  ///
+  /// Acima da capacidade o texto continua sendo o das vagas — numa célula com
+  /// duas salas a outra pode ter vaga de verdade —, e o ⚠ é quem avisa.
+  String get texto {
+    if (semBloco) return '—';
+    if (semCapacidade) return 'sem lugar';
+    if (lotada) return 'lotado';
+    return vagasLivres == 1 ? '1 livre' : '$vagasLivres livres';
+  }
+
+  /// A parte ocupada da capacidade, de 0 a 1, para a barra de ocupação.
+  ///
+  /// Sai de `capacidade − vagasLivres` só para DESENHAR: é a soma das
+  /// ocupações quando nenhum bloco passa da capacidade, e quando algum passa a
+  /// barra fica cheia e vermelha de qualquer jeito. Nenhum número exibido é
+  /// recalculado assim — a vaga continua sendo a soma das parcelas (card 5.9).
+  double get fracaoOcupada {
+    if (acimaCapacidade) return 1;
+    if (capacidade <= 0) return 0;
+    return ((capacidade - vagasLivres) / capacidade).clamp(0.0, 1.0);
+  }
 }
 
 /// Soma os blocos de um cruzamento.

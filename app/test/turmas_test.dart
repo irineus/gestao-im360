@@ -172,8 +172,8 @@ void main() {
     });
 
     test('ocupacaoTexto é a leitura da célula do wireframe', () {
-      expect(de('b-quase').ocupacaoTexto, '9/10');
-      expect(de('b-ingles').ocupacaoTexto, '4/6');
+      expect(de('b-quase').ocupacaoTexto, '9 de 10');
+      expect(de('b-ingles').ocupacaoTexto, '4 de 6');
     });
   });
 
@@ -371,7 +371,7 @@ void main() {
       ];
       expect(
         resumoLotacao(lista, capacidade: 10),
-        'Ocupação 3/10 (2 fixos + 1 reposição no dia)',
+        'Ocupação 3 de 10 (2 fixos + 1 reposição no dia)',
       );
     });
 
@@ -380,9 +380,12 @@ void main() {
         resumoLotacao([
           alocacaoFalsa(alunoId: 'a', nome: 'A', tipo: 'REM'),
         ], capacidade: 6),
-        'Ocupação 1/6 (1 aluno)',
+        'Ocupação 1 de 6 (1 aluno)',
       );
-      expect(resumoLotacao(const [], capacidade: 6), 'Ocupação 0/6 (0 alunos)');
+      expect(
+        resumoLotacao(const [], capacidade: 6),
+        'Ocupação 0 de 6 (0 alunos)',
+      );
     });
   });
 

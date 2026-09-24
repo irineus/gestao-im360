@@ -228,8 +228,15 @@ class CelulaGrade {
   /// Sem nenhum lugar — a sala perdeu os PCs (card 5.4).
   bool get semCapacidade => capacidade == 0 && !acimaCapacidade;
 
-  /// `8/10` — a leitura da célula do wireframe §7.1.
-  String get ocupacaoTexto => '$ocupacao/$capacidade';
+  /// `8 de 10` — a leitura da célula do wireframe §7.1, **por extenso**
+  /// (card 9.2,61): a fração `8/10` era lida ao contrário no Dashboard, que
+  /// escrevia vagas/capacidade com a mesma notação.
+  String get ocupacaoTexto => '$ocupacao de $capacidade';
+
+  /// A parte ocupada, de 0 a 1, para a barra de ocupação — a mesma barra da
+  /// célula do Dashboard.
+  double get fracaoOcupada =>
+      capacidade <= 0 ? 0 : (ocupacao / capacidade).clamp(0.0, 1.0);
 
   /// O bloco como a tabela o guarda, para abrir o formulário de edição sem uma
   /// segunda consulta. `ativo` é sempre verdadeiro: a grade só traz ativos.
@@ -489,7 +496,7 @@ class AlunoDoBloco {
 }
 
 /// Quantos são fixos e quantos são reposição do dia — o
-/// `8/10 (7 fixos + 1 reposição hoje)` do cabeçalho do wireframe §7.2.
+/// `8 de 10 (7 fixos + 1 reposição hoje)` do cabeçalho do wireframe §7.2.
 ///
 /// A soma tem de bater com `ocupacao` da célula da grade, e é o banco que
 /// garante isso (`fn_bloco_alunos` e `fn_ocupacao_bloco` contam o mesmo
@@ -501,7 +508,8 @@ String resumoLotacao(List<AlunoDoBloco> lista, {required int capacidade}) {
       ? '$fixos ${fixos == 1 ? 'aluno' : 'alunos'}'
       : '$fixos ${fixos == 1 ? 'fixo' : 'fixos'} + $reposicoes '
             '${reposicoes == 1 ? 'reposição' : 'reposições'} no dia';
-  return 'Ocupação ${lista.length}/$capacidade ($detalhe)';
+  // `de` e não `/`: nenhuma lotação se escreve como fração (card 9.2,61).
+  return 'Ocupação ${lista.length} de $capacidade ($detalhe)';
 }
 
 /// Uma linha de `v_bloco_alunos` vista **do lado do aluno**: a alocação dele

@@ -16,6 +16,7 @@ import 'package:gestao_im360/telas/dashboard/cartoes_alunos.dart';
 import 'package:gestao_im360/telas/dashboard/cartoes_metodo.dart';
 import 'package:gestao_im360/telas/dashboard/conclusoes_semestre.dart';
 import 'package:gestao_im360/telas/dashboard/grade_vagas.dart';
+import 'package:gestao_im360/widgets/ocupacao.dart';
 import 'package:gestao_im360/telas/dashboard/lotacao_modular.dart';
 import 'package:gestao_im360/telas/dashboard/pendencias_abertas.dart';
 import 'package:gestao_im360/telas/dashboard/tela_dashboard.dart';
@@ -93,24 +94,30 @@ void main() {
     return dashboard;
   }
 
-  testWidgets('a célula mostra VAGAS/capacidade, não alocados/capacidade', (
-    tester,
-  ) async {
+  testWidgets('a célula diz as VAGAS por extenso, nunca como fração '
+      '(card 9.2,61)', (tester) async {
     await montar(tester);
 
-    // Terça tem 9 alocados em 10 lugares: aqui isso é "1/10", e na grade de
-    // Turmas (card 5.6) o mesmo bloco aparece como "9/10".
-    expect(find.text('1/10'), findsOneWidget);
-    expect(
-      find.text('9/10'),
-      findsNothing,
-      reason: 'seria a leitura da tela de Turmas — grade inteira invertida',
-    );
+    // Terça tem 9 alocados em 10 lugares: aqui isso é "1 livre", e na grade
+    // de Turmas o mesmo bloco aparece como "9 de 10". Até o 9.2,61 os dois
+    // eram fração (`1/10` aqui, `9/10` lá), e o bloco vazio era `10/10` aqui
+    // e `0/10` lá — a mesma notação com a leitura oposta.
+    expect(find.text('1 livre'), findsOneWidget);
     // Segunda está vazio: dez vagas de dez.
-    expect(find.text('10/10'), findsOneWidget);
-    // Quarta (lotado) e quinta (acima da capacidade) não têm vaga nenhuma.
-    expect(find.text('0/10'), findsNWidgets(2));
+    expect(find.text('10 livres'), findsOneWidget);
+    // Quarta está lotada: ícone e texto (a célula e a legenda).
+    expect(find.text(rotuloLotado), findsNWidgets(2));
+    expect(find.byIcon(Icons.block), findsNWidgets(2));
+    // Quinta está acima da capacidade: as vagas (zero) e o ⚠.
+    expect(find.text('0 livres'), findsOneWidget);
+    // Nenhuma célula escreve n/m (as datas dd/mm dos dias ficam de fora).
+    for (final fracao in ['1/10', '10/10', '0/10', '9/10']) {
+      expect(find.text(fracao), findsNothing, reason: fracao);
+    }
+    // A mesma barra de ocupação da grade de Turmas, uma por bloco.
+    expect(find.byType(BarraOcupacao), findsNWidgets(4));
     expect(find.text(rotuloLegendaVagas), findsOneWidget);
+    expect(find.text(rotuloLegendaBarra), findsOneWidget);
   });
 
   testWidgets('a grade nunca soma métodos no mesmo cruzamento', (tester) async {
@@ -120,7 +127,7 @@ void main() {
     // diferentes. Somados dariam "2/16" — uma vaga de Inglês oferecida a um
     // aluno de Interativo, que o trigger de admissão recusaria com
     // METODO_INCOMPATIVEL (card 5.3).
-    expect(find.text('2/16'), findsNothing);
+    expect(find.text('2 livres'), findsNothing);
     expect(find.text(textoUmMetodoPorVez), findsOneWidget);
     expect(find.text('Vagas por dia e horário — INTERATIVO'), findsOneWidget);
   });
@@ -150,7 +157,7 @@ void main() {
 
   testWidgets('tocar o cartão do outro método troca a grade', (tester) async {
     await montar(tester);
-    expect(find.text('1/10'), findsOneWidget);
+    expect(find.text('1 livre'), findsOneWidget);
 
     // ⚠️ `ensureVisible` desde o card 8.7: as duas regiões novas empurraram os
     // cartões de vaga para baixo da dobra, e `tap` num alvo fora da vista
@@ -163,9 +170,9 @@ void main() {
     await carregar(tester);
 
     expect(find.text('Vagas por dia e horário — INGLES'), findsOneWidget);
-    expect(find.text('2/6'), findsOneWidget);
+    expect(find.text('2 livres'), findsOneWidget);
     expect(
-      find.text('1/10'),
+      find.text('1 livre'),
       findsNothing,
       reason: 'a grade passou a ser a do outro método',
     );
@@ -292,7 +299,7 @@ void main() {
 
     // O conteúdo à vista é o de HOJE, e só o dele: numa matriz os quatro
     // apareceriam juntos.
-    const vagasDoDia = {1: '10/10', 2: '1/10'};
+    const vagasDoDia = {1: '10 livres', 2: '1 livre'};
     // ⚠️ No DOMINGO não há aba de hoje (a matriz vai de segunda a sábado) e
     // ela abre na primeira, a de segunda — sem isto o teste reprovava um dia
     // por semana, medido em 06/09/2026 (um domingo), sem defeito nenhum.
@@ -314,7 +321,7 @@ void main() {
     await carregar(tester);
     await tester.tap(find.textContaining('Ter '));
     await carregar(tester);
-    expect(find.text('1/10'), findsOneWidget);
+    expect(find.text('1 livre'), findsOneWidget);
   });
 
   testWidgets('a célula é atalho e leva à MESMA semana e ao MESMO método', (
@@ -352,9 +359,9 @@ void main() {
     );
     await carregar(tester);
 
-    await tester.ensureVisible(find.text('1/10'));
+    await tester.ensureVisible(find.text('1 livre'));
     await carregar(tester);
-    await tester.tap(find.text('1/10'));
+    await tester.tap(find.text('1 livre'));
     await carregar(tester);
 
     expect(container.read(filtroGradeProvider).metodoId, 'm-int');
@@ -889,6 +896,19 @@ void main() {
       expect(find.text('Tentar de novo'), findsWidgets);
     },
   );
+
+  testWidgets('em 390 px a célula com a barra e o "lotado" não estoura '
+      '(card 9.2,61)', (tester) async {
+    await montar(tester, tamanho: const Size(390, 800));
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.textContaining('Qua '));
+    await carregar(tester);
+    await tester.tap(find.textContaining('Qua '));
+    await carregar(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.byIcon(Icons.block), findsWidgets);
+    expect(find.byType(BarraOcupacao), findsWidgets);
+  });
 
   testWidgets('em 390 px a tela monta sem overflow (item H6)', (tester) async {
     await montar(tester, tamanho: const Size(390, 800));

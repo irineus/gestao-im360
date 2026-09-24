@@ -5,6 +5,8 @@ import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../turmas/turmas.dart';
 import '../../widgets/matriz_semanal.dart';
+import '../../widgets/ocupacao.dart';
+import '../dashboard/grade_vagas.dart' show rotuloLegendaBarra;
 
 /// A grade semanal do wireframe §7.1: dia × horário, cada célula com método,
 /// ocupação/capacidade e professor.
@@ -142,7 +144,8 @@ class _CartaoBloco extends StatelessWidget {
       // por leitor de tela não tem a coluna nem a linha à vista (§8.5).
       label:
           '${nomeDia(celula.diaSemana)} ${celula.horaInicio}, '
-          '${celula.metodoCodigo}, ${celula.ocupacao} de ${celula.capacidade}, '
+          '${celula.metodoCodigo}, ${celula.ocupacao} alunos de '
+          '${celula.capacidade} lugares, '
           '${celula.salaNome}, '
           '${celula.professorNome ?? 'sem professor'}'
           '${grave ? ', acima da capacidade' : ''}'
@@ -201,16 +204,31 @@ class _CartaoBloco extends StatelessWidget {
                     ),
                 ],
               ),
-              Text(
-                celula.ocupacaoTexto,
-                // **Lotado é peso, não cor** (design-system §6): lotado é fato,
-                // não problema — a turma cheia é o sistema funcionando. Cor de
-                // alerta ali gasta o alerta que a turma ESTOURADA precisa.
-                style: Tipografia.numero(Tipografia.rotulo).copyWith(
-                  fontWeight: celula.lotado ? FontWeight.w600 : FontWeight.w500,
-                  color: grave ? cores.onErrorContainer : null,
-                ),
+              // `9 de 10`, nunca `9/10` (card 9.2,61): o Dashboard escrevia
+              // vagas com a mesma fração, e o bloco vazio era `0/10` aqui e
+              // `10/10` lá. Lotado ganhou ícone e texto ([MarcaLotado]), mas
+              // continua em cor neutra: lotado é fato, não problema — cor de
+              // alerta ali gasta o alerta que a turma ESTOURADA precisa (§6).
+              Wrap(
+                spacing: Dim.e8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    celula.ocupacaoTexto,
+                    style: Tipografia.numero(Tipografia.rotulo).copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: grave ? cores.onErrorContainer : null,
+                    ),
+                  ),
+                  if (celula.lotado) const MarcaLotado(),
+                ],
               ),
+              const SizedBox(height: Dim.e4),
+              BarraOcupacao(
+                fracao: celula.fracaoOcupada,
+                acimaCapacidade: grave,
+              ),
+              const SizedBox(height: Dim.e4),
               Text(
                 celula.professorNome ?? '—',
                 maxLines: 1,
@@ -258,11 +276,9 @@ class _Legenda extends StatelessWidget {
       runSpacing: Dim.e4,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text('Célula: método · alocados/capacidade · professor', style: estilo),
-        Text(
-          'bloco lotado',
-          style: estilo.copyWith(fontWeight: FontWeight.w600),
-        ),
+        Text(rotuloLegendaTurmas, style: estilo),
+        Text(rotuloLegendaBarra, style: estilo),
+        MarcaLotado(cor: cores.onSurfaceVariant),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -283,3 +299,6 @@ class _Legenda extends StatelessWidget {
     );
   }
 }
+
+/// Texto único, para a tela e o teste lerem a mesma frase (card 9.2,61).
+const rotuloLegendaTurmas = 'Célula: método · alunos de lugares · professor';
