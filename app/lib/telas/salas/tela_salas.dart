@@ -124,7 +124,16 @@ class _AbaSalasState extends ConsumerState<AbaSalas>
   @override
   Widget build(BuildContext context) {
     final salas = ref.watch(salasProvider);
-    final pcs = ref.watch(pcsProvider).value ?? const <Pc>[];
+    final pcsAsync = ref.watch(pcsProvider);
+    final pcs = pcsAsync.value ?? const <Pc>[];
+    // ⚠️ Os três estados dos PCs (card 9.2,62): com `.value ?? []` a coluna
+    // dizia "0/0" e a capacidade efetiva "0" enquanto carregava e para sempre
+    // quando a leitura falhava — uma sala cheia de PCs com cara de sala vazia.
+    String dosPcs(String Function() texto) => pcsAsync.hasError
+        ? textoNaoLido
+        : !pcsAsync.hasValue
+        ? '…'
+        : texto();
 
     // O atalho da pendência traz o **PC**; a tela de destino é a sala dele.
     final pedido = widget.pcId;
@@ -176,7 +185,8 @@ class _AbaSalasState extends ConsumerState<AbaSalas>
         // parado continua cadastrado e continua fora da capacidade.
         ColunaIm360(
           titulo: 'PCs',
-          texto: (s) => '${resumoDe(s).operacionais}/${resumoDe(s).total}',
+          texto: (s) =>
+              dosPcs(() => '${resumoDe(s).operacionais}/${resumoDe(s).total}'),
           numerica: true,
           prioridade: 2,
           flex: 1,
@@ -192,7 +202,7 @@ class _AbaSalasState extends ConsumerState<AbaSalas>
         ),
         ColunaIm360(
           titulo: 'Cap. efetiva',
-          texto: (s) => '${resumoDe(s).efetiva}',
+          texto: (s) => dosPcs(() => '${resumoDe(s).efetiva}'),
           numerica: true,
           flex: 1,
           larguraMin: 110,
@@ -209,10 +219,11 @@ class _AbaSalasState extends ConsumerState<AbaSalas>
       cartao: (s) => CartaoIm360(
         titulo: s.nome,
         subtitulo:
-            '${rotuloTipoSala(s.tipo)} · ${resumoDe(s).operacionais}/'
-            '${resumoDe(s).total} PCs operacionais',
+            '${rotuloTipoSala(s.tipo)} · '
+            '${dosPcs(() => '${resumoDe(s).operacionais}/${resumoDe(s).total}')}'
+            ' PCs operacionais',
         apoio: s.ativo ? null : 'Inativa',
-        destaque: 'cap. ${resumoDe(s).efetiva}',
+        destaque: 'cap. ${dosPcs(() => '${resumoDe(s).efetiva}')}',
       ),
       estadoVazio: haCadastro
           ? EstadoVazio(

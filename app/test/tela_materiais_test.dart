@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/util/async_valor.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/catalogo/catalogo.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
@@ -260,6 +261,51 @@ void main() {
       expect(find.text('2'), findsNWidgets(2), reason: 'Essencial e Kids');
     });
 
+    // Card 9.2,62: a contagem lia `.value ?? {}` e dizia "0" enquanto
+    // carregava e para sempre quando a leitura falhava.
+    testWidgets('contagem de apostilas que FALHA diz "não lido", nunca 0', (
+      tester,
+    ) async {
+      final repositorio = CatalogoFalso.fixture()
+        ..leiturasQueFalham.add('apostilasPorCurso');
+      await montar(tester, repositorio: repositorio);
+      await tester.tap(find.text('Cursos'));
+      await carregar(tester);
+      expect(find.text('Informática Essencial'), findsOneWidget);
+      expect(find.text(textoNaoLido), findsWidgets);
+      expect(find.text('0'), findsNothing);
+    });
+
+    testWidgets('contagem de apostilas CARREGANDO não afirma número', (
+      tester,
+    ) async {
+      final repositorio = CatalogoFalso.fixture()
+        ..leiturasPendentes.add('apostilasPorCurso');
+      await montar(tester, repositorio: repositorio);
+      await tester.tap(find.text('Cursos'));
+      await carregar(tester);
+      expect(find.text('Informática Essencial'), findsOneWidget);
+      expect(find.text('…'), findsWidgets);
+      expect(find.text('0'), findsNothing);
+    });
+
+    testWidgets('em 390 px o cartão diz "não lido" em vez de "0 apostilas"', (
+      tester,
+    ) async {
+      final repositorio = CatalogoFalso.fixture()
+        ..leiturasQueFalham.add('apostilasPorCurso');
+      await montar(
+        tester,
+        repositorio: repositorio,
+        tamanho: const Size(390, 800),
+      );
+      await tester.tap(find.text('Cursos'));
+      await carregar(tester);
+      expect(tester.takeException(), isNull);
+      expect(find.text(textoNaoLido), findsWidgets);
+      expect(find.textContaining('0 apostila'), findsNothing);
+    });
+
     testWidgets(
       'o detalhe mostra a sequência na ordem e salva a lista de ids',
       (tester) async {
@@ -328,6 +374,17 @@ void main() {
       expect(find.text('Novo módulo'), findsNothing, reason: 'sem criar');
       expect(find.text('Editar'), findsNothing, reason: 'sem editar');
     });
+  });
+
+  testWidgets('contagem de cursos do combo que FALHA diz "não lido", nunca 0 '
+      '(card 9.2,62)', (tester) async {
+    final repositorio = CatalogoFalso.fixture()
+      ..leiturasQueFalham.add('cursosPorCombo');
+    await montar(tester, repositorio: repositorio);
+    await tester.tap(find.text('Combos'));
+    await carregar(tester);
+    expect(find.text(textoNaoLido), findsWidgets);
+    expect(find.text('0'), findsNothing);
   });
 
   testWidgets('combos: o detalhe lista os cursos na ordem do combo', (

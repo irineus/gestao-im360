@@ -6,6 +6,7 @@ import '../../infraestrutura/infraestrutura.dart';
 import '../../infraestrutura/infraestrutura_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../util/async_valor.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
@@ -76,8 +77,12 @@ class DetalheSala extends ConsumerWidget {
     final salaAtual = sala;
 
     final pcs = ref.watch(pcsProvider);
-    final manutencoes =
-        ref.watch(manutencoesProvider).value ?? const <PcManutencao>[];
+    // ⚠️ Os três estados das manutenções (card 9.2,62): com `.value ?? []` a
+    // manutenção ABERTA sumia enquanto carregava e para sempre quando a leitura
+    // falhava — o PC parado aparecia sem o aviso e com a ação errada
+    // ("Registrar manutenção" no lugar de "Encerrar"). A lista espera as duas.
+    final manutencoesAsync = ref.watch(manutencoesProvider);
+    final manutencoes = manutencoesAsync.value ?? const <PcManutencao>[];
     final abertas = manutencoesAbertas(manutencoes, DateTime.now());
     final pcsDaSala = [
       for (final p in pcs.value ?? const <Pc>[])
@@ -91,7 +96,11 @@ class DetalheSala extends ConsumerWidget {
       subtitulo: [
         rotuloTipoSala(salaAtual.tipo),
         'cap. nominal ${salaAtual.capacidadeNominal}',
-        'efetiva ${resumo.efetiva}',
+        'efetiva ${pcs.hasError
+            ? textoNaoLido
+            : !pcs.hasValue
+            ? '…'
+            : resumo.efetiva}',
         if (!salaAtual.ativo) 'inativa',
       ].join(' · '),
       acoes: [
@@ -139,7 +148,16 @@ class DetalheSala extends ConsumerWidget {
                   .read(versaoInfraestruturaProvider.notifier)
                   .incrementar,
             ),
-            data: (_) => pcsDaSala.isEmpty
+            data: (_) => manutencoesAsync.hasError
+                ? EstadoErro(
+                    mensagem: erroManutencoesNaoLidas,
+                    aoRepetir: ref
+                        .read(versaoInfraestruturaProvider.notifier)
+                        .incrementar,
+                  )
+                : !manutencoesAsync.hasValue
+                ? const EstadoCarregando(linhas: 3)
+                : pcsDaSala.isEmpty
                 ? Text(
                     'Nenhum computador nesta sala.',
                     style: Tipografia.corpoTabela.copyWith(
@@ -213,3 +231,9 @@ class _LinhaPc extends StatelessWidget {
     );
   }
 }
+
+/// Os PCs chegaram e as manutenções não (card 9.2,62): sem elas a situação e a
+/// ação de cada PC seriam as de um PC sem manutenção nenhuma.
+const erroManutencoesNaoLidas =
+    'Não foi possível ler as manutenções desta sala, e sem elas a situação de '
+    'cada computador ficaria errada.';

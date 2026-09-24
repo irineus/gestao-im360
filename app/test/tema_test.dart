@@ -34,6 +34,17 @@ void main() {
       });
     });
 
+    esquemas.forEach((nome, esquema) {
+      test('$nome: `outlineVariant` é declarado — borda clara, nunca a cor do '
+          'texto (card 9.2,62)', () {
+        // Sem ele o Flutter devolve `onSurface`: toda borda que o usa saía
+        // quase preta, e a barra de ocupação do card 9.2,61 desenhava o
+        // bloco vazio como lotado.
+        expect(esquema.outlineVariant, isNot(esquema.onSurface));
+        expect(esquema.outlineVariant, esquema.outline);
+      });
+    });
+
     test('claro: os pares são os tokens do design-system §2.1', () {
       final claro = esquemas['claro']!;
       expect(claro.tertiary, Cores.atencao);
@@ -41,6 +52,7 @@ void main() {
       expect(claro.onTertiaryContainer, Cores.atencao);
       expect(claro.errorContainer, Cores.erroFundo);
       expect(claro.onErrorContainer, Cores.erro);
+      expect(claro.outlineVariant, Cores.grafite200);
     });
 
     test('escuro: os pares são os tokens do §2.3', () {
@@ -50,6 +62,7 @@ void main() {
       expect(escuro.onTertiaryContainer, Cores.atencaoEscuro);
       expect(escuro.errorContainer, Cores.erroFundoEscuro);
       expect(escuro.onErrorContainer, Cores.erroEscuro);
+      expect(escuro.outlineVariant, Cores.divisorEscuro);
     });
 
     test(

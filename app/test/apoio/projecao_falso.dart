@@ -172,6 +172,12 @@ class ProjecaoFalso implements ProjecaoRepositorio {
     ];
   }
 
+  /// Quando não nula, a leitura da pendência devolve o futuro DESTA função — um
+  /// `Completer` que nunca completa é a carga eterna; um que completa com erro
+  /// é a falha (card 9.2,62).
+  Future<bool> Function()? leituraDaRotina;
+
   @override
-  Future<bool> rotinaFalhou() async => rotinaFalhou_;
+  Future<bool> rotinaFalhou() =>
+      leituraDaRotina?.call() ?? Future.value(rotinaFalhou_);
 }

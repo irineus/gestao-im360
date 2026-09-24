@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/widgets/estados.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/erros/erro_app.dart';
@@ -45,6 +48,7 @@ void main() {
     Set<String> permissoes = comPendencias,
     Size tamanho = const Size(1400, 1000),
     String? materialId,
+    bool assentar = true,
   }) async {
     ultimaRota = '/projecao';
     tester.view.physicalSize = tamanho;
@@ -97,7 +101,12 @@ void main() {
         ),
       ),
     );
-    await carregar(tester);
+    if (assentar) {
+      await carregar(tester);
+    } else {
+      await tester.pump();
+      await tester.pump();
+    }
   }
 
   group('grade', () {
@@ -274,6 +283,33 @@ void main() {
 
       expect(find.text(vazioProjecao), findsOneWidget);
       expect(find.text(vazioProjecaoRotinaFalhou), findsNothing);
+    });
+
+    // Card 9.2,62: a pendência que discrimina os dois vazios era lida com
+    // `.value ?? false` — em carga e em erro a tela afirmava "Sem demanda
+    // projetada", o que o design-system §7.2 proíbe.
+    testWidgets('enquanto a pendência carrega, NENHUM dos dois vazios é '
+        'afirmado', (tester) async {
+      projecao = ProjecaoFalso.vazio()
+        ..leituraDaRotina = () => Completer<bool>().future;
+      // O esqueleto anima para sempre: `pumpAndSettle` nunca assentaria.
+      await montar(tester, assentar: false);
+
+      expect(find.text(vazioProjecao), findsNothing);
+      expect(find.text(vazioProjecaoRotinaFalhou), findsNothing);
+      expect(find.byType(EstadoCarregando), findsWidgets);
+    });
+
+    testWidgets('pendência que não pôde ser lida: a tela diz que não sabe, e '
+        'oferece de novo', (tester) async {
+      projecao = ProjecaoFalso.vazio()
+        ..leituraDaRotina = () => Future<bool>.error(Exception('sem rede'));
+      await montar(tester);
+
+      expect(find.text(vazioProjecao), findsNothing);
+      expect(find.text(vazioProjecaoRotinaFalhou), findsNothing);
+      expect(find.text(vazioProjecaoRotinaNaoLida), findsOneWidget);
+      expect(find.text('Tentar de novo'), findsOneWidget);
     });
 
     testWidgets('filtro que esconde tudo oferece limpar', (tester) async {

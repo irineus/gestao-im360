@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/infraestrutura/infraestrutura.dart';
 import 'package:gestao_im360/infraestrutura/infraestrutura_repositorio.dart';
 
@@ -116,8 +119,18 @@ class InfraestruturaFalso implements InfraestruturaRepositorio {
   int _contador = 0;
   String _novoId(String prefixo) => '$prefixo-novo-${++_contador}';
 
+  /// Leituras que falham SOZINHAS, pelo nome (card 9.2,62).
+  final Set<String> leiturasQueFalham = {};
+
+  /// Leituras que nunca terminam, pelo nome — o estado de carga de uma região.
+  final Set<String> leiturasPendentes = {};
+
   Future<T> _ler<T>(String nome, T valor) async {
     chamadas.add(nome);
+    if (leiturasPendentes.contains(nome)) return Completer<T>().future;
+    if (leiturasQueFalham.contains(nome)) {
+      throw const ErroApp(mensagem: 'Não foi possível ler.', traduzido: true);
+    }
     if (atrasoLeitura > Duration.zero) await Future.delayed(atrasoLeitura);
     final falha = falhaAoLer;
     if (falha != null) throw falha;

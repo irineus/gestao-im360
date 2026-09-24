@@ -32,3 +32,25 @@ extension AsyncValorIm360<T> on AsyncValue<T> {
     return carregando.copyWithPrevious(dado, isRefresh: isRefreshing);
   }
 }
+
+/// Uma contagem lida de um mapa que talvez ainda não tenha chegado (card
+/// 9.2,62): `0` só quando o mapa CHEGOU e não tem a chave.
+///
+/// ⚠️ A forma antiga, `mapa.value?[id] ?? 0`, dizia "0 apostilas" enquanto a
+/// leitura carregava e **para sempre** quando ela falhava — a família B1 do
+/// card 5.11 ("`AsyncValue` que decide texto precisa dos três estados").
+/// [carregando] e [naoLido] são o que a célula mostra nos outros dois estados.
+String contagemDe(
+  AsyncValue<Map<String, int>> mapa,
+  String? chave,
+  String Function(int n) formatar, {
+  String carregando = '…',
+  String naoLido = textoNaoLido,
+}) {
+  if (mapa.hasError) return naoLido;
+  if (!mapa.hasValue) return carregando;
+  return formatar(mapa.requireValue[chave] ?? 0);
+}
+
+/// O que uma célula diz quando o número dela não pôde ser lido.
+const textoNaoLido = 'não lido';

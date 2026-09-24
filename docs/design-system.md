@@ -712,6 +712,12 @@ const _esquemaClaro = ColorScheme.light(
   surfaceContainerHighest: Cores.grafite100,
   onSurfaceVariant: Cores.grafite500,
   outline: Cores.grafite200,
+  // ⚠️ Card 9.2,62 (achado do 9.2,61 no navegador): sem `outlineVariant` o
+  // Flutter devolve `onSurface` — quase preto —, e TODA borda e divisor que o
+  // usa (as células das duas grades, os cartões, os divisores de lista) saía
+  // escura em vez do token "Borda e divisor" do §2.1. Mesma família do
+  // `tertiary` do card 8.1,5.
+  outlineVariant: Cores.grafite200,
   error: Cores.erro,              onError: Colors.white,
   errorContainer: Cores.erroFundo, onErrorContainer: Cores.erro,
   // ⚠️ Sem estes o Flutter devolve `tertiary = secondary` (grafite) e
@@ -728,6 +734,9 @@ const _esquemaEscuro = ColorScheme.dark(
   surfaceContainerHighest: Cores.superficieElevada,
   onSurfaceVariant: Cores.textoEscuroSec,
   outline: Cores.divisorEscuro,
+  // O par do escuro, pela mesma razão (card 9.2,62): token "Borda e divisor"
+  // do §2.3.
+  outlineVariant: Cores.divisorEscuro,
   error: Cores.erroEscuro,        onError: Cores.grafite900,
   // ⚠️ Sem estes dois o Flutter devolve `error` no lugar de `errorContainer` e
   // toda superfície tonal de erro do tema escuro fica com fundo, borda e texto
@@ -936,6 +945,8 @@ As cinco telas dos cards 8.2, 8.5, 8.6, 8.7 e 9.1 foram revisadas contra este do
 | 50 | **Plural "(s)" em três textos da Importação** ("N erro(s) · M aviso(s)", "N linhas em M entidades" → "1 linhas em 1 entidades"), a forma que o §7 não usa em lugar nenhum | Os três passaram pelo `plural()` de `lib/util/texto.dart`, que nasceu no 8.1,5 exatamente para isto. Nenhum "(s)" em `lib/telas/`, e o teste que asserta `erro(s)` mudou junto |
 
 | 51 | **O §6 manda "lotado é peso, não cor e não ícone"** — e no print o peso w600 mal se distingue do w500, então a célula lotada parecia igual às outras | **Lotado ganhou ícone e texto**, e continua **neutro** (cor de apoio, nunca de alerta): componente `MarcaLotado` (`lib/widgets/ocupacao.dart`), usado nas duas grades e nas duas legendas. Junto nasceu `BarraOcupacao`, a barra de 4 px da parte OCUPADA, igual na grade de Turmas e na de vagas do Dashboard — cheia e na cor de erro quando o bloco passa da capacidade. Decisão adotada pela sessão, autorizada por Irineu em 24/09/2026 (card 9.2,61; divergência 74 do `wireframes.md` §17) |
+| 52 | **O banner de erro do `FormularioIm360` era o último item da rolagem** (pendência 9.13(b), aberta desde o card 4.6): num formulário alto ele nascia abaixo da dobra, e quem tocou em Salvar no rodapé fixo não via nada acontecer | O erro vem **primeiro** na rolagem e o formulário rola até ele (`Scrollable.ensureVisible`) depois do quadro que o desenha; o `AvisoTonal(erro: true)` ganhou `Semantics(liveRegion: true)` — até ali só o `EstadoErro` era anunciado ao leitor de tela. Card 9.2,62. ⚠️ **Contraprova que passou verde primeiro:** o teste rolava até o fim, onde o banner antigo por acaso já estava à vista; o caso que mede é quem está no **topo** |
+| 53 | **Contagem lida de um mapa que talvez não tenha chegado** (`apostilas por curso`, `cursos por combo`, PCs por sala, nome de perfil) virava `0`/`0/0`/`?` com `.value ?? {}` — em carga e, para sempre, em erro | `contagemDe` em `lib/util/async_valor.dart`: `…` enquanto carrega, `não lido` (`textoNaoLido`) quando a leitura falha, o número só com o mapa na mão. A família B1 do card 5.11 em mais quatro telas (card 9.2,62) |
 ---
 
 *Card 2.7 — Fase 2. Fecha a cadeia de design da Fase 2: identidade (1.9) → estrutura (2.6) →

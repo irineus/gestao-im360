@@ -184,6 +184,9 @@ class ModularFalso implements ModularRepositorio {
 
   final List<TurmaModular> turmas_;
   final List<TurmaModular> inativas_;
+
+  /// Só a leitura das inativas falha (card 9.2,62).
+  Object? falhaInativas;
   final List<ModuloDaTurma> cronograma_;
   final List<AlunoDaTurmaModular> alunos_;
 
@@ -229,6 +232,8 @@ class ModularFalso implements ModularRepositorio {
   @override
   Future<List<TurmaModular>> turmasInativas() async {
     await _lerOuFalhar();
+    final falha = falhaInativas;
+    if (falha != null) throw falha;
     return List.of(inativas_);
   }
 
