@@ -1,3 +1,5 @@
+import '../sessao/nomes_usuarios.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'certificados.dart';
@@ -48,21 +50,25 @@ class CertificadosRepositorioSupabase implements CertificadosRepositorio {
       'situacao, itens_pendentes, checklist_id, data_fim_curso, pedagogico_ok, '
       'financeiro_ok, formatura, certificado_status';
 
-  /// Os quatro embeds de "quem", pela FK de cada coluna — o mesmo recurso de
-  /// `usuario:usuario_id(nome)` no histórico de status (card 4.6). Vem **nulo**
-  /// quando a política de `usuario` não deixa ler a linha da pessoa (só
-  /// `admin.ler` e o próprio usuário), e a tela mostra só a data nesse caso.
+  /// Os quatro "quem" (card 9.2,74): os ids `*_por`, e o nome de cada um sai
+  /// de `fn_usuarios_nomes()` — o embed `…_por(nome)` vinha **nulo** para quem
+  /// não tem `admin.ler`, e o monitor lia o próprio nome e nulo nos outros três
+  /// (pendência 9.13(a)).
   ///
-  /// ⚠️ Os apelidos não repetem nome de coluna: `formatura` já é a coluna
-  /// booleana do item, e um embed com o mesmo apelido a sobrescreveria.
+  /// ⚠️ As chaves dos nomes não repetem nome de coluna: `formatura` já é a
+  /// coluna booleana do item, e um nome com a mesma chave a sobrescreveria.
   static const _colunasChecklist =
       'id, aluno_id, data_fim_curso, '
       'pedagogico_ok, pedagogico_em, financeiro_ok, financeiro_em, '
       'formatura, formatura_em, certificado_status, certificado_em, '
-      'pedagogico_usuario:pedagogico_por(nome), '
-      'financeiro_usuario:financeiro_por(nome), '
-      'formatura_usuario:formatura_por(nome), '
-      'certificado_usuario:certificado_por(nome)';
+      'pedagogico_por, financeiro_por, formatura_por, certificado_por';
+
+  static const _autores = {
+    'pedagogico_por': 'pedagogico_usuario',
+    'financeiro_por': 'financeiro_usuario',
+    'formatura_por': 'formatura_usuario',
+    'certificado_por': 'certificado_usuario',
+  };
 
   @override
   Future<List<LinhaFilaCertificado>> fila() async {
@@ -79,12 +85,19 @@ class CertificadosRepositorioSupabase implements CertificadosRepositorio {
 
   @override
   Future<ChecklistCertificado?> checklist(String alunoId) async {
-    final linhas = await _cliente
-        .from('certificado_checklist')
-        .select(_colunasChecklist)
-        .eq('aluno_id', alunoId)
-        .limit(1);
-    return linhas.isEmpty ? null : ChecklistCertificado.deLinha(linhas.first);
+    final (linhas, nomes) = await (
+      _cliente
+          .from('certificado_checklist')
+          .select(_colunasChecklist)
+          .eq('aluno_id', alunoId)
+          .limit(1),
+      nomesDaUnidade(_cliente),
+    ).wait;
+    return linhas.isEmpty
+        ? null
+        : ChecklistCertificado.deLinha(
+            comNomes(linhas.first, nomes, colunaParaEmbed: _autores),
+          );
   }
 
   @override

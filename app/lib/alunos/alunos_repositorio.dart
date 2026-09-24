@@ -1,3 +1,5 @@
+import '../sessao/nomes_usuarios.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'alunos.dart';
@@ -48,11 +50,11 @@ class AlunosRepositorioSupabase implements AlunosRepositorio {
       'id, codigo_sgf, nome, metodo_id, combo_id, status, status_desde, '
       'prev_conclusao_curso, data_inicio, observacoes, conferido';
 
-  /// `usuario:usuario_id(nome)` é um embed do PostgREST pela FK; quando a
-  /// política de `usuario` não deixa ler a linha, vem nulo — não erro.
+  /// Card 9.2,74: o autor sai de `fn_usuarios_nomes()` (só id e nome da
+  /// unidade), e não do embed `usuario:usuario_id(nome)` — que vinha nulo para
+  /// quem não tem `admin.ler` (pendência 9.13(a)).
   static const _colunasHistorico =
-      'id, status_anterior, status_novo, ocorrido_em, motivo, '
-      'usuario:usuario_id(nome)';
+      'id, status_anterior, status_novo, ocorrido_em, motivo, usuario_id';
 
   @override
   Future<List<Aluno>> alunos() async {
@@ -92,12 +94,24 @@ class AlunosRepositorioSupabase implements AlunosRepositorio {
 
   @override
   Future<List<TransicaoStatus>> historico(String alunoId) async {
-    final linhas = await _cliente
-        .from('aluno_status_hist')
-        .select(_colunasHistorico)
-        .eq('aluno_id', alunoId)
-        .order('ocorrido_em', ascending: false);
-    return linhas.map(TransicaoStatus.deLinha).toList();
+    final (linhas, nomes) = await (
+      _cliente
+          .from('aluno_status_hist')
+          .select(_colunasHistorico)
+          .eq('aluno_id', alunoId)
+          .order('ocorrido_em', ascending: false),
+      nomesDaUnidade(_cliente),
+    ).wait;
+    return [
+      for (final linha in linhas)
+        TransicaoStatus.deLinha(
+          comNomes(
+            linha,
+            nomes,
+            colunaParaEmbed: const {'usuario_id': 'usuario'},
+          ),
+        ),
+    ];
   }
 
   @override
