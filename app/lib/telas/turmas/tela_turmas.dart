@@ -270,9 +270,17 @@ class _NavegacaoSemana extends ConsumerWidget {
           icon: const Icon(Icons.chevron_left),
           onPressed: () => controlador.mover(-1),
         ),
-        Text(
-          'Semana ${rotuloSemana(semana, incluiDomingo: incluiDomingo)}',
-          style: Tipografia.numero(Tipografia.rotulo),
+        // ⚠️ `Flexible`: em 390 px o rótulo da semana mais as duas setas
+        // estouravam 23 px à direita — medido pelo teste de 390 px que o card
+        // 9.2,61 acrescentou (a tela não tinha nenhum; a obrigação do
+        // estrategia-testes.md §13 ficara para trás). O rótulo quebra em duas
+        // linhas em vez de sair da tela.
+        Flexible(
+          child: Text(
+            'Semana ${rotuloSemana(semana, incluiDomingo: incluiDomingo)}',
+            style: Tipografia.numero(Tipografia.rotulo),
+            textAlign: TextAlign.center,
+          ),
         ),
         IconButton(
           tooltip: 'Próxima semana',

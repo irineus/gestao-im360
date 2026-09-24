@@ -134,7 +134,37 @@ void main() {
       expect(vagas.salas, 2);
       expect(vagas.capacidade, 16);
       expect(vagas.vagasLivres, 7);
-      expect(vagas.texto, '7/16');
+      // Por extenso e nunca como fração (card 9.2,61): `7/16` se lia como
+      // "sete ocupados de dezesseis", o contrário do que a célula conta.
+      expect(vagas.texto, '7 livres');
+      expect(vagas.fracaoOcupada, closeTo(9 / 16, 1e-9));
+    });
+
+    test('o texto da célula nunca é fração: livre, livres, lotado, sem lugar '
+        '(card 9.2,61)', () {
+      VagasNaCelula v({int cap = 10, int vagas = 0, bool acima = false}) =>
+          VagasNaCelula(
+            blocos: 1,
+            capacidade: cap,
+            vagasLivres: vagas,
+            acimaCapacidade: acima,
+            salas: 1,
+          );
+      expect(v(vagas: 10).texto, '10 livres');
+      expect(v(vagas: 1).texto, '1 livre');
+      expect(v().texto, 'lotado');
+      expect(v(cap: 0).texto, 'sem lugar');
+      // Acima da capacidade o texto é o das vagas (0), e o ⚠ é quem avisa.
+      expect(v(acima: true).texto, '0 livres');
+      expect(VagasNaCelula.vazia.texto, '—');
+      for (final c in [v(vagas: 10), v(vagas: 1), v(), v(cap: 0)]) {
+        expect(c.texto.contains('/'), isFalse, reason: c.texto);
+      }
+      // A barra: vazio, cheio, e acima (cheia, pintada de erro pela tela).
+      expect(v(vagas: 10).fracaoOcupada, 0);
+      expect(v().fracaoOcupada, 1);
+      expect(v(acima: true).fracaoOcupada, 1);
+      expect(v(cap: 0).fracaoOcupada, 0);
     });
 
     test('um bloco acima da capacidade marca a célula inteira', () {

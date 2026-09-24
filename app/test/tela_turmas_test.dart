@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/widgets/ocupacao.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/catalogo/catalogo_provider.dart';
 import 'package:gestao_im360/infraestrutura/infraestrutura_provider.dart';
@@ -77,9 +78,19 @@ void main() {
   testWidgets('a grade mostra ocupação/capacidade, sala e professor de cada '
       'bloco', (tester) async {
     await montar(tester);
-    expect(find.text('9/10'), findsOneWidget, reason: 'bloco quase cheio');
-    expect(find.text('10/10'), findsOneWidget, reason: 'bloco cheio');
-    expect(find.text('4/6'), findsOneWidget, reason: 'bloco de Inglês');
+    expect(find.text('9 de 10'), findsOneWidget, reason: 'bloco quase cheio');
+    expect(find.text('10 de 10'), findsOneWidget, reason: 'bloco cheio');
+    expect(find.text('4 de 6'), findsOneWidget, reason: 'bloco de Inglês');
+    // Card 9.2,61: nenhuma célula escreve fração — o Dashboard escrevia VAGAS
+    // com a mesma notação, e o bloco vazio era `0/10` aqui e `10/10` lá.
+    for (final fracao in ['9/10', '10/10', '4/6', '0/10']) {
+      expect(find.text(fracao), findsNothing, reason: fracao);
+    }
+    // Lotado com ícone e texto (a célula cheia e a legenda), e a mesma barra
+    // de ocupação da grade do Dashboard em cada bloco.
+    expect(find.text(rotuloLotado), findsNWidgets(2));
+    expect(find.byType(BarraOcupacao), findsWidgets);
+    expect(find.text(rotuloLegendaTurmas), findsOneWidget);
     expect(find.text('Renata Alves'), findsOneWidget);
     // Seg a Sáb sempre, mesmo sem bloco em quinta, sexta e sábado.
     for (final dia in ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']) {
@@ -94,7 +105,7 @@ void main() {
     await montar(tester);
     // O bloco de 10 alunos é o sem professor: com `join` interno em professor a
     // linha inteira sumiria do banco, e aqui ela some da tela.
-    expect(find.text('10/10'), findsOneWidget);
+    expect(find.text('10 de 10'), findsOneWidget);
     expect(find.text('—'), findsOneWidget);
   });
 
@@ -105,7 +116,7 @@ void main() {
     // Quarta 08:00 tem Laboratório 1 (Interativo) e Laboratório 2 (Inglês).
     expect(find.text('INGLES'), findsOneWidget);
     expect(find.text('Laboratório 2'), findsOneWidget);
-    expect(find.text('4/6'), findsOneWidget);
+    expect(find.text('4 de 6'), findsOneWidget);
   });
 
   testWidgets('a legenda diz o que cada ⚠ significa', (tester) async {
@@ -205,7 +216,7 @@ void main() {
 
     await tester.tap(find.text('Limpar filtros'));
     await carregar(tester);
-    expect(find.text('9/10'), findsOneWidget);
+    expect(find.text('9 de 10'), findsOneWidget);
   });
 
   testWidgets('"Inativos" só aparece quando há bloco inativo, e só para quem '
@@ -228,7 +239,7 @@ void main() {
   testWidgets('tocar a célula abre os alunos do bloco, e o cadastro fica no '
       '"Editar bloco" de dentro', (tester) async {
     await montar(tester, permissoes: secretaria);
-    await tester.tap(find.text('9/10'));
+    await tester.tap(find.text('9 de 10'));
     await carregar(tester);
 
     // O painel do card 5.7, e não o formulário do bloco: quem clica numa turma
@@ -253,7 +264,12 @@ void main() {
 
     // A aba inicial é a de HOJE, e não sempre segunda (design-system §6): a
     // grade de segunda é a resposta errada para quem abre o app na quinta.
-    const ocupacaoDoDia = {1: '0/10', 2: '9/10', 3: '10/10', 4: '11/10'};
+    const ocupacaoDoDia = {
+      1: '0 de 10',
+      2: '9 de 10',
+      3: '10 de 10',
+      4: '11 de 10',
+    };
     // ⚠️ No DOMINGO não há aba de hoje (a matriz vai de segunda a sábado) e
     // ela abre na primeira, a de segunda — sem isto o teste reprovava um dia
     // por semana, medido em 06/09/2026 (um domingo), sem defeito nenhum.
@@ -274,7 +290,7 @@ void main() {
     await carregar(tester);
     await tester.tap(find.textContaining('Ter '));
     await carregar(tester);
-    expect(find.text('9/10'), findsOneWidget);
+    expect(find.text('9 de 10'), findsOneWidget);
   });
 
   // -------------------------------------------------------------------------
@@ -358,7 +374,7 @@ void main() {
     final turmas = await montar(tester, permissoes: secretaria);
     // Pelo "Editar bloco" de dentro do painel, que é onde o cadastro mora
     // (§7.2): os campos vêm preenchidos, e é o caminho real.
-    await tester.tap(find.text('9/10'));
+    await tester.tap(find.text('9 de 10'));
     await carregar(tester);
     await tester.tap(find.text('Editar bloco'));
     await carregar(tester);
@@ -372,7 +388,7 @@ void main() {
     );
     expect(find.text('Bloco salvo.'), findsOneWidget);
 
-    await tester.tap(find.text('9/10'));
+    await tester.tap(find.text('9 de 10'));
     await carregar(tester);
     await tester.tap(find.text('Editar bloco'));
     await carregar(tester);
@@ -414,11 +430,24 @@ void main() {
     // inteira e a pessoa procurava de novo o que a lista já sabia.
     await montar(tester, blocoId: 'b-cheio');
     expect(find.text('Ana Paula Ribeiro'), findsOneWidget);
-    expect(find.textContaining('Ocupação 3/10'), findsOneWidget);
+    expect(find.textContaining('Ocupação 3 de 10'), findsOneWidget);
   });
 
   testWidgets('sem o parâmetro nenhum painel abre sozinho', (tester) async {
     await montar(tester);
     expect(find.text('Ana Paula Ribeiro'), findsNothing);
+  });
+
+  testWidgets('em 390 px a célula com a barra e o "lotado" não estoura '
+      '(card 9.2,61)', (tester) async {
+    await montar(tester, tamanho: const Size(390, 800));
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.textContaining('Qua '));
+    await carregar(tester);
+    await tester.tap(find.textContaining('Qua '));
+    await carregar(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.byIcon(Icons.block), findsWidgets);
+    expect(find.byType(BarraOcupacao), findsWidgets);
   });
 }
