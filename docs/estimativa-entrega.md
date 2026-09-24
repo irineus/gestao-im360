@@ -68,7 +68,7 @@ não medição. Vigente desde 02/09/2026: **fins de semana + algumas noites** = 
 
 | Card | Bloco | Dias declarados | Medido |
 |---|---|---|---|
-| 4.8 | marco de validação com a secretaria | 4 | ⚠️ **≥ 4 e ainda aberto** — 06/09/2026, card 8.9 |
+| 4.8 | marco de validação com a secretaria | 4 | ~~≥ 4 e ainda aberto — 06/09/2026, card 8.9~~ ⚠️ **reclassificado em 24/09/2026 (card 9.2,75): o bloco NUNCA COMEÇOU** — a pré-condição (as preparações de Irineu em homologação) não aconteceu; volta a contar os 4 declarados a partir do início combinado (§11c) |
 | 6.9, 8.8 | marco de validação com monitor/secretaria/direção | 4 cada | — |
 | 9.3 | revisão das exceções pelo pedagógico | 7 | — |
 | 9.4 | dry-run e conferência de totais | 3 | — |
@@ -78,7 +78,10 @@ não medição. Vigente desde 02/09/2026: **fins de semana + algumas noites** = 
 | 10.6 | revisão de Google Play e App Store | 14 por rodada | — |
 
 No P50 assume-se que **60%** da latência não se sobrepõe ao desenvolvimento; no P80, **100%** (nada
-se sobrepõe) e a revisão das lojas vai a **duas** rodadas.
+se sobrepõe) e a revisão das lojas vai a **duas** rodadas. ⚠️ **Corrigido em 24/09/2026 (card 9.2,75,
+§11b): a sobreposição nunca passa do esforço que há para sobrepor** — tempo = esforço + latência −
+min(40% da latência, esforço). Com esforço ≈ 0 a latência entra inteira no P50, e o P80 passa a
+multiplicar a **latência** por 1,5 (§11d).
 
 ⚠️ **Nenhum destes blocos foi medido até o fim.** Dois estão abertos: o do card 4.8 desde
 03/09/2026 e o do card 6.9 desde 04/09/2026 — ver §4. **Ao fechar cada um, anotar aqui os dias
@@ -208,6 +211,15 @@ Ao fechar o 4.8 — e o 6.9, o 8.8, o 9.3, o 9.4, o 9.6 e o 9.7 — anotar **qua
 de fato consumiu**, contados da abertura ao aceite, e comparar com o bloco declarado. Sem essa
 anotação, cada rodada recalibra a velocidade com precisão crescente e deixa intacta a metade da
 conta que hoje decide a data.
+
+**Em 24/09/2026 (card 9.2,75) a maior incerteza trocou de natureza: deixou de ser a DURAÇÃO dos
+blocos e passou a ser o INÍCIO deles.** Dezoito dias depois da rodada 8.9, nenhum bloco andou, e
+não por lentidão de terceiro: a pré-condição do primeiro (as preparações de Irineu em homologação)
+não aconteceu, e os seis de trás são seriais. O "estouro" do `4.8` foi reclassificado (§11c): não
+houve medição de duração nenhuma. A série continua sem **um único bloco de latência medido até o
+fim** — e agora se sabe que o relógio dos blocos só liga com uma ação de Irineu. **Obrigação da
+rodada 9.8: anotar o dia em que as preparações e a sessão do `4.8` de fato aconteceram, e quantos
+dias corridos cada bloco consumiu dali em diante.**
 
 ## 5. Primeira estimativa (02/09/2026)
 
@@ -487,3 +499,58 @@ entregou `v_ritmo_aluno` e `fn_ritmo_aluno` e não esta. O `9.5` tem de **constr
 é migração, antes de rodar o `update`. Fica em `M`. **Regra que fica, e é o §8(d) na direção
 oposta: antes de descer um card por "o artefato já existe", procurar o artefato no repositório.**
 Custa um `grep` e é a diferença entre reúso medido e reúso suposto.
+
+## 11. Sétima rodada (24/09/2026, card 9.2,75) — o que mudou no método
+
+Os **números** continuam morando na subpágina Notion "Estimativa de entrega" do card 3.13. Aqui, só
+o que mudou no método. A rodada foi pedida pela revisão geral de 24/09/2026: o P50 de 25/09 vencia no
+dia seguinte, e a série tinha **17 dias corridos sem entrega nenhuma** (07/09 a 23/09).
+
+**(a) Período PARADO não é dia parcial, e a régua já o tratava certo — o que ele mede é outra coisa.**
+O §9(a) cobre o dia **parcial** (a rodada que roda no meio de um dia de trabalho). Período parado são
+dias em que **ninguém trabalhou**: não são dias-plenos, e o divisor do §6(c) — dias de calendário
+**com entrega** — já os excluía. A velocidade não muda por eles (10 dias com entrega, bruta 47,2).
+O que o período parado mede é **capacidade** (10 dias trabalhados em 27 corridos ≈ 2,6 dias-plenos por
+semana, contra 3,0 declarados — premissa que já saiu do modelo) e, principalmente, que **a latência
+também parou**: os blocos não andam sozinhos, porque dependem de preparações de Irineu. **Regra:
+dia sem entrega não entra na velocidade; entra na leitura de capacidade e no relógio dos blocos só
+se o bloco pôde andar.**
+
+**(b) A sobreposição nunca passa do esforço — um erro de aritmética que as rodadas 7.5 e 8.9
+carregaram.** O P50 somava esforço + 60% da latência, supondo que 40% da latência corre por baixo do
+desenvolvimento. Isso só vale enquanto **há** desenvolvimento para correr por baixo: com 25 pontos
+(1,6 dia corrido) contra 28 dias de latência, a rodada 8.9 abateu 11,2 dias de sobreposição que
+não existiam. Refeita com a regra certa — **tempo = E + L − min(0,4·L, E)** —, ela teria dado
+**04/10/2026**, não 25/09. Parte do "P50 vencido" é esta conta, e não só o atraso. Reverter: voltar
+ao `E + 0,6·L` do §3 — sabendo que ele só vale com E ≥ 0,4·L.
+
+**(c) Bloco cuja pré-condição não aconteceu não começou — e isso se aplica ao 4.8 retroativamente.**
+A regra do §3 (card 7.5) diz que o bloco serial de trás não consome dia enquanto não pode começar. O
+`4.8` tem a mesma situação por outro motivo: as três preparações de Irineu em homologação são
+**pré-condição** da sessão com a secretaria e **nunca começaram**. O "estouro" registrado em 06/09
+(card 8.9) não mediu a duração da sessão — mediu que a pré-condição não aconteceu. **A medição n = 1
+de estouro deixa de existir**, o piso de 1 dia sai, e o `4.8` volta aos 4 declarados. **Os blocos
+passam a contar a partir de uma data de início DECLARADA** — nesta rodada, a semana de 28/09 a
+04/10/2026, em que Irineu fará as preparações e as sessões do 4.8 e do 6.9 (premissa combinada em
+24/09/2026). Antes dela, nenhum bloco consome dia.
+
+**(d) O divisor do P80 mudou de alvo: da velocidade para a latência.** O §3 diz que o divisor
+"precifica o que ainda não foi medido". Hoje o esforço restante é **7 pontos** (≈ 0,5 dia corrido) e
+nenhum bloco de latência foi medido até o fim. Com a correção (b) o P50 já usa a latência inteira, e
+o P80 antigo (latência a 100%) daria praticamente o P50 — banda de meio dia, que seria falsa
+confiança. **P80 = latência declarada × 1,5**, mais o esforço à velocidade ÷ 1,5 (que não move nada).
+A revisão das lojas no P80 continua em duas rodadas, sem o 1,5 por cima. Reverter: P80 com a
+latência a 100% — a banda some, e com ela a informação.
+
+**(e) A taxa de descoberta saiu da faixa, e por um motivo que não é ruído: foi uma revisão.** A série
+era 4,2 → 4,6 → 7,4 → 6,6 → 6,9. Nesta janela entraram **62 pontos em 22 cards** num único dia, todos
+com origem "revisão geral, 24/09/2026" — uma auditoria deliberada, não descoberta orgânica. Com eles,
+a taxa acumulada vai a **12,4** e a líquida a 34,8 (sem eles, 41). A regra do `min` do §3 usa a
+líquida (**35**), e a data não se mexe com a escolha: o esforço restante vale meio dia. **Não
+extrapolar 12,4 para a frente** — o sinal que vale é outro: a revisão de telas por fase (§10, premissa
+2 da rodada 8.9) e agora a revisão geral são escopo previsível que o board não prevê como card.
+
+**(f) A pergunta para o dono do produto mudou de novo: não é "quanto a latência pode estourar", é
+"quando as sessões começam".** Com esforço ≈ 0 e latência inteira, **cada dia que o início dos blocos
+atrasa empurra o go-live um dia**. A margem contra outubro/2026 cabe numa linha: de 28/09 a 31/10 são
+33 dias, e os blocos declarados somam 31 — **2 dias de folga no P50, nenhuma no P80**.
