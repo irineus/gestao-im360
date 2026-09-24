@@ -592,6 +592,68 @@ void main() {
       },
     );
 
+    // Card 9.2,6 — a escola-fixture do banco: Eduarda Lima ATIVA na turma
+    // Modular "Eletricista 2026.1" e em bloco nenhum. Até este card a coluna
+    // contava só bloco e a marcava "sem turma", com o banco dizendo o oposto.
+    TurmasFalso comEduardaNaModular({bool turmaAtiva = true}) =>
+        TurmasFalso.fixture()
+          ..turmas_.removeWhere((t) => t.alunoId == 'al-3005')
+          ..modulares_.add(
+            vinculoModularFalso(alunoId: 'al-3005', turmaAtiva: turmaAtiva),
+          );
+
+    for (final tamanho in const [Size(1400, 900), Size(390, 800)]) {
+      testWidgets('aluno em turma MODULAR não é "sem turma" — mostra a turma '
+          '(${tamanho.width.toInt()} px)', (tester) async {
+        await montar(
+          tester,
+          repositorio: AlunosFalso.fixture(),
+          turmas: comEduardaNaModular(),
+          permissoes: comTurmas,
+          tamanho: tamanho,
+        );
+        expect(tester.takeException(), isNull);
+        final linha = find.ancestor(
+          of: find.text('Eduarda Lima'),
+          matching: find.byType(tamanho.width < 600 ? Column : Row),
+        );
+        expect(
+          find.descendant(
+            of: linha.first,
+            matching: find.text('Eletricista 2026.1'),
+          ),
+          findsOneWidget,
+          reason: 'a turma Modular é a turma dela',
+        );
+        expect(
+          find.descendant(of: linha.first, matching: find.text('sem turma')),
+          findsNothing,
+          reason: 'o ⚠ falso do card 9.2,6',
+        );
+        // Contraprova no mesmo teste: quem está mesmo sem turma continua
+        // marcado — a correção não apagou o alerta.
+        expect(find.text('sem turma'), findsWidgets);
+      });
+    }
+
+    testWidgets('turma Modular DESATIVADA não conta — a mesma regra do bloco '
+        'desativado', (tester) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        turmas: comEduardaNaModular(turmaAtiva: false),
+        permissoes: comTurmas,
+      );
+      final linha = find.ancestor(
+        of: find.text('Eduarda Lima'),
+        matching: find.byType(Row),
+      );
+      expect(
+        find.descendant(of: linha.first, matching: find.text('sem turma')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('status terminal não recebe ⚠: quem cancelou não precisa de '
         'turma', (tester) async {
       await montar(
@@ -701,6 +763,55 @@ void main() {
       expect(find.text(vazioTurmasAluno), findsOneWidget);
       expect(find.text(avisoSemTurma), findsOneWidget);
     });
+
+    for (final tamanho in const [Size(1400, 900), Size(390, 800)]) {
+      testWidgets('aluno em turma MODULAR: a aba mostra a turma e NÃO avisa '
+          'pendência de sem turma (${tamanho.width.toInt()} px)', (
+        tester,
+      ) async {
+        await montar(
+          tester,
+          repositorio: AlunosFalso.fixture(),
+          turmas: TurmasFalso.fixture()
+            ..turmas_.removeWhere((t) => t.alunoId == 'al-3005')
+            ..modulares_.add(vinculoModularFalso(alunoId: 'al-3005')),
+          permissoes: comTurmas,
+          tamanho: tamanho,
+          rotaInicial: '/alunos/al-3005',
+        );
+        await tester.tap(find.text('Turmas').first);
+        await carregar(tester);
+        expect(tester.takeException(), isNull);
+        expect(find.text('Turma Modular'), findsOneWidget);
+        expect(find.text('Eletricista 2026.1'), findsOneWidget);
+        expect(find.text('na turma desde 01/06/2026'), findsOneWidget);
+        expect(find.text(semBlocoComModular), findsOneWidget);
+        expect(find.text(vazioTurmasAluno), findsNothing);
+        expect(find.text(avisoSemTurma), findsNothing);
+      });
+    }
+
+    testWidgets(
+      'turma Modular desativada: marcada, e com o aviso de que para o '
+      'sistema o aluno está sem turma',
+      (tester) async {
+        await montar(
+          tester,
+          repositorio: AlunosFalso.fixture(),
+          turmas: TurmasFalso.fixture()
+            ..turmas_.removeWhere((t) => t.alunoId == 'al-3005')
+            ..modulares_.add(
+              vinculoModularFalso(alunoId: 'al-3005', turmaAtiva: false),
+            ),
+          permissoes: comTurmas,
+          rotaInicial: '/alunos/al-3005',
+        );
+        await tester.tap(find.text('Turmas').first);
+        await carregar(tester);
+        expect(find.text('turma desativada'), findsOneWidget);
+        expect(find.text(avisoTurmaModularDesativada), findsOneWidget);
+      },
+    );
 
     testWidgets('a situação REP só aparece quando há o que dizer', (
       tester,

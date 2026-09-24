@@ -310,9 +310,16 @@ class _FormularioRemoverAlunoState
     // os avisos (achado da revisão da fase 05).
     final todasAsTurmas = ref.watch(turmasProvider);
     final turmas = ref.watch(turmasPorAlunoProvider)[aluno.alunoId] ?? const [];
+    // Turma Modular ativa também é turma (card 9.2,6): sair do último bloco
+    // não deixa sem turma quem está numa.
+    final emModular =
+        (ref.watch(vinculosPorAlunoProvider)[aluno.alunoId] ??
+                const <VinculoTurma>[])
+            .any((v) => v.modular && v.turmaAtiva);
     final ultimaTurma =
         !reposicao &&
         todasAsTurmas.hasValue &&
+        !emModular &&
         turmas.where((t) => t.blocoAtivo).length <= 1;
 
     return FormularioIm360(

@@ -438,7 +438,10 @@ void main() {
           blocoAtivo: false,
         ),
       ];
-      expect(rotuloTurmasDoAluno(turmas), 'Qua 08:00');
+      expect(
+        rotuloTurmasDoAluno([for (final t in turmas) VinculoTurma.deBloco(t)]),
+        'Qua 08:00',
+      );
       expect(rotuloTurmasDoAluno(const []), '—');
     });
 
@@ -455,9 +458,58 @@ void main() {
             blocoAtivo: false,
           ),
         ];
-        expect(alunosEmTurma(turmas), {'al-1'});
+        expect(
+          alunosEmTurma([for (final t in turmas) VinculoTurma.deBloco(t)]),
+          {'al-1'},
+        );
       },
     );
+
+    test('alunosEmTurma conta a turma MODULAR ativa — o defeito do card 9.2,6 '
+        '(Eduarda Lima, ATIVA na turma Modular, saía "sem turma")', () {
+      final vinculos = [
+        vinculoModularFalso(alunoId: 'al-mod'),
+        vinculoModularFalso(alunoId: 'al-orfa', turmaAtiva: false),
+      ];
+      expect(alunosEmTurma(vinculos), {'al-mod'});
+      expect(rotuloTurmasDoAluno(vinculos.sublist(0, 1)), 'Eletricista 2026.1');
+      expect(rotuloTurmasDoAluno(vinculos.sublist(1)), '—');
+    });
+
+    test('VinculoTurma.deLinha lê as duas formas de v_aluno_turmas', () {
+      final bloco = VinculoTurma.deLinha(const {
+        'forma': 'BLOCO',
+        'alocacao_id': 'aloc-1',
+        'aluno_id': 'al-1',
+        'turma_ativa': false,
+        'bloco_id': 'b-1',
+        'dia_semana': 3,
+        'hora_inicio': '08:00:00',
+        'metodo_id': 'm-int',
+        'sala_id': 's-lab1',
+        'tipo': 'REM',
+      });
+      expect(bloco.modular, isFalse);
+      expect(bloco.turmaAtiva, isFalse);
+      // `turma_ativa` da view vira o `blocoAtivo` da alocação: a aba Turmas
+      // marca o bloco desativado a partir dele.
+      expect(bloco.bloco!.blocoAtivo, isFalse);
+      expect(bloco.rotulo, 'Qua 08:00');
+
+      final modular = VinculoTurma.deLinha(const {
+        'forma': 'MODULAR',
+        'alocacao_id': 'tma-1',
+        'aluno_id': 'al-2',
+        'turma_ativa': true,
+        'turma_modular_id': 'tm-1',
+        'turma_nome': 'Eletricista 2026.1',
+        'data_entrada': '2026-06-01',
+      });
+      expect(modular.modular, isTrue);
+      expect(modular.bloco, isNull);
+      expect(modular.rotulo, 'Eletricista 2026.1');
+      expect(modular.dataEntrada, DateTime(2026, 6, 1));
+    });
 
     test('deLinha de v_bloco_alunos lê o hh:mm:ss e o bloco_ativo', () {
       final turma = TurmaDoAluno.deLinha(const {

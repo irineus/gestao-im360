@@ -22,6 +22,7 @@ class TurmasFalso implements TurmasRepositorio {
     List<BlocoHorario>? blocos,
     Map<String, List<AlunoDoBloco>>? alunos,
     List<TurmaDoAluno>? turmas,
+    List<VinculoTurma>? modulares,
     List<ReposicaoAluno>? reposicoes,
     this.situacao,
     this.atrasoLeitura = Duration.zero,
@@ -32,6 +33,7 @@ class TurmasFalso implements TurmasRepositorio {
            entrada.key: List.of(entrada.value),
        },
        turmas_ = List.of(turmas ?? const []),
+       modulares_ = List.of(modulares ?? const []),
        reposicoes_ = List.of(reposicoes ?? const []);
 
   /// Um repositório em que **toda leitura falha** — é como se exercita o quarto
@@ -202,6 +204,11 @@ class TurmasFalso implements TurmasRepositorio {
   final List<BlocoHorario> blocos_;
   final Map<String, List<AlunoDoBloco>> alunos_;
   final List<TurmaDoAluno> turmas_;
+
+  /// Os vínculos com turma Modular — a outra metade de `v_aluno_turmas`
+  /// (card 9.2,6). Sem eles o teste mediria um mundo em que só bloco é turma,
+  /// que era exatamente o defeito.
+  final List<VinculoTurma> modulares_;
   final List<ReposicaoAluno> reposicoes_;
 
   /// O que `fn_rep_situacao` devolve. Nulo = "MANTER sem débito", que é o caso
@@ -318,12 +325,12 @@ class TurmasFalso implements TurmasRepositorio {
   }
 
   @override
-  Future<List<TurmaDoAluno>> turmas() async {
+  Future<List<VinculoTurma>> vinculos() async {
     _conferirLeitura();
     if (atrasoLeitura > Duration.zero) {
       await Future<void>.delayed(atrasoLeitura);
     }
-    return List.of(turmas_);
+    return [for (final t in turmas_) VinculoTurma.deBloco(t), ...modulares_];
   }
 
   @override
@@ -570,6 +577,22 @@ TurmaDoAluno turmaFalsa({
   blocoAtivo: blocoAtivo,
   tipo: tipo,
   tipoDesde: DateTime(2026, 3, 12),
+);
+
+/// Uma linha MODULAR de `v_aluno_turmas` — a forma de Eduarda Lima na
+/// escola-fixture (turma "Eletricista 2026.1").
+VinculoTurma vinculoModularFalso({
+  required String alunoId,
+  String turma = 'Eletricista 2026.1',
+  bool turmaAtiva = true,
+}) => VinculoTurma(
+  forma: VinculoTurma.formaModular,
+  alocacaoId: 'tma-$alunoId',
+  alunoId: alunoId,
+  turmaAtiva: turmaAtiva,
+  turmaModularId: 'tm-$turma',
+  turmaNome: turma,
+  dataEntrada: DateTime(2026, 6, 1),
 );
 
 /// A célula-modelo: `dataReferencia` é recalculada em [TurmasFalso.grade] para

@@ -556,16 +556,124 @@ class TurmaDoAluno {
   String get rotulo => rotuloBloco(diaSemana, horaInicio);
 }
 
-/// Os ids dos alunos que estão em pelo menos uma turma **que existe**.
+/// Uma linha de `v_aluno_turmas` (card 9.2,6): um vínculo ATIVO do aluno com
+/// uma turma, em qualquer das **duas** formas que o sistema tem — bloco de
+/// horário ou turma Modular.
 ///
-/// É a mesma definição de `rt_pendencias_diaria` desde o card 5.7 — alocação em
-/// bloco desativado não conta —, e é por isso que o ⚠ da lista e a pendência
-/// `ALUNO_SEM_TURMA` dizem a mesma coisa. Duas contas diferentes divergiriam no
-/// dia em que alguém mexesse numa só (card 5.4 (4)).
-Set<String> alunosEmTurma(Iterable<TurmaDoAluno> turmas) => {
-  for (final t in turmas)
-    if (t.blocoAtivo) t.alunoId,
+/// ⚠️ Existe porque a lista de Alunos contava só bloco, e desde o card 7.1 a
+/// pendência `ALUNO_SEM_TURMA` conta as duas formas: Eduarda Lima, ATIVA numa
+/// turma Modular, aparecia com o ⚠ de "sem turma" que o banco, corretamente,
+/// não abria. [turmaAtiva] vem decidido do banco (bloco ativo / turma Modular
+/// ativa, o predicado da rotina), e o teste 073 prende a view à pendência pela
+/// paridade — a tela só lê.
+@immutable
+class VinculoTurma {
+  const VinculoTurma({
+    required this.forma,
+    required this.alocacaoId,
+    required this.alunoId,
+    required this.turmaAtiva,
+    this.bloco,
+    this.turmaModularId,
+    this.turmaNome,
+    this.dataEntrada,
+  });
+
+  /// O vínculo de bloco — a mesma linha de `v_bloco_alunos`, com
+  /// `bloco_ativo` como [turmaAtiva].
+  VinculoTurma.deBloco(TurmaDoAluno this.bloco)
+    : forma = formaBloco,
+      alocacaoId = bloco.alocacaoId,
+      alunoId = bloco.alunoId,
+      turmaAtiva = bloco.blocoAtivo,
+      turmaModularId = null,
+      turmaNome = null,
+      dataEntrada = null;
+
+  factory VinculoTurma.deLinha(Map<String, dynamic> linha) {
+    final forma = '${linha['forma']}';
+    final ativa = linha['turma_ativa'] as bool? ?? true;
+    if (forma == formaBloco) {
+      return VinculoTurma.deBloco(
+        TurmaDoAluno.deLinha({...linha, 'bloco_ativo': ativa}),
+      );
+    }
+    return VinculoTurma(
+      forma: forma,
+      alocacaoId: '${linha['alocacao_id']}',
+      alunoId: '${linha['aluno_id']}',
+      turmaAtiva: ativa,
+      turmaModularId: linha['turma_modular_id'] as String?,
+      turmaNome: linha['turma_nome'] as String?,
+      dataEntrada: _data(linha['data_entrada']),
+    );
+  }
+
+  static const formaBloco = 'BLOCO';
+  static const formaModular = 'MODULAR';
+
+  /// `BLOCO` ou `MODULAR`.
+  final String forma;
+  final String alocacaoId;
+  final String alunoId;
+
+  /// Falso = o bloco ou a turma Modular foi desativado com o aluno dentro. O
+  /// vínculo aparece na ficha, marcado, mas não conta como turma.
+  final bool turmaAtiva;
+
+  /// Preenchido só em [formaBloco]: a alocação inteira, para a aba Turmas e os
+  /// formulários de remover e virar REP, que falam de bloco.
+  final TurmaDoAluno? bloco;
+
+  final String? turmaModularId;
+  final String? turmaNome;
+  final DateTime? dataEntrada;
+
+  bool get modular => forma == formaModular;
+
+  /// `Qua 08:00` para bloco, o nome da turma para Modular.
+  String get rotulo => bloco?.rotulo ?? turmaNome ?? '—';
+}
+
+/// Os ids dos alunos que estão em pelo menos uma turma **que existe**, nas
+/// duas formas.
+///
+/// É a mesma definição de `rt_pendencias_diaria` — vínculo com bloco ou turma
+/// Modular desativados não conta —, e é por isso que o ⚠ da lista e a pendência
+/// `ALUNO_SEM_TURMA` dizem a mesma coisa. Quem decide [VinculoTurma.turmaAtiva]
+/// é o banco (`v_aluno_turmas`); duas contas diferentes divergiriam no dia em
+/// que alguém mexesse numa só (card 5.4 (4)) — e divergiram: até o card 9.2,6
+/// esta função olhava só bloco.
+Set<String> alunosEmTurma(Iterable<VinculoTurma> vinculos) => {
+  for (final v in vinculos)
+    if (v.turmaAtiva) v.alunoId,
 };
+
+/// Vínculos por aluno, na ordem em que a tela os mostra: blocos (dia, depois
+/// hora) e depois as turmas Modular pelo nome.
+Map<String, List<VinculoTurma>> agruparVinculosPorAluno(
+  List<VinculoTurma> vinculos,
+) {
+  final mapa = <String, List<VinculoTurma>>{};
+  for (final v in vinculos) {
+    (mapa[v.alunoId] ??= []).add(v);
+  }
+  int chave(VinculoTurma v) => v.modular ? 1 : 0;
+  for (final lista in mapa.values) {
+    lista.sort((a, b) {
+      final forma = chave(a).compareTo(chave(b));
+      if (forma != 0) return forma;
+      final ba = a.bloco;
+      final bb = b.bloco;
+      if (ba != null && bb != null) {
+        final dia = ba.diaSemana.compareTo(bb.diaSemana);
+        return dia != 0 ? dia : ba.horaInicio.compareTo(bb.horaInicio);
+      }
+      return a.rotulo.compareTo(b.rotulo);
+    });
+  }
+  return mapa;
+}
 
 /// Turmas por aluno, na ordem em que a tela as mostra (dia, depois hora).
 Map<String, List<TurmaDoAluno>> agruparPorAluno(List<TurmaDoAluno> turmas) {
@@ -582,12 +690,14 @@ Map<String, List<TurmaDoAluno>> agruparPorAluno(List<TurmaDoAluno> turmas) {
   return mapa;
 }
 
-/// `Seg 08:00 · Qua 08:00` — a coluna Turmas do wireframe §6.1. Vazio vira `—`,
-/// e quem decide se isso merece ⚠ é [alunosEmTurma], não este rótulo.
-String rotuloTurmasDoAluno(List<TurmaDoAluno> turmas) {
+/// `Seg 08:00 · Qua 08:00` — a coluna Turmas do wireframe §6.1 —, e o nome da
+/// turma Modular quando é dela que o aluno faz parte (`Eletricista 2026.1`).
+/// Vazio vira `—`, e quem decide se isso merece ⚠ é [alunosEmTurma], não este
+/// rótulo.
+String rotuloTurmasDoAluno(List<VinculoTurma> vinculos) {
   final ativas = [
-    for (final t in turmas)
-      if (t.blocoAtivo) t.rotulo,
+    for (final v in vinculos)
+      if (v.turmaAtiva) v.rotulo,
   ];
   return ativas.isEmpty ? '—' : ativas.join(' · ');
 }

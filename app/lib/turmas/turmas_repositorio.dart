@@ -42,10 +42,11 @@ abstract interface class TurmasRepositorio {
   /// vale toda semana e a reposição vale só no dia (card 2.1 §8).
   Future<List<AlunoDoBloco>> alunosDoBloco(String blocoId, DateTime data);
 
-  /// Todas as alocações ativas da unidade, do lado do aluno (`v_bloco_alunos`).
-  /// É o que a coluna Turmas da lista de alunos resume e o que o ⚠ de "sem
-  /// turma" consulta.
-  Future<List<TurmaDoAluno>> turmas();
+  /// Todos os vínculos ativos da unidade, do lado do aluno, nas DUAS formas de
+  /// turma — bloco e Modular (`v_aluno_turmas`, card 9.2,6). É o que a coluna
+  /// Turmas da lista de alunos resume, o que o ⚠ de "sem turma" consulta e,
+  /// na metade BLOCO, o que a aba Turmas da ficha lista.
+  Future<List<VinculoTurma>> vinculos();
 
   /// As reposições do aluno, da mais recente para a mais antiga — inclusive as
   /// já quitadas, porque é delas que o débito do card 2.5 se compõe.
@@ -131,9 +132,10 @@ class TurmasRepositorioSupabase implements TurmasRepositorio {
       'id, dia_semana, hora_inicio, metodo_id, sala_id, professor_id, '
       'capacidade_override, ativo';
 
-  static const _colunasTurma =
-      'alocacao_id, bloco_id, aluno_id, dia_semana, hora_inicio, metodo_id, '
-      'sala_id, bloco_ativo, tipo, tipo_desde, data_inicio_prevista';
+  static const _colunasVinculo =
+      'forma, alocacao_id, aluno_id, turma_ativa, bloco_id, dia_semana, '
+      'hora_inicio, metodo_id, sala_id, tipo, tipo_desde, data_inicio_prevista, '
+      'turma_modular_id, turma_nome, data_entrada';
 
   static const _colunasReposicao =
       'id, bloco_id, aluno_id, data, status, bloco_origem_id, data_origem, '
@@ -210,13 +212,11 @@ class TurmasRepositorioSupabase implements TurmasRepositorio {
   }
 
   @override
-  Future<List<TurmaDoAluno>> turmas() async {
+  Future<List<VinculoTurma>> vinculos() async {
     final linhas = await _cliente
-        .from('v_bloco_alunos')
-        .select(_colunasTurma)
-        .order('dia_semana', ascending: true)
-        .order('hora_inicio', ascending: true);
-    return linhas.map(TurmaDoAluno.deLinha).toList();
+        .from('v_aluno_turmas')
+        .select(_colunasVinculo);
+    return linhas.map(VinculoTurma.deLinha).toList();
   }
 
   @override
