@@ -276,3 +276,36 @@ local vazio o vigia reprovou com *"o bucket não tem nenhuma cópia em `producao
 completa de `2026-08-31` passou, com `data: 2026-08-31` e `idadeDias: 2`. Isso confirma que a API real
 de `env.BACKUP.list()` (`objects[].key`, `truncated`, `cursor`) — inclusive a paginação — bate com o
 que a suíte simula.
+
+## 10. Vigilância da rotina diária (card 9.2,66, 24/09/2026)
+
+**O modo de falha.** `ROTINA_FALHOU` cobre a falha **dentro** da rotina; não cobre a rotina que
+**não roda** — job `gi_rotina_diaria` apagado, extensão `pg_cron` desligada, migração que
+substituiu `rt_diaria` errado. O sintoma seria uma central de pendências e uma projeção paradas no
+último dia bom, sem erro nenhum, e a sonda do §2 continuaria verde porque o banco continua acordado.
+
+**O que o banco expõe — e só isso** (decisão de Irineu, 24/09/2026: qualquer coisa além da data
+volta a ser decisão):
+
+- `rotina_execucao` — uma linha por unidade, carimbada por `rt_diaria()` **só** na execução
+  completa (a do cron; a sob demanda do card 9.2,65 não carimba, senão um clique diário esconderia
+  um cron morto) e **só** na unidade em que as cinco `rt_*` passaram;
+- `fn_rotina_diaria_ultima_execucao()` — a **única** função aberta ao `anon` (exceção nominal ao
+  C9): sem parâmetro, devolve um `timestamptz` — o da unidade ativa **mais atrasada**, ou `null` se
+  alguma nunca rodou até o fim.
+
+**A sonda.** `POST /rest/v1/rpc/fn_rotina_diaria_ultima_execucao` com a chave publicável, só nos
+ambientes cuja sonda do §2 passou. Asserção **positiva**: 200, JSON que é uma data válida, idade
+≤ **36 h**. Em dia normal o carimbo tem ~3 h às 06:00 (o cron roda às 03:10); com um dia perdido,
+~27 h — não alarma; com dois, ~51 h — alarma no primeiro vigia depois de um dia inteiro sem rotina.
+`null`, 404 (função inexistente), data no futuro e corpo que não é data reprovam. Não lança: rotina
+parada entra no mesmo e-mail do dia (assunto próprio quando é o único problema) com o SQL de
+conferir `cron.job` e `cron.job_run_details`.
+
+**Quando começa a valer.** O Worker é publicado só a partir de `main`, junto com a migração
+`20260924140000_vigiar_rotina_diaria.sql`. Em cada banco o carimbo nasce **nulo** e só existe
+depois da primeira execução do cron (03:10). Uma promoção feita entre 03:10 e 06:00 faria o vigia
+das 06:00 daquele dia reprovar com "nunca rodou" — uma vez só.
+
+**O `conferir.mjs` não pergunta pela rotina**, de propósito: ele roda no deploy do vigia, antes de
+a migração existir em produção, e reprovaria o deploy por uma função que ainda vai chegar.

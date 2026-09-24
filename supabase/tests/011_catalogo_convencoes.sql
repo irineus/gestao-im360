@@ -246,6 +246,11 @@ select is(
             -- postgres executa. Confere `parametros.gerir` com o token de quem
             -- chama e roda SÓ a unidade dele (fn_unidade_atual() no corpo).
             'fn_rotina_diaria_executar',
+            -- card 9.2,66 — a data da última execução completa da rotina, para
+            -- o worker-vigia (anon). Lê `rotina_execucao`, que não tem política
+            -- para anon; devolve SÓ um timestamptz, agregado entre as unidades
+            -- (o anon não tem unidade) — exceção nominal também no C9, abaixo.
+            'fn_rotina_diaria_ultima_execucao',
             -- card 6.5 — o trigger que fecha ESTOQUE_ZERO e COMPRA_SEM_ESTOQUE
             -- quando a compra chega. Ele dispara na transação de quem RECEBE
             -- (`compras.receber`) e precisa ler `pendencia` (`pendencias.ler`) e
@@ -346,6 +351,10 @@ select is(
        union all
        select proname || ' -> anon' from f_projeto
         where has_function_privilege('anon', oid, 'EXECUTE')
+          -- EXCEÇÃO NOMINAL, uma só (card 9.2,66, autorizada por Irineu em
+          -- 24/09/2026): o vigia só tem a chave publicável e pergunta QUANDO
+          -- a rotina diária rodou. Sem parâmetro, devolve um timestamptz.
+          and proname <> 'fn_rotina_diaria_ultima_execucao'
        union all
        select proname || ' -> authenticated' from f_projeto
         where proname like 'rt\_%'
