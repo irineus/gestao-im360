@@ -235,6 +235,13 @@ class _TelaGuardada extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // ⚠️ Card 9.2,63: enquanto a sessão carrega, as permissões são o conjunto
+    // VAZIO — e a guarda abaixo mostrava "Sem acesso" com TODAS as permissões
+    // "faltando", por um segundo ou dois a cada abertura do app. A tela
+    // afirmava o que não sabia. Carregando é carregando.
+    if (ref.watch(sessaoProvider) is SessaoCarregando) {
+      return const EstadoCarregando(linhas: 4);
+    }
     final permissoes = ref.watch(permissoesProvider);
     if (!podeAbrir(rota, permissoes)) {
       return TelaSemAcesso(

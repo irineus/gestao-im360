@@ -29,20 +29,30 @@ class SessaoRepositorioSupabase implements SessaoRepositorio {
     if (autenticado == null) return const SessaoDeslogada();
 
     try {
-      // 1. A própria linha de usuario. Zero linhas aqui não é "usuário vazio":
-      //    é ausência de espelho OU usuário desativado — ver SessaoSemEspelho.
-      final linha = await _cliente
-          .from('usuario')
-          .select('id, nome, email, unidade_id')
-          .eq('id', autenticado.id)
-          .maybeSingle();
+      // ⚠️ Card 9.2,63: as três consultas saíam EM SÉRIE (usuario → rpc →
+      // unidade), sem dependência nenhuma entre a segunda e as outras — cada
+      // abertura de tela pagava três idas e voltas antes do primeiro dado.
+      // Agora são DUAS, em paralelo: a linha do usuário já traz o nome da
+      // unidade por embed, e as permissões vão junto.
+      final respostas = await Future.wait<Object?>([
+        // 1. A própria linha de usuario, com a unidade embutida. Zero linhas
+        //    aqui não é "usuário vazio": é ausência de espelho OU usuário
+        //    desativado — ver SessaoSemEspelho.
+        _cliente
+            .from('usuario')
+            .select('id, nome, email, unidade_id, unidade:unidade_id(nome)')
+            .eq('id', autenticado.id)
+            .maybeSingle(),
+        // 2. As permissões. Uma chamada, não uma por código.
+        _cliente.rpc('fn_minhas_permissoes'),
+      ]);
+      final linha = respostas[0] as Map<String, dynamic>?;
+      final retorno = respostas[1];
 
       if (linha == null) {
         return SessaoSemEspelho(autenticado.email ?? '');
       }
 
-      // 2. As permissões. Uma chamada, não uma por código.
-      final retorno = await _cliente.rpc('fn_minhas_permissoes');
       final permissoes = <String>{
         for (final item in (retorno as List? ?? const []))
           if (item is String)
@@ -53,14 +63,11 @@ class SessaoRepositorioSupabase implements SessaoRepositorio {
 
       final unidadeId = '${linha['unidade_id']}';
 
-      // 3. A unidade. Falta de `unidades.ler` degrada o cabeçalho e não derruba
-      //    a sessão: o nome da unidade é enfeite, a unidade em si vem do
-      //    usuário.
-      final unidade = await _cliente
-          .from('unidade')
-          .select('id, nome')
-          .eq('id', unidadeId)
-          .maybeSingle();
+      // 3. A unidade, pelo embed. Falta de `unidades.ler` degrada o cabeçalho
+      //    e não derruba a sessão: o PostgREST devolve o embed NULO quando a
+      //    RLS não deixa ler a linha — o nome da unidade é enfeite, a unidade
+      //    em si vem do usuário.
+      final unidade = linha['unidade'] as Map<String, dynamic>?;
 
       final sessao = Sessao(
         usuarioId: '${linha['id']}',

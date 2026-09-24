@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -19,6 +19,9 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Gestão IM360 — gestão de alunos, turmas, vagas e material didático">
+  <!-- Card 9.2,63: a cor da barra do navegador no celular é a do manifest
+       (theme_color), e não a cinza do sistema. -->
+  <meta name="theme-color" content="#171C26">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -31,8 +34,38 @@
 
   <title>Gestão IM360</title>
   <link rel="manifest" href="manifest.json">
+  <!--
+    Card 9.2,63: a tela ficava BRANCA até o motor do Flutter subir (medido no
+    navegador), sem nada dizendo que o app estava abrindo. O indicador é só
+    HTML e CSS — a CSP do `_headers` não permite script inline (`script-src
+    'self'`), e `style-src` permite estilo inline. Ele some sozinho quando o
+    Flutter põe a `flutter-view` na página (`:has`), sem código nenhum.
+  -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #FFFFFF; }
+    #abrindo {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #656F82; font-size: 14px;
+    }
+    #abrindo .roda {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 3px solid #D9DDE5; border-top-color: #BE4E08;
+      animation: girar 0.9s linear infinite;
+    }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      #abrindo .roda { animation: none; }
+    }
+    body:has(flutter-view) #abrindo { display: none; }
+  </style>
 </head>
 <body>
+  <div id="abrindo" role="status" aria-live="polite">
+    <div class="roda" aria-hidden="true"></div>
+    <span>Abrindo o Gestão IM360…</span>
+  </div>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
