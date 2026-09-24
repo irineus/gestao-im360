@@ -22,9 +22,17 @@ class BarraFiltrosIm360 extends StatelessWidget {
     this.filtrosAtivos = 0,
     this.acoes = const [],
     this.mobile,
+    this.buscaMobile,
   });
 
   final Widget? filtros;
+
+  /// Campo de busca que, no CELULAR, fica sempre à vista, acima do botão
+  /// "Filtrar" (card 9.2,64). A lista de Alunos escondia a busca por nome atrás
+  /// de "Filtrar (1)" — e a primeira coisa que o monitor faz é procurar o aluno
+  /// que está à frente dele. Fora do celular a busca continua dentro de
+  /// [filtros], como sempre esteve.
+  final Widget? buscaMobile;
 
   /// Quantos filtros estão ligados — o `(n)` do botão no mobile.
   final int filtrosAtivos;
@@ -61,6 +69,10 @@ class BarraFiltrosIm360 extends StatelessWidget {
   Widget _estreita(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      if (buscaMobile != null) ...[
+        buscaMobile!,
+        const SizedBox(height: Dim.e8),
+      ],
       if (filtros != null)
         Align(
           alignment: Alignment.centerLeft,

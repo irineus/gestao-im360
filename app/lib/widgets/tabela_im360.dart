@@ -59,10 +59,19 @@ class CartaoIm360 {
     this.destaque,
     this.badge,
     this.acao,
+    this.informacao,
+    this.iconeInformacao,
   });
 
   final String titulo;
   final String? subtitulo;
+
+  /// Uma linha a mais, em cor de texto e com ícone, entre o subtítulo e o
+  /// apoio — o "próximo livro" do cartão de Alunos no celular (card 9.2,64),
+  /// que é a informação da jornada nº 1 do monitor e não cabia no subtítulo
+  /// sem empurrar o método para fora.
+  final String? informacao;
+  final IconData? iconeInformacao;
   final String? apoio;
 
   /// Ícone antes da linha de apoio — é como o ⚠ de "sem turma" existe no
@@ -118,6 +127,7 @@ class TabelaIm360<T> extends StatelessWidget {
     this.aoRepetir,
     this.tomDaLinha,
     this.linhaSelecionada,
+    this.buscaMobile,
   });
 
   final List<ColunaIm360<T>> colunas;
@@ -154,6 +164,10 @@ class TabelaIm360<T> extends StatelessWidget {
   /// (tela 6) mostra o conteúdo dela, e sem a marca a lista não diz de quem é o
   /// painel. Nasceu no card 6.7.
   final bool Function(T item)? linhaSelecionada;
+
+  /// A busca que fica à vista no celular, fora da folha de filtros (card
+  /// 9.2,64). Ver [BarraFiltrosIm360.buscaMobile].
+  final Widget? buscaMobile;
 
   /// Quais colunas cabem em [largura]: sai primeiro a de maior [prioridade];
   /// as de prioridade 1 ficam sempre, mesmo apertadas.
@@ -238,6 +252,7 @@ class TabelaIm360<T> extends StatelessWidget {
     filtrosAtivos: filtrosAtivos,
     acoes: acoes,
     mobile: mobile,
+    buscaMobile: mobile ? buscaMobile : null,
   );
 
   Widget _tabela(BuildContext context, List<T> itens, double largura) {
@@ -410,6 +425,28 @@ class TabelaIm360<T> extends StatelessWidget {
                               style: Tipografia.corpoTabela.copyWith(
                                 color: cores.onSurfaceVariant,
                               ),
+                            ),
+                          if (dados.informacao != null)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (dados.iconeInformacao != null) ...[
+                                  Icon(
+                                    dados.iconeInformacao,
+                                    size: 14,
+                                    color: cores.onSurface,
+                                  ),
+                                  const SizedBox(width: Dim.e4),
+                                ],
+                                Flexible(
+                                  child: Text(
+                                    dados.informacao!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Tipografia.corpoTabela,
+                                  ),
+                                ),
+                              ],
                             ),
                           if (dados.apoio != null)
                             Row(

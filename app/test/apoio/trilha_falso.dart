@@ -190,6 +190,13 @@ class TrilhaFalso implements TrilhaRepositorio {
   }
 
   @override
+  Future<Map<String, String>> proximosLivros() => _ler('proximosLivros', {
+    for (final e in trilhas.entries)
+      for (final i in e.value)
+        if (i.proximo) e.key: i.materialNome,
+  });
+
+  @override
   Future<List<ItemTrilha>> trilha(String alunoId) =>
       _ler('trilha', List.of(trilhas[alunoId] ?? const <ItemTrilha>[]));
 

@@ -10,6 +10,8 @@ import '../../rotas/rotas.dart';
 import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../trilha/trilha.dart';
+import '../../trilha/trilha_provider.dart';
 import '../../turmas/turmas.dart';
 import '../../turmas/turmas_provider.dart';
 import '../../util/async_valor.dart';
@@ -70,6 +72,13 @@ class TelaAlunos extends ConsumerWidget {
     final vinculosPorAluno = ref.watch(vinculosPorAlunoProvider);
     final emTurma = ref.watch(alunosEmTurmaProvider);
     final cores = Theme.of(context).colorScheme;
+    final mobile = faixaDe(MediaQuery.sizeOf(context).width) == Faixa.mobile;
+    // O próximo livro de cada aluno, só no celular — é a informação da
+    // jornada nº 1 do monitor (card 9.2,64). Em carga ou erro a linha
+    // simplesmente não aparece: nenhum livro é afirmado sem ter sido lido.
+    final proximos = mobile
+        ? ref.watch(proximosLivrosProvider).value ?? const <String, String>{}
+        : const <String, String>{};
     String metodoDe(Aluno a) => metodosPorId[a.metodoId]?.nome ?? '—';
     String comboDe(Aluno a) => combosPorId[a.comboId]?.nome ?? '—';
 
@@ -101,8 +110,16 @@ class TelaAlunos extends ConsumerWidget {
     }
 
     return TabelaIm360<Aluno>(
-      filtros: FiltrosAlunos(metodos: metodos, combos: combos),
-      filtrosAtivos: filtro.ativos,
+      // No celular a busca sai da folha e fica sempre à vista (card 9.2,64):
+      // a primeira coisa que o monitor faz é procurar o aluno à frente dele.
+      buscaMobile: const CampoBuscaAlunos(),
+      filtros: FiltrosAlunos(
+        metodos: metodos,
+        combos: combos,
+        comBusca: !mobile,
+      ),
+      filtrosAtivos:
+          filtro.ativos - (mobile && filtro.busca.trim().isNotEmpty ? 1 : 0),
       acoes: [
         BotaoAcao(
           rotulo: 'Matricular',
@@ -177,6 +194,10 @@ class TelaAlunos extends ConsumerWidget {
             ? Icons.warning_amber_rounded
             : null,
         corApoio: mostraTurmas && turmasDe(a).alerta ? cores.tertiary : null,
+        informacao: proximos[a.id] == null
+            ? null
+            : '$rotuloProximoLivro ${proximos[a.id]}',
+        iconeInformacao: Icons.menu_book_outlined,
         badge: BadgeStatus(a.status),
       ),
       estadoVazio: haCadastro

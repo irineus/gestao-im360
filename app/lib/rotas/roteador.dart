@@ -24,6 +24,7 @@ import '../telas/selecao_unidade.dart';
 import '../telas/turmas/tela_turmas.dart';
 import '../telas/turmas/tela_turmas_modular.dart';
 import '../telas/sem_acesso.dart';
+import '../theme/dimensoes.dart';
 import '../widgets/estados.dart';
 import '../widgets/shell_im360.dart';
 import 'rotas.dart';
@@ -119,6 +120,11 @@ const _cardDaRota = <String, String>{'importacao': '9.1'};
 final roteadorProvider = Provider<GoRouter>((ref) {
   final controlador = ref.watch(sessaoProvider.notifier);
 
+  // A primeira navegação com sessão ativa ainda não aconteceu: é nela que o
+  // app, aberto na rota inicial, vai para a tela de partida do dispositivo
+  // (card 9.2,64). Depois disso, "/" é o Dashboard que a pessoa escolheu abrir.
+  var partidaResolvida = false;
+
   return GoRouter(
     initialLocation: rotasAplicacao.first.caminho,
     // O roteador reavalia o redirect quando a sessão muda; nenhuma tela navega
@@ -156,7 +162,25 @@ final roteadorProvider = Provider<GoRouter>((ref) {
         SessaoSemEspelho() ||
         SessaoSemPerfil() ||
         SessaoErro() => caminho == _caminhoAcesso ? null : _caminhoAcesso,
-        SessaoAtiva(:final sessao) => _destinoComSessao(caminho, sessao),
+        SessaoAtiva(:final sessao) => () {
+          final mobile =
+              faixaDe(MediaQuery.sizeOf(context).width) == Faixa.mobile;
+          final aberturaDoApp =
+              !partidaResolvida &&
+              caminho == rotasAplicacao.first.caminho &&
+              estadoRota.uri.queryParameters.isEmpty;
+          partidaResolvida = true;
+          if (aberturaDoApp) {
+            final partida = primeiraRotaPermitida(
+              sessao.permissoes,
+              mobile: mobile,
+            );
+            if (partida != null && partida.caminho != caminho) {
+              return partida.caminho;
+            }
+          }
+          return _destinoComSessao(caminho, sessao, mobile: mobile);
+        }(),
       };
     },
     routes: [
@@ -200,8 +224,12 @@ final roteadorProvider = Provider<GoRouter>((ref) {
 /// Sai do login/acesso para a primeira rota que o usuário abre — o Dashboard
 /// exige cinco permissões, e um perfil enxuto entraria e cairia numa tela sem
 /// acesso logo depois de digitar a senha certa.
-String? _destinoComSessao(String caminho, Sessao sessao) {
-  final permitido = primeiraRotaPermitida(sessao.permissoes);
+String? _destinoComSessao(
+  String caminho,
+  Sessao sessao, {
+  bool mobile = false,
+}) {
+  final permitido = primeiraRotaPermitida(sessao.permissoes, mobile: mobile);
   final inicio = permitido?.caminho ?? _caminhoAcesso;
 
   if (caminho == rotaLogin.caminho || caminho == _caminhoAcesso) return inicio;
