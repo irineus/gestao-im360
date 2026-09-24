@@ -54,7 +54,7 @@ MCP do Notion conectado na sessão. Se não estiver, parar e avisar Irineu (sem 
 
    ⚠️ **A §2 tem piso** (card 6.2,7): 70 enunciados + 111 armadilhas, ~64 KB; não adianta repetir a cirurgia, e a página inteira (~120 KB) **não cabe num `notion-fetch` só** — lê-se em fatias ou abre-se a subpágina do domínio.
 
-   ⚠️ **Ao encerrar tarefa que gere decisão**, o enunciado curto vai para a §2 (respeitando o teto de 6 linhas) e o raciocínio vai para a **subpágina do domínio** — nunca tudo na página-mãe, que foi como ela chegou a 146 KB.
+   ⚠️ **Ao encerrar tarefa que gere decisão**, o enunciado curto vai para a seção (§1, §2 ou §5), respeitando o teto de 6 linhas, e o raciocínio vai para a **subpágina de detalhe** dela — nunca tudo na página-mãe, que foi como ela chegou a 146 KB.
 
 ## Consultar o board
 
