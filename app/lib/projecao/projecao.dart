@@ -105,11 +105,15 @@ class CelulaProjecao {
     required this.quantidade,
     required this.regra,
     required this.calculadoEm,
+    required this.metodoCodigo,
+    required this.metodoNome,
   });
 
   factory CelulaProjecao.deLinha(Map<String, dynamic> linha) => CelulaProjecao(
     materialId: '${linha['material_id']}',
     metodoId: '${linha['metodo_id']}',
+    metodoCodigo: '${linha['metodo_codigo']}',
+    metodoNome: '${linha['metodo_nome']}',
     codigo: '${linha['codigo']}',
     nome: '${linha['nome']}',
     categoria: '${linha['categoria']}',
@@ -123,6 +127,11 @@ class CelulaProjecao {
 
   final String materialId;
   final String metodoId;
+
+  /// O rótulo do método **vem na linha** desde o card 9.2,7 (item E1 do
+  /// 9.2,5): a coluna Método não depende mais do catálogo em memória.
+  final String metodoCodigo;
+  final String metodoNome;
   final String codigo;
   final String nome;
   final String categoria;
@@ -151,10 +160,14 @@ class LinhaProjecao {
     required this.categoria,
     required this.porMes,
     required this.regras,
+    this.metodoNome = '',
   });
 
   final String materialId;
   final String metodoId;
+
+  /// O nome do método, como veio da view (card 9.2,7).
+  final String metodoNome;
   final String codigo;
   final String nome;
   final String categoria;
@@ -213,6 +226,7 @@ List<LinhaProjecao> pivotar(Iterable<CelulaProjecao> celulas) {
         codigo: primeira.codigo,
         nome: primeira.nome,
         categoria: primeira.categoria,
+        metodoNome: primeira.metodoNome,
         porMes: Map.fromEntries(
           (porMes.keys.toList()..sort()).map((m) => MapEntry(m, porMes[m]!)),
         ),
@@ -244,6 +258,7 @@ class DetalheProjecao {
     required this.k,
     required this.pendentes,
     this.ritmoDias,
+    this.modularSemCronograma = false,
   });
 
   factory DetalheProjecao.deLinha(Map<String, dynamic> linha) =>
@@ -261,6 +276,7 @@ class DetalheProjecao {
         ritmoDias: (linha['ritmo_dias'] as num?)?.toInt(),
         k: (linha['k'] as num?)?.toInt() ?? 0,
         pendentes: (linha['pendentes'] as num?)?.toInt() ?? 0,
+        modularSemCronograma: linha['modular_sem_cronograma'] as bool? ?? false,
       );
 
   final String alunoId;
@@ -286,8 +302,17 @@ class DetalheProjecao {
   final int k;
   final int pendentes;
 
+  /// Aluno do Modular projetado por outro degrau que não o cronograma — a turma
+  /// dele não tem cronograma futuro datado, ou ele não tem turma (card 9.2,7;
+  /// projecao-demanda §13 item 5).
+  final bool modularSemCronograma;
+
   String get rotuloAluno => '$alunoNome ($codigoSgf)';
 }
+
+/// O aviso da linha do drill-down para [DetalheProjecao.modularSemCronograma].
+const avisoModularSemCronograma =
+    'Turma sem cronograma: data estimada, não do cronograma';
 
 /// "23 d" · "—". O traço não é omissão: é o que diz que aquele degrau não usa
 /// ritmo, e mostrar o do método ali seria exibir um número que não participou
@@ -434,16 +459,11 @@ const vazioProjecaoRotinaNaoLida =
 
 const vazioProjecaoFiltro = 'Nenhum material com esses filtros.';
 
-/// O catálogo de métodos não veio (item B3 da revisão das telas 08/09): a
-/// coluna Método diz "não lido" em cada linha, o filtro fica só com "Todos", e
-/// a tela diz por quê — antes disso era um `—` mudo em toda linha, para sempre.
+/// O catálogo de métodos não veio (item B3 da revisão das telas 08/09): o
+/// filtro fica só com "Todos", e a tela diz por quê. Desde o card 9.2,7 a
+/// coluna Método vem da própria view e continua de pé.
 const erroMetodosNaoLidos =
-    'Não foi possível ler os métodos: a coluna Método e o filtro por método '
-    'estão indisponíveis.';
-
-/// O que a coluna Método diz enquanto o catálogo não foi lido — nunca o traço,
-/// que é a forma de "este material não tem método".
-const metodoNaoLido = 'não lido';
+    'Não foi possível ler os métodos: o filtro por método está indisponível.';
 
 /// O drill-down de uma célula que não devolveu aluno nenhum. Só acontece quando
 /// o total é da madrugada e o detalhe, de agora, já não tem aquele aluno — uma

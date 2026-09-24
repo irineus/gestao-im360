@@ -968,3 +968,6 @@ na mesma medida; e com a política de `insert` escrita por `tem_permissao('estoq
 5. **Turma Modular sem cronograma degrada para média de método** (§5.4). A pendência avisa; o que
    não existe é uma tela dizendo "estes 12 alunos estão projetados por média porque falta
    cronograma". Se a situação for comum, vale uma coluna de aviso na tela 8.5.
+   ✅ **Feito no card 9.2,7 (24/09/2026):** `v_projecao_aluno_detalhe.modular_sem_cronograma` marca o
+   aluno Modular projetado por outro degrau, e o drill-down da tela 8 diz na linha "Turma sem
+   cronograma: data estimada, não do cronograma".

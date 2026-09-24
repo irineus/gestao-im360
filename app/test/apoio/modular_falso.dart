@@ -72,6 +72,8 @@ class ModularFalso implements ModularRepositorio {
         moduloCorrenteInicio: DateTime(2025, 11, 10),
         moduloCorrentePrevConclusao: DateTime(2026, 7, 26),
         moduloAtrasado: true,
+        // O início REAL da turma, que a view de lotação traz desde o 9.2,7.
+        dataInicio: DateTime(2025, 11, 9),
       ),
       // Acima da capacidade: 16 numa turma de 15. Estado real — o importador do
       // card 9.1 pode trazer uma —, e `vagas_livres` tem piso zero.
@@ -504,7 +506,9 @@ TurmaModular turmaModularFalsa({
   DateTime? moduloCorrenteInicio,
   DateTime? moduloCorrentePrevConclusao,
   bool moduloAtrasado = false,
+  DateTime? dataInicio,
 }) => TurmaModular(
+  dataInicio: dataInicio,
   id: id,
   nome: nome,
   cursoId: cursoId,

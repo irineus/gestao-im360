@@ -39,11 +39,12 @@ class ProjecaoRepositorioSupabase implements ProjecaoRepositorio {
 
   static const _colunasGrade =
       'material_id, metodo_id, codigo, nome, categoria, mes, quantidade, '
-      'regra, calculado_em';
+      'regra, calculado_em, metodo_codigo, metodo_nome';
 
   static const _colunasDetalhe =
       'aluno_id, aluno_nome, codigo_sgf, aluno_status, material_id, codigo, '
-      'material_nome, mes, data_prevista, regra, ritmo_dias, k, pendentes';
+      'material_nome, mes, data_prevista, regra, ritmo_dias, k, pendentes, '
+      'modular_sem_cronograma';
 
   /// A chave de dedução da pendência que `rt_diaria` abre quando
   /// `rt_projecao_demanda` levanta exceção (card 8.1).

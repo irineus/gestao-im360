@@ -47,6 +47,7 @@ class TurmaModular {
     this.moduloCorrenteInicio,
     this.moduloCorrentePrevConclusao,
     this.moduloAtrasado = false,
+    this.dataInicio,
   });
 
   factory TurmaModular.deLinha(Map<String, dynamic> linha) => TurmaModular(
@@ -67,6 +68,7 @@ class TurmaModular {
     moduloCorrenteInicio: _data(linha['modulo_corrente_inicio']),
     moduloCorrentePrevConclusao: _data(linha['modulo_corrente_prev_conclusao']),
     moduloAtrasado: linha['modulo_atrasado'] as bool? ?? false,
+    dataInicio: _data(linha['data_inicio']),
   );
 
   final String id;
@@ -75,6 +77,11 @@ class TurmaModular {
   final String cursoNome;
   final String salaId;
   final String salaNome;
+
+  /// O início da TURMA (não do módulo corrente) — `turma_modular.data_inicio`,
+  /// exposto pela view desde o card 9.2,7. É o que o formulário de edição
+  /// mostra e deixa corrigir.
+  final DateTime? dataInicio;
 
   /// Teto da turma — **coluna**, não conta de PC (card 7.1).
   final int capacidade;

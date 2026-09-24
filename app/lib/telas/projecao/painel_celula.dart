@@ -184,6 +184,16 @@ class _LinhaAluno extends StatelessWidget {
                           color: cores.onSurfaceVariant,
                         ),
                       ),
+                      // Card 9.2,7: a pendência TURMA_MODULAR_SEM_CRONOGRAMA
+                      // avisa por turma; aqui se vê QUAIS alunos estão na conta
+                      // estimada. Texto, e não só cor (design-system §8.2).
+                      if (aluno.modularSemCronograma)
+                        Text(
+                          avisoModularSemCronograma,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Tipografia.apoio.copyWith(color: cores.error),
+                        ),
                     ],
                   ),
                 ),

@@ -199,6 +199,40 @@ void main() {
       expect(find.text(avisoDetalheAoVivo), findsOneWidget);
     });
 
+    for (final (nome, tamanho) in [
+      ('desktop', const Size(1400, 1000)),
+      ('390 px', const Size(390, 800)),
+    ]) {
+      testWidgets('$nome: aluno Modular fora do cronograma é avisado na linha, '
+          'e só ele (card 9.2,7)', (tester) async {
+        // A pendência TURMA_MODULAR_SEM_CRONOGRAMA avisa por turma; o
+        // drill-down diz QUAIS alunos estão na conta estimada.
+        final i = projecao.detalhe_.indexWhere((d) => d.alunoId == 'aluno-1');
+        final d = projecao.detalhe_[i];
+        projecao.detalhe_[i] = DetalheProjecao(
+          alunoId: d.alunoId,
+          alunoNome: d.alunoNome,
+          codigoSgf: d.codigoSgf,
+          alunoStatus: d.alunoStatus,
+          materialId: d.materialId,
+          codigo: d.codigo,
+          materialNome: d.materialNome,
+          mes: d.mes,
+          dataPrevista: d.dataPrevista,
+          regra: d.regra,
+          ritmoDias: d.ritmoDias,
+          k: d.k,
+          pendentes: d.pendentes,
+          modularSemCronograma: true,
+        );
+        await montar(tester, tamanho: tamanho, materialId: d.materialId);
+
+        expect(find.text('Aluno 1 (3001)'), findsOneWidget);
+        expect(find.text(avisoModularSemCronograma), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
     testWidgets('a regra e o ritmo aparecem em cada linha do detalhe', (
       tester,
     ) async {
@@ -427,7 +461,8 @@ void main() {
     });
 
     testWidgets(
-      'métodos em erro: a coluna diz "não lido" e a tela diz por quê',
+      'métodos em erro: o filtro diz por quê, e a coluna Método continua de '
+      'pé (vem da view desde o card 9.2,7)',
       (tester) async {
         // Antes: `—` em toda linha e o filtro só com "Todos", para sempre e sem
         // nenhum erro em tela (item B3).
@@ -438,8 +473,9 @@ void main() {
         await montar(tester);
 
         expect(find.text(erroMetodosNaoLidos), findsOneWidget);
-        expect(find.text(metodoNaoLido), findsWidgets);
-        expect(find.text('Interativo'), findsNothing);
+        // Antes do 9.2,7 a coluna inteira dizia "não lido": o nome dependia do
+        // catálogo em memória. Agora ele vem na linha da própria view.
+        expect(find.text('Interativo'), findsWidgets);
         // A grade continua de pé.
         expect(find.text('Informática Essencial 2'), findsOneWidget);
 
@@ -447,7 +483,6 @@ void main() {
         await tester.tap(find.text('Tentar de novo'));
         await carregar(tester);
         expect(find.text(erroMetodosNaoLidos), findsNothing);
-        expect(find.text(metodoNaoLido), findsNothing);
         expect(find.text('Interativo'), findsWidgets);
       },
     );

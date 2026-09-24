@@ -20,6 +20,13 @@ import 'package:gestao_im360/projecao/projecao_repositorio.dart';
 ///     não como zero;
 ///   • um aluno por `PREVISAO_CURSO`, com `ritmo_dias` **nulo** — o degrau em
 ///     que a data não vem de ritmo nenhum.
+/// Os três métodos do catálogo falso, pelo id — a view traz o rótulo na linha.
+const _metodos = <String, (String, String)>{
+  'm-int': ('INTERATIVO', 'Interativo'),
+  'm-ing': ('INGLES', 'Inglês'),
+  'm-mod': ('MODULAR', 'Modular'),
+};
+
 class ProjecaoFalso implements ProjecaoRepositorio {
   ProjecaoFalso({
     required List<CelulaProjecao> grade,
@@ -60,6 +67,9 @@ class ProjecaoFalso implements ProjecaoRepositorio {
       quantidade: quantidade,
       regra: regra,
       calculadoEm: calculadoEm,
+      // O rótulo vem na linha desde o card 9.2,7, como a view o traz.
+      metodoCodigo: _metodos[metodoId]?.$1 ?? '',
+      metodoNome: _metodos[metodoId]?.$2 ?? '',
     );
 
     final grade = [

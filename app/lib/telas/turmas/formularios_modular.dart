@@ -64,8 +64,14 @@ class _FormularioTurmaModularState
   late final _capacidade = TextEditingController(
     text: widget.turma?.capacidade.toString() ?? '',
   );
+  // Card 9.2,7: na edição o campo vem com o início REAL da turma (a view de
+  // lotação passou a trazê-lo), e salvar sem mexer reenvia a mesma data.
   late final _dataInicio = TextEditingController(
-    text: widget.turma == null ? formatarData(hojeSaoPaulo()) : '',
+    text: widget.turma == null
+        ? formatarData(hojeSaoPaulo())
+        : widget.turma!.dataInicio == null
+        ? ''
+        : formatarData(widget.turma!.dataInicio!),
   );
   late String? _cursoId = widget.turma?.cursoId;
   late String? _salaId = widget.turma?.salaId;
@@ -157,8 +163,13 @@ class _FormularioTurmaModularState
               ? 'Campo obrigatório.'
               : null,
         ),
+        // `isExpanded` nos dois (card 9.2,7): sem ele o dropdown mede o item
+        // MAIS LONGO da lista e estoura em 390 px — medido quando a edição da
+        // turma passou a ser exercitada no celular (69 px). Mesma correção do
+        // formulário de item de pedido (compras/formularios.dart).
         DropdownButtonFormField<String>(
           initialValue: cursoSelecionado,
+          isExpanded: true,
           decoration: InputDecoration(
             labelText: 'Curso *',
             helperText: cursos.isEmpty
@@ -178,6 +189,7 @@ class _FormularioTurmaModularState
         ),
         DropdownButtonFormField<String>(
           initialValue: salaSelecionada,
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Sala *'),
           items: [
             for (final s in salas)
@@ -202,24 +214,28 @@ class _FormularioTurmaModularState
           ),
           validator: validarInteiroPositivo,
         ),
-        // Só na criação: a data de início não é editável na tela, e o
-        // repositório NÃO envia a coluna no `update` (item A2). Registrado
-        // como divergência no §17 — expô-la exige view nova.
-        if (!editando)
-          TextFormField(
-            controller: _dataInicio,
-            readOnly: somenteLeitura,
-            style: Tipografia.numero(Tipografia.corpo),
-            decoration: const InputDecoration(
-              labelText: 'Início da turma *',
-              hintText: 'dd/mm/aaaa',
-              helperText:
-                  'Quando a turma começou — não é a data do módulo corrente, '
-                  'que fica no cronograma.',
-              helperMaxLines: 3,
-            ),
-            validator: validarData,
+        // Na criação e, desde o card 9.2,7, também na edição: a view de
+        // lotação traz o início real, o campo nasce preenchido com ele e a
+        // correção passa a ser possível (wireframes §17 div. 41). Sem data
+        // conhecida (não acontece — a coluna é not null), o campo fica
+        // opcional e a coluna não vai no `update` (item A2).
+        TextFormField(
+          controller: _dataInicio,
+          readOnly: somenteLeitura,
+          style: Tipografia.numero(Tipografia.corpo),
+          decoration: const InputDecoration(
+            labelText: 'Início da turma *',
+            hintText: 'dd/mm/aaaa',
+            helperText:
+                'Quando a turma começou — não é a data do módulo corrente, '
+                'que fica no cronograma.',
+            helperMaxLines: 3,
           ),
+          validator: (v) => validarData(
+            v,
+            obrigatorio: !editando || turma.dataInicio != null,
+          ),
+        ),
         if (editando)
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -244,12 +260,10 @@ class _FormularioTurmaModularState
               cursoId: _cursoId!,
               salaId: _salaId!,
               capacidade: int.parse(_capacidade.text.trim()),
-              // ⚠️ Na edição o campo não é oferecido e a data vai NULA — o
-              // repositório então não envia a coluna. O comentário anterior
-              // dizia "só quando é turma nova" e o código fazia o contrário:
-              // com o campo vazio, `?? hojeSaoPaulo()` reescrevia o início
-              // real da turma em toda edição (item A2).
-              dataInicio: editando ? null : lerData(_dataInicio.text),
+              // ⚠️ Nunca `?? hojeSaoPaulo()`: com o campo vazio isso
+              // reescrevia o início real da turma em toda edição (item A2).
+              // Vazio vai NULO, e o repositório então não envia a coluna.
+              dataInicio: lerData(_dataInicio.text),
               ativo: _ativo,
             );
         recarregarModular(ref);
