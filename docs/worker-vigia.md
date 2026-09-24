@@ -86,6 +86,7 @@ do zero, e do que conferir se um dia o vigia parar.
 | Secret do repositório | `SUPABASE_ANON_KEY_DEV` | chave publicável do projeto dev | ✅ |
 | Secret do repositório | `SUPABASE_ANON_KEY_PROD` | chave publicável do projeto prod | ✅ |
 | Secret do repositório | `RESEND_API_KEY` | conta Resend do card 3.8, para o alerta | ✅ chave própria `gestao-im360-vigia`, *Sending access*, restrita a `gestaoim360.com` |
+| Secret do repositório | `VIGIA_BATIMENTO_URL` | URL de ping do check no Healthchecks.io — o batimento do §11 (card 9.6,5) | ⚠️ **OPCIONAL e pendente** (ação de Irineu): sem ele o deploy não falha, o vigia roda e registra "batimento: NÃO enviado" no log |
 
 A chave do Resend é **própria do vigia**, e não a que o Supabase usa para convite e recuperação: assim
 revogar o vigia não derruba o e-mail do app, e vice-versa.
@@ -214,7 +215,9 @@ Primeira execução agendada: **03/09/2026, 06:00** em São Paulo.
 
 ## 7. Limites assumidos
 
-- **Vigia que morre não avisa.** Se o Worker for apagado, se o cron parar de disparar ou se a conta
+- ~~**Vigia que morre não avisa.**~~ ✅ **Coberto pelo batimento externo do §11 (card 9.6,5,
+  24/09/2026) — assim que o secret `VIGIA_BATIMENTO_URL` existir.** Até lá o texto abaixo continua
+  valendo. Se o Worker for apagado, se o cron parar de disparar ou se a conta
   Cloudflare tiver problema, nada alerta e o projeto pausa em silêncio. Um *dead man's switch* de
   verdade exige um vigia externo (serviço de terceiros), e isso está fora do escopo da v1. O que
   existe hoje é um segundo observador **incidental**: o backup semanal do card 3.11 roda um `pg_dump`
@@ -309,3 +312,44 @@ das 06:00 daquele dia reprovar com "nunca rodou" — uma vez só.
 
 **O `conferir.mjs` não pergunta pela rotina**, de propósito: ele roda no deploy do vigia, antes de
 a migração existir em produção, e reprovaria o deploy por uma função que ainda vai chegar.
+
+---
+
+## 11. Batimento externo — quem vigia o vigia (card 9.6,5, 24/09/2026)
+
+**O modo de falha.** O §7 registrava desde o card 3.10: vigia que morre não avisa. Worker apagado,
+cron que parou, conta do Cloudflare com problema ou token vencido produzem **a mesma caixa de entrada
+vazia** de um dia em que está tudo bem. Com o sistema em produção isso vira: o Supabase free pausa por
+inatividade, e o primeiro aviso é a escola sem sistema.
+
+**O que o código faz** (`baterPonto` em `worker-vigia/src/vigia.js`):
+
+- ao fim da execução **agendada** que cumpriu o papel — tudo verde, **ou** algo ruim com o alerta
+  entregue —, um `GET` na URL do secret `VIGIA_BATIMENTO_URL`; três tentativas, 10 s cada;
+- alerta que **não** sai lança antes do batimento: o batimento que falta é o segundo canal desse caso;
+- a conferência à mão (`fetch`, `wrangler dev`) e o `conferir.mjs` do deploy **nunca** batem o ponto —
+  não podem fingir que o cron rodou;
+- **nada disso derruba o vigia**: sem a URL, URL que não é `https://` ou serviço fora do ar, a execução
+  segue e o log diz `batimento: NÃO enviado (motivo)`. A URL **nunca** vai para o log: quem a tem bate
+  o ponto no lugar do vigia.
+
+**Por que bater o ponto também com algo ruim e alerta entregue.** O problema já chegou a Irineu pelo
+e-mail do vigia; um segundo e-mail diário do serviço externo sobre a mesma coisa só ensinaria a
+ignorar os dois. O batimento responde a uma pergunta só: *o vigia rodou e conseguiu falar?* Para
+bater só com tudo verde, a condição é uma linha no fim de `executar` (`!algoRuim` em vez de
+`!algoRuim || alertaEnviado`), e o teste "algo ruim com o alerta ENTREGUE ainda bate o ponto" muda
+junto.
+
+**O que só Irineu faz** (handoff do card): criar o check no Healthchecks.io com **período de 1 dia e
+tolerância de 2 horas** (o vigia roda às 06:00 em São Paulo; o ping chega segundos depois), copiar a
+*ping URL* e cadastrá-la como secret de repositório `VIGIA_BATIMENTO_URL`. O Worker só a recebe na
+próxima publicação dele, que parte de `main` (`deploy-worker-vigia.yml`, que roda também por
+`workflow_dispatch`).
+
+**O deploy.** O secret é **opcional** de propósito: fica fora da lista de "faltando" do passo de
+conferência, e o passo de segredos só o instala se ele existir; sem ele, um `::warning` e uma linha
+no resumo da execução ("Batimento externo: NÃO configurado").
+
+**Testes:** dez em `worker-vigia/test/vigia.test.mjs` (bloco "Batimento externo"). Contraprovas vistas
+vermelhas: sem a chamada em `executar`, quatro reprovam; com a condição só `!algoRuim`, reprova o
+"alerta ENTREGUE ainda bate o ponto".

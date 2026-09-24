@@ -13,13 +13,16 @@ import * as entrada from '../src/index.js';
 import {
   AMBIENTES,
   BACKUP,
+  BATIMENTO,
   CAMINHO_SONDA,
   ROTINA,
   avaliarBackup,
   avaliarRotina,
+  baterPonto,
   conferirBackup,
   conferirConfiguracao,
   conferirRotina,
+  descreverBatimento,
   executar,
   montarAlerta,
   resumir,
@@ -544,4 +547,132 @@ test('resumo do log diz a idade da rotina de cada ambiente', () => {
     [{ rotulo: 'produção', ok: true, idadeHoras: 2 }],
   );
   assert.match(r, /rotina de produção: ok \(2 h\)/);
+});
+
+// ---------------------------------------------------------------------------
+// Batimento externo — card 9.6,5 ("quem vigia o vigia")
+//
+// O modo de falha que estes testes protegem é o SILENCIOSO: vigia morto e vigia
+// satisfeito produzem a mesma caixa de entrada vazia. O batimento é o sinal
+// positivo de vida, e o serviço externo avisa quando ele some.
+// ---------------------------------------------------------------------------
+
+const URL_BATIMENTO = 'https://hc-ping.com/00000000-0000-4000-8000-000000000000';
+const COM_BATIMENTO = { ...AMBIENTE_COMPLETO, [BATIMENTO.variavel]: URL_BATIMENTO };
+
+/** Quantos GETs foram para a URL do batimento. */
+const pings = (chamadas) => chamadas.filter((c) => c.url === URL_BATIMENTO);
+
+/** fetch de mentira que responde ao batimento com `status` e ao resto com `outro`. */
+function comBatimento(outro, status = 200) {
+  const chamadas = [];
+  const buscar = async (url, opcoes) => {
+    chamadas.push({ url, opcoes });
+    if (url === URL_BATIMENTO) {
+      if (status instanceof Error) throw status;
+      return resposta(status, 'OK');
+    }
+    return outro(url, opcoes);
+  };
+  buscar.chamadas = chamadas;
+  return buscar;
+}
+
+test('batimento: sem a URL, não chama nada e diz por quê — e não lança', async () => {
+  const buscar = buscarFalso([resposta(200, 'OK')]);
+  const b = await baterPonto(AMBIENTE_COMPLETO, { buscar, ...semEspera });
+  assert.equal(b.enviado, false);
+  assert.match(b.motivo, /VIGIA_BATIMENTO_URL/);
+  assert.equal(buscar.chamadas.length, 0);
+});
+
+test('batimento: com a URL, um GET nela', async () => {
+  const buscar = buscarFalso([resposta(200, 'OK')]);
+  const b = await baterPonto(COM_BATIMENTO, { buscar, ...semEspera });
+  assert.equal(b.enviado, true);
+  assert.equal(buscar.chamadas.length, 1);
+  assert.equal(buscar.chamadas[0].url, URL_BATIMENTO);
+  assert.equal(buscar.chamadas[0].opcoes.method, 'GET');
+});
+
+test('batimento: URL que não é https é recusada sem sair da máquina', async () => {
+  const buscar = buscarFalso([resposta(200, 'OK')]);
+  const b = await baterPonto(
+    { [BATIMENTO.variavel]: 'http://hc-ping.com/x' },
+    { buscar, ...semEspera },
+  );
+  assert.equal(b.enviado, false);
+  assert.match(b.motivo, /https/);
+  assert.equal(buscar.chamadas.length, 0);
+});
+
+test('batimento: serviço fora repete, não lança, e o motivo NÃO carrega a URL', async () => {
+  const buscar = buscarFalso([new Error(`fetch failed for ${URL_BATIMENTO}`)]);
+  const b = await baterPonto(COM_BATIMENTO, { buscar, ...semEspera });
+  assert.equal(b.enviado, false);
+  assert.equal(buscar.chamadas.length, 3, 'três tentativas, como a sonda');
+  assert.equal(b.motivo.includes(URL_BATIMENTO), false, 'a URL é segredo: quem a tem bate o ponto no lugar do vigia');
+  assert.match(b.motivo, /<VIGIA_BATIMENTO_URL>/);
+
+  const http = await baterPonto(COM_BATIMENTO, { buscar: buscarFalso([resposta(500, 'x')]), ...semEspera });
+  assert.match(http.motivo, /HTTP 500/);
+});
+
+test('execução verde bate o ponto uma vez, DEPOIS de sondar tudo', async () => {
+  const buscar = comBatimento(async () => resposta(200, '[]'));
+  const r = await executar(COM_BATIMENTO, { buscar: comRotina(buscar), ...semEspera, ...backupBom });
+
+  assert.equal(r.algoRuim, false);
+  assert.equal(r.batimento.enviado, true);
+  assert.equal(pings(buscar.chamadas).length, 1);
+  assert.equal(buscar.chamadas.at(-1).url, URL_BATIMENTO, 'o batimento é a última coisa da execução');
+});
+
+test('execução verde SEM a URL continua verde — o secret é opcional', async () => {
+  const buscar = buscarFalso([resposta(200, '[]')]);
+  const r = await executar(AMBIENTE_COMPLETO, { buscar: comRotina(buscar), ...semEspera, ...backupBom });
+  assert.equal(r.algoRuim, false);
+  assert.equal(r.batimento.enviado, false);
+  assert.match(descreverBatimento(r.batimento), /NÃO enviado.*VIGIA_BATIMENTO_URL/);
+});
+
+test('batimento recusado não deixa a execução vermelha nem manda e-mail', async () => {
+  const buscar = comBatimento(async () => resposta(200, '[]'), 500);
+  const r = await executar(COM_BATIMENTO, { buscar: comRotina(buscar), ...semEspera, ...backupBom });
+  assert.equal(r.algoRuim, false);
+  assert.equal(r.batimento.enviado, false);
+  assert.equal(buscar.chamadas.some((c) => c.url.includes('resend')), false);
+});
+
+test('algo ruim com o alerta ENTREGUE ainda bate o ponto — o vigia está vivo e falou', async () => {
+  const buscar = comBatimento(async (url) => {
+    if (url.includes('resend')) return resposta(200, '{"id":"abc"}');
+    if (url.includes(AMBIENTES[1].url)) return resposta(503, 'unavailable');
+    return resposta(200, '[]');
+  });
+  const r = await executar(COM_BATIMENTO, { buscar: comRotina(buscar), ...semEspera, ...backupBom });
+  assert.equal(r.algoRuim, true);
+  assert.equal(r.alertaEnviado, true);
+  assert.equal(r.batimento.enviado, true);
+});
+
+test('alerta que NÃO sai também não bate o ponto — é o serviço externo que avisa', async () => {
+  const buscar = comBatimento(async (url) =>
+    url.includes('resend') ? resposta(422, '{"message":"domain not verified"}') : resposta(500, 'boom'),
+  );
+  await assert.rejects(() => executar(COM_BATIMENTO, { buscar, ...semEspera, ...backupBom }), /ALERTA NÃO SAIU/);
+  assert.equal(pings(buscar.chamadas).length, 0);
+});
+
+test('a conferência à mão (fetch, sem alertar) nunca bate o ponto', async () => {
+  const buscar = comBatimento(async () => resposta(200, '[]'));
+  const r = await executar(COM_BATIMENTO, {
+    alertar: false,
+    buscar: comRotina(buscar),
+    ...semEspera,
+    ...backupBom,
+  });
+  assert.equal(r.batimento, null);
+  assert.equal(pings(buscar.chamadas).length, 0);
+  assert.equal(descreverBatimento(r.batimento), 'batimento: não se aplica');
 });

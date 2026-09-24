@@ -517,6 +517,64 @@ export async function enviarAlerta(env, alerta, buscar = fetch) {
   return resposta.status;
 }
 
+/**
+ * Batimento externo — quem vigia o vigia (card 9.6,5, 24/09/2026).
+ *
+ * O vigia não vigia a si mesmo: Worker apagado, cron que parou de disparar ou
+ * conta do Cloudflare com problema dão exatamente o que um dia bom dá — nenhum
+ * e-mail. Um serviço de batimento (Healthchecks.io) recebe um GET por execução
+ * e avisa Irineu quando o GET PARA de chegar.
+ *
+ * Quando bate: na execução agendada que CUMPRIU o papel — tudo verde, ou algo
+ * ruim e o alerta saiu. Alerta que não sai lança antes daqui, e o batimento
+ * que falta é justamente o segundo canal desse caso. Batimento com algo ruim
+ * mas alerta entregue é de propósito: o problema já chegou a Irineu, e um
+ * segundo e-mail diário do serviço externo só ensinaria a ignorar os dois.
+ *
+ * O que NÃO faz: derrubar o vigia. Sem `VIGIA_BATIMENTO_URL` (o secret é
+ * opcional no deploy) ou com o serviço fora do ar, a execução segue e o log diz
+ * por quê. E a URL nunca vai para o log nem para o motivo: quem a tem consegue
+ * bater o ponto no lugar do vigia.
+ */
+export const BATIMENTO = { variavel: 'VIGIA_BATIMENTO_URL' };
+
+export async function baterPonto(env, opcoes = {}) {
+  const {
+    buscar = fetch,
+    tentativas = 3,
+    esperaMs = 1500,
+    timeoutMs = 10000,
+    dormir = dormirDeVerdade,
+  } = opcoes;
+  const url = env?.[BATIMENTO.variavel];
+  if (!url) {
+    return { enviado: false, motivo: `sem ${BATIMENTO.variavel} — batimento não configurado` };
+  }
+  if (!String(url).startsWith('https://')) {
+    return { enviado: false, motivo: `${BATIMENTO.variavel} não começa com https:// — batimento não enviado` };
+  }
+  const semUrl = (texto) => String(texto).split(url).join(`<${BATIMENTO.variavel}>`);
+
+  let motivo = '';
+  for (let n = 1; n <= tentativas; n += 1) {
+    try {
+      const resposta = await buscar(url, { method: 'GET', signal: AbortSignal.timeout(timeoutMs) });
+      if (resposta.ok) return { enviado: true, status: resposta.status, tentativas: n };
+      motivo = `HTTP ${resposta.status}`;
+    } catch (erro) {
+      motivo = semUrl(erro?.message ?? erro);
+    }
+    if (n < tentativas) await dormir(esperaMs);
+  }
+  return { enviado: false, motivo: `batimento não aceito depois de ${tentativas} tentativa(s): ${motivo}` };
+}
+
+/** A linha do batimento no log da execução. */
+export function descreverBatimento(batimento) {
+  if (!batimento) return 'batimento: não se aplica';
+  return batimento.enviado ? 'batimento: enviado' : `batimento: NÃO enviado (${batimento.motivo})`;
+}
+
 export function resumir(resultados, backup = null, rotinas = []) {
   const partes = [
     resultados
@@ -587,5 +645,10 @@ export async function executar(env, opcoes = {}) {
     }
   }
 
-  return { resultados, falhas, backup, rotinas, algoRuim, alertaEnviado };
+  // Card 9.6,5: só a execução agendada bate o ponto (a conferência à mão do
+  // `fetch` não pode fingir que o cron rodou), e só a que cumpriu o papel.
+  const batimento =
+    alertar && (!algoRuim || alertaEnviado) ? await baterPonto(env, resto) : null;
+
+  return { resultados, falhas, backup, rotinas, algoRuim, alertaEnviado, batimento };
 }

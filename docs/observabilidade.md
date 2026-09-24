@@ -249,8 +249,11 @@ deploy` recusar o Worker. É deliberado, e o vigia já publicado continua no ar 
 que falha não derruba o que está rodando. O `CLOUDFLARE_API_TOKEN` precisa de **Workers R2 Storage —
 Read**.
 
-⚠️ **O que continua sem observador é o vigia**: vigia que morre não avisa, e um *dead man's switch* de
-verdade exige um observador externo, fora do escopo da v1 (card 3.10).
+✅ **O vigia ganhou observador no card 9.6,5 (24/09/2026)**: batimento externo no Healthchecks.io ao
+fim de cada execução que cumpriu o papel (`docs/worker-vigia.md` §11) — vale a partir do secret
+`VIGIA_BATIMENTO_URL`, que é ação de Irineu. ~~O que continua sem observador é o vigia: vigia que
+morre não avisa, e um *dead man's switch* de verdade exige um observador externo, fora do escopo da
+v1 (card 3.10).~~
 
 ---
 
