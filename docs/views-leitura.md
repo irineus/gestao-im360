@@ -752,6 +752,7 @@ o número certo se o leitor tiver **todo** o conjunto (§3.4), e é esse conjunt
 | `v_estoque_atual` | `materiais.ler`, `estoque.ler` |
 | `v_demanda_imediata_aluno` / `v_demanda_imediata` | `alunos.ler` — ⚠️ ~~`materiais.ler`~~, ver a correção abaixo |
 | `v_demanda_projetada` | `materiais.ler`, `estoque.ler` |
+| `v_projecao_acuracia` | `estoque.ler`, `alunos.ler` — sem `estoque.ler` vem **vazia** (nenhum mês medido); sem `alunos.ler` o previsto aparece inteiro como sobra (card 11.1,5) |
 | `v_projecao_material_mes` | `estoque.ler`, **`materiais.ler`** (join interno em `material`) |
 | `v_projecao_aluno_detalhe` | `alunos.ler`, **`materiais.ler`**, **`turmas.ler`** — os três da rota da tela 8 |
 | `v_pedido_sugerido` | `materiais.ler`, `estoque.ler`, `alunos.ler`, `compras.ler` |
@@ -822,6 +823,7 @@ e não há como ele ver um pedido sugerido com a parcela pendente zerada.
 | `v_aluno_trilha` | **6.6** ✅ — `20260904233000_view_aluno_trilha.sql`, view de listagem (§12.1); o teste nasceu em `053_aluno_trilha`, com 23 asserções | 6 |
 | `v_turma_modular_lotacao`, `v_turma_modular_cronograma`, `v_turma_modular_aluno` | **7.3** ✅ — `20260905120000_views_turmas_modular.sql`, as três sem uma linha de dado. ⚠️ **A de lotação estava atribuída ao 7.4 (e ao 5.9) e nasceu no 7.3**: o `wireframes.md` §8 manda a tela 5 lê-la, e o §12.1 abaixo é a regra geral — view de tela é do card da tela, como em 6.6, 6.7 e 6.8. O SQL é cópia palavra por palavra do §7.2. O **7.4** ✅ (05/09/2026) foi **consumidor** e não criou objeto nenhum, como o 5.9 foi para `v_bloco_vagas_semana` — soma esta view por curso na região "Lotação Modular" do dashboard, e o que ele acrescentou ao banco foram **três asserções** no teste `095` (o `join` interno em `curso` × `materiais.ler`, o bloqueante nº 1 de `permissoes-matriz.md` §7). As outras duas o §7.2 não previa: o cronograma precisa da ordem e do nome do módulo (que só existem em `modulo`, por join — o card 7.1 recusou coluna própria de ordem), e a lista de alunos precisa do nome (que `turma_modular_aluno` não tem). Teste em `072_modular_views`, 34 asserções | 7 |
 | `demanda_projetada`, `v_demanda_projetada` | 8.1 | 8 |
+| `v_projecao_acuracia` | **11.1,5** ✅ — `20260924190000_projecao_acuracia.sql`, antecipada do 11.2 (que fica só com a recalibração); duas divergências de correção em `projecao-demanda.md` §9.3. Teste em `098_projecao_acuracia`, 11 asserções | 11 |
 | `v_pedido_sugerido` — troca do literal `0` pela parcela projetada | 8.2 | 8 |
 | `v_projecao_material_mes`, `v_projecao_aluno_detalhe` e a coluna `v_projecao_aluno.ritmo_dias` | **8.5** ✅ — `20260906010000_views_projecao_tela.sql`, as duas views sem uma linha de dado; ver §12.1 | 8 |
 | `v_importacao`, `v_importacao_ocorrencia` | **9.1** ✅ — `20260906120000_importacao.sql`, as duas sem uma linha de dado, sobre três tabelas que o DDL do card 2.1 não previa (`docs/importacao.md` §2.4); ver §12.1. Teste em `100_importacao`, 33 asserções | 9 |

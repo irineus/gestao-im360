@@ -784,6 +784,25 @@ falta de 10% é aula sem material. O sistema tolera errar mais para o lado de co
 
 ### 9.3 `v_projecao_acuracia` — card 11.2
 
+> ✅ **Implementada antes dos três meses, no card 11.1,5 (24/09/2026)** —
+> `20260924190000_projecao_acuracia.sql`; o 11.2 fica **só com a recalibração**. Duas divergências
+> do SQL abaixo, as duas de **correção**:
+>
+> 1. **O previsto é uma linha por (unidade, material, mês)**, com as regras numa lista (`regras
+>    text[]`, no lugar de `regra`). Agrupar também por `regra` — que faz parte da unique de
+>    `demanda_projetada_hist` — daria duas linhas de previsto para o material previsto por duas
+>    regras, e o `full join` casaria o realizado com as duas: a mesma entrega contada duas vezes no
+>    Σ realizado, que é o **denominador** do viés do §9.2(b).
+> 2. **Só entram meses medidos** — aqueles com a foto do mês anterior na unidade. Sem isso, toda
+>    entrega de antes da primeira foto (a começar pelo histórico que o importador traz na virada)
+>    viraria "entregue sem previsão", e o viés sairia perto de −100% sem ninguém ter previsto nada
+>    errado. Limite: foto tirada com a projeção **vazia** não marca o mês como medido.
+>
+> Teste `098_projecao_acuracia` (11 asserções). **Três contraprovas vistas vermelhas:** `left join`
+> (o entregue sem previsão some — a asserção obrigatória do card), `group by … regra` (o Σ realizado
+> de 2026-06 dobra) e sem o filtro de mês medido (abril, sem foto de março, aparece inteiro como
+> falta).
+
 ```sql
 create view public.v_projecao_acuracia with (security_invoker = on) as
 with previsto as (
