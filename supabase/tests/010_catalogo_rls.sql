@@ -188,7 +188,11 @@ create temporary view p_esperada (tabela, cmd) as values
   -- `admin.ler` está dentro do conjunto.
   ('importacao','r'),            ('importacao','a'),            ('importacao','w'),
   ('importacao_ocorrencia','r'), ('importacao_ocorrencia','a'),
-  ('importacao_referencia','r'), ('importacao_referencia','a');
+  ('importacao_referencia','r'), ('importacao_referencia','a'),
+  -- card 9.2,66 — o carimbo da rotina diária. Só leitura: quem grava é
+  -- rt_diaria (definer), e política de escrita deixaria alguém "consertar"
+  -- à mão o que o vigia confere.
+  ('rotina_execucao','r');
 
 create temporary view p_real (tabela, cmd) as
   select t.relname, p.polcmd::text

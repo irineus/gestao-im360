@@ -16,8 +16,8 @@ import { executar, resumir } from './vigia.js';
 
 export default {
   async scheduled(_evento, env) {
-    const { resultados, backup, algoRuim, alertaEnviado } = await executar(env);
-    const resumo = resumir(resultados, backup);
+    const { resultados, backup, rotinas, algoRuim, alertaEnviado } = await executar(env);
+    const resumo = resumir(resultados, backup, rotinas);
     console.log(resumo);
     if (algoRuim) {
       // Lançar DEPOIS de alertar deixa a execução vermelha no painel do

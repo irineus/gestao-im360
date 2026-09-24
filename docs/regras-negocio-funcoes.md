@@ -1106,6 +1106,12 @@ parâmetro; entra na lista do C8), que devolve `EXECUTADA` ou `JA_EM_EXECUCAO` �
 não erro. No app: "Recalcular agora" em Compras, Projeção e no resultado da Importação aplicada.
 A trava entre duas sessões é provada em `supabase/tests_concorrencia/rotina_diaria_dupla.sh`.
 
+**Vigiada de fora (card 9.2,66, 24/09/2026).** Na execução completa (sem argumento), `rt_diaria`
+carimba `rotina_execucao` (uma linha por unidade) da unidade em que as cinco `rt_*` passaram. A
+execução sob demanda não carimba. `fn_rotina_diaria_ultima_execucao() → timestamptz` — única função
+aberta ao `anon` — devolve a data da unidade ativa mais atrasada (NULL se alguma nunca rodou), e o
+`worker-vigia` reprova acima de 36 h (docs/worker-vigia.md §10).
+
 ---
 
 ## 12. Catálogo de erros

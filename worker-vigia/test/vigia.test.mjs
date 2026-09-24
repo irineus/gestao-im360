@@ -14,11 +14,15 @@ import {
   AMBIENTES,
   BACKUP,
   CAMINHO_SONDA,
+  ROTINA,
   avaliarBackup,
+  avaliarRotina,
   conferirBackup,
   conferirConfiguracao,
+  conferirRotina,
   executar,
   montarAlerta,
+  resumir,
   sondar,
 } from '../src/vigia.js';
 
@@ -61,6 +65,20 @@ function baldeFalso(chaves, { porPagina = 1000, quebrar = null } = {}) {
 
 /** Backup saudável: cópia de anteontem, completa. */
 const backupBom = { balde: baldeFalso(copia('2026-08-31')), quando: AGORA };
+
+/** A rotina de hoje: 03:10 em São Paulo = 06:10 UTC, ~3 h antes do vigia. */
+const ROTINA_DE_HOJE = JSON.stringify('2026-09-02T06:10:00.123+00:00');
+
+/**
+ * Embrulha um fetch de mentira para responder à pergunta da rotina (card
+ * 9.2,66) — POST em `/rpc/` — e deixar o resto com quem já respondia.
+ */
+function comRotina(buscar, corpo = ROTINA_DE_HOJE) {
+  const embrulhado = async (url, opcoes) =>
+    url.includes('/rpc/') ? resposta(200, corpo) : buscar(url, opcoes);
+  embrulhado.chamadas = buscar.chamadas;
+  return embrulhado;
+}
 
 function resposta(status, corpo) {
   return { status, ok: status >= 200 && status < 300, text: async () => corpo };
@@ -175,10 +193,11 @@ test('alerta: assunto nomeia o ambiente e o texto carrega o que a sonda viu', ()
 
 test('execução verde: nenhuma chamada ao Resend', async () => {
   const buscar = buscarFalso([resposta(200, '[]')]);
-  const r = await executar(AMBIENTE_COMPLETO, { buscar, ...semEspera, ...backupBom });
+  const r = await executar(AMBIENTE_COMPLETO, { buscar: comRotina(buscar), ...semEspera, ...backupBom });
 
   assert.equal(r.falhas.length, 0);
   assert.equal(r.backup.ok, true);
+  assert.deepEqual(r.rotinas.map((x) => x.ok), [true, true], 'a rotina dos dois ambientes rodou');
   assert.equal(r.algoRuim, false);
   assert.equal(r.alertaEnviado, false);
   assert.equal(r.resultados.length, AMBIENTES.length);
@@ -197,10 +216,12 @@ test('execução com falha: um e-mail, com destinatário e assunto certos', asyn
     return buscar(url, opcoes);
   };
 
-  const r = await executar(AMBIENTE_COMPLETO, { buscar: espiao, ...semEspera, ...backupBom });
+  const r = await executar(AMBIENTE_COMPLETO, { buscar: comRotina(espiao), ...semEspera, ...backupBom });
 
   assert.equal(r.falhas.length, 1);
   assert.equal(r.falhas[0].ambiente, 'producao');
+  // Com o banco de produção fora do ar, a rotina de lá nem é perguntada.
+  assert.deepEqual(r.rotinas.map((x) => x.ambiente), ['homologacao']);
   assert.equal(r.alertaEnviado, true);
 
   const email = chamadas.filter((c) => c.url.includes('resend'));
@@ -352,7 +373,7 @@ test('backup ruim com Supabase de pé: alerta próprio, e a execução fica verm
   };
 
   const r = await executar(AMBIENTE_COMPLETO, {
-    buscar,
+    buscar: comRotina(buscar),
     ...semEspera,
     balde: baldeFalso(copia('2026-01-01')),
     quando: AGORA,
@@ -393,4 +414,134 @@ test('o limite do backup cobre a semana perdida, não a atrasada', () => {
   // em vez de esperar a segunda.
   assert.ok(BACKUP.idadeMaximaDias > 7, 'abaixo disso, alarme falso toda semana');
   assert.ok(BACKUP.idadeMaximaDias < 14, 'acima disso, uma semana perdida passa batida');
+});
+
+// ---------------------------------------------------------------------------
+// Vigilância da rotina diária — card 9.2,66
+//
+// O modo de falha: o job `gi_rotina_diaria` some (ou a extensão desliga, ou
+// uma migração substitui `rt_diaria` errado) e a central de pendências e a
+// projeção param no último dia bom, SEM ERRO NENHUM. A sonda do banco continua
+// verde, porque o banco continua acordado. O que se protege aqui é a asserção
+// POSITIVA: passa uma data válida e recente, e nada mais.
+// ---------------------------------------------------------------------------
+
+test('rotina: a execução de hoje passa, com a idade em horas', () => {
+  const r = avaliarRotina(ROTINA_DE_HOJE, { quando: AGORA });
+  assert.equal(r.ok, true);
+  assert.equal(r.idadeHoras, 2);
+});
+
+test('rotina: 36 h passa, 37 reprova — o limite é o limite', () => {
+  const ha = (horas) => JSON.stringify(new Date(AGORA.getTime() - horas * 3600000).toISOString());
+  assert.equal(avaliarRotina(ha(36), { quando: AGORA }).ok, true);
+  const r = avaliarRotina(ha(37), { quando: AGORA });
+  assert.equal(r.ok, false);
+  assert.match(r.motivo, /37 h atrás \(limite: 36 h\)/);
+});
+
+test('rotina: o limite cobre o dia perdido, não o atrasado', () => {
+  // Em dia normal o carimbo tem ~3 h na hora do vigia; com UM dia perdido,
+  // ~27 h; com DOIS, ~51 h. O limite tem de deixar passar o atraso de horas e
+  // pegar o primeiro vigia depois de um dia inteiro sem rotina.
+  assert.ok(ROTINA.idadeMaximaHoras > 27, 'abaixo disso, um cron atrasado vira alarme');
+  assert.ok(ROTINA.idadeMaximaHoras < 51, 'acima disso, dois dias perdidos passam batidos');
+});
+
+test('rotina: null REPROVA — alguma unidade ativa nunca rodou até o fim', () => {
+  const r = avaliarRotina('null', { quando: AGORA });
+  assert.equal(r.ok, false);
+  assert.match(r.motivo, /nunca rodou/);
+});
+
+test('rotina: o que não é data reprova — lista, número, texto torto', () => {
+  for (const corpo of ['[]', '42', '"ontem"', '{"executada_em":"2026-09-02"}', '<html>']) {
+    const r = avaliarRotina(corpo, { quando: AGORA });
+    assert.equal(r.ok, false, `passou com ${corpo}`);
+  }
+});
+
+test('rotina: data no futuro reprova — relógio torto não é rotina em dia', () => {
+  const r = avaliarRotina(JSON.stringify('2026-09-03T09:00:00Z'), { quando: AGORA });
+  assert.equal(r.ok, false);
+  assert.match(r.motivo, /futuro/);
+});
+
+test('rotina: pergunta por POST ao rpc, com a chave publicável do ambiente', async () => {
+  const buscar = buscarFalso([resposta(200, ROTINA_DE_HOJE)]);
+  const r = await conferirRotina(AMBIENTES[1], AMBIENTE_COMPLETO, { buscar, ...semEspera, quando: AGORA });
+  assert.equal(r.ok, true);
+  assert.equal(buscar.chamadas.length, 1);
+  assert.equal(buscar.chamadas[0].url, AMBIENTES[1].url + ROTINA.caminho);
+  assert.equal(buscar.chamadas[0].opcoes.method, 'POST');
+  assert.equal(buscar.chamadas[0].opcoes.headers.apikey, 'chave-prod');
+});
+
+test('rotina: 404 (a função não existe) repete e reprova dizendo o HTTP — e não lança', async () => {
+  const buscar = buscarFalso([resposta(404, '{"code":"PGRST202"}')]);
+  const r = await conferirRotina(AMBIENTES[0], AMBIENTE_COMPLETO, { buscar, ...semEspera, quando: AGORA });
+  assert.equal(r.ok, false);
+  assert.equal(buscar.chamadas.length, 3);
+  assert.match(r.motivo, /HTTP 404/);
+});
+
+test('rotina: data velha NÃO repete — repetir não rejuvenesce a resposta', async () => {
+  const buscar = buscarFalso([resposta(200, JSON.stringify('2026-08-30T06:10:00Z'))]);
+  const r = await conferirRotina(AMBIENTES[0], AMBIENTE_COMPLETO, { buscar, ...semEspera, quando: AGORA });
+  assert.equal(r.ok, false);
+  assert.equal(buscar.chamadas.length, 1);
+});
+
+test('rotina parada com Supabase de pé: e-mail próprio, com o SQL de conferir, e a execução fica vermelha', async () => {
+  const chamadas = [];
+  const base = async (url, opcoes) => {
+    chamadas.push({ url, opcoes });
+    return url.includes('resend') ? resposta(200, '{"id":"abc"}') : resposta(200, '[]');
+  };
+  // Produção parou há três dias; homologação rodou hoje.
+  const buscar = async (url, opcoes) => {
+    if (url.includes('/rpc/')) {
+      return url.startsWith(AMBIENTES[1].url)
+        ? resposta(200, JSON.stringify('2026-08-30T06:10:00Z'))
+        : resposta(200, ROTINA_DE_HOJE);
+    }
+    return base(url, opcoes);
+  };
+
+  const r = await executar(AMBIENTE_COMPLETO, { buscar, ...semEspera, ...backupBom });
+
+  assert.equal(r.falhas.length, 0, 'as sondas passaram');
+  assert.equal(r.backup.ok, true);
+  assert.deepEqual(r.rotinas.map((x) => `${x.ambiente}=${x.ok}`), ['homologacao=true', 'producao=false']);
+  assert.equal(r.algoRuim, true, 'rotina parada tem de deixar a execução vermelha');
+  assert.equal(r.alertaEnviado, true);
+
+  const email = chamadas.filter((c) => c.url.includes('resend'));
+  assert.equal(email.length, 1, 'um e-mail por execução');
+  const corpo = JSON.parse(email[0].opcoes.body);
+  assert.match(corpo.subject, /rotina diária de produção não está rodando/);
+  assert.match(corpo.text, /cron\.job/, 'o e-mail tem de dizer onde olhar');
+  assert.match(corpo.text, /ROTINA_FALHOU/);
+  assert.doesNotMatch(corpo.subject, /homologação/);
+});
+
+test('alerta com Supabase fora E rotina parada cabe num envelope só', () => {
+  const falha = {
+    rotulo: 'homologação',
+    alvo: 'https://exemplo.supabase.co' + CAMINHO_SONDA,
+    tentativas: [{ ok: false, status: 540, corpo: 'paused', ms: 9 }],
+  };
+  const rotina = { ok: false, rotulo: 'produção', alvo: 'https://x' + ROTINA.caminho, motivo: 'nenhuma execução completa' };
+  const { assunto, texto } = montarAlerta([falha], AGORA, { ok: true }, [rotina]);
+  assert.match(assunto, /homologação não respondeu — e a rotina diária parou em produção/);
+  assert.match(texto, /rotina diária de produção/);
+});
+
+test('resumo do log diz a idade da rotina de cada ambiente', () => {
+  const r = resumir(
+    [{ rotulo: 'produção', ok: true, tentativas: [{ ok: true, status: 200, linhas: 0, ms: 5 }] }],
+    null,
+    [{ rotulo: 'produção', ok: true, idadeHoras: 2 }],
+  );
+  assert.match(r, /rotina de produção: ok \(2 h\)/);
 });

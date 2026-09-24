@@ -171,6 +171,131 @@ export async function conferirBackup(env, opcoes = {}) {
   }
 }
 
+/**
+ * A rotina diária (card 9.2,66): o `pg_cron` rodou?
+ *
+ * ⚠️ POR QUE ESTA VERIFICAÇÃO EXISTE: `ROTINA_FALHOU` cobre a falha DENTRO da
+ * rotina, e não a rotina que não roda — job apagado, extensão desligada,
+ * migração que substituiu `rt_diaria` errado. O sintoma seria uma central de
+ * pendências e uma projeção paradas no último dia bom, sem erro nenhum; a
+ * sonda de cima continuaria verde, porque o banco continua acordado.
+ *
+ * `fn_rotina_diaria_ultima_execucao()` é a ÚNICA função aberta ao anon, e
+ * devolve só uma data: a da última execução COMPLETA e bem-sucedida, a mais
+ * velha entre as unidades ativas, ou `null` se alguma nunca rodou (decisão de
+ * Irineu, 24/09/2026 — qualquer coisa além da data volta a ser decisão).
+ */
+export const ROTINA = {
+  caminho: '/rest/v1/rpc/fn_rotina_diaria_ultima_execucao',
+  /**
+   * O cron roda às 03:10 de São Paulo (06:10 UTC) e o vigia às 06:00 (09:00
+   * UTC): em dia normal o carimbo tem ~3 h. 36 h dão folga para um dia
+   * atrasado sem alarme falso e denunciam o PRIMEIRO dia perdido — no vigia do
+   * dia seguinte o carimbo já tem 51 h.
+   */
+  idadeMaximaHoras: 36,
+};
+
+/**
+ * Decide sobre a resposta da função. Pura de propósito: é o que permite
+ * exercitar data velha, `null`, data no futuro e corpo torto sem banco.
+ *
+ * Asserção POSITIVA, como a da sonda (card 3.10): passa uma data válida e
+ * recente, e só. Qualquer outra coisa reprova — inclusive o que ninguém previu.
+ */
+export function avaliarRotina(texto, opcoes = {}) {
+  const { quando = new Date(), idadeMaximaHoras = ROTINA.idadeMaximaHoras } = opcoes;
+
+  let corpo;
+  try {
+    corpo = JSON.parse(texto);
+  } catch {
+    return { ok: false, motivo: `a resposta não é JSON: ${String(texto).slice(0, 120)}` };
+  }
+  if (corpo === null) {
+    return {
+      ok: false,
+      motivo:
+        'nenhuma execução completa registrada em alguma unidade ativa — a rotina diária nunca rodou até o fim lá',
+    };
+  }
+  if (typeof corpo !== 'string' || Number.isNaN(Date.parse(corpo))) {
+    return { ok: false, motivo: `a resposta não é uma data: ${String(texto).slice(0, 120)}` };
+  }
+
+  const data = new Date(corpo);
+  const idadeHoras = Math.floor((quando.getTime() - data.getTime()) / 3600000);
+  // Uma hora de folga para relógio: o vigia e o Postgres não são o mesmo relógio.
+  if (idadeHoras < -1) {
+    return { ok: false, data: corpo, idadeHoras, motivo: `a última execução está no futuro (${emSaoPaulo(data)})` };
+  }
+  if (idadeHoras > idadeMaximaHoras) {
+    return {
+      ok: false,
+      data: corpo,
+      idadeHoras,
+      motivo: `a última execução completa foi em ${emSaoPaulo(data)}, ${idadeHoras} h atrás (limite: ${idadeMaximaHoras} h)`,
+    };
+  }
+  return { ok: true, data: corpo, idadeHoras };
+}
+
+/**
+ * Pergunta ao ambiente quando a rotina rodou e avalia.
+ *
+ * **Não lança**, pela mesma razão de `conferirBackup`: vigia novo não pode
+ * custar a vigilância que já funcionava. E repete como a sonda — três vezes,
+ * mas só quando a RESPOSTA falhou; data velha é resposta, e repetir não a
+ * rejuvenesce.
+ */
+export async function conferirRotina(ambiente, env, opcoes = {}) {
+  const {
+    buscar = fetch,
+    tentativas = 3,
+    esperaMs = 1500,
+    timeoutMs = 10000,
+    dormir = dormirDeVerdade,
+    quando = new Date(),
+  } = opcoes;
+
+  const alvo = ambiente.url + ROTINA.caminho;
+  const chave = env[ambiente.chave];
+  let motivo = '';
+
+  for (let n = 1; n <= tentativas; n += 1) {
+    try {
+      const resposta = await buscar(alvo, {
+        method: 'POST',
+        headers: {
+          apikey: chave,
+          Authorization: `Bearer ${chave}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const texto = (await resposta.text()).slice(0, 300);
+      if (resposta.status === 200) {
+        return { ambiente: ambiente.nome, rotulo: ambiente.rotulo, alvo, ...avaliarRotina(texto, { quando }) };
+      }
+      // 404 é o caso de a função não existir — migração não aplicada, ou
+      // aplicada e revertida. O e-mail diz isso com todas as letras.
+      motivo = `HTTP ${resposta.status} ${texto.replace(/\s+/g, ' ').trim()}`;
+    } catch (erro) {
+      motivo = String(erro?.message ?? erro);
+    }
+    if (n < tentativas) await dormir(esperaMs);
+  }
+  return {
+    ambiente: ambiente.nome,
+    rotulo: ambiente.rotulo,
+    alvo,
+    ok: false,
+    motivo: `não consegui perguntar: ${motivo}`,
+  };
+}
+
 /** Remetente do alerta. O Resend do card 3.8 serve `gestaoim360.com`; o nome
  *  distingue quem mandou, como já distingue dev de prod na caixa de entrada. */
 export const REMETENTE_PADRAO = 'Gestão IM360 (Vigia) <nao-responda@gestaoim360.com>';
@@ -282,13 +407,17 @@ function emSaoPaulo(quando) {
  * assuntos num envelope, e não dois envelopes. Alerta que se multiplica é
  * alerta que se aprende a arquivar sem ler.
  */
-export function montarAlerta(falhas, quando = new Date(), backup = null) {
+export function montarAlerta(falhas, quando = new Date(), backup = null, rotinas = []) {
   const nomes = falhas.map((f) => f.rotulo).join(' e ');
   const backupRuim = backup && !backup.ok;
+  const rotinasRuins = rotinas.filter((r) => !r.ok);
+  const nomesRotina = rotinasRuins.map((r) => r.rotulo).join(' e ');
 
   const abertura = falhas.length
     ? `O vigia diário não conseguiu falar com o Supabase de ${nomes}.`
-    : 'O vigia diário encontrou um problema no backup de produção.';
+    : backupRuim
+      ? 'O vigia diário encontrou um problema no backup de produção.'
+      : `O vigia diário encontrou a rotina diária parada em ${nomesRotina}.`;
 
   const linhas = [abertura, '', `Quando: ${emSaoPaulo(quando)} (São Paulo)`, ''];
 
@@ -296,6 +425,13 @@ export function montarAlerta(falhas, quando = new Date(), backup = null) {
     linhas.push(`── ${falha.rotulo}`);
     linhas.push(`   ${falha.alvo}`);
     falha.tentativas.forEach((t, i) => linhas.push(`   tentativa ${i + 1}: ${descreverTentativa(t)}`));
+    linhas.push('');
+  }
+
+  for (const rotina of rotinasRuins) {
+    linhas.push(`── rotina diária de ${rotina.rotulo}`);
+    linhas.push(`   ${rotina.alvo}`);
+    linhas.push(`   ${rotina.motivo}`);
     linhas.push('');
   }
 
@@ -331,12 +467,31 @@ export function montarAlerta(falhas, quando = new Date(), backup = null) {
     linhas.push('');
   }
 
+  if (rotinasRuins.length) {
+    linhas.push('O que verificar na rotina diária, nesta ordem (SQL Editor do projeto):');
+    linhas.push('1. O job existe e está ativo?');
+    linhas.push('   select jobname, schedule, active from cron.job;');
+    linhas.push("   Tem de haver gi_rotina_diaria, '10 6 * * *', active = true.");
+    linhas.push('2. As últimas execuções do job:');
+    linhas.push('   select status, return_message, start_time from cron.job_run_details');
+    linhas.push('    order by start_time desc limit 5;');
+    linhas.push('3. O job roda e a data não anda? Então uma rt_* está falhando numa');
+    linhas.push('   unidade: a central de pendências tem ROTINA_FALHOU aberta, com a');
+    linhas.push('   mensagem do banco. A unidade com falha não é carimbada (card 9.2,66).');
+    linhas.push('4. HTTP 404: a função fn_rotina_diaria_ultima_execucao não existe neste');
+    linhas.push('   banco — a migração do card 9.2,66 não foi aplicada aqui.');
+    linhas.push('');
+  }
+
   linhas.push('Enquanto durar, este e-mail chega uma vez por dia. Silêncio amanhã');
   linhas.push('significa que voltou — o vigia não guarda estado e não avisa recuperação.');
 
+  const extraRotina = rotinasRuins.length ? ` — e a rotina diária parou em ${nomesRotina}` : '';
   const assunto = falhas.length
-    ? `[Gestão IM360] Supabase de ${nomes} não respondeu${backupRuim ? ' — e o backup está atrasado' : ''}`
-    : '[Gestão IM360] O backup de produção não está saindo';
+    ? `[Gestão IM360] Supabase de ${nomes} não respondeu${backupRuim ? ' — e o backup está atrasado' : ''}${extraRotina}`
+    : backupRuim
+      ? `[Gestão IM360] O backup de produção não está saindo${extraRotina}`
+      : `[Gestão IM360] A rotina diária de ${nomesRotina} não está rodando`;
 
   return { assunto, texto: linhas.join('\n') };
 }
@@ -362,15 +517,23 @@ export async function enviarAlerta(env, alerta, buscar = fetch) {
   return resposta.status;
 }
 
-export function resumir(resultados, backup = null) {
-  const sondas = resultados
-    .map((r) => `${r.rotulo}: ${r.ok ? 'ok' : 'FALHOU'} (${r.tentativas.map(descreverTentativa).join(' | ')})`)
-    .join(' — ');
-  if (!backup) return sondas;
-  const dito = backup.ok
-    ? `backup: ok (cópia de ${backup.data}, ${backup.idadeDias} dia(s))`
-    : `backup: FALHOU (${backup.motivo})`;
-  return `${sondas} — ${dito}`;
+export function resumir(resultados, backup = null, rotinas = []) {
+  const partes = [
+    resultados
+      .map((r) => `${r.rotulo}: ${r.ok ? 'ok' : 'FALHOU'} (${r.tentativas.map(descreverTentativa).join(' | ')})`)
+      .join(' — '),
+  ];
+  for (const r of rotinas) {
+    partes.push(r.ok ? `rotina de ${r.rotulo}: ok (${r.idadeHoras} h)` : `rotina de ${r.rotulo}: FALHOU (${r.motivo})`);
+  }
+  if (backup) {
+    partes.push(
+      backup.ok
+        ? `backup: ok (cópia de ${backup.data}, ${backup.idadeDias} dia(s))`
+        : `backup: FALHOU (${backup.motivo})`,
+    );
+  }
+  return partes.join(' — ');
 }
 
 /**
@@ -397,22 +560,32 @@ export async function executar(env, opcoes = {}) {
   // a vigilância que já funcionava.
   const backup = await conferirBackup(env, { ...resto, quando });
 
+  // A rotina diária (card 9.2,66), só dos ambientes cuja sonda passou: com o
+  // banco fora do ar a pergunta não tem resposta, e o e-mail já diz o que
+  // importa. Também não lança.
+  const rotinas = [];
+  for (const r of resultados) {
+    if (!r.ok) continue;
+    const ambiente = AMBIENTES.find((a) => a.nome === r.ambiente);
+    rotinas.push(await conferirRotina(ambiente, env, { ...resto, quando }));
+  }
+
   const falhas = resultados.filter((r) => !r.ok);
-  const algoRuim = falhas.length > 0 || !backup.ok;
+  const algoRuim = falhas.length > 0 || !backup.ok || rotinas.some((r) => !r.ok);
   let alertaEnviado = false;
 
   if (algoRuim && alertar) {
     try {
-      await enviarAlerta(env, montarAlerta(falhas, quando, backup), resto.buscar ?? fetch);
+      await enviarAlerta(env, montarAlerta(falhas, quando, backup, rotinas), resto.buscar ?? fetch);
       alertaEnviado = true;
     } catch (erro) {
       // O alerta que não sai é a falha mais cara das duas: a primeira alguém
       // ainda descobre abrindo o app, a segunda ninguém descobre nunca.
-      throw new Error(`${resumir(resultados, backup)} — E O ALERTA NÃO SAIU: ${erro.message}`, {
+      throw new Error(`${resumir(resultados, backup, rotinas)} — E O ALERTA NÃO SAIU: ${erro.message}`, {
         cause: erro,
       });
     }
   }
 
-  return { resultados, falhas, backup, algoRuim, alertaEnviado };
+  return { resultados, falhas, backup, rotinas, algoRuim, alertaEnviado };
 }
