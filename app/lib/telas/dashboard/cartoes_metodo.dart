@@ -22,40 +22,25 @@ class CartoesMetodo extends ConsumerWidget {
     final totais = ref.watch(totaisPorMetodoProvider);
     final visivel = ref.watch(metodoVisivelProvider);
     final controlador = ref.read(metodoDashboardProvider.notifier);
+    final nomeDoMetodo = ref.watch(nomeDoMetodoProvider);
 
-    return LayoutBuilder(
-      builder: (context, restricoes) {
-        // ⚠️ No mobile os cartões **empilham** (design-system §3). Com largura
-        // fixa de 200 px eles cabiam dois lado a lado numa tela de 430 px, que
-        // é o oposto da regra — e a segunda coluna ficava com o número colado
-        // na borda.
-        final mobile = faixaDe(restricoes.maxWidth) == Faixa.mobile;
-        final cartoes = [
-          for (final total in totais)
-            _CartaoMetodo(
-              total: total,
-              selecionado: total.metodoId == visivel?.metodoId,
-              largura: mobile ? null : larguraCardDashboard,
-              // Um método só: o cartão continua mostrando os números, mas não
-              // se anuncia como botão que não muda nada.
-              aoTocar: totais.length == 1
-                  ? null
-                  : () => controlador.escolher(total.metodoId),
-            ),
-        ];
-
-        return mobile
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final cartao in cartoes)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: Dim.e12),
-                      child: cartao,
-                    ),
-                ],
-              )
-            : Wrap(spacing: Dim.e12, runSpacing: Dim.e12, children: cartoes);
+    // ⚠️ No mobile os cartões **empilham** (design-system §3); no desktop
+    // dividem a largura (card 9.2,71) — ver FileiraCartoes.
+    return FileiraCartoes(
+      quantidade: totais.length,
+      cartao: (i, largura) {
+        final total = totais[i];
+        return _CartaoMetodo(
+          total: total,
+          nome: nomeDoMetodo(total.metodoCodigo),
+          selecionado: total.metodoId == visivel?.metodoId,
+          largura: largura,
+          // Um método só: o cartão continua mostrando os números, mas não se
+          // anuncia como botão que não muda nada.
+          aoTocar: totais.length == 1
+              ? null
+              : () => controlador.escolher(total.metodoId),
+        );
       },
     );
   }
@@ -64,12 +49,16 @@ class CartoesMetodo extends ConsumerWidget {
 class _CartaoMetodo extends StatelessWidget {
   const _CartaoMetodo({
     required this.total,
+    required this.nome,
     required this.selecionado,
     this.largura,
     this.aoTocar,
   });
 
   final TotalMetodo total;
+
+  /// O nome do método (card 9.2,71) — "Inglês", e não o código "INGLES".
+  final String nome;
   final bool selecionado;
   final double? largura;
   final VoidCallback? aoTocar;
@@ -88,7 +77,7 @@ class _CartaoMetodo extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            total.metodoCodigo,
+            nome,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Tipografia.badge.copyWith(color: cores.onSurfaceVariant),

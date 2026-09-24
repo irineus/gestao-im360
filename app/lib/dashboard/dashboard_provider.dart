@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../catalogo/catalogo_provider.dart';
 import '../erros/erro_app.dart';
 import '../sessao/sessao_provider.dart';
 import '../turmas/modular.dart';
@@ -147,4 +148,14 @@ final gradeVagasProvider = Provider<GradeSemana?>((ref) {
   final segunda = segundaDaGrade(todas);
   if (segunda == null) return null;
   return montarGrade(segunda, celulasDoMetodo(todas, metodo.metodoId));
+});
+
+/// O NOME do método a partir do código que as views do Dashboard trazem (card
+/// 9.2,71): o cartão dizia "INGLES", e em todas as outras telas aparece
+/// "Inglês". Enquanto o catálogo não vem — ou se ele falhar — fica o código:
+/// o cartão nunca perde o rótulo por causa de outra consulta.
+final nomeDoMetodoProvider = Provider<String Function(String codigo)>((ref) {
+  final metodos = ref.watch(metodosProvider).value ?? const [];
+  final porCodigo = {for (final m in metodos) m.codigo: m.nome};
+  return (codigo) => porCodigo[codigo] ?? codigo;
 });

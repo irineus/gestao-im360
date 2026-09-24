@@ -85,3 +85,63 @@ class CardDashboard extends StatelessWidget {
 
 /// A largura do cartão no desktop e no tablet. No mobile ele ocupa a linha.
 const larguraCardDashboard = 200.0;
+
+/// Os cartões de método numa fileira (card 9.2,71).
+///
+/// Visto em 24/09/2026: em 1280 px os três cartões de método, com largura fixa,
+/// ocupavam menos da metade da linha, e o resto ficava vazio. No desktop e no
+/// tablet eles passam a **dividir a largura** — até [maxPorLinha]; acima disso
+/// voltam à largura fixa em `Wrap`, para não virar colunas de 150 px. No mobile
+/// empilham e ocupam a linha, como antes (design-system §3).
+class FileiraCartoes extends StatelessWidget {
+  const FileiraCartoes({
+    super.key,
+    required this.quantidade,
+    required this.cartao,
+  });
+
+  final int quantidade;
+
+  /// O cartão [indice], com a largura que ele deve ter — nula quando é a
+  /// fileira quem decide.
+  final Widget Function(int indice, double? largura) cartao;
+
+  static const maxPorLinha = 4;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, restricoes) {
+      if (faixaDe(restricoes.maxWidth) == Faixa.mobile) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < quantidade; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: Dim.e12),
+                child: cartao(i, null),
+              ),
+          ],
+        );
+      }
+      if (quantidade > maxPorLinha) {
+        return Wrap(
+          spacing: Dim.e12,
+          runSpacing: Dim.e12,
+          children: [
+            for (var i = 0; i < quantidade; i++)
+              cartao(i, larguraCardDashboard),
+          ],
+        );
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < quantidade; i++) ...[
+            if (i > 0) const SizedBox(width: Dim.e12),
+            Expanded(child: cartao(i, null)),
+          ],
+        ],
+      );
+    },
+  );
+}

@@ -11,6 +11,7 @@ import '../../theme/tipografia.dart';
 import '../../turmas/turmas.dart';
 import '../../turmas/turmas_provider.dart';
 import '../../widgets/estados.dart';
+import 'atencao_hoje.dart';
 import 'cartoes_alunos.dart';
 import 'cartoes_metodo.dart';
 import 'conclusoes_semestre.dart';
@@ -85,9 +86,16 @@ class TelaDashboard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // As duas regiões do card 8.7 abrem a tela, na ordem do wireframe §5.
-          // Cada uma tem a própria leitura e falha sozinha: a de vagas cair não
-          // pode levar embora a contagem de alunos (design-system §7.2).
+          // Card 9.2,71: o que pede ação HOJE abre a tela — antes estava no fim
+          // da página, abaixo da grade de vagas. Divergência registrada no
+          // wireframes §17 (item 76).
+          const AtencaoHoje(),
+          const SizedBox(height: Dim.e16),
+          const Divider(),
+          const SizedBox(height: Dim.e8),
+          // As duas regiões do card 8.7, na ordem do wireframe §5. Cada uma
+          // tem a própria leitura e falha sozinha: a de vagas cair não pode
+          // levar embora a contagem de alunos (design-system §7.2).
           const CartoesAlunos(),
           const SizedBox(height: Dim.e24),
           const ConclusoesSemestre(),
@@ -122,7 +130,8 @@ class TelaDashboard extends ConsumerWidget {
                   const CartoesMetodo(),
                   const SizedBox(height: Dim.e24),
                   Text(
-                    'Vagas por dia e horário — ${visivel.metodoCodigo}',
+                    'Vagas por dia e horário — '
+                    '${ref.watch(nomeDoMetodoProvider)(visivel.metodoCodigo)}',
                     style: Tipografia.subtitulo,
                   ),
                   Text(
