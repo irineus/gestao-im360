@@ -370,4 +370,37 @@ do arquivo) só para provar que, resolvidos os dois, o resto do arquivo entra in
 - **A tela é de navegador.** Não há seletor de arquivo no Android/iOS, e isso é decisão — a carga é
   operação de direção, em computador, contra um ambiente escolhido na hora.
 - **Nada aqui roda sozinho.** Sem rotina, sem gatilho de deploy, sem agendamento: a importação só
-  acontece quando alguém aperta o botão.
+  acontece quando alguém aperta o botão. ⚠️ **Com uma exceção desde o card 11.5,5** — a retenção do
+  §8.1, que é passo da rotina diária.
+
+## 8.1 Retenção do arquivo bruto (card 11.5,5, 24/09/2026)
+
+`importacao.dados` guarda o **arquivo inteiro** de cada lote — a escola inteira, com nome e código de
+cada aluno, uma cópia por reimportação no dry-run e mais uma na virada. Depois de aplicado e
+conferido, o que a auditoria precisa é o **relatório**: `totais`, as ocorrências e os carimbos.
+
+- `rt_importacao_retencao()`, **sexto passo de `rt_diaria`** (03:10): na unidade do contexto, todo
+  lote **APLICADA** com `aplicado_em` (dia de São Paulo) há `importacao_retencao_dias` dias **ou
+  mais** tem `dados` trocado por `'{}'` e `dados_limpos_em` carimbado. `totais`, ocorrências, status e
+  carimbos ficam. Sem volta: o arquivo sai do banco.
+- **Só APLICADA.** VALIDADA, REPROVADA e FALHOU guardam o arquivo — ainda podem ser conferidos,
+  aplicados ou reenviados. A constraint `importacao_dados_limpos_ck` reforça: `dados_limpos_em` só
+  existe com status APLICADA e `dados = '{}'`.
+- **Prazo em `parametro`, sem default** (valor inicial **30**, decidido com Irineu em 24/09/2026 — é
+  o tempo de comparar os totais com o Dashboard da planilha, card 9.4). Parâmetro ausente é
+  `PARAMETRO_AUSENTE`: o passo cai no bloco de exceção de `rt_diaria`, abre `ROTINA_FALHOU`
+  (MEDIA) e **nada se apaga**. Valor menor que 1 também falha.
+- **Em produção**, alcança o lote da virada (card 9.7) 30 dias depois dela. Quem precisar do arquivo
+  depois disso precisa guardá-lo fora do sistema — o importador trabalha com o arquivo que a pessoa
+  tem na mão.
+- **O que ficou de fora** (escopo fechado em 24/09/2026): `demanda_projetada_hist`,
+  `importacao_ocorrencia`, pendência resolvida e os históricos continuam crescendo. Os históricos
+  são auditoria e não se apagam; o resto espera a **medição do tamanho das tabelas em produção**,
+  junto do card 11.5 (limite de 500 MB do free tier).
+
+Teste `102_importacao_retencao` (15 asserções), pelo caminho de verdade — a direção chama
+`fn_rotina_diaria_executar()`. Quatro contraprovas vistas vermelhas: sem o filtro de unidade, `<` no
+lugar de `<=`, default `30` embutido no `fn_param_int` e sem o filtro de status. ⚠️ **A última passou
+VERDE primeiro**: nenhum lote não aplicado da fixture tinha `aplicado_em`, e o `aplicado_em is not
+null` escondia a falta do filtro. O lote `A_FALC` (FALHOU com `aplicado_em`) existe para o dia em que a
+falha passar a carimbar a tentativa.

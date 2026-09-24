@@ -376,7 +376,7 @@ on conflict (codigo) do nothing;
 -- Catálogo, perfis, matriz e parâmetros NÃO são escritos aqui. As duas unidades
 -- da fixture chamam `public.fn_seed_acesso()` — exatamente a função que a
 -- migração do card 3.6 chama para a unidade real: 50 permissões, os quatro
--- perfis do plano, a matriz de docs/permissoes-matriz.md §5 e os 15 parâmetros.
+-- perfis do plano, a matriz de docs/permissoes-matriz.md §5 e os 16 parâmetros.
 --
 -- É o ponto inteiro da camada `acesso_seed_real`. Enquanto o seed real não
 -- existia, esta seção declarava um catálogo mínimo próprio (as sete permissões
@@ -420,7 +420,7 @@ select tests.criar_usuario('desativado@escola-a.test', 'DIRECAO',   null, false)
 select tests.criar_usuario('arquivado@escola-a.test',  'ARQUIVADO');
 select tests.criar_usuario('direcao@escola-b.test',    'DIRECAO', tests.unidade('ESCOLA_B'));
 
--- Nenhum parâmetro escrito aqui: os 15 vêm de `fn_seed_parametros()`, chamada
+-- Nenhum parâmetro escrito aqui: os 16 vêm de `fn_seed_parametros()`, chamada
 -- acima. `projecao_horizonte_dias` continua sendo o que prova que fn_param_int
 -- lê para quem NÃO tem `parametros.ler` (ajuste bloqueante do card 2.4 #4) — a
 -- diferença é que agora ele vale 60 pela mesma linha que fará valer 60 em

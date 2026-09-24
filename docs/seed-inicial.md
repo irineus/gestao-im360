@@ -30,7 +30,7 @@ este projeto já catalogou nos cards 2.3, 2.4, 3.4 e 3.5.
 | `permissao` | 50 códigos — as 49 do card 2.4 §3 e `salas.acessar_credencial` do card 2.9 |
 | `perfil` | DIRECAO, PEDAGOGICO, SECRETARIA, MONITOR |
 | `perfil_permissao` | Matriz do card 2.4 §5 — direção 50, secretaria 37, pedagógico 22, monitor 14 |
-| `parametro` | 15 parâmetros de negócio (§3) + `direcao_inicial_email` |
+| `parametro` | 16 parâmetros de negócio (§3) + `direcao_inicial_email` |
 | `usuario_perfil` | O primeiro usuário de direção, por bootstrap (§4) |
 
 `codigo` é a chave natural criada pelo card 3.3 exatamente para isto: `nome` é editável na tela de
@@ -80,7 +80,7 @@ todo mundo".
 
 ---
 
-## 3. Os 15 parâmetros, e de onde cada valor veio
+## 3. Os 16 parâmetros, e de onde cada valor veio
 
 Parâmetro ausente é erro `PARAMETRO_AUSENTE` (card 2.2 §2.3): não há default escondido no código, e o
 que não estiver aqui não roda. Todos são `INTEIRO` e todos são editáveis na tela de Administração
@@ -103,6 +103,7 @@ que não estiver aqui não roda. Todos são `INTEIRO` e todos são editáveis na
 | `ritmo_intervalo_max_dias` | 120 | Ordem 5 §3 | Teto: acima disso é interrupção, não ritmo |
 | `projecao_acelerar_pct` | 50 | Ordem 5 §3 | Percentual do ritmo do método para o aluno ACELERAR |
 | `ritmo_calibracao_dias` | 180 | Ordem 5 §3 | Janela da mediana observada por método |
+| `importacao_retencao_dias` | 30 | **card 11.5,5** (24/09/2026) — o 16º, e o primeiro que chega por migração **depois** do seed: `20260924200000_retencao_importacao.sql` redefine `fn_seed_parametros` e a chama para as unidades que já existem (`do nothing`) | Dias depois de APLICADO em que o arquivo bruto do lote de importação é limpo (`docs/importacao.md` §8.1) |
 
 ⚠️ **Nenhum destes valores é medição** — são leitura conservadora do plano. Os três
 `ritmo_padrao_dias_<METODO>` são substituídos pela mediana do histórico migrado no **card 9.5**, e o
