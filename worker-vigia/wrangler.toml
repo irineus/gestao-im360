@@ -39,3 +39,5 @@ ALERTA_PARA = "irineus@gmail.com"
 #   SUPABASE_ANON_KEY_DEV   chave publicável do projeto de desenvolvimento
 #   SUPABASE_ANON_KEY_PROD  chave publicável do projeto de produção
 #   RESEND_API_KEY          chave da conta Resend do card 3.8
+#   VIGIA_BATIMENTO_URL     URL de ping do check no Healthchecks.io (card 9.6,5)
+#                           — OPCIONAL: sem ela o vigia roda e só registra no log

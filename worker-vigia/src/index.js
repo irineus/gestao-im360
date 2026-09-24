@@ -12,13 +12,15 @@
 // não abrisse o painel do Cloudflare não saberia; o sintoma seria a ausência de
 // e-mail, que é exatamente o que se espera quando está tudo bem.
 
-import { executar, resumir } from './vigia.js';
+import { descreverBatimento, executar, resumir } from './vigia.js';
 
 export default {
   async scheduled(_evento, env) {
-    const { resultados, backup, rotinas, algoRuim, alertaEnviado } = await executar(env);
+    const { resultados, backup, rotinas, algoRuim, alertaEnviado, batimento } = await executar(env);
     const resumo = resumir(resultados, backup, rotinas);
-    console.log(resumo);
+    // O batimento vai para o log, não para o erro: batimento que falhou não
+    // deixa a execução vermelha (card 9.6,5) — quem avisa é o serviço externo.
+    console.log(`${resumo} — ${descreverBatimento(batimento)}`);
     if (algoRuim) {
       // Lançar DEPOIS de alertar deixa a execução vermelha no painel do
       // Cloudflare — segundo sinal, para o caso de o e-mail se perder.

@@ -19,6 +19,10 @@
 #     Worker: é de propósito, e o vigia JÁ PUBLICADO segue no ar sondando os dois
 #     Supabase enquanto isso — deploy que falha não derruba o que está rodando.
 #     O `CLOUDFLARE_API_TOKEN` precisa também de **Workers R2 Storage — Read**.
+#   - (OPCIONAL) secret do repositório VIGIA_BATIMENTO_URL — URL de ping do check
+#     no Healthchecks.io (card 9.6,5, "quem vigia o vigia"). De propósito FORA da
+#     lista de faltando abaixo: sem ele o vigia publica e roda, só não bate o
+#     ponto (e diz isso no log). Com ele, o passo de segredos o instala.
 # As duas chaves publicáveis são as MESMAS que já estão nos environments `dev` e
 # `prod` como `SUPABASE_ANON_KEY`. Aqui elas precisam de nome distinto e escopo de
 # repositório por um motivo prático: um job só enxerga UM environment, e este
@@ -58,6 +62,7 @@ jobs:
       SUPABASE_ANON_KEY_DEV: ${{ secrets.SUPABASE_ANON_KEY_DEV }}
       SUPABASE_ANON_KEY_PROD: ${{ secrets.SUPABASE_ANON_KEY_PROD }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      VIGIA_BATIMENTO_URL: ${{ secrets.VIGIA_BATIMENTO_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -106,6 +111,13 @@ jobs:
           for nome in SUPABASE_ANON_KEY_DEV SUPABASE_ANON_KEY_PROD RESEND_API_KEY; do
             printf '%s' "${!nome}" | npx --yes wrangler@4.128.0 secret put "$nome"
           done
+          # Card 9.6,5: opcional. Sem o secret no GitHub o passo NÃO falha e o
+          # Worker segue sem batimento — o aviso fica no resumo da execução.
+          if [ -n "$VIGIA_BATIMENTO_URL" ]; then
+            printf '%s' "$VIGIA_BATIMENTO_URL" | npx --yes wrangler@4.128.0 secret put VIGIA_BATIMENTO_URL
+          else
+            echo "::warning title=Batimento não configurado::VIGIA_BATIMENTO_URL ausente — o vigia roda, mas ninguém avisa se ele morrer (docs/worker-vigia.md §11)."
+          fi
 
       - name: Resumo
         run: |
@@ -114,4 +126,9 @@ jobs:
             echo "- Worker: \`gestao-im360-vigia\`"
             echo "- Cron: \`0 9 * * *\` (06:00 em São Paulo)"
             echo "- Sondas conferidas antes da publicação: homologação e produção"
+            if [ -n "$VIGIA_BATIMENTO_URL" ]; then
+              echo "- Batimento externo: instalado (VIGIA_BATIMENTO_URL)"
+            else
+              echo "- ⚠️ Batimento externo: NÃO configurado — falta o secret VIGIA_BATIMENTO_URL"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
