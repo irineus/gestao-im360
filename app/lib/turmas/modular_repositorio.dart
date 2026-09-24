@@ -28,8 +28,9 @@ abstract interface class ModularRepositorio {
   /// blocos inativos do card 5.6.
   Future<List<TurmaModular>> turmasInativas();
 
-  /// Grava a turma. **[dataInicio] só é aceita na criação** e é obrigatória
-  /// nela; na edição fica nula e a coluna **não é enviada**.
+  /// Grava a turma. [dataInicio] é obrigatória na criação; na edição vem do
+  /// campo PREENCHIDO com o início real (card 9.2,7) e, nula, a coluna **não é
+  /// enviada**.
   ///
   /// ⚠️ Não é elegância: enquanto o `update` reenviava `data_inicio`, salvar a
   /// turma sem mudar nada reescrevia a data real de início para hoje — medido,
@@ -117,7 +118,7 @@ class ModularRepositorioSupabase implements ModularRepositorio {
       'unidade_id, turma_id, turma_nome, curso_id, curso_nome, sala_id, '
       'sala_nome, capacidade, alocados, vagas_livres, modulo_corrente_id, '
       'modulo_corrente_nome, modulo_corrente_ordem, modulo_corrente_inicio, '
-      'modulo_corrente_prev_conclusao, modulo_atrasado';
+      'modulo_corrente_prev_conclusao, modulo_atrasado, data_inicio';
 
   static const _colunasCronograma =
       'cronograma_id, turma_id, modulo_id, modulo_nome, modulo_ordem, '
@@ -145,7 +146,7 @@ class ModularRepositorioSupabase implements ModularRepositorio {
   Future<List<TurmaModular>> turmasInativas() async {
     final linhas = await _cliente
         .from('turma_modular')
-        .select('id, nome, curso_id, sala_id, capacidade')
+        .select('id, nome, curso_id, sala_id, capacidade, data_inicio')
         .eq('ativo', false)
         .order('nome', ascending: true);
     return [
@@ -160,6 +161,9 @@ class ModularRepositorioSupabase implements ModularRepositorio {
           capacidade: (linha['capacidade'] as num?)?.toInt() ?? 0,
           alocados: 0,
           vagasLivres: 0,
+          dataInicio: linha['data_inicio'] == null
+              ? null
+              : DateTime.parse('${linha['data_inicio']}'),
         ),
     ];
   }

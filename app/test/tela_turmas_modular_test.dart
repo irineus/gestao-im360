@@ -563,6 +563,35 @@ void main() {
       );
     });
 
+    for (final (nome, tamanho) in [
+      ('desktop', const Size(1400, 1000)),
+      ('390 px', const Size(390, 800)),
+    ]) {
+      testWidgets('$nome: a EDIÇÃO mostra o início real e deixa corrigir '
+          '(card 9.2,7)', (tester) async {
+        // Antes do 9.2,7 o campo nem existia na edição: a view de lotação não
+        // trazia data_inicio, e o início da turma — dado que o importador traz
+        // e a projeção Modular lê — não podia ser visto nem corrigido.
+        final modular = await montar(
+          tester,
+          permissoes: secretaria,
+          tamanho: tamanho,
+        );
+        await abrir(tester, 'Eletricista 2025.2');
+        await tocar(tester, find.text('Editar turma'));
+
+        final campo = find.widgetWithText(TextFormField, 'Início da turma *');
+        expect(campo, findsOneWidget);
+        expect(find.text('09/11/2025'), findsOneWidget);
+
+        await tester.enterText(campo, '01/12/2025');
+        await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+        expect(modular.datasInicio['t-2025'], DateTime(2025, 12, 1));
+        expect(tester.takeException(), isNull);
+      });
+    }
+
     testWidgets('a CRIAÇÃO continua gravando a data', (tester) async {
       await montar(tester, permissoes: secretaria);
       await tocar(tester, find.text('Nova turma'));

@@ -90,9 +90,6 @@ class _GradeState extends ConsumerState<_Grade> with AberturaPorUrl {
     final catalogo = ref.watch(metodosProvider);
     final metodos = catalogo.value ?? const <Metodo>[];
     final metodosNaoLidos = catalogo.hasError;
-    final metodosPorId = {for (final m in metodos) m.id: m};
-    String nomeDoMetodo(String metodoId) =>
-        metodosNaoLidos ? metodoNaoLido : metodosPorId[metodoId]?.nome ?? '—';
     final grade = ref.watch(gradeProjecaoProvider);
     final filtro = ref.watch(filtroProjecaoProvider);
     // ⚠️ Os três estados, e não `.value ?? false` (card 9.2,62): em carga e em
@@ -142,7 +139,7 @@ class _GradeState extends ConsumerState<_Grade> with AberturaPorUrl {
         ),
         ColunaIm360(
           titulo: 'Método',
-          texto: (l) => nomeDoMetodo(l.metodoId),
+          texto: (l) => l.metodoNome,
           prioridade: 4,
           larguraMin: 120,
         ),
@@ -187,11 +184,7 @@ class _GradeState extends ConsumerState<_Grade> with AberturaPorUrl {
       aoTocarLinha: (l) => _abrir(CelulaPedida(materialId: l.materialId)),
       cartao: (l) => CartaoIm360(
         titulo: l.nome,
-        subtitulo: [
-          l.codigo,
-          nomeDoMetodo(l.metodoId),
-          l.categoria,
-        ].join(' · '),
+        subtitulo: [l.codigo, l.metodoNome, l.categoria].join(' · '),
         apoio: [
           for (final mes in meses)
             if (l.temMes(mes))

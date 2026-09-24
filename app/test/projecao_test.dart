@@ -80,6 +80,8 @@ void main() {
           quantidade: 1,
           regra: 'DEGRAU_NOVO',
           calculadoEm: DateTime(2026, 9, 6, 3, 12),
+          metodoCodigo: 'INTERATIVO',
+          metodoNome: 'Interativo',
         ),
       ];
       final linha = pivotar(comNovo).firstWhere((l) => l.codigo == '02');
