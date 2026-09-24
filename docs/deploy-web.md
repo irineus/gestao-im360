@@ -192,8 +192,11 @@ caracteres por cabeçalho.
 **Cache.** O Flutter web **não versiona os nomes dos arquivos**: `main.dart.js` se chama assim em
 todo build. Cache longo aqui não é economia, é a garantia de que alguém vai continuar rodando a
 versão da semana passada sem saber. `must-revalidate` faz cada pedido revalidar por ETag (respostas
-304, baratas), a borda do Cloudflare continua servindo, e o service worker do Flutter cuida do uso
-offline.
+304, baratas) e a borda do Cloudflare continua servindo. ⚠️ **Corrigido no card 10.1 (24/09/2026):**
+este parágrafo dizia que "o service worker do Flutter cuida do uso offline" — não cuida. O
+`flutter_service_worker.js` que o Flutter 3.47 gera é um **service worker de limpeza**: no `activate`
+ele se desregistra e recarrega as abas, e não guarda nada em cache. O app **não abre offline**, e é
+por isso também que o `must-revalidate` não briga com cache nenhum (§13).
 
 ⚠️ **Reavaliado no card 9.2,63 (24/09/2026) e mantido.** A nota do card pedia cache longo "só para o
 que tem hash/versão" (`canvaskit/`, fontes). Nenhum dos dois tem hash no nome: `canvaskit/canvaskit.wasm`
@@ -477,3 +480,40 @@ Três coisas que o contrato não previa e que ficam para quem repetir isto:
    erro: devolve a Site URL. Na conferência, o `redirect_to` do e-mail entregue foi seguido nos dois
    ambientes e o `Location` caiu em `/redefinir-senha` — se tivesse caído na raiz, a lista estaria
    errada e a tela não diria nada.
+
+---
+
+## 13. PWA instalável (card 10.1, 24/09/2026)
+
+**Estratégia "web primeiro"** (plano, risco "publicação nas lojas"): o mesmo build do Pages atende a
+secretaria no desktop e o monitor no celular, instalado como app, antes das lojas.
+
+**O manifest** (`app/web/manifest.json`), no que foi decidido com Irineu em 24/09/2026:
+
+| Campo | Valor | Por quê |
+|---|---|---|
+| `id` | `/` | identidade estável: sem ele o navegador deriva o id do `start_url`, e mudar o `start_url` um dia faria o app instalado virar **outro** app |
+| `start_url` / `scope` | `/` / `/` | o app vive na raiz do domínio; todo caminho (`/alunos`, `/redefinir-senha`) abre dentro da janela do app |
+| `lang` / `dir` | `pt-BR` / `ltr` | igual ao `<html lang>` do `index.html` |
+| `name` / `short_name` | `Gestão IM360` / `IM360` | o curto cabe sob o ícone (≤ 12) |
+| `orientation` | `any` | o template vinha com `portrait-primary`, que deitava o tablet e o desktop de lado |
+| `theme_color` / `background_color` | `#171C26` | grafite-900, fundo do símbolo (`docs/identidade-visual.md`); o `theme-color` do `index.html` é o mesmo desde o 9.2,63 — **feito no 9.2,63, não refeito** |
+| `icons` | 192 e 512, comuns e *maskable* | já na identidade visual |
+
+O `test/publicacao_web_test.dart` (grupo "manifest do PWA") prende tudo isso — inclusive que o
+tamanho declarado de cada ícone é o do PNG, lido do cabeçalho do arquivo. Contraprova vista vermelha:
+`portrait-primary` e sem `id`, dois testes reprovam.
+
+**O que ficou de fora, de propósito:**
+
+- **Uso offline.** O service worker do Flutter 3.47 é de limpeza (ver "Cache" acima). Escrever um
+  próprio é trazer de volta o risco que o `must-revalidate` evita — alguém rodando a versão da semana
+  passada sem saber — num sistema que não funciona sem o Supabase de qualquer jeito. Se um dia for
+  preciso, é card próprio, com a estratégia de atualização decidida antes.
+- **Tela/botão próprio de instalação.** A instalação é a do navegador (ícone na barra de endereço no
+  desktop; "Instalar app"/"Adicionar à tela inicial" no celular). Um botão dentro do app exige ouvir o
+  `beforeinstallprompt`, que só existe no Chromium.
+- **Conferência em navegador real.** Os navegadores Chromium atuais não exigem mais service worker
+  com `fetch` para oferecer a instalação — manifest válido servido em HTTPS basta —, mas a oferta de
+  instalação **não foi vista** nesta sessão: o `deploy-web` de `develop` publica o manifest novo no
+  endereço de homologação, e é lá que se confere (menu do navegador → "Instalar Gestão IM360").
