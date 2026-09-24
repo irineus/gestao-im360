@@ -110,12 +110,12 @@ select is(
   (select string_agg(chave || '=' || valor, ',' order by chave collate "C")
      from public.parametro
     where unidade_id = (select id from u_real) and tipo = 'INTEIRO'),
-  'projecao_acelerar_pct=50,projecao_horizonte_dias=60,'
+  'importacao_retencao_dias=30,projecao_acelerar_pct=50,projecao_horizonte_dias=60,'
   'rep_capacidade_semanal=1,rep_faltas_max=2,rep_janela_volta_dias=30,rep_prazo_dias=30,'
   'ritmo_calibracao_dias=180,ritmo_intervalo_max_dias=120,ritmo_intervalo_min_dias=7,'
   'ritmo_janela_entregas=4,ritmo_padrao_dias_INGLES=30,ritmo_padrao_dias_INTERATIVO=30,'
   'ritmo_padrao_dias_MODULAR=45,ritmo_padrao_dias_PADRAO=30,standby_alerta_dias=30',
-  'os 15 parametros das regras ja especificadas, com os valores dos cards 2.1, 2.5 e Ordem 5');
+  'os 16 parametros das regras ja especificadas, com os valores dos cards 2.1, 2.5, Ordem 5 e 11.5,5');
 
 -- fn_param_int lê pela unidade corrente; em contexto de rotina a unidade vem da
 -- GUC (card 2.2 §2.2). É a leitura que a projeção e a virada REP fazem de

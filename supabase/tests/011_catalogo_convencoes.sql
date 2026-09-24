@@ -259,6 +259,12 @@ select is(
             -- para o "quem" dos históricos (a política de usuario continua
             -- admin.ler ou a própria pessoa para o resto das colunas).
             'fn_usuarios_nomes',
+            -- card 11.5,5 — a retenção do arquivo bruto das importações, pelo
+            -- mesmo motivo das outras rt_*: pg_cron roda como postgres sem
+            -- auth.uid(), e o contexto de rotina só se sustenta porque ela é
+            -- definer e não tem grant para authenticated (C9). Filtra a unidade
+            -- do contexto no corpo e trata unidade nula como ERRO.
+            'rt_importacao_retencao',
             -- card 6.5 — o trigger que fecha ESTOQUE_ZERO e COMPRA_SEM_ESTOQUE
             -- quando a compra chega. Ele dispara na transação de quem RECEBE
             -- (`compras.receber`) e precisa ler `pendencia` (`pendencias.ler`) e
