@@ -261,7 +261,7 @@ teria de entrar nas Redirect URLs do Auth. Implementado o que o 3.8 decidiu — 
 | Cloudflare R2 | bucket `gestao-im360-backup` | destino do backup semanal (card 3.11) | criado 02/09/2026; **sem uso desde a aposentadoria do `backup-semanal` (24/09/2026)** — destino a decidir por Irineu |
 | Secret do repositório | `R2_ACCESS_KEY_ID` | `aws s3` contra o R2 (card 3.11) | criado 02/09/2026; **sem uso desde 24/09/2026 — remover** |
 | Secret do repositório | `R2_SECRET_ACCESS_KEY` | idem — só aparece uma vez, na criação | criado 02/09/2026; **sem uso desde 24/09/2026 — remover** |
-| Cloudflare R2 | bucket `fulcrum-backups`, na **mesma conta** do Worker vigia | o vigia lê `gestaoim360/` para conferir a idade do backup do Fulcrum | ⚠️ confirmar a conta antes de promover |
+| Cloudflare R2 | bucket `fulcrum-backups`, na **mesma conta** do Worker vigia | o vigia lê `gestaoim360/` para conferir a idade do backup do Fulcrum | ✅ mesma conta, conferido por Irineu em 24/09/2026 (`wrangler r2 bucket list` e `deployments list --name gestao-im360-vigia` na mesma sessão); lido pelo código novo do vigia com binding remoto: 2 cópias, veredito `ok`, 3 h |
 
 | Painel do Cloudflare Pages | *Production branch* de `gestao-im360-homolog` = `develop` | sem isso o deploy do CI vira **preview** e o endereço público não muda (card 3.9,5) | ⚠️ falta configurar |
 | Painel do Cloudflare Pages | *Production branch* de `gestao-im360` = `main` | idem, em produção | ⚠️ falta configurar |
