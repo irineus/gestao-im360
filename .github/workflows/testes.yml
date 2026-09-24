@@ -97,6 +97,19 @@ jobs:
           done
           echo "Suíte de concorrência: ${#scripts[@]} script(s), todos verdes." >> "$GITHUB_STEP_SUMMARY"
 
+      # Card 9.2,67: o arquivo que o EXTRATOR escreve passando pelo IMPORTADOR.
+      # Os dois só se conheciam pelo contrato de docs/importacao.md §3; a primeira
+      # execução deste passo achou dois defeitos que só apareceriam no dry-run do
+      # 9.4 (saldo negativo e sala sem PC). Roda na unidade MATRIZ, numa
+      # transação com rollback, depois de tudo o que mexe na escola-fixture.
+      - uses: actions/setup-node@v4
+        with:
+          # Fixa pelo mesmo motivo do CLI e do Flutter (§2 de docs/ci-cd.md).
+          node-version: '24.16.0'
+
+      - name: Ponta a ponta (extrator → importador)
+        run: node supabase/tests_ponta_a_ponta/extrator_importador.mjs
+
   # ---------------------------------------------------------------------------
   # Migrações: nenhuma grava dado de negócio (card 4.0,5)
   #

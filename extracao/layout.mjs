@@ -123,7 +123,9 @@ export const TIPOS_ALOCACAO = ['REM', 'PRE', 'REP', 'NOVO'];
 export const TIPOS_CORRIGIDOS = { R: 'REP' };
 
 // A sala do laboratório: a aba `PCS` não está mapeada, então o nome é presumido e
-// a capacidade vem da resposta 8 da análise (10 PCs, e é isso que dá as 10 vagas).
+// a capacidade NOMINAL vem da resposta 8 da análise (10 PCs). ⚠️ Ela não dá vaga
+// nenhuma: no sistema a vaga é contada pelos PCs operacionais da sala, que o
+// arquivo não traz — ver SALA_SEM_PC em transformacao.mjs (card 9.2,67).
 export const SALA_LABORATORIO_PADRAO = 'Laboratório de Informática';
 export const SALA_LABORATORIO_CAPACIDADE = 10;
 

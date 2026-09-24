@@ -88,7 +88,7 @@ function dia(cabecalhos, alunos) {
  * estabilidade simula o snapshot seguinte, que é o caso real: a planilha muda todo
  * dia até a virada (card 9.4).
  */
-export function planilha(extraMovimentos = []) {
+export function planilha(extraMovimentos = [], extraEntradas = []) {
   const gerApost = [
     vazia(20), vazia(20),
     catalogoEMovimento({
@@ -104,6 +104,7 @@ export function planilha(extraMovimentos = []) {
     catalogoEMovimento({ codigo: 4, nome: 'FIM', saida: ['2026-05-03', 2, 1, 3605] }),
   ];
   for (const saida of extraMovimentos) gerApost.push(catalogoEMovimento({ saida }));
+  for (const entrada of extraEntradas) gerApost.push(catalogoEMovimento({ entrada }));
 
   return new PlanilhaEmMemoria({
     'Ger. Apost': gerApost,

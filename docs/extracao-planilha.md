@@ -163,6 +163,8 @@ Duas severidades. **ERRO** é o que deixaria o arquivo errado ou incompleto; **A
 | `TRILHA_SEM_MATERIAL` | ERRO | trilha apontando para código fora do catálogo |
 | `HORARIO_ILEGIVEL` / `BLOCO_DUPLICADO` | ERRO | cabeçalho de bloco sem horário, ou dois blocos no mesmo horário |
 | `METODO_DIVERGENTE` | ERRO | aluno de um método sentado em bloco de outro |
+| `SALDO_NEGATIVO` | ERRO | os movimentos de um material somam negativo: o importador (V10) recusaria o arquivo inteiro — falta o estoque de abertura (card 9.2,67) |
+| `SALA_SEM_PC` | ERRO | alocação numa sala sem PC no arquivo: a vaga é contada pelos PCs operacionais, e sem eles no sistema a aplicação cai inteira em `BLOCO_LOTADO` (card 9.2,67) |
 | `MATERIAL_DESCARTADO` / `ALUNO_DESCARTADO` | AVISO | MSE, FIM, MACRO, Fake 02 — o que foi jogado fora |
 | `CODIGO_DIVERGENTE` | AVISO | §4.2 |
 | `TURMA_SEM_CADASTRO` | AVISO | código na turma sem aluno correspondente |
@@ -182,6 +184,15 @@ Duas severidades. **ERRO** é o que deixaria o arquivo errado ou incompleto; **A
 isto. As de lá conferem o arquivo contra si mesmo e contra o banco; as daqui
 conferem a planilha — que o arquivo já não carrega. As duas listas se encontram no
 dry-run do 9.4.
+
+**Desde o card 9.2,67 as duas listas se encontram antes — no CI.**
+`supabase/tests_ponta_a_ponta/extrator_importador.mjs` gera o `.xlsx` sintético desta suíte,
+roda o CLI de verdade e alimenta o JSON escrito no disco no importador de verdade, na unidade
+`MATRIZ`, numa transação com rollback. O contrato que ele prova: **o importador não acha nada que
+este relatório não tenha dito** (mesmo código, mesma chave). A primeira execução achou dois
+defeitos da própria fixture que só apareceriam no dry-run — `SALDO_NEGATIVO` (a validação reprova)
+e `SALA_SEM_PC` (a validação passa e a **aplicação** cai inteira) —, e é por isso que os dois
+códigos existem.
 
 ### 4.1 A premissa do movimento é conferida, não assumida
 
