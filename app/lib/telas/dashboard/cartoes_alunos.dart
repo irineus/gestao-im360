@@ -70,13 +70,18 @@ class CartoesAlunos extends ConsumerWidget {
           // gastaria três linhas para dizer a mesma coisa. Sem ela, a soma
           // parece contagem de gente e não bate com os ativos logo acima
           // (docs/views-leitura.md §8.3).
-          if (tipos.hasValue && paineis.any((p) => p.tipos != null))
+          const SizedBox(height: Dim.e8),
+          _Cartoes(paineis: paineis),
+          // Card 9.2,71: a nota técnica sai do TOPO e vira rodapé da região —
+          // o Dashboard abria com ela. Continua uma vez só, e continua dizendo
+          // por que a soma não bate com os ativos.
+          if (tipos.hasValue && paineis.any((p) => p.tipos != null)) ...[
+            const SizedBox(height: Dim.e8),
             Text(
               legendaAlocacoes,
               style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
             ),
-          const SizedBox(height: Dim.e12),
-          _Cartoes(paineis: paineis),
+          ],
         ],
       ],
     );
@@ -107,33 +112,11 @@ class _Cartoes extends StatelessWidget {
   final List<PainelMetodo> paineis;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, restricoes) {
-      // No mobile os cartões **empilham** e ocupam a linha (design-system §3 e
-      // wireframes §5): a largura fixa do desktop punha dois lado a lado numa
-      // tela de 430 px, com o número colado na borda.
-      final mobile = faixaDe(restricoes.maxWidth) == Faixa.mobile;
-      final cartoes = [
-        for (final painel in paineis)
-          _CartaoAlunos(
-            painel: painel,
-            largura: mobile ? null : larguraCardDashboard,
-          ),
-      ];
-
-      return mobile
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final cartao in cartoes)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Dim.e12),
-                    child: cartao,
-                  ),
-              ],
-            )
-          : Wrap(spacing: Dim.e12, runSpacing: Dim.e12, children: cartoes);
-    },
+  Widget build(BuildContext context) => FileiraCartoes(
+    // No mobile empilham e ocupam a linha; no desktop dividem a largura
+    // (card 9.2,71) — ver FileiraCartoes.
+    quantidade: paineis.length,
+    cartao: (i, largura) => _CartaoAlunos(painel: paineis[i], largura: largura),
   );
 }
 
@@ -150,6 +133,7 @@ class _CartaoAlunos extends ConsumerWidget {
     final tipos = painel.tipos;
     final permissoes = ref.watch(permissoesProvider);
     final podeVerCertificados = podeAbrir(_rotaCertificados, permissoes);
+    final nomeMetodo = ref.watch(nomeDoMetodoProvider)(a.metodoCodigo);
 
     void abrirAlunos({String? status}) {
       ref
@@ -201,10 +185,10 @@ class _CartaoAlunos extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _Alvo(
-            rotulo: '${a.metodoCodigo}, ver todos os alunos do método',
+            rotulo: '$nomeMetodo, ver todos os alunos do método',
             aoTocar: abrirAlunos,
             filho: Text(
-              a.metodoCodigo,
+              nomeMetodo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Tipografia.badge.copyWith(color: cores.onSurfaceVariant),
@@ -238,14 +222,17 @@ class _CartaoAlunos extends ConsumerWidget {
           // "0 em standby" é informação, e uma linha que desaparece tira a
           // referência de comparação entre um dia e o outro.
           _LinhaNumero(
+            valor: a.acelerar,
             texto: '${a.acelerar} em aceleração',
             aoTocar: () => abrirAlunos(status: 'ACELERAR'),
           ),
           _LinhaNumero(
+            valor: a.standby,
             texto: '${a.standby} em standby',
             aoTocar: () => abrirAlunos(status: 'STANDBY'),
           ),
           _LinhaNumero(
+            valor: a.trancados,
             texto:
                 '${a.trancados} ${a.trancados == 1 ? 'trancado' : 'trancados'}',
             aoTocar: () => abrirAlunos(status: 'TRANCADO'),
@@ -254,6 +241,7 @@ class _CartaoAlunos extends ConsumerWidget {
           // leituras diferentes que o plano chama pelo mesmo nome, e é esta
           // que dá tempo de pedir o certificado (docs/views-leitura.md §8.1).
           _LinhaNumero(
+            valor: a.emUltimoLivro,
             texto: '${a.emUltimoLivro} no último livro',
             // A fila de quem está chegando ao fim é a tela de Certificados —
             // mas a rota dela pede uma permissão que a desta não pede, e botão
@@ -264,7 +252,10 @@ class _CartaoAlunos extends ConsumerWidget {
           // inventar um aqui seria uma tela prometendo o que a outra não faz. O
           // número existe para a conta das conclusões fechar — a explicação
           // está na região logo abaixo.
-          _LinhaNumero(texto: '${a.semPrevisao} sem previsão de conclusão'),
+          _LinhaNumero(
+            valor: a.semPrevisao,
+            texto: '${a.semPrevisao} sem previsão de conclusão',
+          ),
           if (tipos != null) ...[
             const SizedBox(height: Dim.e8),
             Text(tipos.resumo, style: Tipografia.numero(Tipografia.apoio)),
@@ -277,14 +268,29 @@ class _CartaoAlunos extends ConsumerWidget {
 
 /// Uma linha de número secundário, com ou sem destino.
 class _LinhaNumero extends StatelessWidget {
-  const _LinhaNumero({required this.texto, this.aoTocar});
+  const _LinhaNumero({required this.valor, required this.texto, this.aoTocar});
 
+  final int valor;
   final String texto;
   final VoidCallback? aoTocar;
 
   @override
   Widget build(BuildContext context) {
     final cores = Theme.of(context).colorScheme;
+    // Card 9.2,71: o ZERO continua na tela (design-system §7.2 — "0 em
+    // standby" é informação), mas em segundo plano: cinza, mais baixo e sem
+    // alvo, porque abrir uma lista vazia não é ação. Antes ele tinha o mesmo
+    // peso dos números que importam.
+    if (valor == 0) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: Dim.e4 / 2),
+        child: Text(
+          texto,
+          style: Tipografia.numero(Tipografia.apoio)
+              .copyWith(color: cores.onSurfaceVariant.withValues(alpha: 0.75)),
+        ),
+      );
+    }
     final destino = aoTocar;
     final conteudo = Text(
       texto,
