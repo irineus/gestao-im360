@@ -740,6 +740,16 @@ $$;
   exibido em tela não pode depender do que o leitor enxerga. Só a direção edita parâmetro, mas o
   número precisa ser o mesmo para quem olhar.
 
+> ✅ **Implementada no card 9.2,69 (24/09/2026)** —
+> `20260924160000_ritmo_metodo_observado.sql`, a parte (a) do 9.5. Três diferenças em relação ao
+> texto acima, todas de convenção: **sem default embutido** nos parâmetros (`fn_param_int(chave)` —
+> as três chaves existem por configuração, e um default esconderia o `PARAMETRO_AUSENTE`); **plpgsql
+> exigindo `parametros.ler`** (a calibração é da tela de Parâmetros, e a função agrega entregas de
+> todos os alunos do método como definer); e a mediana **arredondada** (`round`), não truncada. Método
+> sem entrega datada (Inglês e Modular) devolve ritmo **nulo** e 0 intervalos. Testes:
+> `supabase/tests/094_ritmo_metodo.sql` — com a fixture ({50, 60, 60, 80, 100}: mediana 60, média
+> 70), a contraprova média × mediana reprova.
+
 **Card 9.5** roda a função por método sobre o histórico migrado e grava o resultado em
 `ritmo_padrao_dias_<METODO>`. **Não é migração**: é `update` em `parametro`, feito na tela.
 
