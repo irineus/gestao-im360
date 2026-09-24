@@ -251,6 +251,10 @@ select is(
             -- para anon; devolve SÓ um timestamptz, agregado entre as unidades
             -- (o anon não tem unidade) — exceção nominal também no C9, abaixo.
             'fn_rotina_diaria_ultima_execucao',
+            -- card 9.2,69 — a mediana do ritmo por método (parte (a) do 9.5).
+            -- Agrega entregas de todos os alunos do método: exige
+            -- parametros.ler e filtra a unidade de quem chama no corpo.
+            'fn_ritmo_metodo_observado',
             -- card 6.5 — o trigger que fecha ESTOQUE_ZERO e COMPRA_SEM_ESTOQUE
             -- quando a compra chega. Ele dispara na transação de quem RECEBE
             -- (`compras.receber`) e precisa ler `pendencia` (`pendencias.ler`) e
