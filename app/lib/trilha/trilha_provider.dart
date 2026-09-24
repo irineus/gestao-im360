@@ -46,6 +46,11 @@ final trilhaAlunoProvider = FutureProvider.family<List<ItemTrilha>, String>(
   (ref, alunoId) => _traduzindo(() => _repositorio(ref).trilha(alunoId)),
 );
 
+/// O próximo livro de cada aluno, para o cartão da lista (card 9.2,64).
+final proximosLivrosProvider = FutureProvider<Map<String, String>>(
+  (ref) => _traduzindo(_repositorio(ref).proximosLivros),
+);
+
 /// O ritmo do aluno (card 8.1, item A8). Provider próprio e não parte da
 /// trilha: a região tem os **três** estados, e um erro aqui não pode apagar a
 /// lista de apostilas ao lado.

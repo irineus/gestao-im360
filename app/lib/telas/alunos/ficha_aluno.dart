@@ -8,9 +8,13 @@ import '../../catalogo/catalogo.dart';
 import '../../catalogo/catalogo_provider.dart';
 import '../../erros/erro_app.dart';
 import '../../rotas/rotas.dart';
+import '../../sessao/sessao_provider.dart';
+import '../../trilha/trilha.dart';
+import '../../trilha/trilha_provider.dart';
+import '../../turmas/turmas.dart';
+import '../../turmas/turmas_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
-import '../../util/datas.dart';
 import '../../widgets/badge_status.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/confirmacao.dart';
@@ -120,7 +124,10 @@ class _Ficha extends ConsumerWidget {
 
     return DefaultTabController(
       length: abasFicha.length,
-      initialIndex: indiceAbaFicha(aba),
+      initialIndex: indiceAbaFicha(
+        aba,
+        abrirNaTrilha: abreFichaNaTrilha(ref.watch(permissoesProvider)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -160,6 +167,7 @@ class _Ficha extends ConsumerWidget {
                     color: cores.onSurfaceVariant,
                   ),
                 ),
+                ResumoFicha(aluno: aluno),
                 const SizedBox(height: Dim.e12),
                 Wrap(
                   spacing: Dim.e8,
@@ -170,9 +178,14 @@ class _Ficha extends ConsumerWidget {
                     // mora no Histórico (wireframe §6.2). O botão fica visível
                     // e desabilitado com o motivo (card 2.6 decisão 1: sem
                     // estado, não sem permissão).
+                    // Card 9.2,64 (DECISÃO adotada): nenhum botão CHEIO no
+                    // cabeçalho. "Alterar status" era o primário laranja — a
+                    // ação rara e de consequência era a mais chamativa da
+                    // ficha. A ação do dia (entregar) mora na Trilha.
                     BotaoAcao(
                       rotulo: 'Alterar status',
                       icone: Icons.swap_horiz,
+                      nivel: NivelBotao.secundario,
                       exigePermissao: 'alunos.alterar_status',
                       desabilitado: transicoesDe(aluno.status).isEmpty
                           ? const DesabilitadoCom(
@@ -185,7 +198,7 @@ class _Ficha extends ConsumerWidget {
                     BotaoAcao(
                       rotulo: 'Editar dados',
                       icone: Icons.edit_outlined,
-                      nivel: NivelBotao.secundario,
+                      nivel: NivelBotao.terciario,
                       exigePermissao: 'alunos.editar',
                       aoTocar: () => _editar(context),
                     ),
@@ -408,3 +421,56 @@ class AbaHistorico extends ConsumerWidget {
 }
 
 const vazioHistorico = 'Nenhuma mudança de status registrada.';
+
+/// O resumo da jornada no cabeçalho da ficha (card 9.2,64, DECISÃO adotada):
+/// próximo livro com o estoque dele, e a turma. É o que o monitor procura ao
+/// abrir a ficha de quem está à frente dele — antes estava espalhado em duas
+/// abas.
+///
+/// Cada parte só aparece com a leitura NA MÃO e com a permissão que a lê: em
+/// carga, em erro ou sem permissão a parte some, e nada é afirmado sem ter sido
+/// lido (a família B1 do card 5.11). Quem diz o que falta é a própria aba.
+class ResumoFicha extends ConsumerWidget {
+  const ResumoFicha({super.key, required this.aluno});
+
+  final Aluno aluno;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final permissoes = ref.watch(permissoesProvider);
+    final partes = <String>[];
+
+    if (podeAbrir(rotaAlunoTrilha, permissoes)) {
+      final trilha = ref.watch(trilhaAlunoProvider(aluno.id!)).value;
+      if (trilha != null) {
+        ItemTrilha? proximo;
+        for (final i in trilha) {
+          if (i.proximo) proximo = i;
+        }
+        if (proximo != null) {
+          partes.add(
+            '$rotuloProximoLivro ${proximo.materialNome} '
+            '(${proximo.saldo} em estoque)',
+          );
+        } else if (trilha.isNotEmpty) {
+          partes.add('Trilha concluída');
+        }
+      }
+    }
+    if (permissoes.contains('turmas.ler')) {
+      final vinculos = ref.watch(vinculosTurmaProvider);
+      if (vinculos.hasValue) {
+        final rotulo = rotuloTurmasDoAluno(
+          ref.watch(vinculosPorAlunoProvider)[aluno.id!] ??
+              const <VinculoTurma>[],
+        );
+        partes.add('Turma: $rotulo');
+      }
+    }
+    if (partes.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: Dim.e4),
+      child: Text(partes.join(' · '), style: Tipografia.corpoTabela),
+    );
+  }
+}

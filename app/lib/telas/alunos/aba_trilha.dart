@@ -330,7 +330,7 @@ class _Cabecalho extends StatelessWidget {
 ///
 /// ⚠️ **Cor não é portadora única** (design-system §8.2): cada situação tem
 /// ícone com forma própria (✓, ►, ○) e a palavra ao lado.
-class _LinhaItem extends StatelessWidget {
+class _LinhaItem extends ConsumerWidget {
   const _LinhaItem({
     required this.item,
     required this.total,
@@ -358,7 +358,7 @@ class _LinhaItem extends StatelessWidget {
   final VoidCallback aoRemover;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cores = Theme.of(context).colorScheme;
     final situacao = situacaoDe(item);
     final (icone, cor) = switch (situacao) {
@@ -459,15 +459,15 @@ class _LinhaItem extends StatelessWidget {
               // card 5.7 fechou no bloco desativado). Estornar duas vezes
               // continua impossível: `movimento_estorno_uk` e o
               // MOVIMENTO_JA_ESTORNADO do card 6.3.
-              if (item.entregue)
-                BotaoAcao(
-                  rotulo: 'Estornar',
-                  nivel: NivelBotao.terciario,
-                  exigePermissao: 'estoque.estornar',
-                  desabilitado: item.estornavel
-                      ? null
-                      : const DesabilitadoCom(motivoSemMovimento),
-                  aoTocar: aoEstornar,
+              // Card 9.2,64 (DECISÃO adotada): o estorno sai do botão na cor
+              // de ação e vai para o menu de três pontos — cada item entregue
+              // tinha um "Estornar" à vista, convidando ao toque errado numa
+              // tela que o monitor usa com o polegar.
+              if (item.entregue &&
+                  ref.watch(permissoesProvider).contains('estoque.estornar'))
+                MenuItemEntregue(
+                  estornavel: item.estornavel,
+                  aoEstornar: aoEstornar,
                 ),
               if (editando && !item.entregue) ...[
                 _BotaoSeta(
@@ -627,3 +627,33 @@ class _RodapeEntrega extends StatelessWidget {
     );
   }
 }
+
+/// O menu "⋮" de um item entregue da trilha (card 9.2,64): hoje só o estorno,
+/// que é raro e de consequência. Item indisponível aparece desabilitado com o
+/// motivo, como o `BotaoAcao` fazia.
+class MenuItemEntregue extends StatelessWidget {
+  const MenuItemEntregue({
+    super.key,
+    required this.estornavel,
+    required this.aoEstornar,
+  });
+
+  final bool estornavel;
+  final VoidCallback aoEstornar;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+    tooltip: 'Mais ações da entrega',
+    icon: const Icon(Icons.more_vert),
+    onSelected: (_) => aoEstornar(),
+    itemBuilder: (_) => [
+      PopupMenuItem<String>(
+        value: 'estornar',
+        enabled: estornavel,
+        child: Text(estornavel ? rotuloEstornarEntrega : motivoSemMovimento),
+      ),
+    ],
+  );
+}
+
+const rotuloEstornarEntrega = 'Estornar entrega';

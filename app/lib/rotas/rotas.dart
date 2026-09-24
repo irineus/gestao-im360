@@ -246,10 +246,22 @@ const abasFicha = <String>[
 /// O índice da aba pedida na URL. Aba desconhecida — ou uma que ainda não
 /// existe — cai na primeira, que é o comportamento honesto: melhor abrir a
 /// ficha em Dados do que não abrir.
-int indiceAbaFicha(String? aba) {
+int indiceAbaFicha(String? aba, {bool abrirNaTrilha = false}) {
   final i = abasFicha.indexOf(aba ?? '');
-  return i < 0 ? 0 : i;
+  if (i >= 0) return i;
+  // Card 9.2,64 (DECISÃO adotada): sem aba pedida, quem ENTREGA apostila abre
+  // a ficha na Trilha — onde está "Registrar entrega", no celular como rodapé
+  // fixo. A ficha abria em Dados, e a entrega ficava um toque e uma rolagem
+  // depois, na jornada nº 1 do monitor. Quem não entrega continua em Dados.
+  return abrirNaTrilha ? abasFicha.indexOf('trilha') : 0;
 }
+
+/// Quem abre a ficha na aba Trilha: quem pode registrar entrega E abrir a aba
+/// (o conjunto da rota 3b — sem ele a aba diz o que falta). Permissões, nunca
+/// perfil (card 9.2,64).
+bool abreFichaNaTrilha(Set<String> permissoes) =>
+    permissoes.contains('estoque.lancar_saida') &&
+    podeAbrir(rotaAlunoTrilha, permissoes);
 
 /// A ficha, opcionalmente já na aba em que o problema se resolve — é o que a
 /// central de pendências usa (wireframe §14.3).
@@ -291,7 +303,21 @@ Set<String> permissoesFaltantes(Rota rota, Set<String> permissoes) =>
 /// Existe porque o Dashboard exige cinco permissões: um perfil enxuto entra e
 /// não abre a tela inicial. Cair no login de novo, ou numa tela de erro, seria
 /// dizer que o acesso falhou quando ele funcionou.
-Rota? primeiraRotaPermitida(Set<String> permissoes) {
+Rota? primeiraRotaPermitida(Set<String> permissoes, {bool mobile = false}) {
+  // ⚠️ Card 9.2,64 (DECISÃO adotada): no CELULAR a primeira tela é a primeira
+  // da BARRA INFERIOR que a pessoa consegue abrir — Alunos, para o monitor. A
+  // ordem do menu levava todo mundo ao Dashboard, que não está na barra: o
+  // item "Mais" aparecia selecionado e a primeira tela era uma rolagem de
+  // contagens que não serve à jornada de quem está no laboratório. Decide a
+  // LARGURA, nunca o perfil (CLAUDE.md: o código verifica permissões, nunca
+  // perfis): a direção que abre o app no celular também cai na barra.
+  if (mobile) {
+    for (final id in idsBarraInferior) {
+      for (final rota in rotasAplicacao) {
+        if (rota.id == id && podeAbrir(rota, permissoes)) return rota;
+      }
+    }
+  }
   for (final rota in rotasAplicacao) {
     if (rota.noMenu && podeAbrir(rota, permissoes)) return rota;
   }

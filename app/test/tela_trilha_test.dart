@@ -382,22 +382,28 @@ void main() {
       );
       await montar(tester, paraAluno: aluno('al-3001'), repositorio: trilha);
 
-      expect(find.text('Estornar'), findsOneWidget);
-      expect(find.text(motivoSemMovimento), findsNothing); // desktop: tooltip
-      final botao = tester.widget<TextButton>(
+      // Card 9.2,64: o estorno mora no menu "⋮" do item entregue. Sem
+      // movimento vinculado o item do menu existe, DESABILITADO, e diz o
+      // motivo no lugar do rótulo.
+      await tester.tap(find.byTooltip('Mais ações da entrega'));
+      await tester.pumpAndSettle();
+      expect(find.text(motivoSemMovimento), findsOneWidget);
+      final item = tester.widget<PopupMenuItem<String>>(
         find.ancestor(
-          of: find.text('Estornar'),
-          matching: find.byType(TextButton),
+          of: find.text(motivoSemMovimento),
+          matching: find.byType(PopupMenuItem<String>),
         ),
       );
-      expect(botao.onPressed, isNull);
+      expect(item.enabled, isFalse);
     });
 
     testWidgets('o estorno pede motivo e chama a função', (tester) async {
       final trilha = TrilhaFalso.fixture();
       await montar(tester, paraAluno: aluno('al-3001'), repositorio: trilha);
 
-      await tester.tap(find.text('Estornar').first);
+      await tester.tap(find.byTooltip('Mais ações da entrega').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(rotuloEstornarEntrega).last);
       await tester.pumpAndSettle();
       expect(find.text('Estornar entrega'), findsOneWidget);
 
@@ -474,7 +480,11 @@ void main() {
     await montar(tester, paraAluno: aluno('al-3001'), permissoes: secretaria);
 
     expect(find.bySemanticsLabel('Registrar entrega'), findsWidgets);
-    expect(find.bySemanticsLabel('Estornar'), findsWidgets);
+    // O estorno está no menu (card 9.2,64): o botão do menu tem rótulo.
+    expect(
+      find.semantics.byPredicate((n) => n.tooltip == 'Mais ações da entrega'),
+      findsWidgets,
+    );
     handle.dispose();
   });
 

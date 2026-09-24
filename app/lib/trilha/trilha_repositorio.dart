@@ -19,6 +19,12 @@ abstract interface class TrilhaRepositorio {
   /// ver material, que a aba já barrou antes de chegar aqui).
   Future<List<ItemTrilha>> trilha(String alunoId);
 
+  /// `aluno_id` → nome do PRÓXIMO livro de cada aluno da unidade (card
+  /// 9.2,64): o cartão da lista do celular mostra a informação da jornada nº 1
+  /// do monitor. Uma consulta só, filtrando a coluna `proximo` de
+  /// `v_aluno_trilha` — a mesma definição da aba Trilha, nunca refeita aqui.
+  Future<Map<String, String>> proximosLivros();
+
   /// `fn_registrar_entrega`. [materialId] nulo = a próxima da trilha, que é o
   /// caminho do botão; informá-lo é a entrega fora de ordem, e o banco recusa
   /// com `MATERIAL_FORA_DA_TRILHA` o que não estiver pendente.
@@ -76,6 +82,17 @@ class TrilhaRepositorioSupabase implements TrilhaRepositorio {
         .eq('aluno_id', alunoId)
         .limit(1);
     return linhas.isEmpty ? null : RitmoAluno.deLinha(linhas.first);
+  }
+
+  @override
+  Future<Map<String, String>> proximosLivros() async {
+    final linhas = await _cliente
+        .from('v_aluno_trilha')
+        .select('aluno_id, material_nome')
+        .eq('proximo', true);
+    return {
+      for (final l in linhas) '${l['aluno_id']}': '${l['material_nome']}',
+    };
   }
 
   @override

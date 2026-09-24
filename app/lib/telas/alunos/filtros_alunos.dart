@@ -12,25 +12,61 @@ import '../../theme/tipografia.dart';
 /// filtro de **turma** entra na Fase 5 (nota do card 4.6). O estado mora no
 /// provider, não aqui.
 class FiltrosAlunos extends ConsumerStatefulWidget {
-  const FiltrosAlunos({super.key, required this.metodos, required this.combos});
+  const FiltrosAlunos({
+    super.key,
+    required this.metodos,
+    required this.combos,
+    this.comBusca = true,
+  });
 
   final List<Metodo> metodos;
   final List<Combo> combos;
+
+  /// Falso no celular, onde a busca fica fora da folha, sempre à vista
+  /// ([CampoBuscaAlunos], card 9.2,64).
+  final bool comBusca;
 
   @override
   ConsumerState<FiltrosAlunos> createState() => _FiltrosAlunosState();
 }
 
 class _FiltrosAlunosState extends ConsumerState<FiltrosAlunos> {
-  late final _busca = TextEditingController(
-    text: ref.read(filtroAlunosProvider).busca,
-  );
+  // ⚠️ Criado no `initState`, e não como `late final` preguiçoso (card
+  // 9.2,64): com a busca fora da folha (`comBusca: false`) o controlador nunca
+  // era lido no `build`, e o `dispose` o criava — com um `ref.read` num widget
+  // já desmontado, que o Riverpod recusa com StateError.
+  late final TextEditingController _busca;
+
+  @override
+  void initState() {
+    super.initState();
+    _busca = TextEditingController(text: ref.read(filtroAlunosProvider).busca);
+  }
 
   @override
   void dispose() {
     _busca.dispose();
     super.dispose();
   }
+
+  Widget _campo(FiltroAlunos filtro, FiltroAlunosNotifier controlador) =>
+      TextField(
+        controller: _busca,
+        style: Tipografia.corpo,
+        decoration: InputDecoration(
+          labelText: 'Nome ou código SGF',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: filtro.busca.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Limpar busca',
+                  icon: const Icon(Icons.clear),
+                  onPressed: () =>
+                      controlador.definir(filtro.copiar(busca: '')),
+                ),
+        ),
+        onChanged: (valor) => controlador.definir(filtro.copiar(busca: valor)),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -51,27 +87,8 @@ class _FiltrosAlunosState extends ConsumerState<FiltrosAlunos> {
       runSpacing: Dim.e8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        SizedBox(
-          width: 240,
-          child: TextField(
-            controller: _busca,
-            style: Tipografia.corpo,
-            decoration: InputDecoration(
-              labelText: 'Nome ou código SGF',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: filtro.busca.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Limpar busca',
-                      icon: const Icon(Icons.clear),
-                      onPressed: () =>
-                          controlador.definir(filtro.copiar(busca: '')),
-                    ),
-            ),
-            onChanged: (valor) =>
-                controlador.definir(filtro.copiar(busca: valor)),
-          ),
-        ),
+        if (widget.comBusca)
+          SizedBox(width: 240, child: _campo(filtro, controlador)),
         DropdownMenu<String>(
           // A chave força o menu a acompanhar o "Limpar filtros".
           key: ValueKey('metodo-${filtro.metodoId}'),
@@ -136,3 +153,54 @@ class _FiltrosAlunosState extends ConsumerState<FiltrosAlunos> {
     );
   }
 }
+
+/// A busca por nome ou código SGF sozinha — a que fica à vista no celular,
+/// acima do botão "Filtrar" (card 9.2,64, DECISÃO adotada). O mesmo estado de
+/// [FiltrosAlunos] (`filtroAlunosProvider`), então buscar aqui e limpar os
+/// filtros lá continuam sendo a mesma coisa.
+class CampoBuscaAlunos extends ConsumerStatefulWidget {
+  const CampoBuscaAlunos({super.key});
+
+  @override
+  ConsumerState<CampoBuscaAlunos> createState() => _CampoBuscaAlunosState();
+}
+
+class _CampoBuscaAlunosState extends ConsumerState<CampoBuscaAlunos> {
+  late final _busca = TextEditingController(
+    text: ref.read(filtroAlunosProvider).busca,
+  );
+
+  @override
+  void dispose() {
+    _busca.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(filtroAlunosProvider, (_, novo) {
+      if (_busca.text != novo.busca) _busca.text = novo.busca;
+    });
+    final filtro = ref.watch(filtroAlunosProvider);
+    final controlador = ref.read(filtroAlunosProvider.notifier);
+    return TextField(
+      controller: _busca,
+      style: Tipografia.corpo,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        labelText: rotuloBuscaAlunos,
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: filtro.busca.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Limpar busca',
+                icon: const Icon(Icons.clear),
+                onPressed: () => controlador.definir(filtro.copiar(busca: '')),
+              ),
+      ),
+      onChanged: (valor) => controlador.definir(filtro.copiar(busca: valor)),
+    );
+  }
+}
+
+const rotuloBuscaAlunos = 'Nome ou código SGF';

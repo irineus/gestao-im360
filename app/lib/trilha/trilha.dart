@@ -432,3 +432,7 @@ String? motivoParaEntregar({
   if (proxima == null) return motivoTrilhaVazia;
   return null;
 }
+
+/// O rótulo do próximo livro no cartão da lista e no cabeçalho da ficha
+/// (card 9.2,64).
+const rotuloProximoLivro = 'Próximo livro:';
