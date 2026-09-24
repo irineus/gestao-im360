@@ -244,6 +244,13 @@ Reexecutar o snapshot é **enviar o arquivo de novo**: nasce outro lote, e os to
 **o mesmo lote** duas vezes é recusado (`IMPORTACAO_JA_APLICADA`) — o histórico de tentativas é o que
 explica o que mudou entre uma carga e outra.
 
+**Guardas de estado (card 9.2,68, 24/09/2026).** `fn_importacao_validar` roda uma vez, dentro de
+`fn_importacao_registrar`: chamada de novo pelo PostgREST ela duplicava as ocorrências, inclusive em
+lote APLICADO — agora exige o conjunto da rota e recusa com `IMPORTACAO_JA_VALIDADA`.
+`fn_importacao_aplicar` lê o lote com `for update`: duas aplicações simultâneas do mesmo lote não
+correm mais juntas — a segunda espera e recebe `IMPORTACAO_JA_APLICADA`
+(`supabase/tests_concorrencia/importacao_aplicar_dupla.sh`).
+
 ### 5.3 O que a aplicação NÃO reescreve
 
 - **`status` de aluno que já existe.** Mudar status é transição: `tg_aluno_status_valida` a examina e
