@@ -55,6 +55,26 @@ void main() {
     );
   });
 
+  // Card 9.2,73: o elo que faltava. O banco não lê o fixture, então o pgTAP
+  // `012_catalogo_contratos` compara o que as funções levantam com uma lista
+  // própria; este teste amarra essa lista ao fixture. Com os dois, código
+  // novo no banco e esquecido aqui reprova — antes chegava à tela como o texto
+  // cru do Postgres.
+  test('a lista do pgTAP 012 é o fixture, código por código', () {
+    final sql = File('../supabase/tests/012_catalogo_contratos.sql')
+        .readAsStringSync()
+        .replaceAll(String.fromCharCode(13), '');
+    final inicio = sql.indexOf('-- <catalogo>');
+    final fim = sql.indexOf('-- </catalogo>');
+    expect(inicio, greaterThan(-1), reason: 'marca <catalogo> sumiu do 012');
+    expect(fim, greaterThan(inicio), reason: 'marca </catalogo> sumiu do 012');
+    final daLista = RegExp(r"'([A-Z0-9_]+)'")
+        .allMatches(sql.substring(inicio, fim))
+        .map((m) => m.group(1)!)
+        .toSet();
+    expect(daLista, codigos.toSet());
+  });
+
   test('o fixture não tem código repetido', () {
     expect(codigos.toSet().length, codigos.length);
   });

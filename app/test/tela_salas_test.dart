@@ -530,4 +530,17 @@ void main() {
     expect(find.text('cap. 4'), findsOneWidget);
     expect(find.text('Laboratório · 4/6 PCs operacionais'), findsOneWidget);
   });
+
+  // Card 9.2,73: o estado de erro da LISTA de salas (o de PCs já existia).
+  testWidgets('a lista de salas que FALHA diz que falhou (card 9.2,73)', (
+    tester,
+  ) async {
+    await montar(
+      tester,
+      repositorio: InfraestruturaFalso.fixture()
+        ..leiturasQueFalham.add('salas'),
+    );
+    expect(find.text('Tentar de novo'), findsWidgets);
+    expect(find.text('Laboratório 1'), findsNothing);
+  });
 }

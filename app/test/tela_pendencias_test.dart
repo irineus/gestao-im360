@@ -737,4 +737,27 @@ void main() {
     expect(find.textContaining('ALTA · aberta'), findsNothing);
     expect(find.textContaining('Aberta há 2 dias'), findsOneWidget);
   });
+
+  // Card 9.2,73: Pendências está na BARRA do monitor, e só tinha desktop.
+  group('390 px e erro (card 9.2,73)', () {
+    testWidgets('390 px: a central abre sem estouro', (tester) async {
+      await montar(tester, tamanho: const Size(390, 800));
+      expect(find.text('Aluno sem turma'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a central que FALHA diz que falhou — nunca "nenhuma '
+        'pendência"', (tester) async {
+      await montar(
+        tester,
+        pendencias: PendenciasFalso.fixture()
+          ..falhaAoLer = const ErroApp(
+            mensagem: 'Não foi possível falar com o servidor.',
+            traduzido: true,
+          ),
+      );
+      expect(find.text('Tentar de novo'), findsWidgets);
+      expect(find.text('Aluno sem turma'), findsNothing);
+    });
+  });
 }

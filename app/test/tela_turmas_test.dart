@@ -450,4 +450,10 @@ void main() {
     expect(find.byIcon(Icons.block), findsWidgets);
     expect(find.byType(BarraOcupacao), findsWidgets);
   });
+
+  // Card 9.2,73: Turmas está na BARRA do monitor; o mais estreito era 599.
+  testWidgets('390 px: a grade abre sem estouro (card 9.2,73)', (tester) async {
+    await montar(tester, tamanho: const Size(390, 800));
+    expect(tester.takeException(), isNull);
+  });
 }
