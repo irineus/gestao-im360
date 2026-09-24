@@ -195,6 +195,14 @@ versão da semana passada sem saber. `must-revalidate` faz cada pedido revalidar
 304, baratas), a borda do Cloudflare continua servindo, e o service worker do Flutter cuida do uso
 offline.
 
+⚠️ **Reavaliado no card 9.2,63 (24/09/2026) e mantido.** A nota do card pedia cache longo "só para o
+que tem hash/versão" (`canvaskit/`, fontes). Nenhum dos dois tem hash no nome: `canvaskit/canvaskit.wasm`
+e `assets/fonts/…` se chamam assim em toda versão do Flutter e do app, e um `immutable` neles faria
+a próxima atualização do Flutter servir o CanvasKit **velho** com o `main.dart.js` **novo** — o app
+não desenharia, sem erro legível. O custo do `must-revalidate` é um 304 por arquivo; o do erro seria
+tela branca para quem abriu o app na semana anterior. Fica como está até o build passar a pôr hash
+nos nomes.
+
 **CSP.** `script-src 'self' 'wasm-unsafe-eval'` (o `wasm-unsafe-eval` é o CanvasKit; sem ele o app
 não desenha), `worker-src 'self' blob:`, `style-src 'self' 'unsafe-inline'` (a engine injeta estilo
 inline), e `connect-src` restrito aos **dois hosts do Supabase**. Verificado em 01/09/2026 servindo

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/sessao/sessao.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/sessao/sessao_repositorio.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// A máquina de estados da sessão — o entregável central deste card.
 ///
@@ -189,4 +192,122 @@ void main() {
     expect(container.read(sessaoProvider), isA<SessaoAtiva>());
     expect(container.read(resumoUsuarioProvider)?.unidade, isNull);
   });
+
+  // -------------------------------------------------------------------------
+  // Card 9.2,63 — a sessão carregada UMA vez, e a mesma sessão não é mudança
+  // -------------------------------------------------------------------------
+  group('velocidade percebida (card 9.2,63)', () {
+    ProviderContainer comFluxo(
+      SessaoRepositorio repositorio,
+      Stream<AuthState> fluxo,
+    ) {
+      final container = ProviderContainer(
+        retry: semRetryAutomatico,
+        overrides: [
+          sessaoRepositorioProvider.overrideWithValue(repositorio),
+          fluxoAuthProvider.overrideWithValue(fluxo),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    test('o build e o initialSession que chega DURANTE a carga fazem UMA carga '
+        'só — medido: eram duas', () async {
+      final portao = Completer<void>();
+      final repositorio = _RepositorioComPortao(
+        const SessaoAtiva(_sessaoDirecao),
+        portao.future,
+      );
+      final eventos = StreamController<AuthState>();
+      addTearDown(eventos.close);
+      final container = comFluxo(repositorio, eventos.stream);
+
+      container.read(sessaoProvider);
+      eventos.add(AuthState(AuthChangeEvent.initialSession, null));
+      await Future<void>.delayed(Duration.zero);
+      portao.complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(repositorio.cargas, 1);
+      expect(container.read(sessaoProvider), isA<SessaoAtiva>());
+    });
+
+    test('tokenRefreshed não recarrega; signedIn recarrega', () async {
+      final repositorio = _RepositorioFalso(const SessaoAtiva(_sessaoDirecao));
+      final eventos = StreamController<AuthState>();
+      addTearDown(eventos.close);
+      final container = comFluxo(repositorio, eventos.stream);
+
+      container.read(sessaoProvider);
+      await Future<void>.delayed(Duration.zero);
+      expect(repositorio.cargas, 1);
+
+      eventos.add(AuthState(AuthChangeEvent.tokenRefreshed, null));
+      await Future<void>.delayed(Duration.zero);
+      expect(repositorio.cargas, 1, reason: 'renovar token não muda a sessão');
+
+      eventos.add(AuthState(AuthChangeEvent.signedIn, null));
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(repositorio.cargas, 2);
+    });
+
+    test('a MESMA sessão recarregada não notifica quem observa as permissões '
+        '— antes, o shell inteiro se reconstruía', () async {
+      final repositorio = _RepositorioFalso(const SessaoAtiva(_sessaoDirecao));
+      final container = _container(repositorio);
+      await container.read(sessaoProvider.notifier).recarregar();
+
+      var notificacoes = 0;
+      container.listen(permissoesProvider, (_, _) => notificacoes++);
+
+      // Objeto NOVO, com o mesmo conteúdo — é o que o banco devolve.
+      repositorio.estado = SessaoAtiva(
+        Sessao(
+          usuarioId: _sessaoDirecao.usuarioId,
+          nome: _sessaoDirecao.nome,
+          email: _sessaoDirecao.email,
+          unidadeId: _sessaoDirecao.unidadeId,
+          unidadeNome: _sessaoDirecao.unidadeNome,
+          permissoes: {..._sessaoDirecao.permissoes},
+        ),
+      );
+      await container.read(sessaoProvider.notifier).recarregar();
+      container.read(permissoesProvider);
+      expect(notificacoes, 0);
+
+      // E uma permissão a menos É mudança.
+      repositorio.estado = const SessaoAtiva(
+        Sessao(
+          usuarioId: '00000000-0000-0000-0000-000000000001',
+          nome: 'Direção',
+          email: 'irineus@gmail.com',
+          unidadeId: '00000000-0000-0000-0000-0000000000aa',
+          unidadeNome: 'Instituto Mix Charqueadas',
+          permissoes: {'admin.ler'},
+        ),
+      );
+      await container.read(sessaoProvider.notifier).recarregar();
+      // O provider derivado recalcula na leitura seguinte.
+      container.read(permissoesProvider);
+      expect(notificacoes, 1);
+    });
+  });
+}
+
+/// Repositório cuja carga só termina quando o teste abre o portão — é como se
+/// reproduz um evento do Auth chegando NO MEIO da carga.
+class _RepositorioComPortao extends _RepositorioFalso {
+  _RepositorioComPortao(super.estado, this.portao);
+
+  final Future<void> portao;
+
+  @override
+  Future<EstadoSessao> carregar() async {
+    cargas++;
+    await portao;
+    return estado;
+  }
 }

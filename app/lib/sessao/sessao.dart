@@ -30,6 +30,31 @@ class Sessao {
   final Set<String> permissoes;
 
   bool pode(String codigo) => permissoes.contains(codigo);
+
+  /// Igualdade por VALOR, com o conjunto comparado por conteúdo (card
+  /// 9.2,63): a mesma sessão recarregada — um `tokenRefreshed`, o evento
+  /// `initialSession` depois da carga do `build` — não pode virar estado
+  /// novo, senão o shell e ~70 widgets que observam as permissões se
+  /// reconstroem por nada.
+  @override
+  bool operator ==(Object other) =>
+      other is Sessao &&
+      other.usuarioId == usuarioId &&
+      other.nome == nome &&
+      other.email == email &&
+      other.unidadeId == unidadeId &&
+      other.unidadeNome == unidadeNome &&
+      setEquals(other.permissoes, permissoes);
+
+  @override
+  int get hashCode => Object.hash(
+    usuarioId,
+    nome,
+    email,
+    unidadeId,
+    unidadeNome,
+    Object.hashAllUnordered(permissoes),
+  );
 }
 
 /// Estado da sessão. É `sealed` de propósito: cada modo de falha tem uma tela,
@@ -79,6 +104,13 @@ class SessaoSemPerfil extends EstadoSessao {
   const SessaoSemPerfil(this.sessao);
 
   final Sessao sessao;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SessaoSemPerfil && other.sessao == sessao;
+
+  @override
+  int get hashCode => sessao.hashCode;
 }
 
 /// A carga da sessão falhou (rede, RLS inesperada). Distinta de deslogado:
@@ -96,6 +128,13 @@ class SessaoAtiva extends EstadoSessao {
   const SessaoAtiva(this.sessao);
 
   final Sessao sessao;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SessaoAtiva && other.sessao == sessao;
+
+  @override
+  int get hashCode => sessao.hashCode;
 }
 
 /// Permissões do estado atual — vazio quando não há sessão pronta.

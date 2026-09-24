@@ -25,6 +25,25 @@ void main() {
     // O teste roda com o diretório do pacote como raiz.
     final web = Directory('web');
 
+    // Card 9.2,63: a abertura não é mais uma página branca muda.
+    test(
+      'index.html diz a língua, a cor da barra e mostra que está abrindo',
+      () {
+        final html = File('${web.path}/index.html').readAsStringSync();
+        expect(html, contains('<html lang="pt-BR">'));
+        expect(html, contains('<meta name="theme-color" content="#171C26">'));
+        expect(html, contains('id="abrindo"'));
+        // O indicador tem de sumir SOZINHO quando o Flutter sobe, e sem script
+        // inline — a CSP (`script-src 'self'`) o bloquearia.
+        expect(html, contains('body:has(flutter-view) #abrindo'));
+        expect(
+          RegExp(r'<script(?![^>]*\ssrc=)').hasMatch(html),
+          isFalse,
+          reason: 'script inline seria bloqueado pela CSP',
+        );
+      },
+    );
+
     test('existe _headers', () {
       expect(File('${web.path}/_headers').existsSync(), isTrue);
     });
