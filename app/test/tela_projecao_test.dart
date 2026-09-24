@@ -11,6 +11,7 @@ import 'package:gestao_im360/pendencias/pendencias_provider.dart';
 import 'package:gestao_im360/widgets/barra_filtros.dart';
 import 'package:gestao_im360/projecao/projecao.dart';
 import 'package:gestao_im360/projecao/projecao_provider.dart';
+import 'package:gestao_im360/rotina/rotina.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/telas/projecao/tela_projecao.dart';
 import 'package:gestao_im360/theme/tema.dart';
@@ -475,5 +476,29 @@ void main() {
       );
       semantica.dispose();
     });
+  });
+
+  // Card 9.2,65: a direção recalcula a projeção na hora, do cabeçalho. O
+  // comportamento do botão está em recalcular_agora_test; aqui, só o lugar.
+  group('"Recalcular agora" no cabeçalho (card 9.2,65)', () {
+    for (final (nome, tamanho) in [
+      ('desktop', const Size(1400, 1000)),
+      ('390 px', const Size(390, 800)),
+    ]) {
+      testWidgets('$nome: aparece para quem tem parametros.gerir, e só para '
+          'quem tem', (tester) async {
+        await montar(
+          tester,
+          permissoes: {...comPendencias, permissaoRecalcular},
+          tamanho: tamanho,
+        );
+        expect(find.text(rotuloRecalcularAgora), findsOneWidget);
+        expect(tester.takeException(), isNull);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await montar(tester, tamanho: tamanho);
+        expect(find.text(rotuloRecalcularAgora), findsNothing);
+      });
+    }
   });
 }

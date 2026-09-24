@@ -242,6 +242,10 @@ select is(
             -- de rotina só se sustenta porque elas são definer e não têm grant
             -- para authenticated (C9).
             'rt_pcs_normaliza', 'rt_capacidades',
+            -- card 9.2,65 — a execução sob demanda: chama rt_diaria, que só o
+            -- postgres executa. Confere `parametros.gerir` com o token de quem
+            -- chama e roda SÓ a unidade dele (fn_unidade_atual() no corpo).
+            'fn_rotina_diaria_executar',
             -- card 6.5 — o trigger que fecha ESTOQUE_ZERO e COMPRA_SEM_ESTOQUE
             -- quando a compra chega. Ele dispara na transação de quem RECEBE
             -- (`compras.receber`) e precisa ler `pendencia` (`pendencias.ler`) e

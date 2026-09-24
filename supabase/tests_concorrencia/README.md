@@ -23,6 +23,7 @@ voz alta no log e no resumo da execução, em vez de passar calado.
 | `admissao_ultima_vaga.sh` ✅ | **5.3** (03/09/2026) | `fn_bloco_admitir` — duas admissões simultâneas no último lugar |
 | `entrega_ultimo_exemplar.sh` ✅ | **6.3** (04/09/2026) | `fn_registrar_entrega` — duas saídas simultâneas do mesmo material |
 | `admissao_turma_modular.sh` ✅ | **7.4,5** (05/09/2026) | `fn_turma_modular_admitir` — duas admissões simultâneas na única vaga da turma Modular |
+| `rotina_diaria_dupla.sh` ✅ | **9.2,65** (24/09/2026) | `fn_rotina_diaria_executar` / `rt_diaria` — duas execuções da rotina diária da mesma unidade: a segunda recebe `JA_EM_EXECUCAO` sem esperar (`pg_try_advisory_xact_lock`) |
 
 ## O que o primeiro script ensinou (card 5.3)
 
@@ -103,3 +104,15 @@ esta suíte junto com a pgTAP, em todo PR e antes de todo `db push` e de todo de
 máquina de quem desenvolve é opcional e usa exatamente os mesmos comandos — só depende de o daemon
 do Docker estar no ar, que é a condição de `supabase start` e portanto de toda a suíte do banco, não
 uma particularidade desta parte.
+
+## O que o quarto script ensinou (card 9.2,65, 24/09/2026)
+
+- **Trava que não espera se testa pelo que a segunda sessão DEVOLVE.** A rotina usa
+  `pg_try_advisory_xact_lock`: quem chega depois recebe `JA_EM_EXECUCAO` na hora. Na contraprova
+  (as duas funções sem o `try`), a segunda sessão esperou as travas de linha da primeira e devolveu
+  `EXECUTADA` — refez o trabalho inteiro por cima, e nenhuma contagem de linhas acusaria isso.
+- **As sessões entram na pele da direção, não no contexto de rotina**: o JWT é montado como
+  `postgres` (quem lê `auth.users`) e só depois a sessão faz `set role authenticated`.
+- **Uma terceira chamada, depois do fim da primeira, tem de rodar**: prova que a trava é de
+  transação (`_xact`) e não de sessão — uma trava de sessão presa numa conexão do pool travaria o
+  botão da direção para sempre.

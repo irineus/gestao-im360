@@ -1076,7 +1076,8 @@ select cron.schedule('gi_rotina_diaria', '10 6 * * *', $$ select rt_diaria(); $$
 > expediente.
 
 ```sql
-rt_diaria() → void          -- security definer; itera unidades ativas (§2.2) e chama, em ordem:
+rt_diaria(p_unidade uuid default null) → void  -- security definer; itera unidades ativas (§2.2)
+                            -- (ou só p_unidade) e chama, em ordem:
   rt_pcs_normaliza()        -- ✅ 5.4 — põe pc.status em dia com pc_manutencao, NAS DUAS DIREÇÕES
   rt_capacidades()          -- ✅ 5.4 — fn_revalidar_blocos_sala em todas as salas, mais a varredura
                             --    das pendências de bloco que deixou de ser ativo
@@ -1094,6 +1095,16 @@ dado corrompido não pode impedir o alerta de STANDBY das outras.
 
 `rt_pendencias_diaria` abre **e fecha**: toda pendência de tempo é reavaliada todo dia, então a
 lista nunca acumula item que já deixou de ser verdade.
+
+**Sob demanda e com trava (card 9.2,65, 24/09/2026).** `rt_diaria(p_unidade uuid default null)`:
+sem argumento (o cron) roda todas as unidades; com argumento, só aquela. Cada unidade começa com
+`pg_try_advisory_xact_lock(hashtext('rt_diaria'), hashtext(unidade))` — a unidade já em execução
+noutra sessão é **pulada**, com `NOTICE`, em vez de disputar o `delete`+`insert` de
+`demanda_projetada` e a foto mensal. A direção roda a da **sua** unidade na hora com
+`fn_rotina_diaria_executar() → text` (exige `parametros.gerir`; unidade da sessão, nunca de
+parâmetro; entra na lista do C8), que devolve `EXECUTADA` ou `JA_EM_EXECUCAO` — status legível,
+não erro. No app: "Recalcular agora" em Compras, Projeção e no resultado da Importação aplicada.
+A trava entre duas sessões é provada em `supabase/tests_concorrencia/rotina_diaria_dupla.sh`.
 
 ---
 
