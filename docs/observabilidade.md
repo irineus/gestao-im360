@@ -214,6 +214,10 @@ Sentry apontar para o banco, olhar o painel no mesmo dia.
 
 ## 9. O vigia também olha o backup (card 3.11 vigiado daqui)
 
+> ⚠️ **Desde 24/09/2026 o backup vigiado é o diário do Fulcrum** (`fulcrum-backups/gestaoim360/`,
+> limite de 48 h, cópia com ≥ 10 KB), e o `backup-semanal` está aposentado. Detalhe em
+> `docs/worker-vigia.md` §9 e `docs/backup-restauracao.md` §0; o texto abaixo é o registro do card.
+
 Acrescentado neste card, em `worker-vigia/src/vigia.js`: a execução diária do vigia confere a idade
 da cópia mais nova no bucket R2 `gestao-im360-backup`.
 

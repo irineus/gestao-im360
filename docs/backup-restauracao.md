@@ -2,8 +2,66 @@
 
 Fonte do backup, como `docs/worker-vigia.md` é a do vigia e `docs/ci-cd.md` a do pipeline.
 
-Entregáveis: `.github/workflows/backup-semanal.yml`, `backup/restaurar.sh` e
-`backup/conferir-restauracao.sh`.
+> ⚠️ **O `backup-semanal` foi aposentado.** O backup de produção é, desde 24/09/2026, o **diário
+> do Fulcrum**. O que vale hoje está no §0; do §1 ao §9 fica o registro do card 3.11 como ele foi
+> entregue — o raciocínio continua valendo para quem revisar o backup do Fulcrum, os caminhos e
+> nomes de arquivo, não.
+
+Entregáveis do card 3.11 (**removidos do repositório** na aposentadoria; estão no histórico do Git):
+`.github/workflows/backup-semanal.yml`, `backup/restaurar.sh`, `backup/conferir-restauracao.sh` e
+`backup/conferir-schema.sh`.
+
+---
+
+## 0. O que vale hoje (24/09/2026): o backup é o do Fulcrum
+
+| | Antes (`backup-semanal`, card 3.11) | Hoje (Fulcrum) |
+|---|---|---|
+| Onde roda | workflow deste repositório | [`irineus/fulcrum`](https://github.com/irineus/fulcrum), `.github/workflows/pg_dump_r2.yml` |
+| Frequência | domingo 06:30 (SP) | **todo dia 02:17 (SP)** — `17 5 * * *` UTC |
+| Destino | `r2://gestao-im360-backup/producao/<AAAA-MM-DD>/`, 4 arquivos em claro | `r2://fulcrum-backups/gestaoim360/gestaoim360-<AAAA-MM-DD>T<HHMM>Z.tar.gz.gpg`, **um objeto cifrado** (GPG simétrico, AES-256; a senha está no gerenciador de senhas de Irineu) |
+| Retenção | 12 cópias ≈ 3 meses, apagadas pelo workflow | **30 dias**, expiração do próprio bucket — execução que falha nunca apaga cópia boa |
+| Restauração conferida | toda semana, no mesmo job | **mensal** (`restore_check.yml`, dia 3, 06:43 UTC) e por `workflow_dispatch`; restauração completa de produção cronometrada em **107 s** (run [`36016161596`](https://github.com/irineus/fulcrum/actions/runs/36016161596), 24/09/2026) |
+| Procedimento de restauração | §5 abaixo | `docs/runbook.md` do Fulcrum — o §5 abaixo **não vale mais**: o arquivo agora é cifrado e empacotado |
+| Quem vigia a idade | o vigia, `gestao-im360-backup`, limite 9 dias | o vigia, `fulcrum-backups` prefixo `gestaoim360/`, **limite 48 h** (`worker-vigia/src/vigia.js`, `BACKUP`) |
+
+### O papel de segundo observador do vigia passou para o backup do Fulcrum
+
+O §1 registra o que o card 3.10 não deixou perder: o backup **também é o segundo observador do
+vigia**. O vigia mora no Cloudflare e *vigia que morre não avisa*; o backup roda em outra
+infraestrutura (GitHub) e fala com produção por outro caminho (Postgres pelo pooler, não PostgREST).
+
+Esse papel **não sumiu com o `backup-semanal`: passou para o dump diário do Fulcrum**, que tem as
+duas propriedades — roda no GitHub e conecta pelo Session pooler. Por isso:
+
+> ⚠️ Quando o workflow **`Backup` do Fulcrum** fica vermelho para o `gestaoim360`, a leitura não é
+> "o backup não saiu". É **"o backup não saiu **e** produção pode ter pausado"**. Confira as duas
+> coisas, nesta ordem: painel do Supabase de produção primeiro, log do workflow do Fulcrum depois.
+
+O observador ficou **mais forte**, não mais fraco: diário em vez de semanal. Continua só de
+produção, e continua sem ser um *dead man's switch* de verdade.
+
+O aviso de falha é o e-mail padrão do GitHub para workflow agendado que falha, e chega a quem
+alterou o cron por último **no repositório do Fulcrum** — hoje, Irineu.
+
+### O que se perdeu na troca, escrito para não se descobrir depois
+
+- **A comparação `schema.sql` × migrações de `main`** (§4, asserção 2), que denunciava tabela em
+  produção que não vem de migração nenhuma — SQL aplicado à mão. A conferência do Fulcrum compara
+  **contagem de linhas por tabela** entre o dump e o restaurado; ela prova que o backup restaura,
+  não que produção só tem o que o Git diz. Hoje nada no projeto faz essa comparação.
+- **Retenção de 3 meses para 30 dias.** O §3 argumentava que corrupção silenciosa não se descobre na
+  semana em que acontece. Com 30 cópias diárias há mais pontos de retorno, mas o mais antigo é mais
+  recente. Reavaliar no card 9.8 (§9, item 5), depois do cutover.
+- **Ensaio semanal para mensal.** Um backup que parou de restaurar leva até um mês para aparecer.
+
+### Enquanto a aposentadoria não termina
+
+O arquivo do workflow saiu de `develop`, mas o agendamento do GitHub roda a partir de `main`: até a
+promoção, é o `gh workflow disable` que o mantém parado. Ficam pendentes, e são de Irineu: os
+secrets `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` deste repositório (nenhum outro workflow os usa) e
+o destino do bucket `gestao-im360-backup`. As cópias nele são de antes do cutover, isto é, só dado
+de configuração — que as migrações recriam (§2).
 
 ---
 

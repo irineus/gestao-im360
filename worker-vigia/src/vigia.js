@@ -66,77 +66,84 @@ export const AMBIENTES = [
 export const CAMINHO_SONDA = '/rest/v1/parametro?select=chave&limit=1';
 
 /**
- * O backup semanal de produção (card 3.11), vigiado a partir daqui desde o card
- * 3.12.
+ * O backup DIÁRIO de produção, que desde 24/09/2026 é o do Fulcrum
+ * (`irineus/fulcrum`, `.github/workflows/pg_dump_r2.yml`) e não mais o
+ * `backup-semanal` do card 3.11, aposentado. Vigiado a partir daqui desde o
+ * card 3.12 — a vigilância trocou de bucket, não de razão.
  *
  * ⚠️ POR QUE ESTA VERIFICAÇÃO EXISTE, e ela é o oposto de zelo: o card 3.11
  * registrou um modo de falha silencioso do próprio backup — **o GitHub desativa
  * workflow agendado em repositório com 60 dias sem commit**, e o risco vira real
  * justamente quando o desenvolvimento parar, que é quando ninguém mais está
  * olhando o painel de Actions. O backup pararia de sair sem uma linha de aviso,
- * e a descoberta seria no dia em que ele fizesse falta. Quem vigia o vigia é
- * outra infraestrutura: o backup mora no GitHub, isto roda no Cloudflare.
+ * e a descoberta seria no dia em que ele fizesse falta. O Fulcrum mora no GitHub
+ * como o backup antigo morava, e nada no Fulcrum olha a idade do que ele mesmo
+ * publica. Quem vigia o vigia continua sendo outra infraestrutura: isto roda no
+ * Cloudflare.
  *
- * A idade sai do **prefixo de data da cópia**, não do `uploaded` do objeto: o
- * prefixo é a data do DUMP, e é essa que responde "quão velho é o dado que eu
+ * A idade sai do **carimbo no nome da cópia**, não do `uploaded` do objeto: o
+ * carimbo é a hora do DUMP, e é essa que responde "quão velho é o dado que eu
  * teria de volta". `uploaded` responde outra coisa — recopiar um backup velho o
  * deixaria novinho, e a idade mentiria exatamente na hora errada.
  */
 export const BACKUP = {
-  /** `s3://<bucket>/producao/YYYY-MM-DD/…` (backup-semanal.yml, "Publicar no R2"). */
-  prefixo: 'producao/',
+  /**
+   * `r2://fulcrum-backups/gestaoim360/gestaoim360-YYYY-MM-DDTHHMMZ.tar.gz.gpg`
+   * (Fulcrum, `backup/pg_dump_r2.sh`). Uma cópia é UM objeto, cifrado.
+   */
+  prefixo: 'gestaoim360/',
+  padrao: /^gestaoim360\/gestaoim360-(\d{4}-\d{2}-\d{2})T(\d{2})(\d{2})Z\.tar\.gz\.gpg$/,
   /**
    * Asserção POSITIVA, pela mesma razão que a sonda não se contenta com "não
-   * deu erro": prefixo que existe passaria com a pasta vazia. `data.sql.gz` é
-   * a razão de o backup existir — o card 3.11 anota que dump de schema sem dado
-   * é o jeito mais comum de um backup ser inútil — e o MANIFESTO é o que o
-   * workflow escreve por último a mais, marcando cópia completa.
+   * deu erro": o vigia não tem a senha e não abre a cópia, então o que ele pode
+   * afirmar é que ela tem corpo. Medido em 24/09/2026: 0,1 MB com produção só
+   * com dado de configuração — um décimo disso é upload truncado, não backup.
+   * Que o conteúdo restaura é o `restore_check` mensal do Fulcrum que diz.
    */
-  exigidos: ['data.sql.gz', 'MANIFESTO.txt'],
+  tamanhoMinimoBytes: 10 * 1024,
   /**
-   * O backup é semanal (domingo). Em operação normal a cópia mais nova tem no
-   * máximo 7 dias; 9 dá folga para uma execução atrasada sem alarme falso e
-   * ainda denuncia a PRIMEIRA semana perdida, em vez de esperar a segunda.
+   * O backup é diário (05:17 UTC) e o vigia roda às 09:00 UTC: em operação
+   * normal a cópia mais nova tem ~4 h. Uma execução perdida e uma execução que
+   * atrasou para depois das 09:00 dão a MESMA idade (~28 h) — daqui não se
+   * distinguem, e alertar nas duas é alarme falso no dia em que o agendador do
+   * GitHub atrasa. 48 h passa uma e denuncia a segunda seguida (~52 h).
    */
-  idadeMaximaDias: 9,
+  idadeMaximaHoras: 48,
 };
 
 /**
- * Decide sobre o backup a partir da lista de chaves. Pura de propósito: é o que
- * permite exercitar bucket vazio, cópia incompleta e cópia velha sem R2 nenhum.
+ * Decide sobre o backup a partir da lista de objetos (`{ key, size }`). Pura de
+ * propósito: é o que permite exercitar bucket vazio, cópia truncada e cópia
+ * velha sem R2 nenhum.
  */
-export function avaliarBackup(chaves, opcoes = {}) {
-  const { quando = new Date(), idadeMaximaDias = BACKUP.idadeMaximaDias } = opcoes;
+export function avaliarBackup(objetos, opcoes = {}) {
+  const { quando = new Date(), idadeMaximaHoras = BACKUP.idadeMaximaHoras } = opcoes;
 
-  const porData = new Map();
-  for (const chave of chaves) {
-    const partes = /^producao\/(\d{4}-\d{2}-\d{2})\/(.+)$/.exec(chave);
+  const copias = [];
+  for (const objeto of objetos) {
+    const partes = BACKUP.padrao.exec(objeto.key);
     if (!partes) continue;
-    if (!porData.has(partes[1])) porData.set(partes[1], new Set());
-    porData.get(partes[1]).add(partes[2]);
+    const [, dia, hora, minuto] = partes;
+    copias.push({ data: `${dia}T${hora}:${minuto}Z`, instante: Date.parse(`${dia}T${hora}:${minuto}:00Z`), size: objeto.size });
   }
 
-  if (porData.size === 0) {
-    return { ok: false, motivo: 'o bucket não tem nenhuma cópia em `producao/`' };
+  if (copias.length === 0) {
+    return { ok: false, motivo: `o bucket não tem nenhuma cópia em \`${BACKUP.prefixo}\`` };
   }
 
-  // Prefixos são datas ISO, então ordem alfabética é ordem cronológica — a
-  // mesma propriedade de que a retenção do card 3.11 depende.
-  const data = [...porData.keys()].sort().at(-1);
-  const arquivos = porData.get(data);
-  const idadeDias = Math.floor((quando.getTime() - Date.parse(`${data}T00:00:00Z`)) / 86400000);
+  const { data, instante, size } = copias.reduce((a, b) => (b.instante > a.instante ? b : a));
+  const idadeHoras = Math.floor((quando.getTime() - instante) / 3600000);
 
-  const faltando = BACKUP.exigidos.filter((nome) => !arquivos.has(nome));
-  if (faltando.length) {
-    return { ok: false, data, idadeDias, motivo: `a cópia de ${data} está incompleta: falta ${faltando.join(', ')}` };
+  if (!(size >= BACKUP.tamanhoMinimoBytes)) {
+    return { ok: false, data, idadeHoras, motivo: `a cópia de ${data} está incompleta: ${size ?? '?'} bytes (mínimo: ${BACKUP.tamanhoMinimoBytes})` };
   }
-  if (idadeDias < 0) {
-    return { ok: false, data, idadeDias, motivo: `a cópia mais nova é de ${data}, uma data no futuro` };
+  if (instante > quando.getTime()) {
+    return { ok: false, data, idadeHoras, motivo: `a cópia mais nova é de ${data}, uma data no futuro` };
   }
-  if (idadeDias > idadeMaximaDias) {
-    return { ok: false, data, idadeDias, motivo: `a cópia mais nova é de ${data}, ${idadeDias} dias atrás (limite: ${idadeMaximaDias})` };
+  if (idadeHoras > idadeMaximaHoras) {
+    return { ok: false, data, idadeHoras, motivo: `a cópia mais nova é de ${data}, ${idadeHoras} h atrás (limite: ${idadeMaximaHoras} h)` };
   }
-  return { ok: true, data, idadeDias };
+  return { ok: true, data, idadeHoras };
 }
 
 /**
@@ -153,19 +160,19 @@ export async function conferirBackup(env, opcoes = {}) {
   if (!balde) {
     return {
       ok: false,
-      motivo: 'o binding R2 `BACKUP` não existe neste Worker — ver worker-vigia/wrangler.toml e docs/backup-restauracao.md §6',
+      motivo: 'o binding R2 `BACKUP` não existe neste Worker — ver worker-vigia/wrangler.toml e docs/backup-restauracao.md',
     };
   }
 
   try {
-    const chaves = [];
+    const objetos = [];
     let cursor;
     do {
       const pagina = await balde.list({ prefix: BACKUP.prefixo, limit: 1000, cursor });
-      for (const objeto of pagina.objects ?? []) chaves.push(objeto.key);
+      for (const objeto of pagina.objects ?? []) objetos.push({ key: objeto.key, size: objeto.size });
       cursor = pagina.truncated ? pagina.cursor : undefined;
     } while (cursor);
-    return avaliarBackup(chaves, opcoes);
+    return avaliarBackup(objetos, opcoes);
   } catch (erro) {
     return { ok: false, motivo: `não consegui ler o bucket: ${erro?.message ?? erro}` };
   }
@@ -300,7 +307,7 @@ export function montarAlerta(falhas, quando = new Date(), backup = null) {
   }
 
   if (backupRuim) {
-    linhas.push('── backup semanal de produção');
+    linhas.push('── backup diário de produção (Fulcrum)');
     linhas.push(`   ${backup.motivo}`);
     linhas.push('');
   }
@@ -318,16 +325,19 @@ export function montarAlerta(falhas, quando = new Date(), backup = null) {
 
   if (backupRuim) {
     linhas.push('O que verificar no backup, nesta ordem:');
-    linhas.push('1. O workflow `backup-semanal` foi DESATIVADO? O GitHub desliga');
+    linhas.push('1. O workflow `Backup` do Fulcrum foi DESATIVADO? O GitHub desliga');
     linhas.push('   workflow agendado em repositório com 60 dias sem commit, e não');
     linhas.push('   avisa — é o modo de falha que este aviso existe para pegar.');
-    linhas.push('   Actions → backup-semanal → Enable workflow.');
-    linhas.push('2. A última execução ficou vermelha? O log diz em que passo parou;');
-    linhas.push('   dump reprovado NÃO é publicado, de propósito (card 3.11).');
-    linhas.push('3. O bucket ou os segredos do R2 mudaram? docs/backup-restauracao.md §6.');
+    linhas.push('   https://github.com/irineus/fulcrum/actions/workflows/pg_dump_r2.yml');
+    linhas.push('   → Enable workflow.');
+    linhas.push('2. A última execução ficou vermelha? Dump que falha não sobe cópia');
+    linhas.push('   nenhuma — e dump que falha pode ser PRODUÇÃO PAUSADA: painel do');
+    linhas.push('   Supabase primeiro, log do workflow depois.');
+    linhas.push('3. O bucket `fulcrum-backups` ou o token do R2 mudaram?');
+    linhas.push('   docs/backup-restauracao.md e o runbook do Fulcrum.');
     linhas.push('');
-    linhas.push('Um `workflow_dispatch` do backup-semanal resolve a semana corrente;');
-    linhas.push('só não resolve a causa, e a causa volta no domingo seguinte.');
+    linhas.push('Um `workflow_dispatch` do Backup do Fulcrum resolve o dia corrente;');
+    linhas.push('só não resolve a causa, e a causa volta na madrugada seguinte.');
     linhas.push('');
   }
 
@@ -368,7 +378,7 @@ export function resumir(resultados, backup = null) {
     .join(' — ');
   if (!backup) return sondas;
   const dito = backup.ok
-    ? `backup: ok (cópia de ${backup.data}, ${backup.idadeDias} dia(s))`
+    ? `backup: ok (cópia de ${backup.data}, ${backup.idadeHoras} h)`
     : `backup: FALHOU (${backup.motivo})`;
   return `${sondas} — ${dito}`;
 }

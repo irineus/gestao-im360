@@ -10,7 +10,7 @@ rodado em lugar nenhum** — portão que não reprova é exatamente a falha que 
 
 ---
 
-## 1. Os cinco workflows
+## 1. Os quatro workflows (eram cinco até 24/09/2026)
 
 | Workflow | Dispara | Jobs | O que bloqueia |
 |---|---|---|---|
@@ -18,9 +18,12 @@ rodado em lugar nenhum** — portão que não reprova é exatamente a falha que 
 | **`db-migrations.yml`** | push em `develop`/`main` tocando `supabase/migrations/**`, `supabase/functions/**` ou `supabase/config.toml`; `workflow_dispatch` | `testes` (chama o de cima) → `migrate` (`db push` e, desde o card 4.7, `functions deploy --use-api` logo depois) | o `supabase db push` e a publicação das Edge Functions em dev e em prod |
 | **`deploy-web.yml`** | push em `develop`/`main` tocando `app/**`, `assets/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação no Cloudflare Pages |
 | **`deploy-worker-vigia.yml`** | push em **`main`** tocando `worker-vigia/**` ou os próprios workflows; `workflow_dispatch` | `testes` → `publicar` | a publicação do Worker vigia (card 3.10) |
-| **`backup-semanal.yml`** | `schedule` domingo 09:30 UTC (06:30 em São Paulo); `workflow_dispatch` | `backup` (dump de produção → ensaio de restauração → R2) | nada — não é portão, é rotina (card 3.11) |
+| ~~**`backup-semanal.yml`**~~ | ~~`schedule` domingo 09:30 UTC (06:30 em São Paulo); `workflow_dispatch`~~ | ~~`backup` (dump de produção → ensaio de restauração → R2)~~ | **aposentado em 24/09/2026**: o backup de produção é o diário do Fulcrum (`docs/backup-restauracao.md` §0) |
 
-O `backup-semanal` é o único que **não chama a suíte** e o único **sem `environment`**, e as duas
+⚠️ **Aposentado.** O parágrafo abaixo é o registro do card 3.11 e explica por que o backup do Fulcrum
+também não passa por aprovação humana.
+
+O `backup-semanal` era o único que **não chama a suíte** e o único **sem `environment`**, e as duas
 coisas são decisão: ele não bloqueia entrega nenhuma, e é o único workflow que só **lê** produção.
 Posto atrás do *required reviewer* do environment `prod`, ele ficaria em `waiting` todo domingo à
 espera de um clique que ninguém dá no fim de semana — e backup que espera aprovação é backup que não
@@ -255,9 +258,10 @@ teria de entrar nas Redirect URLs do Auth. Implementado o que o 3.8 decidiu — 
 | Secret do repositório | `SUPABASE_ANON_KEY_PROD` | sonda do vigia no projeto prod (card 3.10) | ✅ criado 02/09/2026 |
 | Secret do repositório | `RESEND_API_KEY` | e-mail de alerta do vigia (card 3.10) | ✅ criado 02/09/2026 (chave `gestao-im360-vigia`, *Sending access*) |
 | Token do Cloudflare | permissão *Workers Scripts — Edit* | `wrangler deploy` do vigia (card 3.10) | ✅ acrescentada ao token `gestao-im360` em 02/09/2026 — editar o token **não muda o valor**, então o secret continuou valendo |
-| Cloudflare R2 | bucket `gestao-im360-backup` | destino do backup semanal (card 3.11) | ⚠️ falta criar |
-| Secret do repositório | `R2_ACCESS_KEY_ID` | `aws s3` contra o R2 (card 3.11) | ⚠️ falta criar |
-| Secret do repositório | `R2_SECRET_ACCESS_KEY` | idem — só aparece uma vez, na criação | ⚠️ falta criar |
+| Cloudflare R2 | bucket `gestao-im360-backup` | destino do backup semanal (card 3.11) | criado 02/09/2026; **sem uso desde a aposentadoria do `backup-semanal` (24/09/2026)** — destino a decidir por Irineu |
+| Secret do repositório | `R2_ACCESS_KEY_ID` | `aws s3` contra o R2 (card 3.11) | criado 02/09/2026; **sem uso desde 24/09/2026 — remover** |
+| Secret do repositório | `R2_SECRET_ACCESS_KEY` | idem — só aparece uma vez, na criação | criado 02/09/2026; **sem uso desde 24/09/2026 — remover** |
+| Cloudflare R2 | bucket `fulcrum-backups`, na **mesma conta** do Worker vigia | o vigia lê `gestaoim360/` para conferir a idade do backup do Fulcrum | ⚠️ confirmar a conta antes de promover |
 
 | Painel do Cloudflare Pages | *Production branch* de `gestao-im360-homolog` = `develop` | sem isso o deploy do CI vira **preview** e o endereço público não muda (card 3.9,5) | ⚠️ falta configurar |
 | Painel do Cloudflare Pages | *Production branch* de `gestao-im360` = `main` | idem, em produção | ⚠️ falta configurar |

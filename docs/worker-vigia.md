@@ -17,7 +17,7 @@ O vigia faz essa requisição e, com a **mesma** requisição, vigia:
 |---|---|
 | **Mantém acordado** | um `select` por dia em cada um dos dois projetos conta como atividade |
 | **Vigia** | se a resposta não for a esperada, manda e-mail |
-| **Confere o backup** | desde o card 3.12: a cópia mais nova no R2 tem no máximo 9 dias e está completa (§9) |
+| **Confere o backup** | desde o card 3.12; desde 24/09/2026 o backup é o diário do Fulcrum: a cópia mais nova em `fulcrum-backups/gestaoim360/` tem no máximo 48 h e tem corpo (§9) |
 
 As duas metades não são funcionalidades separadas empilhadas por conveniência. Elas se verificam:
 **se o `select` diário não estiver evitando a pausa, quem descobre é o próprio vigia**, no dia em que
@@ -224,7 +224,11 @@ Primeira execução agendada: **03/09/2026, 06:00** em São Paulo.
   saiu **e** produção pode ter pausado"). ✅ **E o inverso passou a valer em 02/09/2026 (card 3.12):**
   o vigia confere a idade do backup (§9), então os dois observadores agora olham um para o outro —
   o que fecha o modo de falha silencioso que o backup tinha (o GitHub desativa workflow agendado em
-  repositório com 60 dias sem commit).
+  repositório com 60 dias sem commit). ⚠️ **Desde 24/09/2026 o `backup-semanal` está aposentado e o
+  segundo observador é o dump diário do Fulcrum** (`irineus/fulcrum`, workflow `Backup`): também roda
+  no GitHub, também conecta pelo pooler, e a falha dele para o `gestaoim360` lê-se do mesmo jeito —
+  "o backup não saiu **e** produção pode ter pausado" (`docs/backup-restauracao.md` §0). O vigia olha
+  a idade dele (§9), então os dois continuam olhando um para o outro.
 - **Sem estado**: sem aviso de recuperação, sem "há N dias assim", sem silenciar temporariamente.
 - **A eficácia contra a pausa não foi verificada** — só se verifica não pausando durante sete dias.
   O que existe é a decisão do plano e, principalmente, o fato de que o próprio vigia denuncia se ela
@@ -245,7 +249,20 @@ Primeira execução agendada: **03/09/2026, 06:00** em São Paulo.
 
 ---
 
-## 9. Vigilância do backup semanal (card 3.12, 02/09/2026)
+## 9. Vigilância do backup (card 3.12, 02/09/2026; bucket trocado em 24/09/2026)
+
+> ⚠️ **Desde 24/09/2026 o vigia olha o backup do Fulcrum**, não mais o `backup-semanal`
+> (aposentado — `docs/backup-restauracao.md` §0). O que mudou, e por quê:
+>
+> | | Antes | Agora |
+> |---|---|---|
+> | Bucket | `gestao-im360-backup`, prefixo `producao/` | `fulcrum-backups`, prefixo `gestaoim360/` — **na mesma conta Cloudflare do Worker**, senão o deploy recusa |
+> | Idade | do prefixo `producao/YYYY-MM-DD/` | do carimbo no nome, `gestaoim360-YYYY-MM-DDTHHMMZ.tar.gz.gpg` — mesma razão: é a hora do dump |
+> | Asserção positiva | `data.sql.gz` e `MANIFESTO.txt` presentes | o objeto tem **≥ 10 KB** (medido: 0,1 MB). A cópia é cifrada e o vigia não tem a senha; quem prova que ela restaura é o `restore_check` mensal do Fulcrum |
+> | Limite | 9 dias (backup semanal) | **48 h** (backup diário, 05:17 UTC; vigia às 09:00 UTC). Um dia perdido e um dump atrasado para depois das 09:00 dão os dois ≈ 28 h e daqui não se distinguem; 48 h passa um e denuncia o segundo dia seguido (≈ 52 h) |
+> | Causa provável no e-mail | *Actions → backup-semanal → Enable workflow* | o link do workflow `Backup` do Fulcrum → *Enable workflow* |
+>
+> O texto abaixo é o registro do card 3.12.
 
 A execução diária confere a idade da cópia mais nova no bucket R2 `gestao-im360-backup`, pelo binding
 `BACKUP` declarado em `worker-vigia/wrangler.toml`.

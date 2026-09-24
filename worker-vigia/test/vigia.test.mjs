@@ -36,31 +36,33 @@ const semEspera = { dormir: async () => {}, esperaMs: 0 };
 /** Data fixa: o vigia roda 09:00 UTC = 06:00 em São Paulo. */
 const AGORA = new Date('2026-09-02T09:00:00Z');
 
-/** Chaves de uma cópia completa naquela data. */
-const copia = (data) =>
-  ['roles.sql.gz', 'schema.sql.gz', 'data.sql.gz', 'MANIFESTO.txt'].map(
-    (nome) => `producao/${data}/${nome}`,
-  );
+/**
+ * Uma cópia do Fulcrum carimbada naquele instante (`YYYY-MM-DDTHHMMZ`), com o
+ * tamanho medido em 24/09/2026 (0,1 MB) a menos que se diga outro.
+ */
+const copia = (carimbo, size = 100 * 1024) => [
+  { key: `gestaoim360/gestaoim360-${carimbo}.tar.gz.gpg`, size },
+];
 
 /** Bucket R2 de mentira, com a paginação que o `list` de verdade tem. */
-function baldeFalso(chaves, { porPagina = 1000, quebrar = null } = {}) {
+function baldeFalso(objetos, { porPagina = 1000, quebrar = null } = {}) {
   return {
     async list({ cursor } = {}) {
       if (quebrar) throw quebrar;
       const inicio = cursor ? Number(cursor) : 0;
-      const fatia = chaves.slice(inicio, inicio + porPagina);
+      const fatia = objetos.slice(inicio, inicio + porPagina);
       const fim = inicio + fatia.length;
       return {
-        objects: fatia.map((key) => ({ key })),
-        truncated: fim < chaves.length,
+        objects: fatia,
+        truncated: fim < objetos.length,
         cursor: String(fim),
       };
     },
   };
 }
 
-/** Backup saudável: cópia de anteontem, completa. */
-const backupBom = { balde: baldeFalso(copia('2026-08-31')), quando: AGORA };
+/** Backup saudável: a cópia desta madrugada (05:17 UTC), com corpo. */
+const backupBom = { balde: baldeFalso(copia('2026-09-02T0517Z')), quando: AGORA };
 
 function resposta(status, corpo) {
   return { status, ok: status >= 200 && status < 300, text: async () => corpo };
@@ -251,7 +253,8 @@ test('scheduled fica vermelho quando alguma sonda reprova', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Vigilância do backup semanal — card 3.12
+// Vigilância do backup de produção — card 3.12; desde 24/09/2026 o backup
+// vigiado é o diário do Fulcrum (`r2://fulcrum-backups/gestaoim360/`).
 //
 // O que estes testes protegem é o modo de falha que o card 3.11 registrou sobre
 // o PRÓPRIO backup: o GitHub desativa workflow agendado em repositório com 60
@@ -260,11 +263,11 @@ test('scheduled fica vermelho quando alguma sonda reprova', async () => {
 // painel de Actions.
 // ---------------------------------------------------------------------------
 
-test('backup: cópia recente e completa passa', () => {
-  const r = avaliarBackup(copia('2026-08-31'), { quando: AGORA });
+test('backup: cópia desta madrugada, com corpo, passa', () => {
+  const r = avaliarBackup(copia('2026-09-02T0517Z'), { quando: AGORA });
   assert.equal(r.ok, true);
-  assert.equal(r.data, '2026-08-31');
-  assert.equal(r.idadeDias, 2);
+  assert.equal(r.data, '2026-09-02T05:17Z');
+  assert.equal(r.idadeHoras, 3);
 });
 
 test('backup: bucket vazio REPROVA', () => {
@@ -276,43 +279,55 @@ test('backup: bucket vazio REPROVA', () => {
 });
 
 test('backup: cópia velha REPROVA, nomeando a data e o limite', () => {
-  const r = avaliarBackup(copia('2026-08-01'), { quando: AGORA });
+  const r = avaliarBackup(copia('2026-08-01T0517Z'), { quando: AGORA });
   assert.equal(r.ok, false);
-  assert.equal(r.idadeDias, 32);
-  assert.match(r.motivo, /2026-08-01/);
-  assert.match(r.motivo, /limite: 9/);
+  assert.equal(r.idadeHoras, 771);
+  assert.match(r.motivo, /2026-08-01T05:17Z/);
+  assert.match(r.motivo, /limite: 48 h/);
 });
 
-test('backup: 9 dias passa, 10 reprova — o limite é o limite', () => {
-  assert.equal(avaliarBackup(copia('2026-08-24'), { quando: AGORA }).ok, true, '9 dias');
-  assert.equal(avaliarBackup(copia('2026-08-23'), { quando: AGORA }).ok, false, '10 dias');
+test('backup: 48 h passa, 49 reprova — o limite é o limite', () => {
+  assert.equal(avaliarBackup(copia('2026-08-31T0900Z'), { quando: AGORA }).ok, true, '48 h');
+  assert.equal(avaliarBackup(copia('2026-08-31T0800Z'), { quando: AGORA }).ok, false, '49 h');
 });
 
-test('backup: cópia INCOMPLETA reprova, ainda que seja de hoje', () => {
+test('backup: cópia TRUNCADA reprova, ainda que seja de hoje', () => {
   // A asserção é positiva pela mesma razão que a sonda não aceita qualquer 200:
-  // prefixo que existe passaria com a pasta vazia, e `data.sql.gz` é a razão de
-  // o backup existir — dump de schema sem dado é o jeito mais comum de um
-  // backup ser inútil (card 3.11).
-  const semDado = ['producao/2026-09-02/schema.sql.gz', 'producao/2026-09-02/MANIFESTO.txt'];
-  const r = avaliarBackup(semDado, { quando: AGORA });
+  // a chave existir passaria com um objeto vazio. O vigia não abre a cópia (não
+  // tem a senha), então o que ele afirma é que ela tem corpo.
+  const r = avaliarBackup(copia('2026-09-02T0517Z', 312), { quando: AGORA });
   assert.equal(r.ok, false);
   assert.match(r.motivo, /incompleta/);
-  assert.match(r.motivo, /data\.sql\.gz/);
+  assert.match(r.motivo, /312 bytes/);
+});
+
+test('backup: objeto sem tamanho reprova, em vez de passar por não saber', () => {
+  const r = avaliarBackup([{ key: 'gestaoim360/gestaoim360-2026-09-02T0517Z.tar.gz.gpg' }], { quando: AGORA });
+  assert.equal(r.ok, false);
+  assert.match(r.motivo, /incompleta/);
 });
 
 test('backup: a cópia MAIS NOVA é que manda, mesmo com velhas no bucket', () => {
-  const chaves = [...copia('2026-06-01'), ...copia('2026-07-01'), ...copia('2026-08-31')];
-  const r = avaliarBackup(chaves, { quando: AGORA });
+  // Inclusive fora de ordem na listagem: a decisão é pelo carimbo, não pela posição.
+  const objetos = [...copia('2026-08-01T0517Z'), ...copia('2026-09-02T0517Z'), ...copia('2026-09-01T0517Z')];
+  const r = avaliarBackup(objetos, { quando: AGORA });
   assert.equal(r.ok, true);
-  assert.equal(r.data, '2026-08-31');
+  assert.equal(r.data, '2026-09-02T05:17Z');
 });
 
 test('backup: chave fora do padrão é ignorada, não confundida com cópia', () => {
-  const r = avaliarBackup(['producao/', 'lixo.txt', 'producao/rascunho/x', ...copia('2026-08-31')], {
-    quando: AGORA,
-  });
+  // Arquivo SEM cifra (`.tar.gz`) não é cópia do Fulcrum — e sozinho no bucket,
+  // tem de reprovar, não passar.
+  const estranhos = [
+    { key: 'gestaoim360/', size: 0 },
+    { key: 'gestaoim360/manifest.txt', size: 50_000 },
+    { key: 'gestaoim360/gestaoim360-2026-09-02T0600Z.tar.gz', size: 50_000 },
+    { key: 'gestaoim360/entrelares-2026-09-02T0600Z.tar.gz.gpg', size: 50_000 },
+  ];
+  const r = avaliarBackup([...estranhos, ...copia('2026-09-02T0517Z')], { quando: AGORA });
   assert.equal(r.ok, true);
-  assert.equal(r.data, '2026-08-31');
+  assert.equal(r.data, '2026-09-02T05:17Z');
+  assert.equal(avaliarBackup(estranhos, { quando: AGORA }).ok, false);
 });
 
 test('backup: sem o binding R2, REPROVA — e não lança', async () => {
@@ -333,15 +348,15 @@ test('backup: R2 fora do ar REPROVA com o motivo, sem lançar', async () => {
   assert.match(r.motivo, /R2 indisponível/);
 });
 
-test('backup: a listagem pagina — 12 cópias não cabem numa página de 3', async () => {
+test('backup: a listagem pagina — a cópia mais nova pode estar na última página', async () => {
   // `list` do R2 devolve no máximo 1000 por página e sinaliza `truncated`.
   // Parar na primeira página faria a cópia mais nova sumir da conta e o alerta
-  // disparar sozinho toda semana, que é como se aprende a ignorá-lo.
-  const datas = ['2026-06-14', '2026-06-21', '2026-08-31'];
-  const chaves = datas.flatMap(copia);
-  const r = await conferirBackup({ BACKUP: baldeFalso(chaves, { porPagina: 3 }) }, { quando: AGORA });
+  // disparar sozinho todo dia, que é como se aprende a ignorá-lo.
+  const carimbos = ['2026-08-28T0517Z', '2026-08-29T0517Z', '2026-08-30T0517Z', '2026-09-02T0517Z'];
+  const objetos = carimbos.flatMap((c) => copia(c));
+  const r = await conferirBackup({ BACKUP: baldeFalso(objetos, { porPagina: 3 }) }, { quando: AGORA });
   assert.equal(r.ok, true);
-  assert.equal(r.data, '2026-08-31');
+  assert.equal(r.data, '2026-09-02T05:17Z');
 });
 
 test('backup ruim com Supabase de pé: alerta próprio, e a execução fica vermelha', async () => {
@@ -354,7 +369,7 @@ test('backup ruim com Supabase de pé: alerta próprio, e a execução fica verm
   const r = await executar(AMBIENTE_COMPLETO, {
     buscar,
     ...semEspera,
-    balde: baldeFalso(copia('2026-01-01')),
+    balde: baldeFalso(copia('2026-01-01T0517Z')),
     quando: AGORA,
   });
 
@@ -368,6 +383,8 @@ test('backup ruim com Supabase de pé: alerta próprio, e a execução fica verm
   const corpo = JSON.parse(email[0].opcoes.body);
   assert.match(corpo.subject, /backup de produção não está saindo/);
   assert.match(corpo.text, /Enable workflow/, 'o e-mail tem de dizer a causa mais provável');
+  assert.match(corpo.text, /irineus\/fulcrum\/actions\/workflows\/pg_dump_r2\.yml/, 'e onde clicar');
+  assert.doesNotMatch(corpo.text, /backup-semanal/, 'o workflow aposentado não é mais causa de nada');
 });
 
 test('alerta com os dois problemas cabe num envelope só', () => {
@@ -378,19 +395,19 @@ test('alerta com os dois problemas cabe num envelope só', () => {
   };
   const { assunto, texto } = montarAlerta([falha], AGORA, {
     ok: false,
-    motivo: 'a cópia mais nova é de 2026-01-01, 244 dias atrás (limite: 9)',
+    motivo: 'a cópia mais nova é de 2026-01-01T05:17Z, 5859 h atrás (limite: 48 h)',
   });
 
   assert.match(assunto, /produção/);
   assert.match(assunto, /backup está atrasado/);
   assert.match(texto, /HTTP 540/);
-  assert.match(texto, /244 dias atrás/);
+  assert.match(texto, /5859 h atrás/);
 });
 
-test('o limite do backup cobre a semana perdida, não a atrasada', () => {
-  // 7 dias é a operação normal (semanal). O limite tem de dar folga para uma
-  // execução atrasada sem alarme falso E denunciar a PRIMEIRA semana perdida,
-  // em vez de esperar a segunda.
-  assert.ok(BACKUP.idadeMaximaDias > 7, 'abaixo disso, alarme falso toda semana');
-  assert.ok(BACKUP.idadeMaximaDias < 14, 'acima disso, uma semana perdida passa batida');
+test('o limite do backup cobre o segundo dia perdido, não o atraso', () => {
+  // Dump às 05:17 UTC, vigia às 09:00 UTC: operação normal ≈ 4 h. Um dia
+  // perdido e um dump atrasado para depois das 09:00 dão os dois ≈ 28 h e daqui
+  // não se distinguem; dois dias perdidos dão ≈ 52 h.
+  assert.ok(BACKUP.idadeMaximaHoras > 28, 'abaixo disso, alarme falso quando o agendador atrasa');
+  assert.ok(BACKUP.idadeMaximaHoras < 52, 'acima disso, dois dias seguidos sem backup passam batidos');
 });
