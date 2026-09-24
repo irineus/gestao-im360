@@ -284,10 +284,13 @@ class _LinhaNumero extends StatelessWidget {
     if (valor == 0) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: Dim.e4 / 2),
+        // Cinza do tema SEM transparência (card 9.2,72): com alpha 0,75 o
+        // contraste caía para 2,96 — abaixo dos 4,5 do WCAG AA —, medido pelo
+        // teste de diretrizes. Segundo plano é tamanho, altura e falta de alvo.
         child: Text(
           texto,
           style: Tipografia.numero(Tipografia.apoio)
-              .copyWith(color: cores.onSurfaceVariant.withValues(alpha: 0.75)),
+              .copyWith(color: cores.onSurfaceVariant),
         ),
       );
     }

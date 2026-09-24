@@ -52,4 +52,15 @@ void main() {
     expect(find.text('XPTO'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('o leitor de tela ouve o status UMA vez (card 9.2,72)', (
+    tester,
+  ) async {
+    // Antes: "Status ATIVO ATIVO" — o rótulo do Semantics e o texto do filho.
+    final semantica = tester.ensureSemantics();
+    await montar(tester, 'ATIVO');
+    expect(find.bySemanticsLabel('Status ATIVO'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'ATIVO.*ATIVO')), findsNothing);
+    semantica.dispose();
+  });
 }

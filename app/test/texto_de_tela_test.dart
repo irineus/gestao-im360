@@ -48,6 +48,17 @@ void main() {
     });
   });
 
+  test('interpolação com aspas dentro não fecha o literal (card 9.2,72)', () {
+    // O `_csv` da importação: sem pular o `${…}`, a aspa de dentro fechava o
+    // literal cedo e o COMENTÁRIO da linha de baixo virava texto de tela.
+    final literais = _literais(
+      "final x = '\"\${valor.replaceAll('\"', '\"\"')}\"';\n"
+      '// card 9.2,65 — comentário, não texto\n',
+    );
+    expect(literais, hasLength(1));
+    expect(literais.single.texto, '"\$"');
+  });
+
   group('jargão interno em texto de usuário', () {
     // A secretaria não sabe o que é um card do board nem o que é
     // `turmas.ler`. Referência a card envelhece junto com o board; código de
@@ -58,16 +69,23 @@ void main() {
     // tela e nada no portão (item C1). Agora `card` seguido de dígito **ou**
     // de interpolação reprova.
     final referenciaACard = RegExp(r'card (\d|\$)', caseSensitive: false);
+    // Card 9.2,72: "Fase N" chegava à tela ("A trilha do aluno nasce do combo
+    // na matrícula (Fase 6).") e o portão não via — é o mesmo vocabulário de
+    // board que a referência a card.
+    final referenciaAFase = RegExp(r'\bFase \d');
     final codigoDePermissao = RegExp(r'`[a-z_]+\.[a-z_]+`');
 
-    test('nenhum literal em lib/telas/ cita card do board ou permissão', () {
+    // Card 9.2,72: `lib/` inteiro, e não só `lib/telas/` — texto de tela mora
+    // também em lib/widgets, lib/erros e nos arquivos de domínio
+    // (`rotuloSituacao` em lib/trilha, as mensagens do catálogo de erros).
+    test('nenhum literal em lib/ cita card do board, fase ou permissão', () {
       final achados = <String>[];
       literaisPorArquivo.forEach((arquivo, literais) {
-        if (!arquivo.contains('/telas/')) return;
         for (final l in literais) {
           final citaCard = referenciaACard.hasMatch(l.texto);
+          final citaFase = referenciaAFase.hasMatch(l.texto);
           final citaPermissao = codigoDePermissao.hasMatch(l.texto);
-          if (citaCard || citaPermissao) {
+          if (citaCard || citaFase || citaPermissao) {
             achados.add('$arquivo:${l.linha}  "${l.texto}"');
           }
         }
@@ -142,6 +160,35 @@ List<_Literal> _literais(String fonte) {
           buffer.write(fonte[i + 1]);
           avancar();
           avancar();
+          continue;
+        }
+        // Card 9.2,72: interpolação `${…}` pode conter ASPAS — o `_csv` da
+        // importação tem `'"${valor.replaceAll('"', '""')}"'`. Sem pular o
+        // bloco inteiro, a aspa de dentro fechava o literal cedo e o resto do
+        // arquivo virava "texto" (um comentário com "card 9.2,65" reprovou
+        // assim). O bloco entra no buffer como `$`, que é o que a regra de
+        // referência a card procura.
+        if (fonte[i] == r'$' && i + 1 < n && fonte[i + 1] == '{') {
+          buffer.write(r'$');
+          avancar();
+          avancar();
+          var profundidade = 1;
+          while (i < n && profundidade > 0) {
+            final d = fonte[i];
+            if (d == "'" || d == '"') {
+              final interna = d;
+              avancar();
+              while (i < n && fonte[i] != interna) {
+                if (fonte[i] == r'\' && i + 1 < n) avancar();
+                avancar();
+              }
+              if (i < n) avancar();
+              continue;
+            }
+            if (d == '{') profundidade++;
+            if (d == '}') profundidade--;
+            avancar();
+          }
           continue;
         }
         buffer.write(fonte[i]);

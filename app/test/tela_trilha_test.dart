@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -146,7 +148,7 @@ void main() {
       // A entregue traz a data; a próxima traz o saldo informativo; a pendente
       // não traz nem uma coisa nem outra.
       expect(find.textContaining('entregue 07/04/2026'), findsOneWidget);
-      expect(find.textContaining('próxima · est. 1'), findsOneWidget);
+      expect(find.textContaining('próxima · 1 em estoque'), findsOneWidget);
     });
 
     testWidgets('o cabeçalho conta entregues e pendentes', (tester) async {
@@ -279,7 +281,7 @@ void main() {
       // é fn_registrar_entrega, e ela reordena (card 2.6 decisão 2).
       final trilha = TrilhaFalso.fixture();
       await montar(tester, paraAluno: aluno('al-3004'), repositorio: trilha);
-      expect(find.textContaining('próxima · est. 0'), findsOneWidget);
+      expect(find.textContaining('próxima · 0 em estoque'), findsOneWidget);
 
       await entregar(tester);
       expect(trilha.chamadas, contains('registrarEntrega'));
@@ -520,6 +522,18 @@ void main() {
       await montar(tester, paraAluno: aluno('al-3001'), repositorio: trilha);
       expect(find.text(semRitmoAinda), findsOneWidget);
       expect(find.textContaining('0 dias'), findsNothing);
+    });
+
+    testWidgets('enquanto o ritmo carrega, nenhum texto provisório '
+        '(card 9.2,72)', (tester) async {
+      // Antes: "calculando o ritmo…" ficava segundos na tela.
+      final trilha = TrilhaFalso.fixture()..esperaRitmo = Completer<void>();
+      await montar(tester, paraAluno: aluno('al-3001'), repositorio: trilha);
+      expect(find.textContaining('calculando'), findsNothing);
+      expect(find.text(semRitmoAinda), findsNothing);
+      expect(find.text('01 Informática Essencial 1'), findsWidgets);
+      trilha.esperaRitmo!.complete();
+      await carregar(tester);
     });
 
     testWidgets('erro na leitura do ritmo NÃO vira "sem ritmo ainda"', (

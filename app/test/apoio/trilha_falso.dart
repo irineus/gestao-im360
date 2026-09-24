@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:gestao_im360/trilha/trilha.dart';
 import 'package:gestao_im360/trilha/trilha_repositorio.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -210,9 +212,14 @@ class TrilhaFalso implements TrilhaRepositorio {
   /// prova que a região tem os três estados.
   Object? falhaAoLerRitmo;
 
+  /// Segura a leitura do ritmo — o estado de carregando (card 9.2,72).
+  Completer<void>? esperaRitmo;
+
   @override
   Future<RitmoAluno?> ritmo(String alunoId) async {
     chamadas.add('ritmo');
+    final espera = esperaRitmo;
+    if (espera != null) await espera.future;
     final falha = falhaAoLerRitmo ?? falhaAoLer;
     if (falha != null) throw falha;
     return ritmos[alunoId];
