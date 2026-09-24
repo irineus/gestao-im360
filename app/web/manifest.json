@@ -1,12 +1,20 @@
 {
+    "id": "/",
     "name": "Gestão IM360",
     "short_name": "IM360",
-    "start_url": ".",
+    "description": "Gestão IM360 — gestão de alunos, turmas, vagas e material didático",
+    "lang": "pt-BR",
+    "dir": "ltr",
+    "start_url": "/",
+    "scope": "/",
     "display": "standalone",
+    "orientation": "any",
     "background_color": "#171C26",
     "theme_color": "#171C26",
-    "description": "Gestão IM360 — gestão de alunos, turmas, vagas e material didático",
-    "orientation": "portrait-primary",
+    "categories": [
+        "education",
+        "productivity"
+    ],
     "prefer_related_applications": false,
     "icons": [
         {

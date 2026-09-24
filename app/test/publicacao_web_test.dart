@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -90,5 +91,81 @@ void main() {
         reason: 'regra curinga em _redirects engole os assets do build',
       );
     });
+  });
+
+  // Card 10.1 (24/09/2026): o PWA instalável. O manifest é lido pelo navegador
+  // na instalação e nunca mais — erro aqui não aparece em tela nenhuma, aparece
+  // como app que não se oferece para instalar, que abre de lado, ou que vira
+  // "outro app" (id novo) depois de uma mudança de start_url.
+  group('manifest do PWA', () {
+    final manifest = jsonDecode(
+      File('web/manifest.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
+
+    test('identidade estável: id, escopo e início na raiz', () {
+      // `id` explícito: sem ele o navegador deriva a identidade do start_url,
+      // e mudar o start_url um dia faria o app instalado virar outro app.
+      expect(manifest['id'], '/');
+      expect(manifest['start_url'], '/');
+      expect(manifest['scope'], '/');
+      expect(manifest['display'], 'standalone');
+    });
+
+    test('pt-BR, nome e orientação livre', () {
+      expect(manifest['lang'], 'pt-BR');
+      expect(manifest['name'], 'Gestão IM360');
+      expect((manifest['short_name'] as String).length, lessThanOrEqualTo(12));
+      // A secretaria usa o desktop deitado, o monitor o celular em pé; travar
+      // em `portrait-primary` (o padrão do template) deitava o tablet de lado.
+      expect(manifest['orientation'], 'any');
+    });
+
+    test('cores da identidade visual, e a barra igual à do index.html', () {
+      // grafite-900, o fundo do símbolo (docs/identidade-visual.md).
+      expect(manifest['theme_color'], '#171C26');
+      expect(manifest['background_color'], '#171C26');
+      final index = File('web/index.html').readAsStringSync();
+      expect(
+        index,
+        contains(
+          '<meta name="theme-color" content="${manifest['theme_color']}">',
+        ),
+        reason: 'o meta do 9.2,63 e o manifest têm de dizer a mesma cor',
+      );
+      expect(index, contains('<html lang="pt-BR">'));
+    });
+
+    test(
+      'ícones 192 e 512, comuns e maskable, existem e têm o tamanho dito',
+      () {
+        final icones = (manifest['icons'] as List).cast<Map<String, dynamic>>();
+        for (final proposito in [null, 'maskable']) {
+          final tamanhos = icones
+              .where((i) => i['purpose'] == proposito)
+              .map((i) => i['sizes'])
+              .toSet();
+          expect(
+            tamanhos,
+            containsAll(['192x192', '512x512']),
+            reason: '$proposito',
+          );
+        }
+        for (final icone in icones) {
+          final bytes = File('web/${icone['src']}').readAsBytesSync();
+          // PNG: largura e altura nos bytes 16..23, big-endian.
+          int palavra(int i) =>
+              (bytes[i] << 24) |
+              (bytes[i + 1] << 16) |
+              (bytes[i + 2] << 8) |
+              bytes[i + 3];
+          expect(
+            '${palavra(16)}x${palavra(20)}',
+            icone['sizes'],
+            reason: '${icone['src']}',
+          );
+          expect(icone['type'], 'image/png');
+        }
+      },
+    );
   });
 }
