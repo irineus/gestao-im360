@@ -5,6 +5,8 @@ import '../../config/ambiente.dart';
 import '../../erros/erro_app.dart';
 import '../../importacao/importacao.dart';
 import '../../importacao/importacao_provider.dart';
+import '../../rotina/rotina.dart';
+import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../util/datas.dart';
@@ -13,6 +15,7 @@ import '../../util/texto.dart';
 import '../../widgets/botoes.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
+import '../../widgets/recalcular_agora.dart';
 import '../../widgets/tabela_im360.dart';
 import 'textos_importacao.dart';
 
@@ -600,6 +603,20 @@ class _TelaImportacaoState extends ConsumerState<TelaImportacao> {
           aplicado ? textoTotaisAplicados : textoTotaisSimulados,
           style: Tipografia.apoio,
         ),
+        // Card 9.2,65: aplicada a importação, projeção, pedido sugerido e
+        // pendências só existiam depois da rotina da madrugada. Sem
+        // `parametros.gerir` a faixa inteira some — o texto sem o botão seria
+        // uma promessa que a pessoa não pode cumprir.
+        if (aplicado &&
+            ref.watch(permissoesProvider).contains(permissaoRecalcular)) ...[
+          const SizedBox(height: Dim.e12),
+          const Text(textoRecalcularDepoisDeAplicar, style: Tipografia.apoio),
+          const SizedBox(height: Dim.e8),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: BotaoRecalcularAgora(nivel: NivelBotao.secundario),
+          ),
+        ],
         const SizedBox(height: Dim.e8),
         SizedBox(
           height: _alturaTabela,

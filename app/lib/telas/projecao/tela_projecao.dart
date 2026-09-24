@@ -18,6 +18,7 @@ import '../../widgets/barra_filtros.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
 import '../../widgets/painel_detalhe.dart';
+import '../../widgets/recalcular_agora.dart';
 import '../../widgets/tabela_im360.dart';
 import 'painel_celula.dart';
 
@@ -327,15 +328,18 @@ class _Cabecalho extends StatelessWidget {
         children: [
           Icon(Icons.update_outlined, size: 16, color: cores.onSurfaceVariant),
           const SizedBox(width: Dim.e8),
-          // `Flexible`, e não largura fixa: em 390 px a frase da projeção sem
+          // `Expanded`, e não largura fixa: em 390 px a frase da projeção sem
           // carimbo ocupa três linhas, e sem isto ela estoura a `Row`
-          // (design-system §11, item 19).
-          Flexible(
+          // (design-system §11, item 19). Expandido para o botão ficar na
+          // borda direita (card 9.2,65).
+          Expanded(
             child: Text(
               texto,
               style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
             ),
           ),
+          const SizedBox(width: Dim.e8),
+          const BotaoRecalcularAgora(),
         ],
       ),
     );

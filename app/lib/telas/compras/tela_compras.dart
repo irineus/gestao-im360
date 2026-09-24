@@ -20,6 +20,7 @@ import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
 import '../../widgets/painel_detalhe.dart';
 import '../../widgets/painel_mobile.dart';
+import '../../widgets/recalcular_agora.dart';
 import '../../widgets/tabela_im360.dart';
 import 'formularios.dart';
 import 'painel_pedido.dart';
@@ -344,15 +345,20 @@ class _CarimboDaProjecao extends ConsumerWidget {
         children: [
           Icon(Icons.update_outlined, size: 16, color: cores.onSurfaceVariant),
           const SizedBox(width: Dim.e8),
-          // `Flexible`, e não largura fixa: em 390 px a frase da projeção não
+          // `Expanded`, e não largura fixa: em 390 px a frase da projeção não
           // calculada ocupa três linhas, e sem isto ela estoura a `Row`
-          // (a mesma família do item 19 do design-system §11).
-          Flexible(
+          // (a mesma família do item 19 do design-system §11). Expandido, e
+          // não só flexível, para o botão ficar na borda direita (card 9.2,65).
+          Expanded(
             child: Text(
               texto,
               style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
             ),
           ),
+          // Card 9.2,65: depois de uma importação a direção não precisa mais
+          // esperar a madrugada. Sem `parametros.gerir`, não é renderizado.
+          const SizedBox(width: Dim.e8),
+          const BotaoRecalcularAgora(),
         ],
       ),
     );

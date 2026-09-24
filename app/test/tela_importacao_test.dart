@@ -5,6 +5,7 @@ import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/importacao/importacao.dart';
 import 'package:gestao_im360/importacao/importacao_provider.dart';
+import 'package:gestao_im360/rotina/rotina.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/telas/importacao/tela_importacao.dart';
 import 'package:gestao_im360/telas/importacao/textos_importacao.dart';
@@ -55,6 +56,7 @@ void main() {
     String? conteudoDoArquivo = arquivoDeTeste,
     bool seletorDisponivel = true,
     Size tamanho = const Size(1400, 1000),
+    Set<String> permissoes = permissoesDirecao,
   }) async {
     final falso = repositorio ?? ImportacaoFalso(totais: totaisDeTeste);
     tester.view.physicalSize = tamanho;
@@ -74,7 +76,7 @@ void main() {
                     conteudo: conteudoDoArquivo,
                   ),
           ),
-          permissoesProvider.overrideWithValue(permissoesDirecao),
+          permissoesProvider.overrideWithValue(permissoes),
           unidadeAtualProvider.overrideWithValue('unidade-teste'),
         ],
         child: MaterialApp(
@@ -464,6 +466,51 @@ void main() {
         ),
         findsNothing,
       );
+    });
+  });
+
+  // Card 9.2,65: aplicada a importação, a direção não espera a madrugada para
+  // ver projeção, pedido sugerido e pendências. O comportamento do botão está
+  // em recalcular_agora_test; aqui, o lugar e a guarda.
+  group('"Recalcular agora" depois de aplicar (card 9.2,65)', () {
+    Future<void> aplicarNaTela(WidgetTester tester) async {
+      await escolherArquivoNaTela(tester);
+      await validarNaTela(tester);
+      await tocar(tester, find.text('Simular'));
+      expect(
+        find.text(textoRecalcularDepoisDeAplicar),
+        findsNothing,
+        reason: 'simulação não grava nada: não há o que recalcular',
+      );
+      await tocar(tester, find.textContaining('Aplicar em'));
+      await tocar(tester, find.text('Aplicar agora'));
+      expect(find.text(textoTotaisAplicados), findsOneWidget);
+    }
+
+    for (final (nome, tamanho) in [
+      ('desktop', const Size(1400, 1000)),
+      ('390 px', const Size(390, 800)),
+    ]) {
+      testWidgets('$nome: com parametros.gerir, a frase e o botão aparecem '
+          'junto dos totais aplicados', (tester) async {
+        await montar(
+          tester,
+          tamanho: tamanho,
+          permissoes: {...permissoesDirecao, permissaoRecalcular},
+        );
+        await aplicarNaTela(tester);
+        expect(find.text(textoRecalcularDepoisDeAplicar), findsOneWidget);
+        expect(find.text(rotuloRecalcularAgora), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('sem parametros.gerir a faixa inteira some — o texto sem o '
+        'botão seria uma promessa', (tester) async {
+      await montar(tester);
+      await aplicarNaTela(tester);
+      expect(find.text(textoRecalcularDepoisDeAplicar), findsNothing);
+      expect(find.text(rotuloRecalcularAgora), findsNothing);
     });
   });
 }
