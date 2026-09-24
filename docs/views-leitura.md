@@ -979,6 +979,14 @@ parecer um ajuste sem dono (a armadilha da pendência 9.13). O teste `061` asser
 perfil a perfil e a igualdade **soma do painel = saldo**, e as duas foram **vistas vermelhas** com o
 `join` do pedido convertido em interno.
 
+**O "quem" dos históricos (card 9.2,74, 24/09/2026 — pendência 9.13(a) fechada).** O embed
+`usuario:usuario_id(nome)` e o `left join usuario` de `v_material_movimento` devolviam **nulo**
+para quem não tem `admin.ler`. Agora o nome sai de `fn_usuarios_nomes()` — definer, **só id e
+nome** dos usuários da unidade de quem chama (decisão de Irineu; e-mail e perfis continuam sob a
+política de `usuario`). `v_material_movimento` faz `left join fn_usuarios_nomes()`; o app troca os
+embeds do histórico de status e do checklist de certificado por `nomesDaUnidade` +
+`comNomes` (`app/lib/sessao/nomes_usuarios.dart`), no mesmo formato do embed antigo.
+
 ⚠️ **`v_aluno_trilha` nasceu em 04/09/2026** (`20260904233000_view_aluno_trilha.sql`, card 6.6), e
 duas coisas dela valem para as duas que faltam. **(a) Ela não recopia número nenhum:** `proximo`
 repete o critério de `fn_trilha_proximo_material` como janela (a função responde por um aluno; a

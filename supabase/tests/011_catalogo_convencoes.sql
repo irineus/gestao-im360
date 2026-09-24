@@ -255,6 +255,10 @@ select is(
             -- Agrega entregas de todos os alunos do método: exige
             -- parametros.ler e filtra a unidade de quem chama no corpo.
             'fn_ritmo_metodo_observado',
+            -- card 9.2,74 — SÓ id e nome dos usuários da unidade de quem chama,
+            -- para o "quem" dos históricos (a política de usuario continua
+            -- admin.ler ou a própria pessoa para o resto das colunas).
+            'fn_usuarios_nomes',
             -- card 6.5 — o trigger que fecha ESTOQUE_ZERO e COMPRA_SEM_ESTOQUE
             -- quando a compra chega. Ele dispara na transação de quem RECEBE
             -- (`compras.receber`) e precisa ler `pendencia` (`pendencias.ler`) e
