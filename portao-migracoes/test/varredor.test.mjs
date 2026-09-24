@@ -9,14 +9,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { join, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import {
   varrerSql,
   varrerConjunto,
   listarMigracoes,
   TABELAS_PERMITIDAS,
+  ehPrincipal,
 } from '../varredor.mjs';
 
 const CASOS = fileURLToPath(new URL('./casos/', import.meta.url));
@@ -200,4 +202,28 @@ end $$;`;
   ]);
 
   assert.equal(rel.aprovado, true, JSON.stringify(barradas(rel), null, 2));
+});
+
+// ---------------------------------------------------------------------------
+// Card 9.2,76 (pendência 9.20): o portão SAÍA 0 SEM VARRER NADA no Windows.
+// A comparação `import.meta.url === 'file://' + argv[1]` nunca casava lá
+// (`file:///C:/…` contra `C:\…`), e o bloco que chama `principal` não rodava.
+// ---------------------------------------------------------------------------
+test('ehPrincipal reconhece o próprio script, em qualquer sistema', () => {
+  const caminho = resolve('portao-migracoes/varredor.mjs');
+  assert.equal(ehPrincipal(pathToFileURL(caminho).href, caminho), true);
+  assert.equal(ehPrincipal(pathToFileURL(caminho).href, resolve('outro.mjs')), false);
+  assert.equal(ehPrincipal(pathToFileURL(caminho).href, undefined), false);
+});
+
+test('o CLI de verdade VARRE e reprova — nunca sai 0 calado', () => {
+  // Um diretório só com um caso que tem de reprovar: se o bloco principal não
+  // rodasse, o processo sairia 0 sem imprimir nada, que é o defeito medido.
+  const aqui = fileURLToPath(new URL('.', import.meta.url));
+  const script = join(aqui, '..', 'varredor.mjs');
+  const r = spawnSync(process.execPath, [script, join(aqui, 'casos', 'reprova-auth-users.sql')], {
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 1, `saiu ${r.status}: ${r.stdout}${r.stderr}`);
+  assert.match(r.stdout + r.stderr, /reprova-auth-users/);
 });

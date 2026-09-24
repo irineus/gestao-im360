@@ -9,8 +9,8 @@ import '../../theme/tipografia.dart';
 
 /// Barra de filtros da lista de alunos (design-system §5.3): busca por nome
 /// ou código SGF, método, status, combo e o chip que esconde os terminais. O
-/// filtro de **turma** entra na Fase 5 (nota do card 4.6). O estado mora no
-/// provider, não aqui.
+/// filtro de **turma**, previsto para a Fase 5 (nota do card 4.6), não entrou —
+/// a coluna Turmas da lista cumpre esse papel. O estado mora no provider.
 class FiltrosAlunos extends ConsumerStatefulWidget {
   const FiltrosAlunos({
     super.key,

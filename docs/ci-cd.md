@@ -255,12 +255,12 @@ teria de entrar nas Redirect URLs do Auth. Implementado o que o 3.8 decidiu — 
 | Secret do repositório | `SUPABASE_ANON_KEY_PROD` | sonda do vigia no projeto prod (card 3.10) | ✅ criado 02/09/2026 |
 | Secret do repositório | `RESEND_API_KEY` | e-mail de alerta do vigia (card 3.10) | ✅ criado 02/09/2026 (chave `gestao-im360-vigia`, *Sending access*) |
 | Token do Cloudflare | permissão *Workers Scripts — Edit* | `wrangler deploy` do vigia (card 3.10) | ✅ acrescentada ao token `gestao-im360` em 02/09/2026 — editar o token **não muda o valor**, então o secret continuou valendo |
-| Cloudflare R2 | bucket `gestao-im360-backup` | destino do backup semanal (card 3.11) | ⚠️ falta criar |
-| Secret do repositório | `R2_ACCESS_KEY_ID` | `aws s3` contra o R2 (card 3.11) | ⚠️ falta criar |
-| Secret do repositório | `R2_SECRET_ACCESS_KEY` | idem — só aparece uma vez, na criação | ⚠️ falta criar |
+| Cloudflare R2 | bucket `gestao-im360-backup` | destino do backup semanal (card 3.11) | ✅ criado 02/09/2026 (backup-restauracao.md §9, item 1) |
+| Secret do repositório | `R2_ACCESS_KEY_ID` | `aws s3` contra o R2 (card 3.11) | ✅ criado 02/09/2026 |
+| Secret do repositório | `R2_SECRET_ACCESS_KEY` | idem — só aparece uma vez, na criação | ✅ criado 02/09/2026 |
 
-| Painel do Cloudflare Pages | *Production branch* de `gestao-im360-homolog` = `develop` | sem isso o deploy do CI vira **preview** e o endereço público não muda (card 3.9,5) | ⚠️ falta configurar |
-| Painel do Cloudflare Pages | *Production branch* de `gestao-im360` = `main` | idem, em produção | ⚠️ falta configurar |
+| Painel do Cloudflare Pages | *Production branch* de `gestao-im360-homolog` = `develop` | sem isso o deploy do CI vira **preview** e o endereço público não muda (card 3.9,5) | ✅ configurado — o `deploy-web` de `develop` fecha verde com a asserção do 3.9,5, que reprovaria sem ele (conferido no card 9.2,76) |
+| Painel do Cloudflare Pages | *Production branch* de `gestao-im360` = `main` | idem, em produção | ✅ configurado (registrado como feito na revisão de 24/09/2026; a mesma asserção reprovaria o `deploy-web` de `main`) |
 
 ⚠️ As duas últimas linhas **não são secrets** e por isso são as mais fáceis de esquecer: nada no
 GitHub as menciona, e o `deploy-web` ficava verde sem elas. Desde o card 3.9,5 não fica mais — a

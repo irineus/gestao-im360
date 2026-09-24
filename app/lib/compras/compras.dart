@@ -10,7 +10,7 @@
 /// `imediata + projetada + mínimo − saldo − pendente`, com piso zero, e quem a
 /// calcula é a view (docs/views-leitura.md §6). Uma segunda soma em Dart
 /// divergiria no dia em que a parcela projetada deixasse de ser zero — que é
-/// exatamente o que o card 8.2 vai fazer.
+/// exatamente o que o card 8.2 fez.
 library;
 
 import 'package:flutter/foundation.dart';

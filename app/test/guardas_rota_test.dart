@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/rotas/roteador.dart';
 import 'package:gestao_im360/rotas/rotas.dart';
 
 /// Card 2.8 §9.1: cada uma das rotas do card 2.4 §6 abre com o conjunto mínimo
@@ -274,6 +275,17 @@ void main() {
     final trilha = rotasGuardadas.firstWhere((r) => r.id == 'aluno_trilha');
     final alunos = rotasGuardadas.firstWhere((r) => r.id == 'alunos');
     expect(trilha.exige.difference(alunos.exige), {'estoque.ler'});
+  });
+
+  // Card 9.2,76: o placeholder "em construção" saiu, e uma rota sem tela agora
+  // é um StateError na navegação. Este teste é quem pega a rota nova esquecida
+  // antes de ela chegar à tela.
+  test('toda rota do app tem tela no roteador', () {
+    final semTela = [
+      for (final rota in rotasAplicacao)
+        if (!temTelaDaRota(rota.id)) rota.id,
+    ];
+    expect(semTela, isEmpty);
   });
 
   test('todo caminho de rota é único', () {

@@ -39,7 +39,8 @@
 // =============================================================================
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 /**
  * Dado de CONFIGURAÇÃO — precisa estar em produção, senão `tem_permissao()` é
@@ -479,6 +480,21 @@ provocar.
   return 1;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * Este módulo é o script que o `node` foi mandado rodar? (card 9.2,73 → 9.2,76,
+ * pendência 9.20.)
+ *
+ * ⚠️ A comparação antiga — a URL do módulo contra `file://` + argv[1] —
+ * nunca casava no Windows: a URL é `file:///C:/…` com barras normais e o argv
+ * é `C:\…` com contrabarras. O portão SAÍA 0 SEM VARRER NADA na conferência
+ * local — verde calado, a pior falha que um portão pode ter. `pathToFileURL`
+ * monta a URL do caminho do jeito de cada sistema.
+ */
+export function ehPrincipal(urlDoModulo, caminhoDoScript) {
+  if (!caminhoDoScript) return false;
+  return urlDoModulo === pathToFileURL(resolve(caminhoDoScript)).href;
+}
+
+if (ehPrincipal(import.meta.url, process.argv[1])) {
   process.exit(principal(process.argv.slice(2)));
 }

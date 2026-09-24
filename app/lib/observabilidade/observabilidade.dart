@@ -153,9 +153,9 @@ Breadcrumb? sanitizarBreadcrumb(Breadcrumb? breadcrumb) {
     breadcrumb.data = limpo;
   }
 
-  // Breadcrumb de navegação carrega a rota; as rotas deste app não têm id de
-  // aluno no caminho hoje, mas terão na Fase 4 (`/alunos/<id>`) — cortar a
-  // query já agora evita ter de lembrar disso lá.
+  // Breadcrumb de navegação carrega a rota — e a rota tem id de aluno no
+  // caminho desde a Fase 4 (`/alunos/<id>`). A query sai; o id de caminho é
+  // um uuid, não dado pessoal.
   final mensagem = breadcrumb.message;
   if (mensagem != null && mensagem.contains('?')) {
     breadcrumb.message = limparUrl(mensagem);
