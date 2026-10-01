@@ -676,8 +676,15 @@ marco não roda:
    toda tela de lista abre vazia lá — por falta de dado, não por RLS. Invertida a ordem, o critério 4
    fica ambíguo justamente no modo de falha que ele existe para pegar.
 
-**Roteiro:** cadastrar um combo real (Secretariado Executivo) com cursos e materiais; cadastrar um
-aluno; percorrer ATIVO → STANDBY → ATIVO → CANCELADO; abrir o sistema com um usuário de cada perfil.
+**Roteiro:** cadastrar um combo real (Secretariado Executivo) com cursos e materiais; cadastrar uma
+sala com PCs e um professor (Salas e PCs); **criar pelo menos um bloco de horário** nessa sala
+(Turmas → Novo bloco); cadastrar um aluno; percorrer ATIVO → STANDBY → ATIVO → CANCELADO; abrir o
+sistema com um usuário de cada perfil.
+
+⚠️ **O bloco de horário entrou no roteiro em 01/10/2026 (card 9.2,81).** Até aqui o M1 dizia "fora do
+marco: turmas", e o passo 2 do M2 ("alocar em bloco") começava sem bloco nenhum para alocar — o dev
+está sem dado de negócio, e bloco não vem de migração. É a mesma classe de defeito da pré-condição 1
+do §15.2: o marco seguinte começa num cadastro que o anterior não pediu.
 
 **Aprova se, e só se:**
 
@@ -702,7 +709,8 @@ o pior desfecho possível para um marco.
 **Reprova se:** aparecer qualquer erro cru do PostgREST/Postgres em tela; qualquer tela vazia por
 RLS; qualquer política exigindo permissão que o seed não cria (é o C11 — não deveria chegar aqui).
 
-**Fora do marco:** turmas, estoque, dashboard, projeção.
+**Fora do marco:** estoque, dashboard, projeção. Turmas entra só pelo **cadastro** do bloco de horário
+(acima), que é pré-condição do M2; alocar é do M2.
 
 ### 15.2 M2 — Fluxo completo de um aluno (card 6.9)
 
@@ -755,6 +763,10 @@ da **secretaria** também, então nenhum deles exige direção.
 
 **Reprova se:** saldo negativo em qualquer momento; entrega que grave movimento sem marcar a trilha
 (ou o contrário); qualquer passo que exija a direção para o que é jornada do monitor.
+
+**Pré-condição de cadastro:** existir em homologação ao menos **um bloco de horário** numa sala com
+PCs — criado no roteiro do M1 (§15.1). Sem ele o passo 2 não tem onde alocar, e o critério 6
+(o 11º recusado com `BLOCO_LOTADO`) não tem bloco para lotar.
 
 ⚠️ **Três pré-condições que não são automatizáveis, e são de Irineu** (achado da sessão do card 6.9,
 04/09/2026). Valem além das duas do §15.1, que continuam abertas:

@@ -24,6 +24,19 @@ O GoTrue tem seis templates. Estes são os dois que **este** sistema dispara:
 | `reauthentication` | reautenticação por código | ❌ o app não chama |
 | `email_change` | alguém troca o e-mail de acesso | ❌ **alcançável só pelo painel** — ver §5 |
 
+Além dos seis templates de **link**, o GoTrue tem **notificações** — avisos mandados depois de algo
+acontecer, sem link de confirmação. Uma está ligada, desde o card **9.2,81** (01/10/2026):
+
+| Notificação | Quando sai | Traduzida |
+|---|---|---|
+| `password_changed` | logo depois de **qualquer** troca de senha — convite, recuperação ou painel | ✅ `supabase/templates/senha-alterada.html` |
+
+Ela existe pelo incidente do card 9.2,80: a senha do Lindomar foi trocada por uma sessão que não era a
+do convite, e ele só soube ao ser trancado para fora. O texto diz o que fazer se não foi a pessoa
+("Esqueci minha senha" e avisar a direção), e o botão leva a `{{ .SiteURL }}` — as variáveis que
+esta notificação oferece são só `{{ .Email }}` e `{{ .SiteURL }}`. Foi ligada no painel do prod à
+mão em 01/10/2026, com um texto colado que pode diferir do arquivo em bytes; o aplicador (§4) iguala.
+
 Traduzir os quatro restantes seria escrever texto que ninguém lê, e texto que ninguém lê envelhece
 sem que se saiba. Os que ficaram têm o motivo registrado aqui e no `config.toml`.
 
@@ -111,8 +124,12 @@ vira texto laranja. Canto arredondado ele não desenha, e isso é aceito.
 `href` — deixaria a pessoa sem caminho nenhum. Fica no menor corpo do e-mail, e é feio de propósito:
 é uma saída de emergência, não um elemento de layout.
 
-**"O link vale 24 horas."** É o `otp_expiry = 86400` do `supabase/config.toml`. ⚠️ **Se aquele número
-mudar, esta frase passa a mentir** — os dois templates e o `config.toml` mudam juntos.
+**"O link vale 24 horas."** É o `otp_expiry = 86400` do `supabase/config.toml` — **no stack local**. No
+hospedado é o *Email OTP expiration* do painel (`mailer_otp_exp` na Management API), e ⚠️ **até
+01/10/2026 ele era 3600: a frase mentia em dev e em prod** desde que foi escrita (card 9.2,81,
+`docs/acesso-autenticacao.md` §2.1). Hoje o aplicador do §4 grava os 86400 e o `--conferir` os
+audita, e a suíte `supabase/templates/test/` reprova se o número do script, o do `config.toml` e a
+frase dos dois templates deixarem de concordar.
 
 **O convite diz que falta definir a senha.** É a mesma correção do card 4.7, agora na única peça que
 a pessoa lê antes de clicar: *"Falta um passo: definir a sua senha."* O botão se chama **"Definir
@@ -142,8 +159,28 @@ SUPABASE_ACCESS_TOKEN=sbp_... node supabase/templates/aplicar-templates.mjs aqfu
 ```
 
 O token é o **personal access token** da conta (https://supabase.com/dashboard/account/tokens) — não
-é a service key nem a chave publicável. O script faz um `PATCH` de **quatro campos** na Management
-API e **lê a configuração de volta** para conferir; `--conferir <ref>` só audita, sem escrever.
+é a service key nem a chave publicável. O script faz um `PATCH` na Management API e **lê a
+configuração de volta** para conferir; `--conferir <ref>` só audita, sem escrever. No PowerShell,
+`$env:SUPABASE_ACCESS_TOKEN = '...'` antes, em vez do prefixo da linha acima.
+
+Desde o card **9.2,81** (01/10/2026) são **onze campos**, e nenhum outro:
+
+| O quê | Campos da Management API |
+|---|---|
+| Convite, recuperação e *Password changed* | `mailer_subjects_*` e `mailer_templates_*_content` dos três — 6 campos |
+| Notificação *Password changed* ligada | `mailer_notifications_password_changed_enabled = true` |
+| Expiração do link (24 h) | `mailer_otp_exp = 86400` |
+| Senha mínima | `password_min_length = 8` |
+| Letras e dígitos | `password_required_characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789"` |
+| *Secure password change* | `security_update_password_require_reauthentication = true` |
+
+Os quatro campos do provedor entraram porque **o `config.toml` os declarava e o hospedado nunca os
+teve** (`docs/acesso-autenticacao.md` §2.1) — o mesmo defeito que este script nasceu para fechar nos
+templates. Os nomes foram **conferidos** na spec OpenAPI pública e no código do CLI que os grava, e
+não supostos: `secure_password_change`, o nome do `config.toml`, **não existe** na API. Antes do
+`PATCH` o script baixa a spec (não pede token) e recusa nome ou valor de enum que ela não tenha;
+`--conferir-nomes` faz só isso, sem token e sem ref. A suíte `supabase/templates/test/` (job
+`migrações (portão)`) exercita o fluxo com uma API falsa, inclusive o `PATCH` 200 que não grava.
 
 A conferência é positiva de propósito, como o vigia do card 3.10 e o ensaio do backup do 3.11: nome
 de campo errado na API devolveria `200` **sem mudar nada**, e "não deu erro" teria passado por
@@ -162,6 +199,10 @@ Em **cada** projeto, `Authentication → Emails`:
 |---|---|---|
 | **Invite user** | `Seu acesso ao Gestão IM360` | conteúdo de `supabase/templates/convite.html` |
 | **Reset password** | `Redefinir sua senha do Gestão IM360` | conteúdo de `supabase/templates/recuperacao-senha.html` |
+| **Password changed** (entre as notificações de segurança da mesma tela; ligar a notificação) | `Sua senha do Gestão IM360 foi alterada` | conteúdo de `supabase/templates/senha-alterada.html` |
+
+Os quatro campos do provedor ficam em `Authentication → Sign In / Providers → Email`, com os valores
+de `docs/acesso-autenticacao.md` §2.1.
 
 Colar o arquivo **inteiro**, do `<!doctype html>` ao `</html>`.
 
@@ -228,8 +269,11 @@ o app usam, e a leitura do que chegou pelo Mailpit:
    o template padrão em inglês; o que este card entregou é o conteúdo e a ferramenta.~~
 2. **O logotipo em produção depende da promoção** que publica `app/web/marca/`. Até lá, texto
    alternativo nos e-mails dos dois ambientes.
-3. **`otp_expiry` e a frase das 24 horas** mudam juntos — não há teste que amarre os dois. Um
-   assertivo em `app/test/` não alcança o `config.toml`; fica o aviso no comentário dos templates.
+3. ✅ **Fechado em 01/10/2026 (card 9.2,81).** ~~`otp_expiry` e a frase das 24 horas mudam juntos — não há teste que amarre os dois. Um
+   assertivo em `app/test/` não alcança o `config.toml`; fica o aviso no comentário dos templates.~~
+   A suíte `supabase/templates/test/` amarra os três: o valor que o aplicador grava, o `otp_expiry`
+   do `config.toml` e a frase dos dois templates. E o item tinha uma metade que ninguém via: o
+   hospedado aplicava **1 h** enquanto as três fontes do repositório diziam 24 h.
 4. **Nenhuma versão em texto puro.** O GoTrue manda só a parte HTML, e cliente 100% texto verá o
    HTML cru. Os quatro a oito usuários da escola usam Gmail e Outlook; se um dia isso mudar, é
    `multipart/alternative` — que o GoTrue não oferece por template.
