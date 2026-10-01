@@ -12,14 +12,16 @@ import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
 import '../../widgets/painel_detalhe.dart';
 import '../../widgets/tabela_im360.dart';
+import 'aba_manutencoes.dart';
 import 'detalhe_sala.dart';
 import 'filtros_salas.dart';
 import 'formularios.dart';
 
 /// Tela 10 — Salas e PCs (docs/wireframes.md §13), card 4.5: as salas com os
 /// seus PCs, a manutenção de cada PC, a credencial de acesso (política do card
-/// 2.9 §8) e, na segunda aba, os professores — que moram aqui, junto do uso, e
-/// não na Administração (card 2.6, apontamento 1).
+/// 2.9 §8); na segunda aba, o histórico de manutenções (card 9.2,78); e, na
+/// terceira, os professores — que moram aqui, junto do uso, e não na
+/// Administração (card 2.6, apontamento 1).
 ///
 /// O impacto da manutenção nos blocos ("Blocos desta sala" do wireframe) mora
 /// na grade do card 5.6, e o `pc.status` amarrado à manutenção em aberto é a
@@ -36,12 +38,15 @@ class TelaSalas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DefaultTabController(
-    length: 2,
+    length: 3,
     child: Column(
       children: [
         const TabBar(
           tabs: [
             Tab(text: 'Salas e PCs'),
+            // Card 9.2,78: o histórico que o monitor pediu. Aba, e não 14º
+            // item do menu — como desfazer está em `aba_manutencoes.dart`.
+            Tab(text: 'Manutenções'),
             Tab(text: 'Professores'),
           ],
         ),
@@ -49,6 +54,7 @@ class TelaSalas extends StatelessWidget {
           child: TabBarView(
             children: [
               AbaSalas(pcId: pcId),
+              const AbaManutencoes(),
               const AbaProfessores(),
             ],
           ),

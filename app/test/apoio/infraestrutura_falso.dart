@@ -78,6 +78,9 @@ class InfraestruturaFalso implements InfraestruturaRepositorio {
           tipo: 'CORRETIVA',
           dataInicio: hoje.subtract(const Duration(days: 3)),
           descricao: 'fonte queimada',
+          criadoPor: 'u-monitor',
+          criadoPorNome: 'Davi Monteiro',
+          criadoEm: hoje.subtract(const Duration(days: 3)),
         ),
         PcManutencao(
           id: 'm-fechada',
@@ -86,6 +89,9 @@ class InfraestruturaFalso implements InfraestruturaRepositorio {
           dataInicio: hoje.subtract(const Duration(days: 60)),
           dataFim: hoje.subtract(const Duration(days: 59)),
           descricao: 'limpeza e atualização',
+          criadoPor: 'u-secretaria',
+          criadoPorNome: 'Paula Reis',
+          criadoEm: hoje.subtract(const Duration(days: 60)),
         ),
       ],
       professores: const [
@@ -196,6 +202,13 @@ class InfraestruturaFalso implements InfraestruturaRepositorio {
   @override
   Future<List<PcManutencao>> manutencoes() =>
       _ler('manutencoes', List.of(manutencoes_));
+
+  /// O histórico com o autor como o banco o carimba (card 9.2,78). O falso
+  /// devolve na ordem em que guardou, de propósito: quem ordena é a tela, e um
+  /// falso já ordenado esconderia a falta disso.
+  @override
+  Future<List<PcManutencao>> historicoManutencoes() =>
+      _ler('historicoManutencoes', List.of(manutencoes_));
 
   @override
   Future<PcManutencao> salvarManutencao(PcManutencao manutencao) =>

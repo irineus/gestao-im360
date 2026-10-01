@@ -54,6 +54,14 @@ final manutencoesProvider = FutureProvider<List<PcManutencao>>(
   (ref) => _traduzindo(_repositorio(ref).manutencoes),
 );
 
+/// O histórico da aba Manutenções, com o nome de quem registrou (card 9.2,78).
+/// Leitura própria, e não um enriquecimento de [manutencoesProvider]: se o nome
+/// não vier, quem perde é o histórico — o painel da sala, que decide entre
+/// "Manutenção" e "Encerrar", continua de pé.
+final historicoManutencoesProvider = FutureProvider<List<PcManutencao>>(
+  (ref) => _traduzindo(_repositorio(ref).historicoManutencoes),
+);
+
 final professoresProvider = FutureProvider<List<Professor>>(
   (ref) => _traduzindo(_repositorio(ref).professores),
 );
@@ -85,4 +93,18 @@ class FiltroProfessoresNotifier extends Notifier<FiltroProfessores> {
 final filtroProfessoresProvider =
     NotifierProvider<FiltroProfessoresNotifier, FiltroProfessores>(
       FiltroProfessoresNotifier.new,
+    );
+
+class FiltroManutencoesNotifier extends Notifier<FiltroManutencoes> {
+  @override
+  FiltroManutencoes build() => FiltroManutencoes.semFiltro;
+
+  void definir(FiltroManutencoes filtro) => state = filtro;
+
+  void limpar() => state = FiltroManutencoes.semFiltro;
+}
+
+final filtroManutencoesProvider =
+    NotifierProvider<FiltroManutencoesNotifier, FiltroManutencoes>(
+      FiltroManutencoesNotifier.new,
     );
