@@ -21,6 +21,14 @@ abstract final class CatalogoErros {
       'Não foi possível concluir. Tente de novo; se continuar, avise a direção '
       '(código {codigo}).';
 
+  /// O mesmo fallback quando NÃO HÁ código — erro do Auth sem `code`, falha
+  /// local do SDK. Até o card 9.2,80 a tela dizia "(código ?)", que não serve
+  /// à direção nem a quem lê: medido em homologação em 01/10/2026, na tela de
+  /// definir senha.
+  static const naoMapeadoSemCodigo =
+      'Não foi possível concluir. Tente de novo; se continuar, avise a '
+      'direção.';
+
   static const mensagens = <String, String>{
     // --- card 2.2 §12
     'SEM_PERMISSAO': 'Você não tem permissão para esta ação.',
@@ -265,14 +273,15 @@ abstract final class CatalogoErros {
   };
 
   /// Mensagem para o código, com as marcações `{...}` substituídas por
-  /// [valores]. Código desconhecido (ou nulo) cai em [naoMapeado], que sempre
-  /// exibe o próprio código.
+  /// [valores]. Código desconhecido cai em [naoMapeado], que sempre exibe o
+  /// próprio código; código nulo, em [naoMapeadoSemCodigo].
   static String mensagem(
     String? codigo, {
     Map<String, String> valores = const {},
   }) {
+    if (codigo == null) return naoMapeadoSemCodigo;
     final modelo = mensagens[codigo] ?? naoMapeado;
-    final todos = {'codigo': codigo ?? '?', ...valores};
+    final todos = {'codigo': codigo, ...valores};
     return todos.entries.fold(
       modelo,
       (texto, e) => texto.replaceAll('{${e.key}}', e.value),

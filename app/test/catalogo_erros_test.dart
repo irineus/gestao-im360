@@ -87,6 +87,10 @@ void main() {
 
   test('código nulo (erro sem DETAIL) ainda produz mensagem legível', () {
     expect(CatalogoErros.mensagem(null), isNot(contains('{codigo}')));
+    // Card 9.2,80: "(código ?)" foi o que a tela de senha mostrou em
+    // homologação — não serve à direção nem a quem lê.
+    expect(CatalogoErros.mensagem(null), CatalogoErros.naoMapeadoSemCodigo);
+    expect(CatalogoErros.mensagem(null), isNot(contains('código')));
   });
 
   test('PARAMETRO_AUSENTE diz qual chave falta', () {

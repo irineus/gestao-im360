@@ -37,6 +37,9 @@ class _RepositorioFalso implements SessaoRepositorio {
   }) async {}
 
   @override
+  UsuarioAutenticado? get autenticado => null;
+
+  @override
   Future<void> trocarSenha(String novaSenha) async {}
 
   @override

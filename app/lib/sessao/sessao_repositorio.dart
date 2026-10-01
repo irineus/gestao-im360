@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/link_inicial.dart';
 import '../erros/erro_app.dart';
 import 'sessao.dart';
 
@@ -13,10 +14,28 @@ abstract interface class SessaoRepositorio {
 
   Future<void> recuperarSenha(String email, {required String redirecionarPara});
 
+  /// Quem está autenticado AGORA no Auth — independente de espelho, perfil
+  /// ou carga da sessão. Nulo sem sessão. É o que a tela de senha confere
+  /// contra o usuário que o link criou (card 9.2,80).
+  UsuarioAutenticado? get autenticado;
+
+  /// Troca a senha da sessão corrente. ⚠️ Só depois de
+  /// `LinkInicial.autorizaTroca` (card 9.2,80): `updateUser` aplica na sessão
+  /// que estiver aberta, seja de quem for.
   Future<void> trocarSenha(String novaSenha);
 
   Future<void> sair();
 }
+
+/// O usuário autenticado no Auth: o id (o que se compara) e o e-mail (o que
+/// se mostra — "este navegador está com a sessão de fulano aberta").
+typedef UsuarioAutenticado = ({String id, String email});
+
+/// A recusa da segunda barreira (card 9.2,80). Texto de tela: chega aqui só se
+/// alguma tela futura chamar [SessaoRepositorio.trocarSenha] sem a guarda.
+const mensagemSenhaSemLink =
+    'Por segurança, a senha só pode ser definida pelo link mais recente que '
+    'chegou por e-mail. Peça um link novo em "Esqueci minha senha".';
 
 class SessaoRepositorioSupabase implements SessaoRepositorio {
   SessaoRepositorioSupabase(this._cliente);
@@ -99,8 +118,24 @@ class SessaoRepositorioSupabase implements SessaoRepositorio {
   );
 
   @override
-  Future<void> trocarSenha(String novaSenha) =>
-      _cliente.auth.updateUser(UserAttributes(password: novaSenha));
+  UsuarioAutenticado? get autenticado {
+    final usuario = _cliente.auth.currentUser;
+    return usuario == null
+        ? null
+        : (id: usuario.id, email: usuario.email ?? '');
+  }
+
+  @override
+  Future<void> trocarSenha(String novaSenha) async {
+    // A SEGUNDA barreira do card 9.2,80 — a primeira é a tela. A senha trocada
+    // em 01/10/2026 foi a do Lindomar, cuja sessão estava aberta no desktop em
+    // que o link vencido do Laurence foi aberto: `updateUser` não sabe de
+    // link nenhum, aplica na sessão corrente.
+    if (!LinkInicial.autorizaTroca(_cliente.auth.currentUser?.id)) {
+      throw const ErroApp(mensagem: mensagemSenhaSemLink, traduzido: true);
+    }
+    await _cliente.auth.updateUser(UserAttributes(password: novaSenha));
+  }
 
   @override
   Future<void> sair() => _cliente.auth.signOut();

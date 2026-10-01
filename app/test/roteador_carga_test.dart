@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/link_inicial.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/rotas/roteador.dart';
 import 'package:gestao_im360/sessao/sessao.dart';
@@ -26,6 +27,9 @@ class _SessaoEternamenteCarregando implements SessaoRepositorio {
     String email, {
     required String redirecionarPara,
   }) async {}
+
+  @override
+  UsuarioAutenticado? get autenticado => null;
 
   @override
   Future<void> trocarSenha(String novaSenha) async {}
@@ -113,6 +117,73 @@ void main() {
       expect(roteador.routerDelegate.currentConfiguration.uri.path, destino);
     });
   }
+  // Card 9.2,80, item 6: só o CONVITE era desviado para a tela de senha. O
+  // link de recuperação enviado pelo PAINEL volta na Site URL (a raiz) e
+  // entrava no Dashboard sem pedir senha; e o link recusado caía no login
+  // sem uma palavra sobre o link.
+  group('link de senha leva à tela de senha antes de qualquer outra', () {
+    setUp(LinkInicial.consumir);
+    tearDown(LinkInicial.consumir);
+
+    Future<String> destino(
+      WidgetTester tester,
+      SessaoRepositorio repositorio,
+    ) async {
+      final container = ProviderContainer(
+        retry: semRetryAutomatico,
+        overrides: [
+          sessaoRepositorioProvider.overrideWithValue(repositorio),
+          fluxoAuthProvider.overrideWithValue(null),
+        ],
+      );
+      addTearDown(container.dispose);
+      final roteador = container.read(roteadorProvider);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(theme: temaClaro(), routerConfig: roteador),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      tester.takeException();
+      return roteador.routerDelegate.currentConfiguration.uri.path;
+    }
+
+    testWidgets('recuperação pelo painel (Site URL, type=recovery) com sessão '
+        '→ /redefinir-senha, não o Dashboard', (tester) async {
+      LinkInicial.registrar(
+        Uri.parse(
+          'https://homolog.gestaoim360.com/#access_token=a&type=recovery',
+        ),
+      );
+      await LinkInicial.trocarPorSessao((_) async => 'u-monitor');
+      expect(await destino(tester, _SessaoPronta()), '/redefinir-senha');
+    });
+
+    testWidgets('link recusado e SEM sessão → /redefinir-senha (que explica), '
+        'não o login mudo', (tester) async {
+      LinkInicial.registrar(
+        Uri.parse(
+          'https://homolog.gestaoim360.com/#error=access_denied'
+          '&error_code=otp_expired',
+        ),
+      );
+      expect(
+        await destino(tester, _SessaoDeslogadaFalsa()),
+        '/redefinir-senha',
+      );
+    });
+
+    testWidgets('sem link: o roteamento de sempre', (tester) async {
+      expect(await destino(tester, _SessaoDeslogadaFalsa()), '/entrar');
+    });
+  });
+}
+
+class _SessaoDeslogadaFalsa extends _SessaoEternamenteCarregando {
+  @override
+  Future<EstadoSessao> carregar() async => const SessaoDeslogada();
 }
 
 /// A sessão do monitor, pronta: o conjunto que abre Alunos, Turmas e

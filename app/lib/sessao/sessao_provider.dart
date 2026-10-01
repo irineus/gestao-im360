@@ -34,6 +34,10 @@ final fluxoAuthProvider = Provider<Stream<AuthState>?>((ref) {
 const eventosQueRecarregam = {
   AuthChangeEvent.initialSession,
   AuthChangeEvent.signedIn,
+  // O link de recuperação cria sessão NOVA — possivelmente de outra pessoa
+  // que a que estava aberta (card 9.2,80) — e o Auth o anuncia com este
+  // evento, não com `signedIn`.
+  AuthChangeEvent.passwordRecovery,
   AuthChangeEvent.signedOut,
   AuthChangeEvent.userUpdated,
 };

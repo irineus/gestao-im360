@@ -336,6 +336,13 @@ Por que o fluxo do próprio app não sofria: `resetPasswordForEmail` usa **PKCE*
 `?code=` na *query* e deixa o fragmento livre. Ou seja, o bug só aparecia no caminho que ninguém
 testa — o do painel.
 
+⚠️ **Desde o card 9.2,80 (01/10/2026) o app também usa o fluxo IMPLÍCITO**, por decisão de Irineu: o
+PKCE amarrava o link de recuperação ao navegador que o pediu e falhou em homologação sempre que foi
+aberto noutro. Agora os três links da tabela voltam no fragmento, e quem os troca por sessão — e
+limpa a URL — é o próprio app (`LinkInicial.trocarPorSessao` + `limparUrlDoAuth`), não mais o
+`supabase_flutter`. A rota no caminho continua obrigatória pelo mesmo motivo de sempre. Detalhe em
+`acesso-autenticacao.md` §5.1.
+
 A correção é uma linha (`usePathUrlStrategy()`), e o preço dela é o §3: o servidor passa a precisar
 devolver o `index.html` para qualquer caminho. No Pages isso é de graça.
 

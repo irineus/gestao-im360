@@ -124,25 +124,26 @@ final roteadorProvider = Provider<GoRouter>((ref) {
       final estado = ref.read(sessaoProvider);
       final caminho = estadoRota.uri.path;
 
-      // A redefinição de senha é pública e tem de continuar alcançável mesmo
-      // com sessão: o link do Auth cria uma sessão de recuperação antes de a
-      // pessoa chegar aqui.
+      // A redefinição de senha é pública e tem de continuar alcançável com ou
+      // sem sessão: é ela que decide, pelo desfecho do link, se oferece o
+      // formulário (card 9.2,80).
       if (caminho == rotaRedefinirSenha.caminho) return null;
 
-      // Chegou pelo link de convite (card 4.7): a sessão existe, a senha não.
-      // Antes de qualquer outra tela, definir a senha — senão o acesso
-      // seguinte falha sem que nada tenha dito que faltava um passo (achado
-      // do card 3.8). Sem sessão, o link não valeu (expirado): segue para o
-      // login, e o registro deixa de valer.
-      if (LinkInicial.convitePendente) {
-        switch (estado) {
-          case SessaoCarregando():
-            return null;
-          case SessaoDeslogada():
-            LinkInicial.consumir();
-          default:
-            return '${rotaRedefinirSenha.caminho}?motivo=convite';
-        }
+      // Chegou por link de convite (card 4.7) ou de recuperação, valendo ou
+      // não: antes de qualquer outra tela, a de senha — que define a senha
+      // quando o link valeu, e diz o que fazer quando não valeu.
+      //
+      // Até o card 9.2,80 só o CONVITE era desviado para cá. A recuperação
+      // dependia do `redirect_to` apontar para esta rota, e o link enviado
+      // pelo painel do Supabase (Send password recovery), que volta na Site
+      // URL, entrava direto no Dashboard sem pedir senha nenhuma. E o link
+      // recusado (vencido, já usado) caía no login — ou, com outra sessão
+      // aberta, no Dashboard dela — sem uma palavra sobre o link.
+      if (LinkInicial.pendente) {
+        if (estado is SessaoCarregando) return null;
+        return LinkInicial.convitePendente
+            ? '${rotaRedefinirSenha.caminho}?motivo=convite'
+            : rotaRedefinirSenha.caminho;
       }
 
       return switch (estado) {
