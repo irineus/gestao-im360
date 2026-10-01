@@ -38,6 +38,40 @@ void main() {
       expect(resumo.efetiva, 4);
     });
 
+    // Card 9.2,77, a sala do achado do monitor: onze PCs, um do professor,
+    // nominal 10. Antes do card a tela (como o banco) contava os onze, e com
+    // um PC de aluno parado dizia 10 — a máquina do professor tapava o buraco.
+    test('o PC do professor opera mas não é vaga: 10 com tudo operacional, '
+        '9 com um PC de aluno parado', () {
+      const sala = Sala(
+        id: 's-tec',
+        nome: 'Tecnologia/Inglês',
+        tipo: 'LABORATORIO',
+        capacidadeNominal: 10,
+      );
+      List<Pc> pcs({required bool umParado}) => [
+        for (var i = 1; i <= 10; i++)
+          Pc(
+            id: 'pc-$i',
+            salaId: 's-tec',
+            identificador: 'PC-$i',
+            status: umParado && i == 1 ? 'MANUTENCAO' : 'OPERACIONAL',
+          ),
+        const Pc(
+          id: 'pc-prof',
+          salaId: 's-tec',
+          identificador: 'PC-PROFESSOR',
+          deProfessor: true,
+        ),
+      ];
+      final todos = resumirSalas([sala], pcs(umParado: false))['s-tec']!;
+      expect(todos.operacionais, 11);
+      expect(todos.efetiva, 10);
+      final umParado = resumirSalas([sala], pcs(umParado: true))['s-tec']!;
+      expect(umParado.operacionais, 10);
+      expect(umParado.efetiva, 9, reason: 'contando o do professor daria 10');
+    });
+
     test('o teto nominal vence quando há mais PCs do que vagas', () {
       expect(capacidadeEfetiva(nominal: 3, operacionais: 5), 3);
       expect(capacidadeEfetiva(nominal: 10, operacionais: 10), 10);
@@ -248,5 +282,43 @@ void main() {
     ).paraLinha('u');
     expect(linha.keys, isNot(contains('credencial_em')));
     expect(linha.keys, isNot(contains('credencial_secret_id')));
+  });
+
+  // Card 9.2,77: o formulário oferece o campo, então o update o envia; e a
+  // leitura sem a coluna (linha antiga) é "lugar de aluno", o default do banco.
+  test('de_professor vai e volta pela linha, e ausente é false', () {
+    const pc = Pc(id: 'a', salaId: 's', identificador: 'A', deProfessor: true);
+    expect(pc.paraLinha('u')['de_professor'], isTrue);
+    expect(pc.copiar(status: 'MANUTENCAO').deProfessor, isTrue);
+    expect(
+      Pc.deLinha({
+        'id': 'a',
+        'sala_id': 's',
+        'identificador': 'A',
+        'status': 'OPERACIONAL',
+      }).deProfessor,
+      isFalse,
+    );
+  });
+
+  test('a situação do PC do professor diz que ele não é vaga e não pede '
+      'substituto', () {
+    const prof = Pc(
+      id: 'p',
+      salaId: 's',
+      identificador: 'PC-PROFESSOR',
+      status: 'MANUTENCAO',
+      deProfessor: true,
+    );
+    final parado = PcManutencao(
+      pcId: 'p',
+      tipo: 'PREVENTIVA',
+      dataInicio: DateTime(2026, 9, 30),
+    );
+    expect(
+      situacaoPc(prof, parado),
+      'Em manutenção · PC do professor, não conta como vaga · '
+      'preventiva desde 30/09',
+    );
   });
 }

@@ -88,6 +88,7 @@ class Pc {
     required this.salaId,
     required this.identificador,
     this.status = 'OPERACIONAL',
+    this.deProfessor = false,
     this.observacao,
     this.credencialEm,
   });
@@ -97,6 +98,7 @@ class Pc {
     salaId: '${linha['sala_id']}',
     identificador: '${linha['identificador']}',
     status: '${linha['status']}',
+    deProfessor: linha['de_professor'] as bool? ?? false,
     observacao: linha['observacao'] as String?,
     credencialEm: linha['credencial_em'] == null
         ? null
@@ -107,6 +109,11 @@ class Pc {
   final String salaId;
   final String identificador;
   final String status;
+
+  /// A máquina do professor (`pc.de_professor`, card 9.2,77): não é lugar de
+  /// aluno e não conta na capacidade efetiva — nem na do banco
+  /// (`fn_capacidade_efetiva`) nem na que a tela deriva ([resumirSalas]).
+  final bool deProfessor;
   final String? observacao;
 
   /// Carimbo da credencial no Vault (`pc.credencial_em`), legível com
@@ -121,6 +128,7 @@ class Pc {
     salaId: salaId,
     identificador: identificador,
     status: status ?? this.status,
+    deProfessor: deProfessor,
     observacao: observacao,
     credencialEm: credencialEm ?? this.credencialEm,
   );
@@ -133,6 +141,7 @@ class Pc {
     'sala_id': salaId,
     'identificador': identificador,
     'status': status,
+    'de_professor': deProfessor,
     'observacao': (observacao == null || observacao!.trim().isEmpty)
         ? null
         : observacao!.trim(),
@@ -149,6 +158,9 @@ class PcManutencao {
     this.dataFim,
     this.descricao,
     this.pcSubstitutoId,
+    this.criadoPor,
+    this.criadoPorNome,
+    this.criadoEm,
   });
 
   factory PcManutencao.deLinha(Map<String, dynamic> linha) => PcManutencao(
@@ -163,6 +175,12 @@ class PcManutencao {
     pcSubstitutoId: linha['pc_substituto_id'] == null
         ? null
         : '${linha['pc_substituto_id']}',
+    criadoPor: linha['criado_por'] == null ? null : '${linha['criado_por']}',
+    criadoPorNome:
+        (linha['autor'] as Map<String, dynamic>?)?['nome'] as String?,
+    criadoEm: linha['criado_em'] == null
+        ? null
+        : DateTime.parse('${linha['criado_em']}').toLocal(),
   );
 
   final String? id;
@@ -179,6 +197,15 @@ class PcManutencao {
   final DateTime? dataFim;
   final String? descricao;
   final String? pcSubstitutoId;
+
+  /// Quem registrou (`criado_por`, carimbado pelo `fn_auditoria`) e o nome
+  /// dele, que vem de `fn_usuarios_nomes()` e não do embed em `usuario` — o
+  /// embed devolve nulo para quem não tem `admin.ler`, e o histórico sairia sem
+  /// o "quem" para três dos quatro perfis (card 9.2,74). Só a leitura do
+  /// histórico os preenche (card 9.2,78); nulos nas demais.
+  final String? criadoPor;
+  final String? criadoPorNome;
+  final DateTime? criadoEm;
 
   /// Em aberto em [hoje]: já começou e o fim ainda não chegou. Fim igual a hoje
   /// é encerrada — é o que "Encerrar" grava —, e é a mesma condição que o banco
@@ -198,8 +225,12 @@ class PcManutencao {
     dataFim: dataFim ?? this.dataFim,
     descricao: descricao,
     pcSubstitutoId: pcSubstitutoId,
+    criadoPor: criadoPor,
+    criadoPorNome: criadoPorNome,
+    criadoEm: criadoEm,
   );
 
+  /// Sem as colunas de auditoria: quem as escreve é o `fn_auditoria`.
   Map<String, dynamic> paraLinha(String unidadeId) => {
     'unidade_id': unidadeId,
     'pc_id': pcId,
@@ -254,8 +285,10 @@ class CredencialPc {
 // ---------------------------------------------------------------------------
 
 /// O que o cartão da sala mostra: quantos PCs tem, quantos operam e a
-/// capacidade efetiva — PCs OPERACIONAIS até o teto nominal, a mesma conta
-/// que `fn_capacidade_efetiva` (card 5.2) faz por bloco, sem o override.
+/// capacidade efetiva — PCs de ALUNO operacionais até o teto nominal, a mesma
+/// conta que `fn_capacidade_efetiva` (card 5.2) faz por bloco, sem o override.
+/// O PC do professor opera mas não é vaga (card 9.2,77): entra em
+/// `operacionais` e fica fora de `efetiva`.
 @immutable
 class ResumoSala {
   const ResumoSala({
@@ -277,10 +310,14 @@ int capacidadeEfetiva({required int nominal, required int operacionais}) =>
 Map<String, ResumoSala> resumirSalas(Iterable<Sala> salas, Iterable<Pc> pcs) {
   final total = <String, int>{};
   final operacionais = <String, int>{};
+  final deAluno = <String, int>{};
   for (final pc in pcs) {
     total[pc.salaId] = (total[pc.salaId] ?? 0) + 1;
     if (pc.operacional) {
       operacionais[pc.salaId] = (operacionais[pc.salaId] ?? 0) + 1;
+      if (!pc.deProfessor) {
+        deAluno[pc.salaId] = (deAluno[pc.salaId] ?? 0) + 1;
+      }
     }
   }
   return {
@@ -291,7 +328,7 @@ Map<String, ResumoSala> resumirSalas(Iterable<Sala> salas, Iterable<Pc> pcs) {
           operacionais: operacionais[sala.id] ?? 0,
           efetiva: capacidadeEfetiva(
             nominal: sala.capacidadeNominal,
-            operacionais: operacionais[sala.id] ?? 0,
+            operacionais: deAluno[sala.id] ?? 0,
           ),
         ),
   };
@@ -327,9 +364,13 @@ AcaoPc acaoContextual(Pc pc, PcManutencao? aberta) {
 
 /// A linha de situação do PC: o status do banco e, se houver, a manutenção em
 /// aberto com o que falta nela ("sem substituto" é o que derruba a
-/// capacidade, card 5.4).
+/// capacidade, card 5.4). A máquina do professor diz que é dele e não fala de
+/// substituto: parada, ela não derruba capacidade nenhuma (card 9.2,77).
 String situacaoPc(Pc pc, PcManutencao? aberta) {
-  final partes = [rotuloStatusPc(pc.status)];
+  final partes = [
+    rotuloStatusPc(pc.status),
+    if (pc.deProfessor) 'PC do professor, não conta como vaga',
+  ];
   if (aberta != null) {
     partes.add(
       '${rotuloTipoManutencao(aberta.tipo).toLowerCase()} desde '
@@ -338,7 +379,9 @@ String situacaoPc(Pc pc, PcManutencao? aberta) {
     if (aberta.dataFim != null) {
       partes.add('prevista até ${formatarDataCurta(aberta.dataFim!)}');
     }
-    if (aberta.pcSubstitutoId == null) partes.add('sem substituto');
+    if (aberta.pcSubstitutoId == null && !pc.deProfessor) {
+      partes.add('sem substituto');
+    }
   }
   return partes.join(' · ');
 }
@@ -418,3 +461,126 @@ List<Professor> filtrarProfessores(
   for (final p in todos)
     if ((!filtro.soAtivos || p.ativo) && _casaBusca(filtro.busca, [p.nome])) p,
 ];
+
+// ---------------------------------------------------------------------------
+// Histórico de manutenções (card 9.2,78) — a aba "Manutenções" da tela 10
+// ---------------------------------------------------------------------------
+
+/// Os cinco filtros que o monitor pediu na rodada de 30/09/2026 — "filtrar por
+/// máquina, tipo de manutenção, data, por quem e o que foi feito". Nenhum vem
+/// ligado: a aba abre no histórico inteiro, da mais recente para a mais antiga.
+@immutable
+class FiltroManutencoes {
+  const FiltroManutencoes({
+    this.pcId,
+    this.tipo,
+    this.de,
+    this.ate,
+    this.autorId,
+    this.busca = '',
+  });
+
+  static const semFiltro = FiltroManutencoes();
+
+  final String? pcId;
+  final String? tipo;
+
+  /// As duas pontas do filtro de data, cada uma opcional. Um dia só é
+  /// `de == ate`.
+  final DateTime? de;
+  final DateTime? ate;
+
+  /// `criado_por` — quem registrou.
+  final String? autorId;
+
+  /// Texto procurado na descrição ("o que foi feito").
+  final String busca;
+
+  /// "Data" conta como UM filtro, com uma ponta ou com as duas.
+  int get ativos =>
+      (pcId != null ? 1 : 0) +
+      (tipo != null ? 1 : 0) +
+      (de != null || ate != null ? 1 : 0) +
+      (autorId != null ? 1 : 0) +
+      (busca.trim().isNotEmpty ? 1 : 0);
+
+  FiltroManutencoes copiar({
+    String? Function()? pcId,
+    String? Function()? tipo,
+    DateTime? Function()? de,
+    DateTime? Function()? ate,
+    String? Function()? autorId,
+    String? busca,
+  }) => FiltroManutencoes(
+    pcId: pcId == null ? this.pcId : pcId(),
+    tipo: tipo == null ? this.tipo : tipo(),
+    de: de == null ? this.de : de(),
+    ate: ate == null ? this.ate : ate(),
+    autorId: autorId == null ? this.autorId : autorId(),
+    busca: busca ?? this.busca,
+  );
+}
+
+/// A manutenção toca o período `[de, ate]`, com as DUAS pontas fechadas.
+///
+/// ⚠️ Não é o `[data_inicio, data_fim)` da capacidade (card 5.4): aquele
+/// intervalo responde "o PC estava parado neste dia?", e este responde "o que
+/// aconteceu neste dia?". Uma manutenção feita e encerrada no mesmo dia tem
+/// `data_fim == data_inicio` — intervalo VAZIO na leitura do banco — e é
+/// exatamente a que o monitor procura quando filtra pela data em que a fez.
+bool manutencaoNoPeriodo(PcManutencao m, {DateTime? de, DateTime? ate}) {
+  final inicio = soData(m.dataInicio);
+  final fim = m.dataFim == null ? null : soData(m.dataFim!);
+  if (ate != null && inicio.isAfter(soData(ate))) return false;
+  if (de != null && fim != null && fim.isBefore(soData(de))) return false;
+  return true;
+}
+
+List<PcManutencao> filtrarManutencoes(
+  List<PcManutencao> todas,
+  FiltroManutencoes filtro,
+) => [
+  for (final m in todas)
+    if ((filtro.pcId == null || m.pcId == filtro.pcId) &&
+        (filtro.tipo == null || m.tipo == filtro.tipo) &&
+        (filtro.autorId == null || m.criadoPor == filtro.autorId) &&
+        manutencaoNoPeriodo(m, de: filtro.de, ate: filtro.ate) &&
+        _casaBusca(filtro.busca, [m.descricao ?? '']))
+      m,
+];
+
+/// Da mais recente para a mais antiga, como o monitor pediu: pela data de
+/// início e, no mesmo dia, pela hora em que foi registrada. A tela ordena
+/// mesmo que o repositório já devolva ordenado — a ordem é requisito, e o
+/// teste a mede aqui, sem rede.
+List<PcManutencao> ordenarHistorico(Iterable<PcManutencao> manutencoes) {
+  final lista = List.of(manutencoes);
+  lista.sort((a, b) {
+    final porData = b.dataInicio.compareTo(a.dataInicio);
+    if (porData != 0) return porData;
+    final ca = a.criadoEm;
+    final cb = b.criadoEm;
+    if (ca == null) return cb == null ? 0 : 1;
+    if (cb == null) return -1;
+    return cb.compareTo(ca);
+  });
+  return lista;
+}
+
+/// Quem aparece no histórico (`criado_por` → nome), em ordem de nome — as
+/// opções do filtro "Registrada por". Só quem registrou alguma: um filtro que
+/// oferece uma pessoa e devolve lista vazia é ruído.
+Map<String, String> autoresDoHistorico(Iterable<PcManutencao> manutencoes) {
+  final autores = <String, String>{
+    for (final m in manutencoes)
+      if (m.criadoPor != null && m.criadoPorNome != null)
+        m.criadoPor!: m.criadoPorNome!,
+  };
+  final ordem = autores.keys.toList()
+    ..sort((a, b) => autores[a]!.compareTo(autores[b]!));
+  return {for (final id in ordem) id: autores[id]!};
+}
+
+/// O que a coluna "Registrada por" diz quando não há nome: a carga da
+/// escola-fixture e a da importação não têm autor.
+const semAutor = '—';

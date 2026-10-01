@@ -114,7 +114,7 @@ class _FormularioSalaState extends ConsumerState<FormularioSala> {
             labelText: 'Capacidade nominal *',
             helperText:
                 'Teto físico da sala. A capacidade efetiva conta os PCs '
-                'operacionais até este teto.',
+                'de aluno operacionais até este teto.',
             helperMaxLines: 3,
           ),
           validator: validarInteiroPositivo,
@@ -202,6 +202,7 @@ class _FormularioPcState extends ConsumerState<FormularioPc> {
   );
   late String? _salaId = widget.pc?.salaId ?? widget.salaId;
   late String _status = widget.pc?.status ?? 'OPERACIONAL';
+  late bool _deProfessor = widget.pc?.deProfessor ?? false;
 
   @override
   void dispose() {
@@ -274,6 +275,22 @@ class _FormularioPcState extends ConsumerState<FormularioPc> {
                 ? null
                 : (valor) => setState(() => _status = valor!),
           ),
+        // Card 9.2,77: a máquina do professor não é lugar de aluno. Quem a
+        // marca é quem edita PC (salas.editar; salas.criar no PC novo) — o
+        // formulário inteiro fica só leitura para os outros.
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('PC do professor', style: Tipografia.corpo),
+          subtitle: const Text(
+            'Não é lugar de aluno: não conta na capacidade efetiva da sala '
+            'nem gera pendência quando entra em manutenção.',
+            style: Tipografia.apoio,
+          ),
+          value: _deProfessor,
+          onChanged: somenteLeitura
+              ? null
+              : (valor) => setState(() => _deProfessor = valor),
+        ),
         TextFormField(
           controller: _observacao,
           readOnly: somenteLeitura,
@@ -292,6 +309,7 @@ class _FormularioPcState extends ConsumerState<FormularioPc> {
                 salaId: _salaId!,
                 identificador: _identificador.text.trim(),
                 status: _status,
+                deProfessor: _deProfessor,
                 observacao: _observacao.text,
                 credencialEm: pc?.credencialEm,
               ),

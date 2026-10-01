@@ -172,6 +172,15 @@ jobs:
           node .claude/hooks/guarda-destrutivos.teste.mjs
           node --test .claude/hooks/guarda-destrutivos.test.mjs
 
+      - name: Suíte do aplicador do Auth (templates e campos do provedor)
+        # Card 9.2,81: o config.toml dizia 24 h, senha 8 com letras e dígitos e
+        # "Secure password change" ligado, e os dois projetos hospedados nunca
+        # tiveram nenhum dos quatro. O aplicador é quem leva esses valores ao
+        # painel; a suíte amarra o que ele grava ao config.toml e aos textos dos
+        # e-mails, e exercita o PATCH 200 que não muda nada. Sem token e sem
+        # rede — rodar contra os projetos é de Irineu.
+        run: node --test "supabase/templates/test/**/*.test.mjs"
+
   # ---------------------------------------------------------------------------
   # Extração da planilha: o produtor do arquivo do importador (card 9.2)
   #

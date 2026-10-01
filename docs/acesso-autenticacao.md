@@ -95,6 +95,55 @@ Os valores que importam:
 | `[auth.email] double_confirm_changes` | `true` | trocar o e-mail de acesso confirma nos **dois** endereços |
 | `[auth.email] secure_password_change` | `true` | trocar senha exige sessão recente (máquina compartilhada de laboratório) |
 | `[auth.email] otp_expiry` | `86400` | 24 h: o default de 1 h não sobrevive a um convite mandado no fim da tarde |
+| `[auth.email.notification.password_changed] enabled` | `true` | aviso por e-mail depois de toda troca de senha (card 9.2,81) — `supabase/templates/senha-alterada.html` |
+
+### 2.1 ⚠️ A tabela acima vale SÓ no stack local — medido em 01/10/2026 (card 9.2,81)
+
+Até 01/10/2026 este documento afirmava os valores do `config.toml` como se fossem os do Auth, e
+**nos projetos hospedados nenhum dos quatro valia**. Pela regra do (a) acima o arquivo não é
+aplicado no dev nem no prod — e nada levava esses quatro campos ao painel, nem comparava o painel com
+o arquivo. É a mesma armadilha do item 9.16 das Decisões vigentes (os templates em inglês), em outra
+tela do mesmo painel.
+
+Medido por Irineu no painel (Authentication → Sign In / Providers → Email), dev e prod iguais:
+
+| Campo do painel | Campo da Management API | `config.toml` | Hospedado **antes** | Hospedado **depois** (01/10/2026) |
+|---|---|---|---|---|
+| Email OTP expiration | `mailer_otp_exp` | `86400` | `3600` (1 h) | `86400` |
+| Minimum password length | `password_min_length` | `8` | `6` | `8` |
+| Password requirements | `password_required_characters` | `letters_digits` | nenhum | *Letters and digits* |
+| Secure password change | `security_update_password_require_reauthentication` | `true` | **desligado** | **ligado** |
+| Notificação *Password changed* | `mailer_notifications_password_changed_enabled` | `true` (novo) | desligada | ligada no prod, texto colado à mão; dev a confirmar |
+
+(*Email OTP length*: 6 no `config.toml`, 8 no hospedado. Irrelevante — o fluxo é por link, não por
+código — e por isso fora da conferência.)
+
+**O que os quatro custaram.** O convite do Laurence saiu em 30/09 às 16:19 UTC e foi aberto 19 h 07
+depois: com 1 h, *"email link has expired"*. Foi o vencimento que levou à tentativa no desktop com a
+sessão do Lindomar aberta, e à troca da senha **dele** (card 9.2,80, §5.1). E o *Secure password
+change* desligado é o que deixou essa troca passar: a sessão do Lindomar tinha 21 dias, e com o campo
+ligado o `updateUser` teria exigido reautenticação e falhado — exatamente o cenário de "máquina
+compartilhada de laboratório" que a tabela acima dava como coberto. Ainda: o e-mail de recuperação
+dizia *"O link vale 24 horas"* enquanto o projeto aplicava 1 h — e a instrução "o link vale 24 horas,
+convide no dia" fez o convite sair na tarde anterior.
+
+**Quem leva e confere agora:** `supabase/templates/aplicar-templates.mjs`, o mesmo aplicador dos
+templates, que passou a gravar e auditar os cinco campos acima (`docs/emails-auth.md` §4). Os nomes
+da Management API foram **conferidos**, não supostos: na spec OpenAPI pública e no código do CLI que
+os grava (`apps/cli-go/pkg/config/auth.go`, inclusive na v2.116.0 que o CI fixa) — e o nome "óbvio",
+`secure_password_change`, **não existe** na API. `--conferir-nomes` refaz essa checagem sem token.
+
+**⚠️ Risco aceito — 24 h apesar do aviso do painel (decisão de 01/10/2026).** Com 86400 o painel
+mostra *"OTP expiry exceeds recommended threshold — recommended less than an hour"*. Mantido de
+propósito: é a razão escrita na tabela acima, agora **medida** — com 1 h o convite do Laurence
+venceu. O risco aceito é o de um link interceptado ser usado em até 24 h; ele é de uso único, e o
+*Secure password change* ligado fecha o caso de sessão antiga trocando senha. **Reavaliar no
+go-live** se os convites passarem a sair um a um, na hora.
+
+**O que o *Secure password change* muda no app:** convite e recuperação criam sessão **nova**, então
+não são afetados. Troca de senha a partir de sessão comum com mais de 24 h passa a exigir
+reautenticação (`400 reauthentication_needed`) — e o app não oferece esse caminho (§5.1, "fora do
+escopo"): quem quer trocar usa "Esqueci minha senha". Falhar fechado é o lado certo.
 
 ---
 
@@ -257,7 +306,9 @@ uma pergunta que vai aparecer.
 
 1. **Sign In / Providers → Email**: provedor **habilitado**; **Allow new users to sign up
    DESABILITADO** (é o `enable_signup` de `[auth]`); confirmação de e-mail habilitada; senha mínima 8
-   com letras e dígitos; `Secure password change` habilitado.
+   com letras e dígitos; `Secure password change` habilitado; *Email OTP expiration* `86400`.
+   ⚠️ Os quatro últimos **não estavam** aplicados até 01/10/2026 (§2.1). Hoje quem os grava e confere
+   é o `supabase/templates/aplicar-templates.mjs` — `--conferir <ref>` é a prova, não a tela.
 2. **URL Configuration → Site URL**: a URL pública daquele ambiente — `https://app.gestaoim360.com`
    em prod, `https://homolog.gestaoim360.com` em dev. **Redirect URLs**: `<url pública>/**`. O card
    3.8 fechou o formato exato e a razão de cada linha — `docs/deploy-web.md` §4 é a lista de
@@ -304,6 +355,12 @@ Mesmo formato do §14 do card 2.2 e do §16 do 2.8.
 | 5 | ~~Edge Function do convite, com o contrato do §3.2 (verificar `admin.gerir_usuarios` com o token do chamador)~~ — ✅ **feita em 03/09/2026 (card 4.7)**, `docs/administracao.md` §2 | `supabase/functions/` | **4.7** | média — até lá o painel resolve |
 | 6 | ~~Ligar `[edge_runtime]` em `config.toml` quando o item 5 acontecer~~ — ✅ **feito no card 4.7**, com `[functions.convidar-usuario] verify_jwt = true` | `supabase/config.toml` | 4.7 | baixa |
 | 7 | Seed do card 3.6 liga o **primeiro usuário de direção** ao perfil `DIRECAO`: o convite cria o espelho, mas ninguém pode nada até existir `usuario_perfil` | migração do seed | **3.6** | **bloqueante** para o 3.7 ter em quem logar — hoje ninguém no dev tem perfil |
+| 8 | ✅ **Os campos do provedor Email do `config.toml` valerem também no hospedado** — `otp_expiry`, senha mínima, requisitos e *Secure password change* —, achado de 01/10/2026: **nunca tinham valido** (§2.1). Aplicados por Irineu no painel em 01/10/2026; desde o card 9.2,81 o `aplicar-templates.mjs` os grava e audita | painel do Supabase + `supabase/templates/` | **9.2,81** | **alta** — a falta dos quatro levou à troca de senha do card 9.2,80 |
+
+⚠️ **Este documento afirmava os valores do `config.toml` como se valessem nos projetos hospedados**,
+e isso só foi desmentido por medição, quatro semanas depois (§2.1). O `config.toml` é o stack local e
+a lista de conferência; o que vale no dev e no prod é o que `aplicar-templates.mjs --conferir <ref>`
+diz.
 
 ---
 

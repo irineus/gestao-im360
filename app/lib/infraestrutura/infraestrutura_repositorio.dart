@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../erros/erro_app.dart';
+import '../sessao/nomes_usuarios.dart';
 import 'infraestrutura.dart';
 
 /// Acesso à infraestrutura física (card 4.5). Interface para o teste injetar
@@ -23,6 +24,11 @@ abstract interface class InfraestruturaRepositorio {
 
   /// Todas as manutenções da unidade; a tela deriva a aberta de cada PC.
   Future<List<PcManutencao>> manutencoes();
+
+  /// O histórico da aba Manutenções (card 9.2,78): as mesmas linhas, com quem
+  /// registrou e quando — o nome por `fn_usuarios_nomes()`, nunca pelo embed
+  /// em `usuario`, que volta nulo para quem não tem `admin.ler` (card 9.2,74).
+  Future<List<PcManutencao>> historicoManutencoes();
 
   /// Insere (sem `id`) ou atualiza — encerrar é atualizar `data_fim`. Não há
   /// exclusão: manutenção registrada é histórico (card 4.3 (a)).
@@ -54,7 +60,8 @@ class InfraestruturaRepositorioSupabase implements InfraestruturaRepositorio {
 
   static const _colunasSala = 'id, nome, tipo, capacidade_nominal, ativo';
   static const _colunasPc =
-      'id, sala_id, identificador, status, observacao, credencial_em';
+      'id, sala_id, identificador, status, de_professor, observacao, '
+      'credencial_em';
   static const _colunasManutencao =
       'id, pc_id, tipo, data_inicio, data_fim, descricao, pc_substituto_id';
   static const _colunasProfessor = 'id, nome, ativo';
@@ -116,6 +123,28 @@ class InfraestruturaRepositorioSupabase implements InfraestruturaRepositorio {
         .select(_colunasManutencao)
         .order('data_inicio', ascending: false);
     return linhas.map(PcManutencao.deLinha).toList();
+  }
+
+  @override
+  Future<List<PcManutencao>> historicoManutencoes() async {
+    final (linhas, nomes) = await (
+      _cliente
+          .from('pc_manutencao')
+          .select('$_colunasManutencao, criado_por, criado_em')
+          .order('data_inicio', ascending: false)
+          .order('criado_em', ascending: false),
+      nomesDaUnidade(_cliente),
+    ).wait;
+    return [
+      for (final linha in linhas)
+        PcManutencao.deLinha(
+          comNomes(
+            linha,
+            nomes,
+            colunaParaEmbed: const {'criado_por': 'autor'},
+          ),
+        ),
+    ];
   }
 
   @override
