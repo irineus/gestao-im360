@@ -9,6 +9,7 @@ import '../theme/dimensoes.dart';
 import '../theme/preferencia_tema.dart';
 import '../theme/tipografia.dart';
 import 'marca.dart';
+import 'versao.dart';
 
 /// O shell é **um componente** — dono da navegação, do cabeçalho e do menu do
 /// usuário; as telas só entregam conteúdo (docs/design-system.md §3).
@@ -342,6 +343,10 @@ class _MenuUsuario extends ConsumerWidget {
           ),
         ),
         const PopupMenuItem(value: 'sair', child: Text('Sair')),
+        // Card 9.2,82: qual versão está aberta. Item desabilitado — informa,
+        // não age.
+        const PopupMenuDivider(),
+        const PopupMenuItem(enabled: false, child: TextoVersao()),
       ],
       // ⚠️ O alvo é do contrato, não do ícone: sem a restrição, o gatilho
       // media 24×24 px — metade do mínimo do design-system §8.4, e o menu do
@@ -497,6 +502,11 @@ class _GavetaMais extends ConsumerWidget {
               title: const Text('Sair', style: Tipografia.corpo),
               minTileHeight: Dim.alvoMobile,
               onTap: () => ref.read(sessaoProvider.notifier).sair(),
+            ),
+            // Card 9.2,82: qual versão está aberta, no pé da gaveta.
+            const Padding(
+              padding: EdgeInsets.fromLTRB(Dim.e16, Dim.e8, Dim.e16, Dim.e16),
+              child: TextoVersao(),
             ),
           ],
         ),

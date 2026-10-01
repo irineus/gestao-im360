@@ -6,6 +6,7 @@ import '../erros/erro_app.dart';
 import '../sessao/sessao_provider.dart';
 import '../theme/dimensoes.dart';
 import '../theme/tipografia.dart';
+import '../widgets/versao.dart';
 import '../widgets/marca.dart';
 
 /// Tela 1 — login (docs/wireframes.md §4).
@@ -197,6 +198,10 @@ class _TelaLoginState extends ConsumerState<TelaLogin> {
                     onPressed: _enviando ? null : _esqueciSenha,
                     child: const Text('Esqueci minha senha'),
                   ),
+                  // Qual app está aberto (card 9.2,82) — é a primeira pergunta
+                  // quando alguém diz "continua igual" depois de uma publicação.
+                  const SizedBox(height: Dim.e24),
+                  const TextoVersao(alinhamento: TextAlign.center),
                 ],
               ),
             ),

@@ -10,6 +10,7 @@ import 'package:gestao_im360/sessao/sessao.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/sessao/sessao_repositorio.dart';
 import 'package:gestao_im360/telas/redefinir_senha.dart';
+import 'package:gestao_im360/widgets/versao.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -173,6 +174,7 @@ void main() {
         expect(find.text(tituloLinkRecusado), findsOneWidget);
         expect(find.text(textoLinkVencido), findsOneWidget);
         expect(find.text(textoPecaOutroLink), findsOneWidget);
+        expect(find.text(textoVersao), findsOneWidget);
         // De quem é a sessão aberta, e a saída.
         expect(find.text(textoSessaoAberta(_lindomar.email)), findsOneWidget);
         await tester.tap(find.text('Sair'));

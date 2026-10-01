@@ -12,6 +12,7 @@ import 'package:gestao_im360/telas/login.dart';
 import 'package:gestao_im360/telas/redefinir_senha.dart';
 import 'package:gestao_im360/telas/selecao_unidade.dart';
 import 'package:gestao_im360/telas/sem_acesso.dart';
+import 'package:gestao_im360/widgets/versao.dart';
 
 import 'apoio/app_de_teste.dart';
 import 'apoio/carregar.dart';
@@ -128,6 +129,8 @@ void main() {
         await tester.tap(find.text('Entrar'));
         await carregar(tester);
         expect(find.text('E-mail ou senha incorretos.'), findsOneWidget);
+        // Card 9.2,82: a versão aparece já na tela de entrada.
+        expect(find.text(textoVersao), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
 

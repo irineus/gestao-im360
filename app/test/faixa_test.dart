@@ -7,6 +7,7 @@ import 'package:gestao_im360/rotas/rotas.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/theme/dimensoes.dart';
 import 'package:gestao_im360/widgets/shell_im360.dart';
+import 'package:gestao_im360/widgets/versao.dart';
 
 import 'apoio/app_de_teste.dart';
 import 'apoio/pendencias_falso.dart';
@@ -169,6 +170,19 @@ void main() {
       expect(find.text('Instituto Mix Charqueadas'), findsOneWidget);
       expect(find.text('Sair'), findsOneWidget);
       expect(find.text('Tema escuro'), findsOneWidget);
+      // Card 9.2,82: qual versão está aberta.
+      expect(find.text(textoVersao), findsOneWidget);
+    });
+
+    testWidgets('no desktop o menu do usuário mostra a versão', (tester) async {
+      // Card 9.2,82: em 01/10/2026 o navegador rodava do cache a versão
+      // anterior à correção publicada, e nada na tela dizia qual era.
+      await montar(tester, const Size(1400, 900));
+      expect(find.text(textoVersao), findsNothing);
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+      expect(find.text(textoVersao), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('o ícone do usuário do app bar abre a MESMA gaveta', (
