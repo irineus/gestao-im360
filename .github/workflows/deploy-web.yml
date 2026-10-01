@@ -195,7 +195,12 @@ jobs:
         run: |
           grep -qF "$SUPABASE_URL"  build/web/main.dart.js || { echo "::error::o bundle não contém SUPABASE_URL=$SUPABASE_URL"; exit 1; }
           grep -qF "$APP_URL_BASE"  build/web/main.dart.js || { echo "::error::o bundle não contém APP_URL_BASE=$APP_URL_BASE"; exit 1; }
-          grep -qF "\"$APP_VERSAO\"" build/web/main.dart.js || { echo "::error::o bundle não contém a versão $APP_VERSAO do pubspec"; exit 1; }
+          # A versão não fica isolada entre aspas: o dart2js junta as constantes
+          # e o bundle traz `"Versão 0.1.0"` (medido em 01/10/2026 — a
+          # primeira versão deste grep, com aspas, reprovou o deploy). Procura-se
+          # todo número x.y.z do bundle e exige-se um IGUAL à versão — 0.1.1 não
+          # passa por 0.1.10, e não há escape de ponto para errar.
+          grep -oE '[0-9]+\.[0-9]+\.[0-9]+' build/web/main.dart.js | grep -qxF "$APP_VERSAO" || { echo "::error::o bundle não contém a versão $APP_VERSAO do pubspec"; exit 1; }
           # Card 3.12: o rótulo que o Sentry vai carimbar em cada erro. Errado,
           # ele manda investigar produção por causa de um erro de homologação.
           #
