@@ -32,7 +32,12 @@ em <http://127.0.0.1:54324>.
 | `APP_URL_BASE` | base pública do app, usada para montar o `redirectTo` da recuperação de senha. Precisa estar nas **Redirect URLs** dos dois projetos, com o curinga `/**` (`docs/deploy-web.md` §4) |
 | `SENTRY_DSN` | DSN do projeto `irineu-pinheiro/gestao-im360` (card 3.12). **Sem ele o Sentry não inicializa** — é o que mantém `flutter run` e a suíte sem mandar nada para lugar nenhum. Público por desenho, como a chave anônima: autoriza escrever evento, nunca ler. ⚠️ Ao mudar o DSN, conferir o `connect-src` de `web/_headers` — CSP que barra a ingestão bloqueia o envio **em silêncio** (`docs/observabilidade.md` §4) |
 | `APP_AMBIENTE` | rótulo do ambiente no Sentry: `homologacao` ou `producao`. Fora do CI, deixar em branco — o default é `local` |
-| `APP_VERSAO` | versão mostrada na tela de entrada e no menu do usuário (card 9.2,82): o `deploy-web` monta `<commit> de <dd/mm/aaaa hh:mm>`. Fora do CI, deixar em branco — o default é `local` |
+
+**Versão** (cards 9.2,82 e 9.2,83): não é define. É o `version:` do `pubspec.yaml`
+(`MAJOR.MINOR.REVISION+BUILD`, hoje `0.1.0+1`), que o Flutter injeta em todo build como
+`FLUTTER_BUILD_NAME`; a tela de entrada e o menu do usuário mostram `Versão 0.1.0`. REVISION e BUILD
+sobem em toda mudança que gere código novo — o job `migrações (portão)` reprova o PR que esquecer
+(`portao-versao/versao.mjs`); MINOR por sugestão da sessão; MAJOR só por pedido de Irineu.
 
 ## Empacotar para o Cloudflare Pages
 

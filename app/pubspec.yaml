@@ -4,19 +4,15 @@ description: "Gestão IM360 — gestão de alunos, turmas, vagas e material did�
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-# The following defines the version and build number for your application.
-# A version number is three numbers separated by dots, like 1.2.43
-# followed by an optional build number separated by a +.
-# Both the version and the builder number may be overridden in flutter
-# build by specifying --build-name and --build-number, respectively.
-# In Android, build-name is used as versionName while build-number used as versionCode.
-# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
-# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
-# Read more about iOS versioning at
-# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-# In Windows, build-name is used as the major, minor, and patch parts
-# of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+# A VERSÃO DO SISTEMA (card 9.2,83, regra de Irineu em 01/10/2026):
+# MAJOR.MINOR.REVISION+BUILD, mostrada na tela de entrada e no menu do usuário
+# (o Flutter a injeta no build como FLUTTER_BUILD_NAME — lib/config/ambiente.dart).
+#   - REVISION sobe em TODA mudança que gere código novo, e o BUILD (+N) junto;
+#   - MINOR é sugerida pela sessão: feature grande nova, fechamento de fase;
+#   - MAJOR só por pedido explícito de Irineu.
+# O job "migrações (portão)" do testes.yml reprova o PR que muda código sem
+# subir a versão (portao-versao/versao.mjs, com a lista do que conta como código).
+version: 0.1.0+1
 
 environment:
   sdk: ^3.13.2
