@@ -125,6 +125,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # O portão de versão compara com a base do PR: precisa do histórico.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -140,6 +143,18 @@ jobs:
 
       - name: Varrer supabase/migrations
         run: node portao-migracoes/varredor.mjs supabase/migrations
+
+      - name: Suíte do portão de versão
+        run: node --test "portao-versao/test/**/*.test.mjs"
+
+      - name: PR com código novo sobe a versão
+        # Card 9.2,83, regra de Irineu: REVISION sobe em toda mudança que gere
+        # código (a lista está em portao-versao/versao.mjs), MINOR por sugestão
+        # da sessão, MAJOR só por pedido dele. A versão é o que a tela mostra
+        # para dizer QUAL app está aberto — dois deploys com o mesmo número
+        # mentiriam. Só em PR: é contra a base dele que se compara.
+        if: github.event_name == 'pull_request'
+        run: node portao-versao/versao.mjs "origin/${{ github.base_ref }}"
 
       - name: Suíte do guarda de destrutivos
         # O outro portão do projeto, e o único que vive fora do CI: o hook que

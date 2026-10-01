@@ -218,10 +218,13 @@ zona. O `deploy-web` ganhou o passo **"O navegador revalida o bundle a cada aber
 `Cache-Control` do endereço público depois de publicar e reprova sem `max-age=0` — o passo do sha
 (§5.9) não pegava isto, porque o `curl` não tem cache.
 
-**Versão na tela (card 9.2,82).** O `deploy-web` passa `--dart-define=APP_VERSAO="<commit> de
-<dd/mm/aaaa hh:mm>"` (hora de São Paulo), e o app a mostra na tela de entrada, na tela de senha, no
-menu do usuário (desktop) e na gaveta (celular): `Versão 76acd34 de 01/10/2026 13:05`. É o que
-responde "qual app está aberto?" sem abrir o DevTools. Build sem o define mostra `Versão local`.
+**Versão na tela (cards 9.2,82 e 9.2,83).** O app mostra a versão na tela de entrada, na tela de
+senha, no menu do usuário (desktop) e na gaveta (celular): `Versão 0.1.0`. É o que responde "qual app
+está aberto?" sem abrir o DevTools. A fonte é o `version:` do `app/pubspec.yaml`, que o Flutter injeta
+como `FLUTTER_BUILD_NAME` — sem define manual. O 9.2,82 nasceu mostrando commit e hora do build; Irineu
+preferiu número sequencial (9.2,83): REVISION sobe em toda mudança que gere código, MINOR por sugestão
+da sessão, MAJOR só por pedido dele, e o portão `portao-versao/` reprova o PR que esquecer. O
+`deploy-web` confere que a versão do pubspec está no bundle.
 
 **CSP.** `script-src 'self' 'wasm-unsafe-eval'` (o `wasm-unsafe-eval` é o CanvasKit; sem ele o app
 não desenha), `worker-src 'self' blob:`, `style-src 'self' 'unsafe-inline'` (a engine injeta estilo

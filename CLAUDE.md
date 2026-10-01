@@ -46,6 +46,7 @@ Não confundir com o board do **Desmalha** (outro projeto de Irineu, data source
 - **RLS em toda tabela.** O código verifica permissões via `tem_permissao(codigo)`, **nunca perfis**. RLS filtra também por `unidade_id` do usuário.
 - Toda tabela de negócio: `id uuid`, `unidade_id`, `criado_em/por`, `atualizado_em/por`.
 - Movimentos de estoque imutáveis; correções por estorno.
+- **Versão do sistema = `version:` de `app/pubspec.yaml`, `MAJOR.MINOR.REVISION+BUILD`** (regra de Irineu, 01/10/2026, card 9.2,83), mostrada na tela de entrada e no menu do usuário. **Toda mudança que gere código novo** (app, migração, Edge Function, worker — a lista está em `portao-versao/versao.mjs`) sobe a **REVISION e o BUILD** no mesmo PR; a **MINOR** a sessão **sugere** a Irineu (feature grande nova, fechamento de fase); a **MAJOR** só muda por **pedido explícito** dele. O job `migrações (portão)` do `testes.yml` reprova o PR que esquecer. Ao avisar promoção ou entrega, dizer a versão.
 - Nomes em português, snake_case (tabelas, colunas, funções). Documentos e commits em português.
 - Credenciais de PCs nunca em texto puro.
 - Flutter: `go_router`, Riverpod, `supabase_flutter`; desktop-first para secretaria, mobile-friendly para monitor.

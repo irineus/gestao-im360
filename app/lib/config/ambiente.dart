@@ -45,16 +45,18 @@ abstract final class Ambiente {
     defaultValue: 'local',
   );
 
-  /// A versão do build, para dizer QUAL app está aberto (card 9.2,82): o
-  /// commit e a hora do build, montados pelo `deploy-web` (`3d19aa7 ·
-  /// 01/10/2026 13:05`). `local` num build sem define.
+  /// A versão do sistema, para dizer QUAL app está aberto (cards 9.2,82 e
+  /// 9.2,83): o `version:` do `pubspec.yaml`, sem o `+BUILD` — `0.1.0`. Quem a
+  /// passa é o próprio Flutter, que define `FLUTTER_BUILD_NAME` em todo build a
+  /// partir do pubspec; não há define manual para esquecer. A regra de quando
+  /// ela sobe está no comentário do pubspec, e o portão `portao-versao/` a
+  /// cobra no CI.
   ///
   /// Nasceu de um caso medido em 01/10/2026: o app novo estava publicado e o
   /// navegador de Irineu rodava o ANTIGO, do cache — e nada na tela permitia
-  /// saber qual dos dois estava aberto. Fica fora de [faltando] pelo mesmo
-  /// motivo do Sentry: build sem versão é pior, não quebrado.
+  /// saber qual dos dois estava aberto.
   static const versao = String.fromEnvironment(
-    'APP_VERSAO',
+    'FLUTTER_BUILD_NAME',
     defaultValue: 'local',
   );
 
