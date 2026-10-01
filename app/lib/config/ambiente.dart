@@ -45,6 +45,19 @@ abstract final class Ambiente {
     defaultValue: 'local',
   );
 
+  /// A versão do build, para dizer QUAL app está aberto (card 9.2,82): o
+  /// commit e a hora do build, montados pelo `deploy-web` (`3d19aa7 ·
+  /// 01/10/2026 13:05`). `local` num build sem define.
+  ///
+  /// Nasceu de um caso medido em 01/10/2026: o app novo estava publicado e o
+  /// navegador de Irineu rodava o ANTIGO, do cache — e nada na tela permitia
+  /// saber qual dos dois estava aberto. Fica fora de [faltando] pelo mesmo
+  /// motivo do Sentry: build sem versão é pior, não quebrado.
+  static const versao = String.fromEnvironment(
+    'APP_VERSAO',
+    defaultValue: 'local',
+  );
+
   /// Sem `#`: a rota vive no caminho (`lib/config/estrategia_url.dart`), e o
   /// fragmento fica livre para os tokens que o Auth devolve.
   static String get urlRedefinicaoSenha => '$urlBase$rotaRedefinicaoSenha';

@@ -206,6 +206,23 @@ não desenharia, sem erro legível. O custo do `must-revalidate` é um 304 por a
 tela branca para quem abriu o app na semana anterior. Fica como está até o build passar a pôr hash
 nos nomes.
 
+⚠️ **O `_headers` não é a última palavra no domínio próprio (medido em 01/10/2026, cards 9.2,80 e
+9.2,82).** O `*.pages.dev` entrega o `max-age=0` deste arquivo; `homolog.gestaoim360.com` entregava
+`main.dart.js` e `flutter_bootstrap.js` com **`max-age=14400`**, e `index.html`/`.wasm` com 0. Quem
+reescreve é a **zona** `gestaoim360.com` do Cloudflare: o *Browser Cache TTL* dela (4 h por padrão)
+sobrepõe o cabeçalho da origem nas extensões que o Cloudflare guarda em cache. Efeito medido: a
+correção do card 9.2,80 estava publicada e o navegador de Irineu continuou rodando a versão anterior,
+com o mesmo defeito — até um Ctrl+Shift+R. Correção no painel da zona: **Caching → Configuration →
+Browser Cache TTL → Respect Existing Headers**, e vale para homologação e produção, que dividem a
+zona. O `deploy-web` ganhou o passo **"O navegador revalida o bundle a cada abertura"**, que lê o
+`Cache-Control` do endereço público depois de publicar e reprova sem `max-age=0` — o passo do sha
+(§5.9) não pegava isto, porque o `curl` não tem cache.
+
+**Versão na tela (card 9.2,82).** O `deploy-web` passa `--dart-define=APP_VERSAO="<commit> de
+<dd/mm/aaaa hh:mm>"` (hora de São Paulo), e o app a mostra na tela de entrada, na tela de senha, no
+menu do usuário (desktop) e na gaveta (celular): `Versão 76acd34 de 01/10/2026 13:05`. É o que
+responde "qual app está aberto?" sem abrir o DevTools. Build sem o define mostra `Versão local`.
+
 **CSP.** `script-src 'self' 'wasm-unsafe-eval'` (o `wasm-unsafe-eval` é o CanvasKit; sem ele o app
 não desenha), `worker-src 'self' blob:`, `style-src 'self' 'unsafe-inline'` (a engine injeta estilo
 inline), e `connect-src` restrito aos **dois hosts do Supabase**. Verificado em 01/09/2026 servindo

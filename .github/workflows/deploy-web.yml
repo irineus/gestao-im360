@@ -169,12 +169,23 @@ jobs:
         # build de release busca o CanvasKit no gstatic.com e, com o CDN
         # inalcançável (filtro de rede da escola, proxy), o app abre em tela
         # branca sem erro nenhum (card 3.8 §1).
+        #
+        # `APP_VERSAO` (card 9.2,82): o commit e a hora do build, no fuso da
+        # escola, mostrados na tela de entrada e no menu do usuário. Em
+        # 01/10/2026 o app novo estava publicado e o navegador rodava o antigo,
+        # do cache — e nada na tela dizia qual dos dois estava aberto. Só ASCII
+        # de propósito: o dart2js pode escapar caractere não ASCII, e aí o grep
+        # do passo seguinte não acharia o valor no bundle.
         run: |
+          APP_VERSAO="${GITHUB_SHA::7} de $(TZ=America/Sao_Paulo date '+%d/%m/%Y %H:%M')"
+          echo "APP_VERSAO=$APP_VERSAO" >> "$GITHUB_ENV"
+          echo "versão: $APP_VERSAO"
           flutter build web --release --no-web-resources-cdn \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --dart-define=APP_URL_BASE="$APP_URL_BASE" \
-            --dart-define=SENTRY_DSN="$SENTRY_DSN"
+            --dart-define=SENTRY_DSN="$SENTRY_DSN" \
+            --dart-define=APP_VERSAO="$APP_VERSAO"
 
       - name: O bundle carrega a configuração DESTE ambiente
         # `APP_URL_BASE` errado "erra baixo e cala" (card 3.8 §1): é dele que sai
@@ -186,6 +197,7 @@ jobs:
         run: |
           grep -qF "$SUPABASE_URL"  build/web/main.dart.js || { echo "::error::o bundle não contém SUPABASE_URL=$SUPABASE_URL"; exit 1; }
           grep -qF "$APP_URL_BASE"  build/web/main.dart.js || { echo "::error::o bundle não contém APP_URL_BASE=$APP_URL_BASE"; exit 1; }
+          grep -qF "$APP_VERSAO"    build/web/main.dart.js || { echo "::error::o bundle não contém APP_VERSAO=$APP_VERSAO"; exit 1; }
           # Card 3.12: o rótulo que o Sentry vai carimbar em cada erro. Errado,
           # ele manda investigar produção por causa de um erro de homologação.
           #
@@ -298,6 +310,49 @@ jobs:
             echo "Detalhe em \`docs/deploy-web.md\` §5.9."
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
+
+      - name: O navegador revalida o bundle a cada abertura
+        # Cards 9.2,80 e 9.2,82 — medido em 01/10/2026. O `_headers` manda
+        # `max-age=0, must-revalidate` em TUDO, e o `*.pages.dev` obedece; mas o
+        # domínio próprio passa pela ZONA `gestaoim360.com` do Cloudflare, cujo
+        # "Browser Cache TTL" (4 h por padrão) reescreve o cabeçalho das
+        # extensões que ela guarda em cache — `main.dart.js` saía com
+        # `max-age=14400`, enquanto `index.html` e `.wasm` saíam com 0. Efeito:
+        # depois de toda publicação, quem já tinha aberto o app roda a versão
+        # ANTERIOR por até 4 h. Foi assim que a correção do card 9.2,80, já no
+        # ar, falhou no navegador de Irineu exatamente como antes.
+        #
+        # O passo anterior não pega isto: o `curl` não tem cache, então o sha
+        # bate. Aqui se mede o que o NAVEGADOR recebe. A correção é do painel da
+        # zona (Caching → Configuration → Browser Cache TTL → Respect Existing
+        # Headers) e vale para homologação E produção, que dividem a zona.
+        # Vermelho aqui não desfaz a publicação: o bundle novo já está no ar.
+        if: github.ref_name == 'main' || github.ref_name == 'develop'
+        shell: bash
+        run: |
+          set -uo pipefail
+          falhou=0
+          for arquivo in main.dart.js flutter_bootstrap.js; do
+            cabecalho="$(curl -sS -D - -o /dev/null --max-time 60 "$APP_URL_BASE/$arquivo" | tr -d '\r' | grep -i '^cache-control:' || true)"
+            echo "$arquivo -> ${cabecalho:-sem Cache-Control}"
+            if ! printf '%s' "$cabecalho" | grep -qiE 'max-age=0([^0-9]|$)|no-cache|no-store'; then
+              falhou=1
+              echo "::error title=O navegador guarda o bundle em cache::$APP_URL_BASE/$arquivo chega com '${cabecalho:-sem Cache-Control}'. Quem já abriu o app roda a versão anterior até o cache vencer. Painel da zona gestaoim360.com: Caching → Configuration → Browser Cache TTL → Respect Existing Headers."
+            fi
+          done
+          if [ "$falhou" = 1 ]; then
+            {
+              echo "## O navegador vai rodar a versão anterior"
+              echo
+              echo "O \`_headers\` manda \`max-age=0\`, e o domínio público entrega mais que isso."
+              echo "Quem reescreve é a **zona** \`gestaoim360.com\` do Cloudflare."
+              echo
+              echo "**Correção (painel do Cloudflare, só Irineu):** zona \`gestaoim360.com\` → Caching →"
+              echo "Configuration → **Browser Cache TTL** = **Respect Existing Headers**."
+              echo "Depois, um \`workflow_dispatch\` deste workflow nesta branch."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
       - name: Resumo
         run: |

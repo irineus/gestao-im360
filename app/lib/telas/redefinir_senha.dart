@@ -10,6 +10,7 @@ import '../sessao/sessao_repositorio.dart';
 import '../theme/dimensoes.dart';
 import '../theme/tipografia.dart';
 import '../widgets/formulario.dart';
+import '../widgets/versao.dart';
 
 /// Destino do link de recuperação (card 3.5 §5) e do link de **convite**
 /// (card 4.7). Define a senha — e diz, no caso do convite, que é isso que
@@ -171,7 +172,17 @@ class _TelaRedefinirSenhaState extends ConsumerState<TelaRedefinirSenha> {
             constraints: const BoxConstraints(
               maxWidth: Dim.larguraFormularioMax,
             ),
-            child: conteudo,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                conteudo,
+                // Card 9.2,82: o caso que fez a versão aparecer foi justamente
+                // esta tela, rodando do cache a versão anterior à correção.
+                const SizedBox(height: Dim.e24),
+                const TextoVersao(alinhamento: TextAlign.center),
+              ],
+            ),
           ),
         ),
       ),
