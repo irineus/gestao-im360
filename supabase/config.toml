@@ -155,6 +155,14 @@ max_frequency = "60s"
 otp_length = 6
 # 24h para o link do convite e da recuperação. O default de 1h não sobrevive a
 # um convite mandado no fim da tarde.
+#
+# ⚠️ Card 9.2,81 (01/10/2026): este arquivo vale SÓ no stack local. Os dois
+#    projetos hospedados estavam com otp_expiry 1 h, senha mínima 6, sem
+#    requisito e secure_password_change DESLIGADO — os quatro valores desta
+#    seção e da [auth] nunca tinham chegado lá. Quem leva e confere é
+#    supabase/templates/aplicar-templates.mjs (`--conferir <ref>`), não um
+#    `config push`. O painel avisa que 24 h passa do recomendado: mantido de
+#    propósito, risco aceito em docs/acesso-autenticacao.md §2.
 otp_expiry = 86400
 
 # Assunto e corpo dos dois e-mails que este sistema manda — card 4.7,6,
@@ -163,7 +171,7 @@ otp_expiry = 86400
 # (Authentication → Emails), porque `[auth.email.template]` só vale para o stack
 # local. Divergir é possível e o §4 do documento é a lista de conferência.
 #
-# ⚠️ Só estes dois estão traduzidos, e é de propósito: são os únicos que o
+# ⚠️ Só estes estão traduzidos, e é de propósito: são os únicos que o
 #    sistema dispara. `confirmation` não existe com `enable_signup = false`,
 #    `magic_link` e `reauthentication` não são chamados pelo app, e
 #    `email_change` só é alcançável por alguém editando o e-mail no painel —
@@ -175,6 +183,14 @@ content_path = "./supabase/templates/convite.html"
 [auth.email.template.recovery]
 subject = "Redefinir sua senha do Gestão IM360"
 content_path = "./supabase/templates/recuperacao-senha.html"
+
+# O aviso mandado DEPOIS de uma troca de senha (card 9.2,81). Não é link: é a
+# pessoa ficar sabendo no mesmo minuto quando a senha muda sem ela ter pedido —
+# o que teria avisado o Lindomar em 01/10/2026 (card 9.2,80).
+[auth.email.notification.password_changed]
+enabled = true
+subject = "Sua senha do Gestão IM360 foi alterada"
+content_path = "./supabase/templates/senha-alterada.html"
 
 # [auth.email.smtp] fica DELIBERADAMENTE fora deste arquivo — ver o aviso do
 # topo. O SMTP próprio é configurado no painel de cada projeto (pendência de
