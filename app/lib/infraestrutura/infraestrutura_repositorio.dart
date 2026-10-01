@@ -54,7 +54,8 @@ class InfraestruturaRepositorioSupabase implements InfraestruturaRepositorio {
 
   static const _colunasSala = 'id, nome, tipo, capacidade_nominal, ativo';
   static const _colunasPc =
-      'id, sala_id, identificador, status, observacao, credencial_em';
+      'id, sala_id, identificador, status, de_professor, observacao, '
+      'credencial_em';
   static const _colunasManutencao =
       'id, pc_id, tipo, data_inicio, data_fim, descricao, pc_substituto_id';
   static const _colunasProfessor = 'id, nome, ativo';

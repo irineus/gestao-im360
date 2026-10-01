@@ -88,6 +88,7 @@ class Pc {
     required this.salaId,
     required this.identificador,
     this.status = 'OPERACIONAL',
+    this.deProfessor = false,
     this.observacao,
     this.credencialEm,
   });
@@ -97,6 +98,7 @@ class Pc {
     salaId: '${linha['sala_id']}',
     identificador: '${linha['identificador']}',
     status: '${linha['status']}',
+    deProfessor: linha['de_professor'] as bool? ?? false,
     observacao: linha['observacao'] as String?,
     credencialEm: linha['credencial_em'] == null
         ? null
@@ -107,6 +109,11 @@ class Pc {
   final String salaId;
   final String identificador;
   final String status;
+
+  /// A máquina do professor (`pc.de_professor`, card 9.2,77): não é lugar de
+  /// aluno e não conta na capacidade efetiva — nem na do banco
+  /// (`fn_capacidade_efetiva`) nem na que a tela deriva ([resumirSalas]).
+  final bool deProfessor;
   final String? observacao;
 
   /// Carimbo da credencial no Vault (`pc.credencial_em`), legível com
@@ -121,6 +128,7 @@ class Pc {
     salaId: salaId,
     identificador: identificador,
     status: status ?? this.status,
+    deProfessor: deProfessor,
     observacao: observacao,
     credencialEm: credencialEm ?? this.credencialEm,
   );
@@ -133,6 +141,7 @@ class Pc {
     'sala_id': salaId,
     'identificador': identificador,
     'status': status,
+    'de_professor': deProfessor,
     'observacao': (observacao == null || observacao!.trim().isEmpty)
         ? null
         : observacao!.trim(),
@@ -254,8 +263,10 @@ class CredencialPc {
 // ---------------------------------------------------------------------------
 
 /// O que o cartão da sala mostra: quantos PCs tem, quantos operam e a
-/// capacidade efetiva — PCs OPERACIONAIS até o teto nominal, a mesma conta
-/// que `fn_capacidade_efetiva` (card 5.2) faz por bloco, sem o override.
+/// capacidade efetiva — PCs de ALUNO operacionais até o teto nominal, a mesma
+/// conta que `fn_capacidade_efetiva` (card 5.2) faz por bloco, sem o override.
+/// O PC do professor opera mas não é vaga (card 9.2,77): entra em
+/// `operacionais` e fica fora de `efetiva`.
 @immutable
 class ResumoSala {
   const ResumoSala({
@@ -277,10 +288,14 @@ int capacidadeEfetiva({required int nominal, required int operacionais}) =>
 Map<String, ResumoSala> resumirSalas(Iterable<Sala> salas, Iterable<Pc> pcs) {
   final total = <String, int>{};
   final operacionais = <String, int>{};
+  final deAluno = <String, int>{};
   for (final pc in pcs) {
     total[pc.salaId] = (total[pc.salaId] ?? 0) + 1;
     if (pc.operacional) {
       operacionais[pc.salaId] = (operacionais[pc.salaId] ?? 0) + 1;
+      if (!pc.deProfessor) {
+        deAluno[pc.salaId] = (deAluno[pc.salaId] ?? 0) + 1;
+      }
     }
   }
   return {
@@ -291,7 +306,7 @@ Map<String, ResumoSala> resumirSalas(Iterable<Sala> salas, Iterable<Pc> pcs) {
           operacionais: operacionais[sala.id] ?? 0,
           efetiva: capacidadeEfetiva(
             nominal: sala.capacidadeNominal,
-            operacionais: operacionais[sala.id] ?? 0,
+            operacionais: deAluno[sala.id] ?? 0,
           ),
         ),
   };
@@ -327,9 +342,13 @@ AcaoPc acaoContextual(Pc pc, PcManutencao? aberta) {
 
 /// A linha de situação do PC: o status do banco e, se houver, a manutenção em
 /// aberto com o que falta nela ("sem substituto" é o que derruba a
-/// capacidade, card 5.4).
+/// capacidade, card 5.4). A máquina do professor diz que é dele e não fala de
+/// substituto: parada, ela não derruba capacidade nenhuma (card 9.2,77).
 String situacaoPc(Pc pc, PcManutencao? aberta) {
-  final partes = [rotuloStatusPc(pc.status)];
+  final partes = [
+    rotuloStatusPc(pc.status),
+    if (pc.deProfessor) 'PC do professor, não conta como vaga',
+  ];
   if (aberta != null) {
     partes.add(
       '${rotuloTipoManutencao(aberta.tipo).toLowerCase()} desde '
@@ -338,7 +357,9 @@ String situacaoPc(Pc pc, PcManutencao? aberta) {
     if (aberta.dataFim != null) {
       partes.add('prevista até ${formatarDataCurta(aberta.dataFim!)}');
     }
-    if (aberta.pcSubstitutoId == null) partes.add('sem substituto');
+    if (aberta.pcSubstitutoId == null && !pc.deProfessor) {
+      partes.add('sem substituto');
+    }
   }
   return partes.join(' · ');
 }

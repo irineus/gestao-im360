@@ -289,6 +289,17 @@ $$;
 > favor do app**, que é quem produz o único "encerrar" do sistema: `data_fim` é o dia em que o PC
 > **volta a operar**. As duas bordas viraram asserção no teste `041`.
 >
+> ⚠️ **CORREÇÃO DE FATO (01/10/2026, card 9.2,77) — a máquina do professor não é vaga.** Achado do
+> monitor na rodada 1 de validação: a sala Tecnologia/Inglês tem 11 PCs (dez de aluno e o do
+> professor) e nominal 10, e a fórmula contava os onze. Com tudo operacional o `least` com a
+> nominal escondia o erro (10); com **um** PC de aluno parado também (`least(10, 10)`): a máquina do
+> professor tapava o buraco, e daí em diante o sistema admitia um aluno a mais. Coluna nova
+> `pc.de_professor` (default `false` = lugar de aluno) e uma **cláusula (0)** na fórmula —
+> `not p.de_professor`, **dentro** do `count` e antes do `least`. `fn_revalidar_blocos_sala` não abre
+> `PC_SEM_SUBSTITUTO` para ela (parada, não derruba capacidade), e `tg_pc_revalida_blocos` em `pc`
+> passou a ouvir a coluna. Limite aceito: o PC do professor como substituto de um PC de aluno da
+> **mesma** sala continua não repondo a vaga — conservador, nunca vende vaga. Teste `103`.
+>
 > ⚠️ **Limite conhecido, registrado e não resolvido:** o PC emprestado continua contando na **sala de
 > origem**. `pc.sala_id` diz onde a máquina está cadastrada, não onde ela está hoje, e conservar
 > máquinas entre salas exigiria modelar a mudança de lugar — decisão que não é deste card e que

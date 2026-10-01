@@ -434,6 +434,10 @@ create table public.pc (
   -- cifrado em vault.secrets, e `pc` guarda credencial_secret_id +
   -- credencial_em + credencial_por. Ver docs/politica-credenciais-pcs.md §3.
   credencial_ref text,
+  -- Card 9.2,77 (01/10/2026): a máquina do professor NÃO é lugar de aluno e
+  -- não conta em fn_capacidade_efetiva. Default false = lugar de aluno.
+  -- Migração 20261001120000_pc_de_professor.sql.
+  de_professor boolean not null default false,
   observacao text,
   criado_em timestamptz not null default now(), criado_por uuid,
   atualizado_em timestamptz, atualizado_por uuid,
