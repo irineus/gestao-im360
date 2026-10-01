@@ -210,7 +210,7 @@ select tests.encerrar_sessao();
 select is(
   (select string_agg(format('%s=%s', identificador, de_professor), ',' order by identificador)
      from public.pc where identificador like 'I77-%'),
-  'I77-01=false,I77-PROF=true',
+  'I77-01=f,I77-PROF=t',
   'o importador grava de_professor quando o arquivo traz a chave, e false quando nao traz (PC novo) — mesmo depois de reimportado SEM a chave');
 
 select is(
