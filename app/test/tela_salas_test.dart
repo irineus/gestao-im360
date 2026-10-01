@@ -355,6 +355,52 @@ void main() {
       expect(find.text('Desativado'), findsNothing);
     });
 
+    // Card 9.2,77: a máquina do professor não é lugar de aluno. Quem edita PC
+    // a marca no formulário, e a efetiva da sala cai na hora — o Laboratório 1
+    // da fixture tem dez PCs para nominal 10.
+    testWidgets('quem edita PC marca o PC do professor, e a efetiva da sala '
+        'deixa de contá-lo', (tester) async {
+      final repositorio = InfraestruturaFalso.fixture();
+      await montar(tester, repositorio: repositorio, permissoes: secretaria);
+      await abrirSala(tester, 'Laboratório 1');
+      expect(find.textContaining('efetiva 10'), findsOneWidget);
+
+      await tester.tap(find.text('LAB1-10'));
+      await tester.pumpAndSettle();
+      final campo = find.widgetWithText(SwitchListTile, 'PC do professor');
+      expect(tester.widget<SwitchListTile>(campo).value, isFalse);
+      await tester.tap(campo);
+      await tester.pump();
+      await tester.tap(find.byKey(chaveBotaoSalvar));
+      await carregar(tester);
+
+      final pc = repositorio.pcs_.singleWhere(
+        (p) => p.identificador == 'LAB1-10',
+      );
+      expect(pc.deProfessor, isTrue);
+      expect(find.textContaining('efetiva 9'), findsOneWidget);
+      expect(
+        find.textContaining('PC do professor, não conta como vaga'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('o monitor vê o campo, mas não o muda (sem salas.editar)', (
+      tester,
+    ) async {
+      await montar(
+        tester,
+        repositorio: InfraestruturaFalso.fixture(),
+        permissoes: monitor,
+      );
+      await abrirSala(tester, 'Laboratório 1');
+      await tester.tap(find.text('LAB1-10'));
+      await tester.pumpAndSettle();
+      final campo = find.widgetWithText(SwitchListTile, 'PC do professor');
+      expect(campo, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(campo).onChanged, isNull);
+    });
+
     testWidgets('novo PC de dentro do painel nasce na sala do painel', (
       tester,
     ) async {

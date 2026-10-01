@@ -179,6 +179,7 @@ class InfraestruturaFalso implements InfraestruturaRepositorio {
         salaId: pc.salaId,
         identificador: pc.identificador,
         status: pc.status,
+        deProfessor: pc.deProfessor,
         observacao: pc.observacao,
       );
       pcs_.add(novo);

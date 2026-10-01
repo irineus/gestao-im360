@@ -136,9 +136,9 @@ class DetalheSala extends ConsumerWidget {
           const TituloSecao(
             texto: 'Computadores',
             apoio:
-                'A capacidade efetiva conta os PCs operacionais até o teto '
-                'nominal da sala. O efeito nos blocos de horário aparece na '
-                'grade de turmas.',
+                'A capacidade efetiva conta os PCs de aluno operacionais até '
+                'o teto nominal da sala — o PC do professor não conta. O '
+                'efeito nos blocos de horário aparece na grade de turmas.',
           ),
           pcs.when(
             loading: () => const EstadoCarregando(linhas: 3),

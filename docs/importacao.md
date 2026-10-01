@@ -116,7 +116,7 @@ As **dezoito entidades, na ordem de aplicação** (que é a ordem de dependênci
 |---|---|---|---|
 | 1 | `professor` | `nome` | `nome`*, `ativo` |
 | 2 | `sala` | `nome` | `nome`*, `tipo`* (`LABORATORIO`\|`SALA_MODULAR`), `capacidade_nominal`*, `ativo` |
-| 3 | `pc` | `identificador` | `identificador`*, `sala`*, `status` (`OPERACIONAL`\|`MANUTENCAO`\|`DESATIVADO`), `observacao` |
+| 3 | `pc` | `identificador` | `identificador`*, `sala`*, `status` (`OPERACIONAL`\|`MANUTENCAO`\|`DESATIVADO`), `de_professor` (`true`\|`false`), `observacao` |
 | 4 | `pc_manutencao` | `pc` + `data_inicio` | `pc`*, `tipo`, `data_inicio`, `data_fim`, `descricao` |
 | 5 | `material` | `metodo` + `codigo` | `metodo`*, `codigo`*, `nome`*, `categoria`*, `estoque_minimo`, `ativo` |
 | 6 | `curso` | `metodo` + `nome` | `metodo`*, `nome`*, `ativo` |
@@ -144,6 +144,14 @@ Três detalhes que custam caro se passarem despercebidos:
 - **`chave` do movimento** é responsabilidade do card 9.2 e precisa ser **estável entre snapshots**.
   Instável, o mesmo movimento entra duas vezes — e `movimento_estoque` é imutável, então a sobra não
   se apaga, só se estorna.
+
+E um quarto, do card 9.2,77 (01/10/2026): **`de_professor` ausente é "não sei", não `false`.** A
+máquina do professor não é lugar de aluno e não conta na capacidade efetiva da sala
+(`fn_capacidade_efetiva`). PC **novo** sem a chave nasce `false` (lugar de aluno); PC que **já
+existe** só muda quando o arquivo traz a chave — o extrator do 9.2 não a emite (a aba `PCS` nem tem
+mapa), e um upsert que a gravasse sempre faria a reimportação **desmarcar em silêncio** o PC que
+alguém marcou na tela de Salas e PCs. Valor que não seja booleano JSON é `ERRO`/`VALOR_INVALIDO` na
+validação.
 
 Exemplo mínimo:
 
