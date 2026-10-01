@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config/ambiente.dart';
 import 'config/estrategia_url.dart';
+import 'config/limpar_url_auth.dart';
 import 'config/link_inicial.dart';
 import 'config/politica_retry.dart';
 import 'observabilidade/observabilidade.dart';
@@ -16,9 +17,8 @@ import 'theme/tipografia.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // ANTES do Supabase.initialize: o `type=invite` do link de convite vive no
-  // fragmento da URL, e o supabase_flutter o consome e limpa ao criar a sessão
-  // — depois disso um convidado é indistinguível de um login (card 4.7,
-  // lib/config/link_inicial.dart).
+  // fragmento da URL, e depois de criada a sessão um convidado é
+  // indistinguível de um login (card 4.7, lib/config/link_inicial.dart).
   LinkInicial.registrar(Uri.base);
   // Antes de qualquer rota ser lida: o fragmento da URL é do Auth, não do
   // roteador (card 3.8).
@@ -45,7 +45,37 @@ Future<void> _subir() async {
   await Supabase.initialize(
     url: Ambiente.supabaseUrl,
     publishableKey: Ambiente.supabaseAnonKey,
+    authOptions: const FlutterAuthClientOptions(
+      // ⚠️ DECISÃO de Irineu, card 9.2,80 (01/10/2026): fluxo IMPLÍCITO. O
+      // default do supabase_flutter 2.x é PKCE, que amarra o link de
+      // recuperação ao navegador que o pediu (o verificador fica no
+      // armazenamento local dele): pedido no computador e aberto no celular,
+      // ou na janela anônima, o link falha — e, sendo de uso único, o
+      // primeiro clique errado o queima. Medido em homologação, duas vezes
+      // seguidas, nas mãos de quem seguia a instrução à risca. O convite
+      // sempre funcionou de qualquer aparelho porque o link gerado pelo
+      // servidor já é implícito. Custo aceito: o token passa pelo fragmento
+      // da URL (link de uso único, 24 h, Secure password change ligado).
+      // Login por senha não muda.
+      authFlowType: AuthFlowType.implicit,
+      // O app troca o link por sessão por conta própria, logo abaixo, para
+      // SABER se o link valeu — ver lib/config/link_inicial.dart.
+      detectSessionInUri: false,
+    ),
   );
+
+  // Card 9.2,80: o desfecho do link (de quem é a sessão que ele criou, ou por
+  // que falhou) é o que autoriza a tela de senha. O `supabase_flutter` fazia
+  // esta troca e engolia a falha num log — e a sessão que já estava aberta no
+  // navegador continuava lá, pronta para ter a senha trocada.
+  if (ehRetornoDoAuth(Uri.base)) {
+    final auth = Supabase.instance.client.auth;
+    await LinkInicial.trocarPorSessao(
+      (uri) async => (await auth.getSessionFromUrl(uri)).session.user.id,
+      codigoDoErro: (falha) => falha is AuthException ? falha.code : null,
+    );
+    limparUrlDoAuth();
+  }
 
   runApp(ProviderScope(retry: semRetryAutomatico, child: const AppIm360()));
 }

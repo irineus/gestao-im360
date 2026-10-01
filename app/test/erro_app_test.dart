@@ -165,6 +165,39 @@ void main() {
       );
       expect(erro.traduzido, isTrue);
     });
+
+    // Card 9.2,80: o Secure password change (ligado no card 9.2,81) devolve
+    // esta recusa — foi ela que barrou, em 01/10/2026, a troca da senha da
+    // conta principal aberta no navegador.
+    test(
+      'reauthentication_needed tem texto próprio e conta como traduzido',
+      () {
+        final erro = traduzirErro(
+          AuthApiException(
+            'Password update requires reauthentication.',
+            statusCode: '400',
+            code: 'reauthentication_needed',
+          ),
+        );
+        expect(erro.mensagem, mensagensAuth['reauthentication_needed']);
+        expect(erro.mensagem, contains('Esqueci minha senha'));
+        expect(erro.traduzido, isTrue);
+      },
+    );
+
+    test('erro do Auth SEM código: texto legível, sem "(código ?)", e vai '
+        'para o Sentry', () {
+      final erro = traduzirErro(AuthSessionMissingException());
+      expect(erro.codigo, isNull);
+      expect(erro.mensagem, CatalogoErros.naoMapeadoSemCodigo);
+      expect(erro.mensagem, isNot(contains('?')));
+      expect(erro.traduzido, isFalse);
+    });
+
+    test('falha de rede do Auth é rede, não "erro sem código"', () {
+      final erro = traduzirErro(AuthRetryableFetchException());
+      expect(erro.mensagem, contains('Verifique a conexão'));
+    });
   });
 
   group('Edge Function (card 4.7)', () {

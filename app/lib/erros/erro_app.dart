@@ -82,6 +82,13 @@ const mensagensAuth = <String, String>{
       'A senha é fraca demais: use ao menos 8 caracteres, com letras e '
       'números.',
   'same_password': 'A nova senha precisa ser diferente da atual.',
+  // Card 9.2,80: o "Secure password change" está ligado nos dois projetos
+  // desde o card 9.2,81 — trocar a senha de uma sessão que não é recente
+  // exige reautenticação. Em 01/10/2026 foi ESTA recusa que impediu o app de
+  // trocar a senha da conta principal aberta no navegador.
+  'reauthentication_needed':
+      'Por segurança, a senha só pode ser trocada logo depois de abrir o link '
+      'recebido por e-mail. Peça um link novo em "Esqueci minha senha".',
   'email_exists': 'Já existe um usuário com este e-mail.',
   'user_already_exists': 'Já existe um usuário com este e-mail.',
   'otp_expired':
@@ -199,6 +206,12 @@ ErroApp _traduzir(Object erro) {
       original: erro,
       traduzido: invalida || conhecida != null ? true : null,
     );
+  }
+
+  // Falha de rede do Auth: chega sem `code`, e não é "erro sem código" — é
+  // rede, e tem o texto de rede.
+  if (erro is AuthRetryableFetchException) {
+    return ErroApp(mensagem: _mensagemRede, original: erro);
   }
 
   if (erro is AuthException) {

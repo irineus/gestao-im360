@@ -188,6 +188,53 @@ erro: manda a pessoa para a Site URL, que é como um link "quase certo" passa de
 Verificado local em 01/09/2026: `POST /auth/v1/recover` → 200 e o e-mail *"Reset your password"* no
 Mailpit (`http://127.0.0.1:54324`), que é onde o card 3.7 testa o fluxo sem SMTP nenhum.
 
+### 5.1 Card 9.2,80 (01/10/2026): fluxo implícito, e a senha só se troca com a sessão que o link criou
+
+**O incidente.** Em homologação, o link de convite **vencido** do Laurence foi aberto num desktop em
+que a sessão do **Lindomar** estava aberta. O Auth recusou o link (`?error=access_denied&error_code=
+otp_expired`), a sessão que sobrou no navegador foi a do Lindomar, e a tela `/redefinir-senha` gravou
+a senha nova **nele** (`user_updated_password`, `actor = lindomarsilva.ti@gmail.com`, 200). Ele ficou
+trancado para fora. A causa: `updateUser(password: …)` aplica na **sessão corrente**, seja de quem
+for, e a tela nunca conferia de onde a sessão tinha vindo. Na mesma tarde, a mesma falha tentou
+trocar a senha da conta principal de Irineu e só não conseguiu porque o *Secure password change*
+(card 9.2,81) respondeu `400 reauthentication_needed`.
+
+**O segundo modo de falha — PKCE.** O `supabase_flutter` 2.x usa **PKCE** por padrão: o
+`resetPasswordForEmail` guarda um verificador no armazenamento local **do navegador que pediu**, e o
+link volta com `?code=`. Aberto em qualquer outro contexto — o celular, a janela anônima, outro perfil
+do Chrome que o Gmail escolheu —, o código não se troca por sessão, e o link (uso único) já foi gasto.
+Medido duas vezes seguidas, com a instrução seguida à risca. O convite nunca sofreu disso porque o
+link gerado pelo **servidor** é implícito.
+
+**O que vale agora** (`app/lib/main.dart`, `app/lib/config/link_inicial.dart`,
+`app/lib/telas/redefinir_senha.dart`):
+
+1. **Fluxo implícito** — `FlutterAuthClientOptions(authFlowType: AuthFlowType.implicit)`, **decisão
+   de Irineu** em 01/10/2026. O link de recuperação volta com a sessão no **fragmento**
+   (`#access_token=…&type=recovery`) e abre em qualquer aparelho, como o convite. Custo aceito: o
+   token passa pelo fragmento da URL — link de uso único, 24 h de validade, *Secure password change*
+   ligado nos dois projetos. Login por senha não muda.
+2. **O app troca o link por sessão por conta própria** (`detectSessionInUri: false` +
+   `LinkInicial.trocarPorSessao`, logo depois do `Supabase.initialize`) e **guarda o desfecho**: de
+   quem é a sessão que o link criou, ou por que ele falhou (`error_code` da URL, código do servidor, ou
+   `link_outro_navegador` para um `?code=` antigo). Antes disso a troca era do `supabase_flutter`, que
+   engolia a falha num log e deixava a sessão anterior de pé. A URL é limpa nos dois desfechos.
+3. **A guarda** — `LinkInicial.autorizaTroca(usuarioAtual)`: link de convite ou recuperação, que
+   **valeu**, e cuja sessão é **a corrente**. A tela só mostra o formulário com ela, confere de novo
+   no clique, e `SessaoRepositorioSupabase.trocarSenha` recusa sem ela (segunda barreira). A
+   autorização é de **uso único**: consumida quando a senha é gravada.
+4. **Sem formulário, a tela explica**: link recusado ("venceu ou já foi usado — peça outro", ou "foi
+   pedido antes da mudança e só abre no navegador em que foi pedido") ou nenhum link (rota aberta à
+   mão, página recarregada). Havendo sessão aberta, diz **de quem é** e oferece **Sair**.
+5. **O roteador** leva à tela de senha, antes de qualquer outra, todo link de convite **ou de
+   recuperação** — inclusive o enviado pelo painel (*Send password recovery*), que volta na Site URL e
+   antes entrava no Dashboard sem pedir senha — e todo link que o Auth recusou.
+
+⚠️ **Fora do escopo, registrado:** não há "Trocar senha" no menu do usuário, ao contrário do que o
+wireframe §3.1 prevê. Com a guarda, quem já está logado e quer mudar a senha usa "Esqueci minha
+senha" — e uma troca a partir de sessão comum esbarraria no `reauthentication_needed` de qualquer
+jeito.
+
 ---
 
 ## 6. Sair do sistema: desativar, banir, apagar

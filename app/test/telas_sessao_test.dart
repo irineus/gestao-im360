@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gestao_im360/config/link_inicial.dart';
 import 'package:gestao_im360/config/politica_retry.dart';
 import 'package:gestao_im360/erros/erro_app.dart';
 import 'package:gestao_im360/sessao/sessao.dart';
@@ -43,6 +44,9 @@ class _SessaoFalsa implements SessaoRepositorio {
   }) async {}
 
   @override
+  UsuarioAutenticado? autenticado;
+
+  @override
   Future<void> trocarSenha(String novaSenha) async => trocas++;
 
   @override
@@ -68,6 +72,9 @@ void main() {
     String rota = '/',
   }) async {
     final repositorio = _SessaoFalsa(estado, falhaAoEntrar: falhaAoEntrar);
+    if (estado case SessaoAtiva(:final sessao)) {
+      repositorio.autenticado = (id: sessao.usuarioId, email: sessao.email);
+    }
     tester.view.physicalSize = tamanho;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -139,6 +146,12 @@ void main() {
       testWidgets('redefinir senha: as duas regras de validação', (
         tester,
       ) async {
+        // O formulário só existe com a sessão que o link criou (card 9.2,80).
+        LinkInicial.registrar(
+          Uri.parse('https://app/redefinir-senha#access_token=t&type=recovery'),
+        );
+        await LinkInicial.trocarPorSessao((_) async => _sessao.usuarioId);
+        addTearDown(LinkInicial.consumir);
         final repo = await montar(
           tester,
           const TelaRedefinirSenha(),
