@@ -180,10 +180,14 @@ class _AbaTrilhaState extends ConsumerState<AbaTrilha> {
         .contains('alunos.editar_trilha');
 
     if (itens.isEmpty) {
+      // Dois eixos, quatro textos (card 9.2,79). A ação só aparece quando dá
+      // para cumpri-la: sem combo, o formulário abriria com "Gerar trilha"
+      // desabilitado e o mesmo aviso que o texto já deu.
+      final temCombo = _aluno.comboId != null;
       return EstadoVazio(
-        mensagem: vazioTrilha,
+        mensagem: textoVazioTrilha(podeEditar: podeEditar, temCombo: temCombo),
         icone: Icons.menu_book_outlined,
-        rotuloAcao: podeEditar ? 'Editar trilha' : null,
+        rotuloAcao: podeEditar && temCombo ? 'Editar trilha' : null,
         aoAgir: () =>
             _abrirEConfirmar((_) => FormularioGerarTrilha(aluno: _aluno)),
       );

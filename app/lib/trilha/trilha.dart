@@ -327,9 +327,46 @@ String? tipoDaPendencia(StatusEntrega status) => switch (status) {
 
 // --- textos de tela ---------------------------------------------------------
 
-/// design-system §7.2, linha "Ficha → Trilha".
+/// design-system §7.2, linha "Ficha → Trilha": QUATRO textos, um por
+/// combinação de dois eixos (card 9.2,79) — quem lê pode gerar a trilha
+/// (`alunos.editar_trilha`)? e o aluno tem combo, de onde a trilha nasce?
+///
+/// ⚠️ Era um texto só, e o monitor — que não tem a permissão — lia "Gere a
+/// partir do combo em Editar trilha" numa tela sem botão nenhum (rodada de
+/// validação de 30/09/2026): o texto mandava fazer o que a matriz não deixa, e
+/// quem lê conclui que o sistema está quebrado. E com o aluno sem combo nem
+/// quem TEM a permissão consegue gerar: o formulário só dizia isso depois de
+/// aberto.
+///
+/// Quatro frases inteiras, e não uma frase com um pedaço condicional: cada uma
+/// se lê sozinha, e o teste confere a frase exata de cada caso.
 const vazioTrilha =
     'Este aluno não tem trilha. Gere a partir do combo em Editar trilha.';
+
+/// Pode gerar, mas falta o combo — o mesmo pedido do aviso do formulário e do
+/// `ALUNO_SEM_COMBO` do catálogo de erros, dito ANTES de abrir.
+const vazioTrilhaSemCombo =
+    'Este aluno não tem trilha nem combo, e a trilha é gerada a partir do '
+    'combo. Informe o combo nos dados do aluno para poder gerar a trilha.';
+
+/// Não pode gerar: diz quem gera, em vez de mandar fazer.
+const vazioTrilhaSemPermissao =
+    'Este aluno ainda não tem trilha. A secretaria gera a trilha a partir do '
+    'combo do aluno.';
+
+const vazioTrilhaSemPermissaoSemCombo =
+    'Este aluno ainda não tem trilha nem combo. A secretaria informa o combo '
+    'nos dados do aluno e gera a trilha a partir dele.';
+
+/// O texto do estado vazio da aba Trilha para quem lê ([podeEditar] é
+/// `alunos.editar_trilha`) e para o aluno ([temCombo]).
+String textoVazioTrilha({required bool podeEditar, required bool temCombo}) =>
+    switch ((podeEditar, temCombo)) {
+      (true, true) => vazioTrilha,
+      (true, false) => vazioTrilhaSemCombo,
+      (false, true) => vazioTrilhaSemPermissao,
+      (false, false) => vazioTrilhaSemPermissaoSemCombo,
+    };
 
 /// A aba exige `estoque.ler`, que a rota da ficha não exige (rota 3b do
 /// card 2.4 §6). Sem ela o saldo viria 0 em toda linha **sem erro nenhum**, e

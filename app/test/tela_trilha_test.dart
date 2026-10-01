@@ -113,27 +113,88 @@ void main() {
     });
   });
 
+  // Card 9.2,79: o monitor (sem `alunos.editar_trilha`) lia "Gere a partir do
+  // combo em Editar trilha" numa tela sem botão nenhum. Dois eixos — pode
+  // gerar? tem combo? —, quatro textos, e a ação só onde dá para cumpri-la.
+  // Contraprova vista vermelha: com `textoVazioTrilha` devolvendo sempre
+  // `vazioTrilha` (um texto só para todos), reprovam os três casos fora do
+  // primeiro, nos dois tamanhos, e o teste dos quatro textos.
   group('estado vazio — design-system §7.2', () {
-    testWidgets('aluno sem trilha mostra o texto do card 2.7 e a ação', (
-      tester,
-    ) async {
-      await montar(tester, paraAluno: aluno('al-karina', combo: null));
+    final casos = [
+      (
+        nome: 'pode gerar e tem combo',
+        permissoes: secretaria,
+        combo: 'cb-info' as String?,
+        texto: vazioTrilha,
+        acao: true,
+      ),
+      (
+        nome: 'pode gerar e está sem combo',
+        permissoes: secretaria,
+        combo: null as String?,
+        texto: vazioTrilhaSemCombo,
+        acao: false,
+      ),
+      (
+        nome: 'monitor, aluno com combo',
+        permissoes: monitor,
+        combo: 'cb-info' as String?,
+        texto: vazioTrilhaSemPermissao,
+        acao: false,
+      ),
+      (
+        nome: 'monitor, aluno sem combo',
+        permissoes: monitor,
+        combo: null as String?,
+        texto: vazioTrilhaSemPermissaoSemCombo,
+        acao: false,
+      ),
+    ];
 
-      expect(find.text(vazioTrilha), findsOneWidget);
-      expect(find.text('Editar trilha'), findsOneWidget);
+    for (final (rotulo, tamanho) in [
+      ('desktop', desktop),
+      ('390 px', celular),
+    ]) {
+      for (final caso in casos) {
+        testWidgets('${caso.nome} ($rotulo)', (tester) async {
+          await montar(
+            tester,
+            paraAluno: aluno('al-karina', combo: caso.combo),
+            permissoes: caso.permissoes,
+            tamanho: tamanho,
+          );
+
+          expect(tester.takeException(), isNull);
+          expect(find.text(caso.texto), findsOneWidget);
+          expect(
+            find.text('Editar trilha'),
+            caso.acao ? findsOneWidget : findsNothing,
+          );
+          // Texto e ação andam juntos: só quem vê o botão lê o nome dele.
+          if (!caso.acao) {
+            expect(find.textContaining('Editar trilha'), findsNothing);
+          }
+        });
+      }
+    }
+
+    test('os quatro casos dão quatro textos diferentes', () {
+      final textos = {
+        for (final podeEditar in [true, false])
+          for (final temCombo in [true, false])
+            textoVazioTrilha(podeEditar: podeEditar, temCombo: temCombo),
+      };
+      expect(textos, hasLength(4));
     });
 
-    testWidgets('sem alunos.editar_trilha o vazio não oferece a ação', (
+    testWidgets('a ação do vazio abre o formulário de gerar a trilha', (
       tester,
     ) async {
-      await montar(
-        tester,
-        paraAluno: aluno('al-karina', combo: null),
-        permissoes: monitor,
-      );
+      await montar(tester, paraAluno: aluno('al-karina'));
 
-      expect(find.text(vazioTrilha), findsOneWidget);
-      expect(find.text('Editar trilha'), findsNothing);
+      await tester.tap(find.text('Editar trilha'));
+      await carregar(tester);
+      expect(find.text('Gerar trilha pelo combo'), findsOneWidget);
     });
   });
 

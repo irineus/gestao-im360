@@ -12,7 +12,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 #   - MAJOR só por pedido explícito de Irineu.
 # O job "migrações (portão)" do testes.yml reprova o PR que muda código sem
 # subir a versão (portao-versao/versao.mjs, com a lista do que conta como código).
-version: 0.1.1+2
+version: 0.1.2+3
 
 environment:
   sdk: ^3.13.2
