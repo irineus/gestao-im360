@@ -730,11 +730,18 @@ select ok(
 -- ===========================================================================
 -- Teste de PARIDADE (card 2.8 §6.3): contar na pele de cada usuário é o único
 -- formato que prova alguma coisa quando a RLS reduz linhas em silêncio.
+-- ⚠️ Card 9.2,85: `TROCA_MODULO_ALINHAR` é o ÚNICO tipo que `pendencias.ler` não
+--    basta para ver — exige também `turmas.alinhar_modulo`, que o monitor não
+--    tem. A turma `Eletricista 2025.2` da fixture está com o módulo vencido, e a
+--    rotina que este arquivo executa abre o aviso dela: a direção passou a ver
+--    uma pendência a mais. A paridade continua valendo para todos os OUTROS
+--    tipos, e é isso que a asserção passa a dizer; a diferença é medida, nas
+--    duas direções, no teste 104 §4.
 select is(
   tests.conta_como(tests.uid('direcao@escola-a.test'),
-                   'select 1 from public.v_pendencias_abertas'),
+                   'select 1 from public.v_pendencias_abertas where tipo <> ''TROCA_MODULO_ALINHAR'''),
   tests.conta_como(tests.uid('monitor@escola-a.test'),
-                   'select 1 from public.v_pendencias_abertas'),
+                   'select 1 from public.v_pendencias_abertas where tipo <> ''TROCA_MODULO_ALINHAR'''),
   'direcao e monitor veem a MESMA central: os dois tem pendencias.ler (card 2.4 §5)');
 
 select is(
