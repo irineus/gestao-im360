@@ -509,6 +509,12 @@ select b.unidade_id,
 
 ### 7.2 `v_turma_modular_lotacao` — ~~cards 7.4 e 5.9~~ **card 7.3** (05/09/2026)
 
+> **Card 9.2,85 (10/11/2026) — oito colunas novas no fim, para o aviso de troca de módulo:**
+> `modulo_corrente_cronograma_id`, `proximo_modulo_id`, `proximo_modulo_nome`, `proximo_material_id`,
+> `proximo_material_nome`, `troca_de_livro`, `dias_para_troca` e `situacao_troca`. O SQL vigente é o
+> de `20261110120000_aviso_troca_modulo.sql` §4, e a fonte das regras é `docs/aviso-troca-modulo.md`
+> §2.1. ⚠️ `modulo_atrasado` **não mudou**: `situacao_troca` tem borda própria (vermelho já no dia).
+
 > ⚠️ **A view NÃO expõe `data_inicio` da turma, e é por isso que a tela 5 não deixa editá-la**
 > (card 8.1,5, 05/09/2026, item A2). O defeito corrigido lá era o oposto do que parece: o `update`
 > reenviava `data_inicio = hoje` e **toda** edição da turma — renomear, mudar capacidade,

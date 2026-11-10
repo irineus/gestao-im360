@@ -98,8 +98,8 @@ select tests.autenticar(tests.uid('direcao@escola-a.test'));
 select is((select count(*) from public.unidade)::bigint, 1::bigint,
   'direcao de A ve apenas a propria unidade');
 
-select is((select count(*) from public.permissao)::bigint, 50::bigint,
-  'direcao ve o catalogo de 50 permissoes da propria unidade, e so o dela');
+select is((select count(*) from public.permissao)::bigint, 51::bigint,
+  'direcao ve o catalogo de 51 permissoes da propria unidade, e so o dela');
 
 select is((select count(*) from public.usuario)::bigint, 7::bigint,
   'direcao ve os sete usuarios da unidade A, e nenhum da B');

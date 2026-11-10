@@ -1030,6 +1030,7 @@ corrida com a interface.
 | **novos — ver §14** | | | | |
 | `ESTOQUE_ZERO` | `ESTOQUE_ZERO:<material_id>` | MEDIA | `fn_registrar_entrega` (item pulado) | `tg_movimento_resolve_pendencia` |
 | `ESTOQUE_ABAIXO_MINIMO` | `MINIMO:<material_id>` | BAIXA | `rt_pendencias_diaria` ✅ **8.4,5** (`abaixo_minimo` de `v_estoque_atual`, só material ATIVO e com mínimo > 0) | saldo ≥ mínimo |
+| `TROCA_MODULO_ALINHAR` | `TROCA_MODULO:<turma_id>:<cronograma_id>` | MEDIA → ALTA | `rt_pendencias_diaria` ✅ **9.2,85** (`situacao_troca` de `v_turma_modular_lotacao`; ALTA no dia da troca) | **resolução manual** (o alinhamento com o professor); sozinha só se a previsão for adiada para além da janela. Resolvida por gente **não reabre**; avançar o módulo **não fecha** — `docs/aviso-troca-modulo.md` §2.2 |
 | `SUGERIR_FORMADO` | `FORMADO:<aluno_id>` | BAIXA | `tg_certificado_sugere_formado` | aluno vira FORMADO |
 | `TRILHA_DIVERGENTE_COMBO` | `TRILHA_COMBO:<aluno_id>` | MEDIA | `tg_aluno_combo_alterado` | resolução manual |
 | `CERTIFICADO_INCONSISTENTE` | `CERT_INCONS:<aluno_id>` | MEDIA | `fn_estornar_entrega` | resolução manual |
