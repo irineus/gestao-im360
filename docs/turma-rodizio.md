@@ -164,7 +164,8 @@ como módulo de entrada — é a escolha que a regra 2 dá à secretaria.
 O aluno conclui quando `aluno_modulo` cobre **todos** os módulos do curso da turma. No ato:
 
 - `turma_modular_aluno.ativo = false`, `motivo_saida = 'Concluiu o curso'` — libera a vaga;
-- abre o checklist de certificado (ver a decisão D1, §10).
+- abre o checklist de certificado, quando não resta curso Modular do combo por concluir (decisões
+  D1 e D3, §10).
 
 Não muda o status do aluno: FORMADO continua sendo decisão de gente, com o gate do certificado
 (card 8.3).
@@ -205,7 +206,7 @@ depois os que faltam, na ordem da agenda, com a data planejada.
 
 ### 5.3 `aluno.prev_conclusao_curso` para o aluno em turma Modular
 
-Ver a decisão D2 (§10).
+Deixa de ser lida para esse aluno: vale a previsão calculada de §5.2 (decisão D2, §10).
 
 ## 6. Projeção de demanda (card 9.2,89)
 
@@ -262,27 +263,39 @@ conclusão; e a aba **Base Modular** dá a ordem dos módulos por livro. O extra
 - A capacidade é coluna da turma; admissão com advisory lock por turma.
 - Laboratório (Interativo e Inglês) não muda em nada (regra 11).
 
-## 10. Decisões que este card pede
+## 10. Decisões tomadas
 
-Três pontos que as onze regras aprovadas não fecham e que mudam comportamento já entregue. Cada um
-tem recomendação; **nenhum é adotado sem resposta**, porque mexem em schema e em regra de outro
-card.
+Três pontos que as onze regras aprovadas não fechavam e que mudam comportamento já entregue.
+**Decididos por Irineu em 11/11/2026**, os três pela recomendação.
 
-**D1 — Quando abre o certificado do aluno Modular.** Hoje o checklist abre quando a **última
-apostila** da trilha é entregue (card 8.3). No Modular o último livro é entregue meses antes do fim
-do curso — o aluno entraria na fila de certificados no meio dele. *Recomendado:* para aluno em turma
-Modular, o checklist abre na **conclusão dos módulos** (§4.4), e a entrega do último livro deixa de
-abri-lo.
+**D1 — O certificado do aluno Modular abre na conclusão dos módulos.** Até aqui o checklist abria
+quando a **última apostila** da trilha era entregue (card 8.3) — e no Modular o último livro é
+entregue meses antes do fim do curso: o aluno entraria na fila de certificados no meio dele. Para
+aluno **do método MODULAR**, `fn_registrar_entrega` deixa de abrir o checklist, e quem o abre é a
+conclusão de §4.4. Interativo e Inglês não mudam.
 
-**D2 — `prev_conclusao_curso` do aluno em turma Modular.** Hoje é campo digitado, e alimenta a
-pendência `PREVISAO_VENCIDA`. A regra 7 aprovada diz que a previsão é calculada. *Recomendado:* para
-esse aluno a previsão é a **derivada** (§5.2): a ficha a mostra e não deixa editar, e
-`PREVISAO_VENCIDA` deixa de olhar para ele — o atraso dele aparece como troca de módulo vencida da
-turma.
+- `v_certificado_fila` (card 8.6) exige trilha em `ULTIMO_LIVRO`/`FIM`; para o Modular a situação
+  passa a sair do progresso de módulos: `ULTIMO_LIVRO` lê-se "no último módulo", `FIM`, "concluiu".
+- `ALUNO_ULTIMO_LIVRO` (pendência aberta por `fn_registrar_entrega`) também deixa de abrir para o
+  aluno Modular na entrega; a tela 9 é quem mostra quem está no último módulo.
+- O estorno de entrega (`fn_certificado_reavaliar_estorno`) não reavalia checklist de aluno
+  Modular: o que o tira do `FIM` é `fn_aluno_modulo_remover` (§4.5), que passa a chamar a mesma
+  reavaliação.
 
-**D3 — Aluno com mais de um curso Modular** (combo). A conclusão de §4.4 é por **curso/turma**.
-*Recomendado:* o certificado (D1) abre quando o aluno não tem mais nenhum curso Modular do combo por
-concluir; enquanto houver, cada conclusão só libera a vaga daquela turma.
+**D2 — A previsão de conclusão do aluno em turma Modular é só a calculada.** A ficha mostra a de
+§5.2 e não deixa editar; `aluno.prev_conclusao_curso` deixa de ser lida para esse aluno.
+
+- `PREVISAO_VENCIDA` (rotina diária, card 8.4) deixa de olhar o aluno com turma Modular ativa — o
+  atraso dele aparece como troca de módulo vencida da turma (`TROCA_MODULO_ALINHAR`).
+- A coluna **não** é apagada nem zerada: o importador continua a trazê-la, e ela volta a valer se o
+  aluno sair da turma. Quem decide qual das duas mostrar é a view da ficha.
+- A projeção não muda por isto: o degrau `MODULAR` já vem antes de `PREVISAO_CURSO` na cascata.
+
+**D3 — Com mais de um curso Modular no combo, o certificado só abre no fim do combo.** A conclusão
+de §4.4 é por **curso/turma** e sempre libera a vaga daquela turma. O checklist abre quando
+`aluno_modulo` cobre os módulos de **todos** os cursos Modular do combo do aluno
+(`aluno.combo_id` → `combo_curso`); aluno sem combo conclui pelo curso da turma. O checklist continua sendo um
+por aluno (card 8.3).
 
 ## 11. Testes que o card 9.2,88 deve
 
