@@ -142,6 +142,13 @@ create temporary view p_esperada (tabela, cmd) as values
   -- depois. `pedido_item` é o único dos cinco com o padrão de quatro.
   ('aluno_material','r'),      ('aluno_material','a'),      ('aluno_material','w'), ('aluno_material','d'),
   ('aluno_material_hist','r'), ('aluno_material_hist','a'),
+  -- card 9.2,88 — a turma em rodízio. `aluno_modulo` (o que o aluno já fez)
+  -- tem os quatro comandos, mas FORA do padrão: o select aceita `turmas.editar`
+  -- além de `alunos.ler` (quem avança o módulo grava ali e precisa enxergar o
+  -- que já existe), e o insert aceita `turmas.editar` ∨ `alunos.editar_trilha`.
+  -- `aluno_modulo_hist` é só leitura: quem escreve é o trigger, definer.
+  ('aluno_modulo','r'), ('aluno_modulo','a'), ('aluno_modulo','w'), ('aluno_modulo','d'),
+  ('aluno_modulo_hist','r'),
   ('movimento_estoque','r'),   ('movimento_estoque','a'),
   ('pedido_compra','r'),       ('pedido_compra','a'),       ('pedido_compra','w'),
   ('pedido_item','r'),         ('pedido_item','a'),         ('pedido_item','w'),    ('pedido_item','d'),

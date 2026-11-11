@@ -297,6 +297,38 @@ de §4.4 é por **curso/turma** e sempre libera a vaga daquela turma. O checklis
 (`aluno.combo_id` → `combo_curso`); aluno sem combo conclui pelo curso da turma. O checklist continua sendo um
 por aluno (card 8.3).
 
+## 10.1 O que a implementação (card 9.2,88, 11/11/2026) mudou neste documento
+
+Migração `20261111120000_turma_rodizio.sql`, teste `105_turma_rodizio` (43 asserções). Cinco
+divergências do que os §3 a §5 escreviam, todas registradas no arquivo:
+
+1. **A agenda devolve N + 1 posições, não N.** A posição N + 1 repete o módulo corrente, no ciclo
+   seguinte. Sem ela, o aluno que entrou para começar no **próximo** módulo não tinha onde concluir:
+   o corrente de hoje é o **último** da sequência dele, e só volta na outra volta. As views leem,
+   para cada módulo que falta, a **primeira** posição em que a turma o dará **àquele** aluno
+   (`aguardando_entrada` em `v_aluno_modular_progresso`).
+2. **`aluno_modulo_hist`** — tabela que o §3 não previa. Remover módulo exige motivo (§4.5), e a
+   linha removida deixa de existir: sem histórico o motivo seria um parâmetro aceito e jogado fora
+   (a mesma razão de `motivo_saida` no card 7.2). Imutável, escrita só por trigger.
+3. **O `select` de `aluno_modulo` aceita `turmas.editar` além de `alunos.ler`.** Quem avança o
+   módulo grava ali e precisa **enxergar** o que já existe para decidir quem ainda não começou — sob
+   RLS, quem não lê recebe zero linhas sem erro, e o avanço daria o módulo a quem entrou para
+   começar no próximo.
+4. **A conclusão é função própria e `security definer`** (`fn_aluno_modular_avaliar_conclusao`): é
+   efeito colateral do avanço (`turmas.editar`), e tirar o aluno da turma exige `turmas.alocar` —
+   como invoker o `update` afetaria zero linhas e o aluno concluído continuaria ocupando a vaga.
+5. **O avanço completa as linhas do ciclo.** Módulo do catálogo depois do que fechou e ainda sem
+   linha no ciclo entra no avanço — a turma em rodízio passa por todos. Os de ordem **menor** não
+   entram: inseridos como "não concluídos", virariam o corrente.
+
+**O que NÃO foi feito aqui, e para onde foi** (card 9.2,885): as decisões D1, D2 e D3; a reordenação
+da trilha de livros na admissão (§4.1) — `fn_trilha_reordenar` pede `alunos.editar_trilha` e quem
+admite tem `turmas.alocar`; e o script de concorrência admissão × avanço (§11). Neste card a
+conclusão **só libera a vaga**.
+
+⚠️ **Entre este card e o 9.2,89** a projeção lê o cronograma sem conhecer `ciclo`: turma que já
+abriu o segundo ciclo teria módulos contados duas vezes. Os dois saem no mesmo lote.
+
 ## 11. Testes que o card 9.2,88 deve
 
 | O que provar | Como |

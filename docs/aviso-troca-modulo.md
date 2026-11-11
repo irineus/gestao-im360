@@ -77,9 +77,10 @@ Três regras a separam de todos os outros tipos da rotina, e as três são a dec
 A turma vai na **chave** porque `pendencia` não tem coluna de turma Modular; é o precedente de
 `REP:<aluno>:CONTINUO`, que a central também lê da chave.
 
-⚠️ **Para o card 9.2,88 (rodízio):** a chave carrega a linha do cronograma. Se o rodízio **reusar**
-a linha a cada volta, a regra 1 calaria o aviso da segunda volta em diante — a chave terá de ganhar
-o ciclo.
+✅ **Com o rodízio (card 9.2,88) a chave não precisou mudar:** cada ciclo tem linhas **novas** no
+cronograma, então "resolvida por gente não reabre" vale por módulo **e por volta**. E o próximo
+módulo passou a dar a volta — depois do último vem o primeiro, e `troca_de_livro` vale também na
+virada do ciclo.
 
 ### 2.3 Quem enxerga — `turmas.alinhar_modulo`
 

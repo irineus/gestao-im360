@@ -148,3 +148,14 @@ ARQUIVO_INVALIDO
 IMPORTACAO_REPROVADA
 IMPORTACAO_JA_APLICADA
 IMPORTACAO_JA_VALIDADA
+# Card 9.2,88 — a turma Modular em rodizio (docs/turma-rodizio.md).
+# O aluno so entra no modulo atual da turma ou no proximo; entrada historica e
+# do importador.
+MODULO_ENTRADA_INVALIDO
+# Turma anterior ao rodizio que ainda tem modulo em curso: o ciclo seguinte abre
+# sozinho no avanco, e abri-lo a mao antes disso duplicaria o cronograma.
+TURMA_COM_MODULO_CORRENTE
+# A excecao a mao (fn_aluno_modulo_registrar / fn_aluno_modulo_remover).
+MODULO_INEXISTENTE
+MODULO_JA_REGISTRADO
+MODULO_NAO_REGISTRADO
