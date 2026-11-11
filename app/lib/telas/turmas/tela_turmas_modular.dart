@@ -7,6 +7,7 @@ import '../../catalogo/catalogo_provider.dart';
 import '../../erros/erro_app.dart';
 import '../../rotas/rotas.dart';
 import '../../sessao/sessao_provider.dart';
+import '../../theme/cores.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../turmas/modular.dart';
@@ -349,7 +350,7 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
     List<ModuloDaTurma> cronograma,
     List<Modulo> faltantes,
   ) async {
-    final resultado = await mostrarFormulario<String>(
+    final resultado = await mostrarFormulario<ResultadoAvanco>(
       context,
       construtor: (_) => FormularioAvancarModulo(
         turma: widget.turma,
@@ -364,10 +365,16 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
     // Resultado que muda o que a pessoa fará em seguida é **diálogo**, nunca
     // snackbar (design-system §5.8): "a turma terminou" some antes de ser lido,
     // e é a informação que decide se ainda há o que avançar.
-    if (resultado == 'terminou') {
+    // O livro que não saiu também é diálogo, pela mesma razão: quem avançou
+    // precisa saber QUEM ficou sem, e isso não cabe num aviso que some.
+    if (resultado.temFalhaDeEntrega) {
+      await mostrarEntregasPendentes(context, resultado: resultado);
+      if (!mounted) return;
+    }
+    if (resultado.terminou) {
       await mostrarResultadoAvanco(context, turma: widget.turma);
-    } else {
-      confirmarEfemero(context, 'Módulo avançado.');
+    } else if (!resultado.temFalhaDeEntrega) {
+      confirmarEfemero(context, resultado.confirmacao);
     }
   }
 
@@ -458,10 +465,36 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
                                       texto: 'lotada',
                                       icone: Icons.group_outlined,
                                     ),
-                                  if (turma.moduloAtrasado)
+                                  // Card 9.2,86: o aviso de troca de módulo
+                                  // diz QUANTO falta, e por isso toma o
+                                  // lugar do selo "módulo atrasado" quando
+                                  // existe — os dois juntos diriam a mesma
+                                  // coisa duas vezes.
+                                  if (seloTroca(turma) case final selo?)
+                                    _Selo(
+                                      texto: selo,
+                                      icone:
+                                          turma.situacaoTroca ==
+                                              SituacaoTroca.hojeOuVencida
+                                          ? Icons.error_outline
+                                          : Icons.schedule_outlined,
+                                      erro:
+                                          turma.situacaoTroca ==
+                                          SituacaoTroca.hojeOuVencida,
+                                      atencao:
+                                          turma.situacaoTroca ==
+                                          SituacaoTroca.proxima,
+                                    )
+                                  else if (turma.moduloAtrasado)
                                     const _Selo(
                                       texto: 'módulo atrasado',
                                       icone: Icons.schedule_outlined,
+                                    ),
+                                  if (turma.trocaEmAviso &&
+                                      (turma.trocaDeLivro ?? false))
+                                    const _Selo(
+                                      texto: 'troca de livro',
+                                      icone: Icons.menu_book_outlined,
                                     ),
                                 ],
                               ),
@@ -631,22 +664,41 @@ String avisoAcimaCapacidadeTurma(int alocados, int capacidade) =>
 /// vocabulário próprio (status do aluno, tipo na turma) e misturá-los aqui
 /// quebraria a regra do card 1.9 §6.
 class _Selo extends StatelessWidget {
-  const _Selo({required this.texto, required this.icone, this.erro = false});
+  const _Selo({
+    required this.texto,
+    required this.icone,
+    this.erro = false,
+    this.atencao = false,
+  });
 
   final String texto;
   final IconData icone;
   final bool erro;
 
+  /// Âmbar — a troca de módulo que se aproxima (card 9.2,86).
+  final bool atencao;
+
   @override
   Widget build(BuildContext context) {
-    final cores = Theme.of(context).colorScheme;
-    final cor = erro ? cores.error : cores.onSurfaceVariant;
+    final tema = Theme.of(context);
+    final cores = tema.colorScheme;
+    final cor = erro
+        ? cores.error
+        : atencao
+        ? (tema.brightness == Brightness.dark
+              ? Cores.atencaoEscuro
+              : Cores.atencao)
+        : cores.onSurfaceVariant;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icone, size: 16, color: cor),
         const SizedBox(width: Dim.e4),
-        Text(texto, style: Tipografia.apoio.copyWith(color: cor)),
+        // `Flexible`: o selo da troca de módulo é longo ("troca de módulo
+        // atrasada há 12 dias") e em 390 px estourava a linha (card 9.2,86).
+        Flexible(
+          child: Text(texto, style: Tipografia.apoio.copyWith(color: cor)),
+        ),
       ],
     );
   }
@@ -775,9 +827,27 @@ class _LinhaModulo extends StatelessWidget {
         'a fazer',
       ),
     };
-    final apoio = modulo.atrasado
+    // Card 9.2,86: o módulo CORRENTE diz quanto falta para a troca, com a cor
+    // da situação da turma — que é da view de lotação, e não uma segunda
+    // conta por linha (card 9.2,85).
+    final dias = turma.diasParaTroca;
+    final emAviso = modulo.corrente && turma.trocaEmAviso && dias != null;
+    final vermelho = emAviso
+        ? turma.situacaoTroca == SituacaoTroca.hojeOuVencida
+        : modulo.atrasado;
+    final apoio = emAviso
+        ? '${modulo.periodo} · troca: ${rotuloDiasParaTroca(dias)}'
+        : modulo.atrasado
         ? '${modulo.periodo} · atrasado'
         : '${modulo.periodo} · $estado';
+    final tema = Theme.of(context);
+    final corApoio = vermelho
+        ? cores.error
+        : emAviso
+        ? (tema.brightness == Brightness.dark
+              ? Cores.atencaoEscuro
+              : Cores.atencao)
+        : cores.onSurfaceVariant;
 
     final conteudo = Padding(
       padding: const EdgeInsets.symmetric(vertical: Dim.e4),
@@ -795,11 +865,8 @@ class _LinhaModulo extends StatelessWidget {
                 ),
                 Text(
                   apoio,
-                  style: Tipografia.numero(Tipografia.apoio).copyWith(
-                    color: modulo.atrasado
-                        ? cores.error
-                        : cores.onSurfaceVariant,
-                  ),
+                  style: Tipografia.numero(Tipografia.apoio)
+                      .copyWith(color: corApoio),
                 ),
               ],
             ),
@@ -1126,6 +1193,41 @@ Future<void> mostrarResultadoAvanco(
         '${turma.nome} concluiu o último módulo do cronograma. A turma '
         'continua na lista: desative-a quando ela realmente encerrar, ou '
         'acrescente módulos ao cronograma.',
+        style: Tipografia.corpo,
+      ),
+    ),
+    actions: [
+      FilledButton(
+        onPressed: () => Navigator.of(contexto).pop(),
+        child: const Text('Entendi'),
+      ),
+    ],
+  ),
+);
+
+/// O avanço aconteceu, e parte dos livros **não** saiu (card 9.2,86).
+///
+/// Diálogo, e não confirmação efêmera (design-system §5.8): o módulo avançou e
+/// isso não se desfaz, mas há aluno sem o livro do módulo que começa — e o
+/// caminho para resolver é a ficha dele.
+Future<void> mostrarEntregasPendentes(
+  BuildContext context, {
+  required ResultadoAvanco resultado,
+}) => showDialog<void>(
+  context: context,
+  builder: (contexto) => AlertDialog(
+    title: const Text('Módulo avançado — há livro por entregar'),
+    content: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: Text(
+        [
+          if (resultado.entregues > 0)
+            '${plural(resultado.entregues, 'livro foi entregue', 'livros foram entregues')}.',
+          'Não foi possível entregar para: '
+              '${resultado.naoEntregues.join(', ')}. '
+              'Confira o estoque e registre a entrega pela ficha do aluno, na '
+              'aba Trilha.',
+        ].join(' '),
         style: Tipografia.corpo,
       ),
     ),

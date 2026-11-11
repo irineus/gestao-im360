@@ -118,7 +118,11 @@ class ModularRepositorioSupabase implements ModularRepositorio {
       'unidade_id, turma_id, turma_nome, curso_id, curso_nome, sala_id, '
       'sala_nome, capacidade, alocados, vagas_livres, modulo_corrente_id, '
       'modulo_corrente_nome, modulo_corrente_ordem, modulo_corrente_inicio, '
-      'modulo_corrente_prev_conclusao, modulo_atrasado, data_inicio';
+      'modulo_corrente_prev_conclusao, modulo_atrasado, data_inicio, '
+      // card 9.2,85 — o aviso de troca de módulo
+      'modulo_corrente_cronograma_id, proximo_modulo_nome, '
+      'proximo_material_id, proximo_material_nome, troca_de_livro, '
+      'dias_para_troca, situacao_troca';
 
   static const _colunasCronograma =
       'cronograma_id, turma_id, modulo_id, modulo_nome, modulo_ordem, '

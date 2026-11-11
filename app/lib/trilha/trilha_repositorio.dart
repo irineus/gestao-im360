@@ -25,6 +25,12 @@ abstract interface class TrilhaRepositorio {
   /// `v_aluno_trilha` — a mesma definição da aba Trilha, nunca refeita aqui.
   Future<Map<String, String>> proximosLivros();
 
+  /// Os alunos que têm [materialId] na trilha e **ainda não o receberam**
+  /// (card 9.2,86): é a lista que o avanço de módulo oferece quando o próximo
+  /// módulo é de outro livro. Quem já recebeu não entra, e quem não tem o
+  /// livro na trilha também não — a entrega dele é assunto da ficha.
+  Future<Set<String>> alunosComLivroPendente(String materialId);
+
   /// `fn_registrar_entrega`. [materialId] nulo = a próxima da trilha, que é o
   /// caminho do botão; informá-lo é a entrega fora de ordem, e o banco recusa
   /// com `MATERIAL_FORA_DA_TRILHA` o que não estiver pendente.
@@ -93,6 +99,16 @@ class TrilhaRepositorioSupabase implements TrilhaRepositorio {
     return {
       for (final l in linhas) '${l['aluno_id']}': '${l['material_nome']}',
     };
+  }
+
+  @override
+  Future<Set<String>> alunosComLivroPendente(String materialId) async {
+    final linhas = await _cliente
+        .from('v_aluno_trilha')
+        .select('aluno_id')
+        .eq('material_id', materialId)
+        .eq('entregue', false);
+    return {for (final l in linhas) '${l['aluno_id']}'};
   }
 
   @override

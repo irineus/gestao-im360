@@ -99,6 +99,38 @@ o aviso que pede ação.
 
 ## 3. O que as telas fazem (card 9.2,86)
 
-Ver o card. Em resumo: painel "Próximas trocas de módulo" no Dashboard, o tipo novo na central e na
-faixa "Atenção hoje", a cor no cronograma da tela 5 e, ao avançar o módulo com `troca_de_livro`, a
-oferta de registrar a entrega do livro na mesma janela.
+Sem migração: é consumidor do §2. Testes em `app/test/aviso_troca_modulo_test.dart` (lógica e o
+painel) e em `app/test/tela_turmas_modular_test.dart` (tela 5), em desktop e em 390 px.
+
+**Nada no app decide a situação.** Laranja e vermelho vêm de `situacao_troca`, e "quanto falta" de
+`dias_para_troca` — os dois da view, com o hoje do banco. Código de situação que o app não conhece
+vira nulo, nunca "em dia". E a cor nunca vai sozinha: todo aviso diz "faltam 6 dias", "hoje" ou
+"atrasada há 3 dias" por extenso (design-system §8.2).
+
+| Onde | O que mudou |
+|---|---|
+| **Dashboard** — região "Lotação Modular" | Painel **"Próximas trocas de módulo"** (`ProximasTrocasModulo`, em `lotacao_modular.dart`): uma linha por turma, da troca mais próxima para a mais distante — curso · turma, módulo atual → próximo, data e quanto falta, e "troca de livro: X" quando há. Tocar abre a tela 5 com a turma expandida (`?turma=`). Turma sem previsão fica de fora, e o painel diz isso em vez de sumir. Mora na região da lotação porque é a **mesma leitura** (`v_turma_modular_lotacao`): divide com ela o carregamento e o erro |
+| **Dashboard** — "Atenção hoje" | Quarto número, "trocas de módulo a alinhar com o professor", **só para quem tem `turmas.alinhar_modulo`**. Para os outros a RLS não devolve a linha, e mostrar zero seria um número que ninguém mediu |
+| **Pendências** | Tipo novo com rótulo "Troca de módulo — alinhar com o professor" e ação **"Ver turma"**, que abre a tela 5 na turma. A turma sai da **chave** (`turmaModularDaChave`), pelo precedente de `sentidoVirada`. O painel diz que avançar o módulo **não** fecha a pendência |
+| **Turmas Modular** — cartão | Selo "troca de módulo em 6 dias" / "hoje" / "atrasada há 3 dias" (âmbar na janela, vermelho no dia), que toma o lugar de "módulo atrasado" quando existe; e o selo "troca de livro" |
+| **Turmas Modular** — cronograma | A linha do módulo corrente diz "troca: faltam 6 dias", na cor da situação da **turma** |
+| **Turmas Modular** — avançar módulo | Quando `troca_de_livro`, o diálogo avisa "O próximo módulo, X, é de outro livro: Y" e lista, **já marcados**, os alunos ativos da turma que têm o livro na trilha e ainda não o receberam; dá para desmarcar. Sem troca de livro, nada é oferecido |
+
+### 3.1 A entrega no avanço — o que ela é e o que não é
+
+- **É a entrega de sempre.** Cada aluno marcado passa por `fn_registrar_entrega`, com o livro do
+  próximo módulo — as mesmas regras, o mesmo movimento de estoque, o mesmo estorno. Não há função
+  nova nem "entrega em lote" no banco.
+- **Vem depois do avanço, e não o desfaz.** O módulo avança; em seguida as entregas saem, uma por
+  aluno. Falta de estoque ou erro numa delas não impede as outras nem volta o módulo: o resultado
+  vira **diálogo** dizendo quem ficou sem o livro, com o caminho (a aba Trilha da ficha).
+- **Quem é oferecido:** aluno **ativo na turma**, com o livro **na trilha** e **não entregue**
+  (`v_aluno_trilha`). Quem já recebeu não aparece; quem não tem o livro na trilha também não — a
+  entrega dele é assunto da ficha.
+- **Quem vê a lista:** quem tem `estoque.lancar_saida`, `estoque.ler` e `alunos.ler`. Sem elas o
+  diálogo mostra só o aviso do livro e diz que a entrega fica para quem registra entregas — e nem
+  consulta a trilha.
+
+⚠️ **Para o card 9.2,88 (rodízio):** "quem ainda não tem o livro" hoje é lido da trilha do aluno.
+Com a sequência por aluno, o próximo módulo deixa de ser o mesmo para a turma inteira, e esta lista
+passa a depender do módulo de cada um.
