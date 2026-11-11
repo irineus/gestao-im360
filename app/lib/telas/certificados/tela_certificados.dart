@@ -161,8 +161,9 @@ class _TelaCertificadosState extends ConsumerState<TelaCertificados>
         ),
         ColunaIm360(
           titulo: 'Situação',
-          texto: (l) => rotuloSituacao(l.situacao),
-          celula: (l) => _Situacao(situacao: l.situacao),
+          texto: (l) => l.rotuloSituacaoDoAluno,
+          celula: (l) =>
+              _Situacao(situacao: l.situacao, rotulo: l.rotuloSituacaoDoAluno),
           flex: 2,
           larguraMin: 130,
         ),
@@ -190,7 +191,7 @@ class _TelaCertificadosState extends ConsumerState<TelaCertificados>
       aoTocarLinha: _abrir,
       cartao: (l) => CartaoIm360(
         titulo: l.rotuloAluno,
-        subtitulo: '${rotuloSituacao(l.situacao)} · ${l.metodoNome}',
+        subtitulo: '${l.rotuloSituacaoDoAluno} · ${l.metodoNome}',
         apoio: resumoChecklist(l),
         badge: BadgeStatus(l.alunoStatus),
         destaque: l.certificadoStatus == null
@@ -252,9 +253,13 @@ class _TelaCertificadosState extends ConsumerState<TelaCertificados>
 /// A situação, com ícone: fim do curso (bandeira) e último livro (relógio). Cor
 /// não é portadora única, e aqui nem cor há — a palavra vem junto.
 class _Situacao extends StatelessWidget {
-  const _Situacao({required this.situacao});
+  const _Situacao({required this.situacao, required this.rotulo});
 
   final String situacao;
+
+  /// Já no vocabulário do método: "Último livro" ou, no Modular, "Último
+  /// módulo" (card 9.2,905).
+  final String rotulo;
 
   @override
   Widget build(BuildContext context) {
@@ -272,7 +277,7 @@ class _Situacao extends StatelessWidget {
         const SizedBox(width: Dim.e4),
         Flexible(
           child: Text(
-            rotuloSituacao(situacao),
+            rotulo,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Tipografia.corpoTabela,
@@ -408,7 +413,7 @@ class _PainelChecklist extends StatelessWidget {
   Widget build(BuildContext context) => PainelDetalhe(
     titulo: linha.rotuloAluno,
     subtitulo: [
-      rotuloSituacao(linha.situacao),
+      linha.rotuloSituacaoDoAluno,
       linha.metodoNome,
       if (linha.dataFimCurso != null)
         'fim do curso ${formatarData(linha.dataFimCurso!)}',
@@ -490,7 +495,7 @@ class _FiltrosCertificadosState extends ConsumerState<_FiltrosCertificados> {
             for (final situacao in widget.situacoes)
               DropdownMenuEntry(
                 value: situacao,
-                label: rotuloSituacao(situacao),
+                label: rotuloSituacaoFiltro(situacao),
               ),
           ],
           aoSelecionar: (valor) => controlador.definir(

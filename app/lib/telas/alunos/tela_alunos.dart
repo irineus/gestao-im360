@@ -52,9 +52,16 @@ class TelaAlunos extends ConsumerWidget {
       context,
       construtor: (_) => const FormularioAluno(),
     );
-    if (resultado != null && context.mounted) {
-      confirmarEfemero(context, 'Aluno matriculado.');
+    if (resultado == null || !context.mounted) return;
+    // Card 9.2,905: aluno criado e admissão na turma recusada. Resultado que
+    // muda a próxima ação é diálogo, e não snackbar (design-system §5.8): o
+    // aluno existe e está sem turma, e isso não pode sumir em 4 s.
+    final semTurma = mensagemSemTurma(resultado);
+    if (semTurma != null) {
+      await mostrarMatriculaSemTurma(context, mensagem: semTurma);
+      return;
     }
+    confirmarEfemero(context, 'Aluno matriculado.');
   }
 
   @override
@@ -331,3 +338,24 @@ class _CelulaTurmas extends StatelessWidget {
     );
   }
 }
+
+/// A matrícula deu pela metade: o aluno existe, a turma não o recebeu.
+Future<void> mostrarMatriculaSemTurma(
+  BuildContext context, {
+  required String mensagem,
+}) => showDialog<void>(
+  context: context,
+  builder: (contexto) => AlertDialog(
+    title: const Text('Aluno matriculado — sem turma'),
+    content: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: Text(mensagem, style: Tipografia.corpo),
+    ),
+    actions: [
+      FilledButton(
+        onPressed: () => Navigator.of(contexto).pop(),
+        child: const Text('Entendi'),
+      ),
+    ],
+  ),
+);

@@ -114,6 +114,34 @@ abstract interface class ModularRepositorio {
     required String moduloId,
   });
 
+  /// Os módulos que o aluno **fez** (`aluno_modulo`, card 9.2,88), do mais
+  /// antigo para o mais novo. Vale com ou sem turma: o que o aluno estudou não
+  /// depende de onde ele está hoje.
+  Future<List<ModuloFeito>> modulosFeitos(String alunoId);
+
+  /// Os módulos que **faltam** ao aluno nas turmas em que ele está
+  /// (`v_aluno_modular_modulo`), na ordem em que a turma os dará. Vazio para
+  /// quem não está em turma Modular ativa.
+  Future<List<ModuloAFazer>> modulosAFazer(String alunoId);
+
+  /// `fn_aluno_modulo_registrar` — a exceção à mão (regra 6 do card 9.2,88):
+  /// o aluno fez o módulo por fora do avanço da turma. `alunos.editar_trilha`;
+  /// `MODULO_JA_REGISTRADO` se já existe.
+  Future<void> registrarModulo({
+    required String alunoId,
+    required String moduloId,
+    required DateTime dataConclusao,
+    String? observacao,
+  });
+
+  /// `fn_aluno_modulo_remover` — o aluno precisa refazer o módulo. Exige motivo
+  /// (`MOTIVO_OBRIGATORIO`), que vai para o histórico.
+  Future<void> removerModulo({
+    required String alunoId,
+    required String moduloId,
+    required String motivo,
+  });
+
   /// `fn_turma_modular_abrir_ciclo` (card 9.2,88) — para a turma anterior ao
   /// rodízio, com todos os módulos concluídos. Devolve o `modulo_id` do novo
   /// corrente. `TURMA_COM_MODULO_CORRENTE` se ainda há módulo em curso.
@@ -370,6 +398,68 @@ class ModularRepositorioSupabase implements ModularRepositorio {
         .eq('turma_id', turmaId)
         .eq('modulo_id', moduloId);
     return {for (final l in linhas) '${l['aluno_id']}'};
+  }
+
+  @override
+  Future<List<ModuloFeito>> modulosFeitos(String alunoId) async {
+    final linhas = await _cliente
+        .from('aluno_modulo')
+        .select(
+          'modulo_id, data_conclusao, origem, observacao, '
+          'modulo(nome, ordem, curso(nome))',
+        )
+        .eq('aluno_id', alunoId)
+        .order('data_conclusao', ascending: true);
+    return linhas.map(ModuloFeito.deLinha).toList();
+  }
+
+  @override
+  Future<List<ModuloAFazer>> modulosAFazer(String alunoId) async {
+    final linhas = await _cliente
+        .from('v_aluno_modular_modulo')
+        .select(
+          'turma_id, modulo_id, modulo_nome, modulo_ordem, de_entrada, '
+          'data_prevista_inicio, data_prevista_fim, sequencia',
+        )
+        .eq('aluno_id', alunoId)
+        .eq('feito', false)
+        .order('sequencia', ascending: true);
+    return linhas.map(ModuloAFazer.deLinha).toList();
+  }
+
+  @override
+  Future<void> registrarModulo({
+    required String alunoId,
+    required String moduloId,
+    required DateTime dataConclusao,
+    String? observacao,
+  }) async {
+    final texto = observacao?.trim() ?? '';
+    await _cliente.rpc<dynamic>(
+      'fn_aluno_modulo_registrar',
+      params: {
+        'p_aluno_id': alunoId,
+        'p_modulo_id': moduloId,
+        'p_data_conclusao': dataIso(dataConclusao),
+        'p_observacao': texto.isEmpty ? null : texto,
+      },
+    );
+  }
+
+  @override
+  Future<void> removerModulo({
+    required String alunoId,
+    required String moduloId,
+    required String motivo,
+  }) async {
+    await _cliente.rpc<dynamic>(
+      'fn_aluno_modulo_remover',
+      params: {
+        'p_aluno_id': alunoId,
+        'p_modulo_id': moduloId,
+        'p_motivo': motivo.trim(),
+      },
+    );
   }
 
   @override

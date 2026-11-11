@@ -104,6 +104,16 @@ final progressoPorAlocacaoProvider =
       ),
     );
 
+/// Os módulos que o aluno fez — por `alunoId` (card 9.2,905).
+final modulosFeitosProvider = FutureProvider.family<List<ModuloFeito>, String>(
+  (ref, alunoId) => _traduzindo(() => _repositorio(ref).modulosFeitos(alunoId)),
+);
+
+/// Os módulos que faltam ao aluno, na ordem da turma — por `alunoId`.
+final modulosAFazerProvider = FutureProvider.family<List<ModuloAFazer>, String>(
+  (ref, alunoId) => _traduzindo(() => _repositorio(ref).modulosAFazer(alunoId)),
+);
+
 /// Os alunos de uma turma a quem um módulo ainda falta — `(turmaId, moduloId)`.
 final alunosAQuemFaltaProvider =
     FutureProvider.family<Set<String>, (String, String)>(
