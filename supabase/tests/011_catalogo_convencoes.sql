@@ -347,7 +347,20 @@ select is(
             -- permissão POR ITEM — que é a razão de existirem três códigos em vez
             -- de um — deixaria de ter segunda camada. Os três triggers também não:
             -- eles operam sobre a linha que recebem.
-            'fn_certificado_reavaliar_estorno', 'fn_aluno_pode_formar'
+            'fn_certificado_reavaliar_estorno', 'fn_aluno_pode_formar',
+            -- card 9.2,88 — a turma em rodízio, três:
+            --   • fn_turma_modular_agenda: decisão derivada (quando a turma dará
+            --     cada módulo) lida sob RLS negaria linha em silêncio, e a
+            --     previsão do aluno sairia nula com cara de turma sem data —
+            --     mesma razão de fn_aluno_pode_formar. Filtra unidade no corpo e
+            --     exige turmas.ler;
+            --   • fn_aluno_modular_avaliar_conclusao: efeito colateral do avanço
+            --     (turmas.editar) que escreve onde a política pede turmas.alocar;
+            --     só age quando a conclusão é verdadeira;
+            --   • fn_aluno_modulo_hist: trigger que grava a tabela de histórico,
+            --     que não tem política de insert. Sem grant para authenticated.
+            'fn_turma_modular_agenda', 'fn_aluno_modular_avaliar_conclusao',
+            'fn_aluno_modulo_hist'
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'

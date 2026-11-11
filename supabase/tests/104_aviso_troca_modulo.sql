@@ -191,7 +191,9 @@ select is(
   'Módulo 2 — Instalações prediais | troca=false',
   'o proximo modulo vem do catalogo mesmo sem linha no cronograma, e aqui o livro e o mesmo');
 
--- No último módulo não há próximo: nulo nas duas colunas, e não `false`.
+-- ⚠️ Card 9.2,88: no último módulo o próximo é o PRIMEIRO — a turma dá a volta.
+--    Até o rodízio as duas colunas vinham nulas aqui; agora a troca de livro
+--    vale também na virada do ciclo (módulo 3 é do livro 02, o 1 é do 01).
 update public.turma_modular_modulo tm set concluido = true
   from public.modulo m
  where m.id = tm.modulo_id and m.ordem = 2
@@ -202,8 +204,8 @@ select is(
                  coalesce(l.proximo_modulo_nome, 'nulo'), coalesce(l.troca_de_livro::text, 'nulo'))
      from public.v_turma_modular_lotacao l
     where l.turma_id = (select id from turma where nome = 'Eletricista 2026.1')),
-  '3 | proximo=nulo | troca=nulo',
-  'turma no ultimo modulo: sem proximo, e troca_de_livro NULA — nulo nao afirma que o livro continua');
+  '3 | proximo=Módulo 1 — Comandos elétricos | troca=true',
+  'turma no ultimo modulo: o proximo e o PRIMEIRO do rodizio, e a troca de livro vale na virada do ciclo');
 
 update public.turma_modular_modulo tm set concluido = false
   from public.modulo m
@@ -219,8 +221,8 @@ select is(
     where a.attrelid = 'public.v_turma_modular_lotacao'::regclass
       and a.attnum > 17 and not a.attisdropped),
   'modulo_corrente_cronograma_id,proximo_modulo_id,proximo_modulo_nome,proximo_material_id,'
-  'proximo_material_nome,troca_de_livro,dias_para_troca,situacao_troca',
-  'as oito colunas novas vem depois das dezessete do card 9.2,7, nesta ordem');
+  'proximo_material_nome,troca_de_livro,dias_para_troca,situacao_troca,modulo_corrente_ciclo',
+  'as oito colunas do card 9.2,85 e o ciclo do 9.2,88 vem depois das dezessete do card 9.2,7, nesta ordem');
 
 -- Quem não tem `parametros.ler` lê a situação do mesmo jeito: fn_param_int é
 -- definer (card 8.1, ajuste 1). Sem isso a tela 5 da secretaria quebraria.

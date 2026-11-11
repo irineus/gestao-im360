@@ -207,6 +207,8 @@ Todas as políticas trazem, além do que está na coluna, o filtro `unidade_id =
 | `pedido_compra` | `compras.ler` | `compras.criar` | `compras.editar` ∨ `compras.receber` | — |
 | `pedido_item` | `compras.ler` | `compras.criar` ∨ `compras.editar` | `compras.editar` ∨ `compras.receber` | `compras.excluir` |
 | **`certificado_checklist`** | `certificados.ler` | `certificados.criar` | `certificados.marcar_pedagogico` ∨ `certificados.marcar_financeiro` ∨ `certificados.alterar_status` | — |
+| **`aluno_modulo`** (card 9.2,88) | `alunos.ler` ∨ `turmas.editar` | `turmas.editar` ∨ `alunos.editar_trilha` | `alunos.editar_trilha` | `alunos.editar_trilha` |
+| **`aluno_modulo_hist`** (card 9.2,88) | `alunos.ler` | — (só o trigger, definer) | — | — |
 | **`pendencia`** | `pendencias.ler` (∧ `turmas.alinhar_modulo` no tipo `TROCA_MODULO_ALINHAR` — card 9.2,85) | *só* `unidade_id = fn_unidade_atual()` | `pendencias.resolver` (∧ `turmas.alinhar_modulo` no mesmo tipo) | — |
 
 **`movimento_estoque`, insert por tipo:**
