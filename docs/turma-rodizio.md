@@ -329,6 +329,34 @@ conclusão **só libera a vaga**.
 ⚠️ **Entre este card e o 9.2,89** a projeção lê o cronograma sem conhecer `ciclo`: turma que já
 abriu o segundo ciclo teria módulos contados duas vezes. Os dois saem no mesmo lote.
 
+## 10.2 O que o card 9.2,885 (11/11/2026) implementou das três decisões
+
+Migração `20261111150000_rodizio_certificado_previsao.sql`, teste `106_rodizio_certificado` (24
+asserções).
+
+- **D1 e D3** — `fn_aluno_modular_modulos_pendentes(aluno)` é a pergunta única: quantos módulos
+  faltam no **escopo** do aluno (os cursos Modular do combo, mais os das turmas e dos módulos que
+  já fez). Zero = concluiu; **nulo** = ainda não começou. `fn_aluno_modular_avaliar_certificado`
+  abre o checklist (com a data do último módulo) e o aviso `ALUNO_ULTIMO_LIVRO` quando dá zero — e
+  é chamada pela conclusão na turma **e** pelo registro à mão. `fn_registrar_entrega` e
+  `fn_estornar_entrega` ganharam `and not fn_aluno_e_modular(...)`. `v_certificado_fila` conta
+  **módulos** para o Modular.
+- **D2** — `PREVISAO_VENCIDA` ganhou um `not exists` de turma Modular ativa.
+
+Três coisas que as decisões não diziam e a implementação teve de escolher:
+
+1. **Quem avança o módulo não precisa de `certificados.criar`.** A abertura do checklist é
+   `security definer` e não passa por `fn_certificado_abrir`: o pedagógico avança turma e não tem
+   essa permissão — o avanço inteiro morreria por causa do certificado.
+2. **Remover um módulo desfaz a conclusão**, como o estorno desfaz a última apostila: checklist
+   intocado é apagado; com item marcado fica, com `CERTIFICADO_INCONSISTENTE`.
+3. **O registro à mão avalia o certificado sempre**, e não só quando o aluno ainda está numa turma
+   do curso. ⚠️ Achado do teste: sem isso, o aluno que já saiu da turma e fecha à mão o último curso
+   do combo — que pode nem ter turma — nunca teria o checklist aberto.
+
+**Não feito, e virou o card 9.2,886:** reordenar a trilha de livros na admissão (§4.1) e o script
+de concorrência admissão × avanço (§11).
+
 ## 11. Testes que o card 9.2,88 deve
 
 | O que provar | Como |

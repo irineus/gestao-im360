@@ -360,7 +360,18 @@ select is(
             --   • fn_aluno_modulo_hist: trigger que grava a tabela de histórico,
             --     que não tem política de insert. Sem grant para authenticated.
             'fn_turma_modular_agenda', 'fn_aluno_modular_avaliar_conclusao',
-            'fn_aluno_modulo_hist'
+            'fn_aluno_modulo_hist',
+            -- card 9.2,885 — o certificado do aluno Modular, três, todas com
+            -- filtro de unidade no corpo:
+            --   • fn_aluno_e_modular e fn_aluno_modular_modulos_pendentes: decisão
+            --     derivada lida na transação de quem ENTREGA e por uma view. Sob
+            --     RLS, o monitor sem materiais.ler receberia false e abriria, na
+            --     entrega, o certificado de quem ainda tem módulos a fazer;
+            --   • fn_aluno_modular_avaliar_certificado: efeito colateral do avanço
+            --     (turmas.editar) que escreve o checklist, cuja política pede
+            --     certificados.criar. Só age quando a conclusão é verdadeira.
+            'fn_aluno_e_modular', 'fn_aluno_modular_modulos_pendentes',
+            'fn_aluno_modular_avaliar_certificado'
           )),
   '',
   'C8: nenhuma funcao security definer fora da lista fechada'
