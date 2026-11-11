@@ -19,7 +19,8 @@ import 'package:gestao_im360/turmas/modular_repositorio.dart';
 ///
 /// ⚠️ Ele **reproduz as funções** do card 7.2: admitir acrescenta o aluno e sobe
 /// a lotação, remover desativa a linha gravando o motivo, avançar conclui o
-/// corrente e abre o seguinte. Sem isso os testes mediriam um mundo em que
+/// corrente e abre o seguinte — e, fechado o último módulo, abre o ciclo
+/// seguinte, porque a turma é cíclica (card 9.2,88). Sem isso os testes mediriam um mundo em que
 /// salvar não muda nada — a lição que o card 5.4 escreveu.
 class ModularFalso implements ModularRepositorio {
   ModularFalso({
@@ -27,8 +28,10 @@ class ModularFalso implements ModularRepositorio {
     List<TurmaModular>? inativas,
     List<ModuloDaTurma>? cronograma,
     List<AlunoDaTurmaModular>? alunos,
+    List<ProgressoAlunoModular>? progresso,
     this.atrasoLeitura = Duration.zero,
   }) : turmas_ = List.of(turmas ?? const []),
+       progresso_ = List.of(progresso ?? const []),
        inativas_ = List.of(inativas ?? const []),
        cronograma_ = List.of(cronograma ?? const []),
        alunos_ = List.of(alunos ?? const []);
@@ -58,6 +61,8 @@ class ModularFalso implements ModularRepositorio {
         moduloCorrenteOrdem: 2,
         moduloCorrenteInicio: DateTime(2026, 8, 11),
         moduloCorrentePrevConclusao: DateTime(2026, 10, 10),
+        proximoModuloId: 'mod-3',
+        proximoModuloNome: 'Módulo 3 — Projetos',
       ),
       // Vazia e com o módulo corrente VENCIDO — é o `modulo_atrasado` com o
       // outro valor, a mesma escolha do seed. Cronograma PARCIAL (só o módulo
@@ -74,6 +79,8 @@ class ModularFalso implements ModularRepositorio {
         moduloAtrasado: true,
         // O início REAL da turma, que a view de lotação traz desde o 9.2,7.
         dataInicio: DateTime(2025, 11, 9),
+        proximoModuloId: 'mod-2',
+        proximoModuloNome: 'Módulo 2 — Instalações prediais',
       ),
       // Acima da capacidade: 16 numa turma de 15. Estado real — o importador do
       // card 9.1 pode trazer uma —, e `vagas_livres` tem piso zero.
@@ -192,6 +199,28 @@ class ModularFalso implements ModularRepositorio {
   final List<ModuloDaTurma> cronograma_;
   final List<AlunoDaTurmaModular> alunos_;
 
+  /// `v_aluno_modular_progresso` (card 9.2,90).
+  final List<ProgressoAlunoModular> progresso_;
+
+  /// `v_aluno_modular_agenda`, pela chave `turma|módulo`: a quem o módulo
+  /// ainda falta. **Sem entrada = falta a todo aluno ativo da turma** — é o
+  /// caso da turma em que ninguém fez módulo nenhum.
+  final Map<String, Set<String>> aQuemFalta = {};
+
+  /// Só a leitura de `alunosAQuemFalta` falha.
+  ErroApp? erroAQuemFalta;
+
+  /// O catálogo que `fn_turma_modular_avancar` e `fn_turma_modular_abrir_ciclo`
+  /// leem para completar e abrir ciclos — o mesmo do `CatalogoFalso`.
+  static const _catalogo = <String, List<(String, String, int)>>{
+    'c-ele': [
+      ('mod-1', 'Módulo 1 — Comandos elétricos', 1),
+      ('mod-2', 'Módulo 2 — Instalações prediais', 2),
+      ('mod-3', 'Módulo 3 — Projetos', 3),
+    ],
+    'c-dep': [('mod-dep-1', 'Técnicas básicas', 1)],
+  };
+
   /// O card 4.4 mediu que teste instantâneo não constrói a tela no estado em que
   /// o banco a apanha: durante a recarga o `AsyncValue` ainda carrega o valor
   /// anterior. O atraso é o que permite reproduzir isso.
@@ -216,6 +245,15 @@ class ModularFalso implements ModularRepositorio {
   final List<String> modulosIncluidos = [];
   final List<String> datasSalvas = [];
   final List<String> modulosExcluidos = [];
+
+  /// O `ciclo` de cada `incluirModulos`, na ordem das chamadas (card 9.2,90).
+  final List<int> ciclosIncluidos = [];
+
+  /// O `p_modulo_entrada_id` de cada `admitir` — nulo = o atual da turma.
+  final List<String?> entradas = [];
+
+  /// `turma|data` de cada `abrirCiclo`.
+  final List<String> ciclosAbertos = [];
 
   Future<void> _lerOuFalhar() async {
     final erro = erroDeLeitura;
@@ -252,6 +290,27 @@ class ModularFalso implements ModularRepositorio {
   }
 
   @override
+  Future<List<ProgressoAlunoModular>> progresso() async {
+    await _lerOuFalhar();
+    return List.of(progresso_);
+  }
+
+  @override
+  Future<Set<String>> alunosAQuemFalta({
+    required String turmaId,
+    required String moduloId,
+  }) async {
+    await _lerOuFalhar();
+    final erro = erroAQuemFalta;
+    if (erro != null) throw erro;
+    return aQuemFalta['$turmaId|$moduloId'] ??
+        {
+          for (final a in alunos_)
+            if (a.turmaId == turmaId && a.ativo) a.alunoId,
+        };
+  }
+
+  @override
   Future<String> salvarTurma({
     String? id,
     required String nome,
@@ -282,8 +341,10 @@ class ModularFalso implements ModularRepositorio {
   Future<void> incluirModulos({
     required String turmaId,
     required List<String> moduloIds,
+    int ciclo = 1,
   }) async {
     modulosIncluidos.add('$turmaId|${moduloIds.join(',')}');
+    ciclosIncluidos.add(ciclo);
     // Reproduz o efeito: as linhas passam a existir, sem datas. Sem isto o
     // teste do "Montar cronograma" mediria um mundo em que salvar não muda nada.
     for (final moduloId in moduloIds) {
@@ -295,6 +356,7 @@ class ModularFalso implements ModularRepositorio {
           nome: moduloId,
           ordem: cronograma_.length + 1,
           corrente: !cronograma_.any((m) => m.turmaId == turmaId),
+          ciclo: ciclo,
         ),
       );
     }
@@ -325,6 +387,7 @@ class ModularFalso implements ModularRepositorio {
         concluido: m.concluido,
         corrente: m.corrente,
         atrasado: m.atrasado,
+        ciclo: m.ciclo,
       );
     }
   }
@@ -339,8 +402,10 @@ class ModularFalso implements ModularRepositorio {
   Future<String> admitir({
     required String turmaId,
     required String alunoId,
+    String? moduloEntradaId,
   }) async {
     admitidos.add('$turmaId|$alunoId');
+    entradas.add(moduloEntradaId);
     final erro = erroAoAdmitir;
     if (erro != null) throw erro;
     alunos_.add(
@@ -391,33 +456,105 @@ class ModularFalso implements ModularRepositorio {
     final erro = erroAoAvancar;
     if (erro != null) throw erro;
 
-    // Reproduz `fn_turma_modular_avancar`: conclui o corrente com a data REAL e
-    // abre o seguinte por ordem. Devolve NULO quando não há seguinte — é o
-    // estado "turma terminou", e é o que a tela precisa distinguir.
-    final daTurma = [
-      for (final m in cronograma_)
-        if (m.turmaId == turmaId) m,
-    ]..sort((a, b) => a.moduloOrdem.compareTo(b.moduloOrdem));
-    final naoConcluidos = [
-      for (final m in daTurma)
-        if (!m.concluido) m,
-    ];
+    // Reproduz `fn_turma_modular_avancar` (card 9.2,88): conclui o corrente
+    // com a data REAL, completa o ciclo com os módulos seguintes do catálogo e,
+    // fechado o último, abre o ciclo seguinte. A turma é cíclica: só devolve
+    // nulo quando não há o que abrir (curso fora do catálogo do falso).
+    final naoConcluidos = _naoConcluidos(turmaId);
     if (naoConcluidos.isEmpty) return null;
     final corrente = naoConcluidos.first;
-    final proximo = naoConcluidos.length > 1 ? naoConcluidos[1] : null;
+    final i = cronograma_.indexWhere((m) => m.id == corrente.id);
+    cronograma_[i] = _copiar(
+      corrente,
+      concluido: true,
+      corrente: false,
+      prevConclusao: dataConclusao,
+    );
 
-    for (var i = 0; i < cronograma_.length; i++) {
-      final m = cronograma_[i];
-      if (m.id == corrente.id) {
-        cronograma_[i] = _copiar(
-          m,
-          concluido: true,
-          corrente: false,
-          prevConclusao: dataConclusao,
-        );
-      } else if (proximo != null && m.id == proximo.id) {
-        cronograma_[i] = _copiar(m, corrente: true);
+    final catalogo = _catalogoDa(turmaId);
+    _incluirDoCatalogo(
+      turmaId,
+      corrente.ciclo,
+      catalogo.where((m) => m.$3 > corrente.moduloOrdem),
+    );
+    if (_naoConcluidos(turmaId).isEmpty) {
+      _incluirDoCatalogo(turmaId, corrente.ciclo + 1, catalogo);
+    }
+    return _abrir(turmaId);
+  }
+
+  @override
+  Future<String> abrirCiclo({
+    required String turmaId,
+    required DateTime dataInicio,
+  }) async {
+    ciclosAbertos.add('$turmaId|${dataIso(dataInicio)}');
+    final ultimo = cronograma_
+        .where((m) => m.turmaId == turmaId)
+        .fold<int>(0, (maior, m) => m.ciclo > maior ? m.ciclo : maior);
+    _incluirDoCatalogo(turmaId, ultimo + 1, _catalogoDa(turmaId));
+    final primeiro = _naoConcluidos(turmaId).first;
+    final i = cronograma_.indexWhere((m) => m.id == primeiro.id);
+    cronograma_[i] = _copiar(primeiro, dataInicio: dataInicio);
+    return _abrir(turmaId)!;
+  }
+
+  /// As linhas não concluídas da turma por (ciclo, ordem) — a ordem com que o
+  /// banco escolhe o corrente.
+  List<ModuloDaTurma> _naoConcluidos(String turmaId) =>
+      [
+        for (final m in cronograma_)
+          if (m.turmaId == turmaId && !m.concluido) m,
+      ]..sort((a, b) {
+        final ciclo = a.ciclo.compareTo(b.ciclo);
+        return ciclo != 0 ? ciclo : a.moduloOrdem.compareTo(b.moduloOrdem);
+      });
+
+  /// Os módulos do curso da turma: o catálogo do falso e, para curso que ele
+  /// não conhece, os módulos que o cronograma da turma já tem.
+  List<(String, String, int)> _catalogoDa(String turmaId) {
+    final turma = turmas_.where((t) => t.id == turmaId).firstOrNull;
+    final doCatalogo = _catalogo[turma?.cursoId];
+    if (doCatalogo != null) return doCatalogo;
+    final vistos = <String, (String, String, int)>{};
+    for (final m in cronograma_) {
+      if (m.turmaId == turmaId) {
+        vistos[m.moduloId] = (m.moduloId, m.moduloNome, m.moduloOrdem);
       }
+    }
+    return vistos.values.toList()..sort((a, b) => a.$3.compareTo(b.$3));
+  }
+
+  void _incluirDoCatalogo(
+    String turmaId,
+    int ciclo,
+    Iterable<(String, String, int)> modulos,
+  ) {
+    for (final (id, nome, ordem) in modulos) {
+      final existe = cronograma_.any(
+        (m) => m.turmaId == turmaId && m.moduloId == id && m.ciclo == ciclo,
+      );
+      if (existe) continue;
+      cronograma_.add(
+        moduloDaTurmaFalso(
+          id: 'cr-$turmaId-$id-c$ciclo',
+          turmaId: turmaId,
+          moduloId: id,
+          nome: nome,
+          ordem: ordem,
+          ciclo: ciclo,
+        ),
+      );
+    }
+  }
+
+  /// Marca o primeiro não concluído como corrente e reflete na lotação.
+  String? _abrir(String turmaId) {
+    final abertos = _naoConcluidos(turmaId);
+    final proximo = abertos.isEmpty ? null : abertos.first;
+    if (proximo != null) {
+      final i = cronograma_.indexWhere((m) => m.id == proximo.id);
+      cronograma_[i] = _copiar(proximo, corrente: true);
     }
     _mexerModuloCorrente(turmaId, proximo);
     return proximo?.moduloId;
@@ -427,30 +564,22 @@ class ModularFalso implements ModularRepositorio {
     for (var i = 0; i < turmas_.length; i++) {
       final t = turmas_[i];
       if (t.id != turmaId) continue;
-      final alocados = t.alocados + delta;
-      turmas_[i] = turmaModularFalsa(
-        id: t.id,
-        nome: t.nome,
-        cursoId: t.cursoId,
-        cursoNome: t.cursoNome,
-        salaId: t.salaId,
-        salaNome: t.salaNome,
-        capacidade: t.capacidade,
-        alocados: alocados,
-        moduloCorrenteId: t.moduloCorrenteId,
-        moduloCorrenteNome: t.moduloCorrenteNome,
-        moduloCorrenteOrdem: t.moduloCorrenteOrdem,
-        moduloCorrenteInicio: t.moduloCorrenteInicio,
-        moduloCorrentePrevConclusao: t.moduloCorrentePrevConclusao,
-        moduloAtrasado: t.moduloAtrasado,
-      );
+      turmas_[i] = _copiarTurma(t, alocados: t.alocados + delta);
     }
   }
 
-  void _mexerModuloCorrente(String turmaId, ModuloDaTurma? proximo) {
+  void _mexerModuloCorrente(String turmaId, ModuloDaTurma? corrente) {
     for (var i = 0; i < turmas_.length; i++) {
       final t = turmas_[i];
       if (t.id != turmaId) continue;
+      // O próximo do rodízio: o de ordem seguinte e, depois do último, o
+      // primeiro. Nulo em curso de um módulo só — como a view.
+      final catalogo = _catalogoDa(turmaId);
+      (String, String, int)? proximo;
+      if (corrente != null && catalogo.length > 1) {
+        final depois = catalogo.where((m) => m.$3 > corrente.moduloOrdem);
+        proximo = depois.isEmpty ? catalogo.first : depois.first;
+      }
       turmas_[i] = turmaModularFalsa(
         id: t.id,
         nome: t.nome,
@@ -460,20 +589,54 @@ class ModularFalso implements ModularRepositorio {
         salaNome: t.salaNome,
         capacidade: t.capacidade,
         alocados: t.alocados,
-        moduloCorrenteId: proximo?.moduloId,
-        moduloCorrenteNome: proximo?.moduloNome,
-        moduloCorrenteOrdem: proximo?.moduloOrdem,
-        moduloCorrenteInicio: proximo?.dataInicio,
-        moduloCorrentePrevConclusao: proximo?.prevConclusao,
+        dataInicio: t.dataInicio,
+        moduloCorrenteId: corrente?.moduloId,
+        moduloCorrenteNome: corrente?.moduloNome,
+        moduloCorrenteOrdem: corrente?.moduloOrdem,
+        moduloCorrenteInicio: corrente?.dataInicio,
+        moduloCorrentePrevConclusao: corrente?.prevConclusao,
+        moduloCorrenteCiclo: corrente?.ciclo,
+        proximoModuloId: proximo?.$1,
+        proximoModuloNome: proximo?.$2,
       );
     }
   }
 }
 
+/// A turma com outra lotação e **todo o resto igual** — inclusive o aviso de
+/// troca e o ciclo, que a versão anterior deste falso perdia.
+TurmaModular _copiarTurma(TurmaModular t, {required int alocados}) =>
+    turmaModularFalsa(
+      id: t.id,
+      nome: t.nome,
+      cursoId: t.cursoId,
+      cursoNome: t.cursoNome,
+      salaId: t.salaId,
+      salaNome: t.salaNome,
+      capacidade: t.capacidade,
+      alocados: alocados,
+      dataInicio: t.dataInicio,
+      moduloCorrenteId: t.moduloCorrenteId,
+      moduloCorrenteNome: t.moduloCorrenteNome,
+      moduloCorrenteOrdem: t.moduloCorrenteOrdem,
+      moduloCorrenteInicio: t.moduloCorrenteInicio,
+      moduloCorrentePrevConclusao: t.moduloCorrentePrevConclusao,
+      moduloAtrasado: t.moduloAtrasado,
+      moduloCorrenteCiclo: t.moduloCorrenteCiclo,
+      proximoModuloId: t.proximoModuloId,
+      proximoModuloNome: t.proximoModuloNome,
+      proximoMaterialId: t.proximoMaterialId,
+      proximoMaterialNome: t.proximoMaterialNome,
+      trocaDeLivro: t.trocaDeLivro,
+      diasParaTroca: t.diasParaTroca,
+      situacaoTroca: t.situacaoTroca,
+    );
+
 ModuloDaTurma _copiar(
   ModuloDaTurma m, {
   bool? concluido,
   bool? corrente,
+  DateTime? dataInicio,
   DateTime? prevConclusao,
 }) => ModuloDaTurma(
   id: m.id,
@@ -482,11 +645,12 @@ ModuloDaTurma _copiar(
   moduloNome: m.moduloNome,
   moduloOrdem: m.moduloOrdem,
   materialId: m.materialId,
-  dataInicio: m.dataInicio,
+  dataInicio: dataInicio ?? m.dataInicio,
   prevConclusao: prevConclusao ?? m.prevConclusao,
   concluido: concluido ?? m.concluido,
   corrente: corrente ?? m.corrente,
   atrasado: m.atrasado,
+  ciclo: m.ciclo,
 );
 
 /// Uma linha de `v_turma_modular_lotacao`. `vagas_livres` com piso zero, como a
@@ -514,7 +678,14 @@ TurmaModular turmaModularFalsa({
   bool? trocaDeLivro,
   int? diasParaTroca,
   SituacaoTroca? situacaoTroca,
+  // card 9.2,88/9.2,90 — a turma em rodízio. O ciclo do corrente vem da view
+  // sempre que há corrente; aqui, 1 por omissão, como a turma recém-montada.
+  int? moduloCorrenteCiclo,
+  String? proximoModuloId,
 }) => TurmaModular(
+  moduloCorrenteCiclo:
+      moduloCorrenteCiclo ?? (moduloCorrenteId == null ? null : 1),
+  proximoModuloId: proximoModuloId,
   dataInicio: dataInicio,
   proximoModuloNome: proximoModuloNome,
   proximoMaterialId: proximoMaterialId,
@@ -551,7 +722,9 @@ ModuloDaTurma moduloDaTurmaFalso({
   bool concluido = false,
   bool corrente = false,
   bool atrasado = false,
+  int ciclo = 1,
 }) => ModuloDaTurma(
+  ciclo: ciclo,
   id: id,
   turmaId: turmaId,
   moduloId: moduloId,

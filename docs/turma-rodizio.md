@@ -383,6 +383,37 @@ e a queda para `MEDIA_METODO` da turma sem data nenhuma.
 quem entrou pelo segundo livro e tem a trilha na ordem do curso, o livro contado como demanda
 imediata é o primeiro — que ele só usará depois.
 
+## 10.4 O que o card 9.2,90 (11/11/2026) implementou na tela Turmas Modular
+
+Só app — nenhuma migração. Testes: 12 novos em `app/test/tela_turmas_modular_test.dart` (desktop e
+390 px) e 2 em `app/test/modular_test.dart`; a suíte do app fecha em 1.091.
+
+| O que a tela faz | De onde vem |
+|---|---|
+| **Mostra um ciclo só** — o do módulo corrente. O título diz `ciclo 2 · 6 módulos` a partir da segunda volta; as linhas dos ciclos passados ficam no banco, como histórico. | `modulo_corrente_ciclo` (lotação) + `ciclo` (cronograma) |
+| **Linha do aluno com o progresso**: `desde 06/07 · entrou em Massas e Molhos · 3 de 6 módulos · falta Confeitaria e mais 2 · conclusão prevista 20/03/2027`; quem entrou para começar no próximo aparece como `começa no próximo módulo`. | `v_aluno_modular_progresso` |
+| **Adicionar aluno pergunta onde ele começa** — módulo atual (padrão) ou o próximo do rodízio. Sem módulo corrente, ou em curso de um módulo só, a pergunta não aparece. | `proximo_modulo_id` → `p_modulo_entrada_id` |
+| **Avançar módulo diz o que abre mesmo no último**: `Abre Massas e Molhos — a turma segue em rodízio.` O diálogo "Turma terminou" saiu. | `proximo_modulo_nome` |
+| **A oferta do livro só lista quem ainda precisa do módulo que abre** — quem já o fez em outra volta fica de fora, ainda que tenha a apostila por receber na trilha. | `v_aluno_modular_agenda` |
+| **`Abrir próximo ciclo`** (`turmas.editar`), só para a turma anterior ao rodízio com tudo concluído. | `fn_turma_modular_abrir_ciclo` |
+
+⚠️ **Dois defeitos fechados aqui, ambos do tipo "a turma volta atrás sem erro nenhum":**
+
+1. **"Acrescentar módulos" gravava no ciclo 1 por omissão.** Numa turma no segundo ciclo, a linha
+   nova — não concluída, num ciclo anterior — passava a ser o módulo corrente. A tela agora manda o
+   ciclo que está mostrando (`incluirModulos(ciclo:)`).
+2. **"Acrescentar módulos" oferecia módulos de ordem MENOR que o corrente.** Num ciclo em que eles
+   não têm linha, acrescentá-los faz deles o corrente. A tela só oferece o que vem **depois** do
+   corrente — é a mesma regra do passo 5 de `fn_turma_modular_avancar`; os de ordem menor pertencem
+   ao ciclo seguinte, que o avanço abre sozinho.
+
+O que **ficou para o card 9.2,905**: cadastro do aluno já com turma e módulo de entrada, a sequência
+de módulos na ficha do aluno, a exceção à mão (`fn_aluno_modulo_registrar`/`_remover`) e os textos
+da fila de certificados.
+
+⚠️ **Não verificado em navegador:** como nos cards anteriores do lote, a tela foi exercitada por
+teste de widget (desktop e 390 px), não num navegador real contra o banco.
+
 ## 11. Testes que o card 9.2,88 deve
 
 | O que provar | Como |
@@ -403,5 +434,6 @@ imediata é o primeiro — que ele só usará depois.
 |---|---|
 | **9.2,88** | §3, §4, §5 e §7 (as colunas `proximo_*` com o rodízio); pgTAP e concorrência |
 | **9.2,89** | §6 |
-| **9.2,90** | tela 5 (alunos com progresso, cronograma por ciclo, abrir ciclo), cadastro com turma e módulo de entrada, sequência e exceção na ficha |
+| **9.2,90** | tela 5 (alunos com progresso, cronograma por ciclo, módulo de entrada ao adicionar, abrir ciclo) — §10.4 |
+| **9.2,905** | cadastro com turma e módulo de entrada, sequência e exceção na ficha, textos da fila de certificados |
 | **9.2,91** | §8 |
