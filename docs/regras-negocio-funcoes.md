@@ -939,6 +939,11 @@ fn_certificado_reavaliar_estorno(p_aluno_id uuid) → text   -- ✅ 8.3, ver aba
 
 ## 9. Modular
 
+> ⚠️ **Revogado em parte em 10/11/2026 (card 9.2,87):** a premissa de que a turma começa, percorre
+> os módulos uma vez e termina com todos os alunos juntos **não vale mais** — as turmas são
+> cíclicas, e cada aluno tem módulo de entrada e registro próprio do que já fez. A fonte passa a ser
+> `docs/turma-rodizio.md`; o §9 daquele documento diz o que desta seção continua valendo.
+
 Detalhamento na Fase 7; as assinaturas ficam aqui para o resto do sistema poder contar com elas.
 
 ```sql
