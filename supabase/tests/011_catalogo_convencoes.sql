@@ -348,18 +348,17 @@ select is(
             -- de um — deixaria de ter segunda camada. Os três triggers também não:
             -- eles operam sobre a linha que recebem.
             'fn_certificado_reavaliar_estorno', 'fn_aluno_pode_formar',
-            -- card 9.2,88 — a turma em rodízio, três:
-            --   • fn_turma_modular_agenda: decisão derivada (quando a turma dará
-            --     cada módulo) lida sob RLS negaria linha em silêncio, e a
-            --     previsão do aluno sairia nula com cara de turma sem data —
-            --     mesma razão de fn_aluno_pode_formar. Filtra unidade no corpo e
-            --     exige turmas.ler;
+            -- card 9.2,88 — a turma em rodízio, duas:
             --   • fn_aluno_modular_avaliar_conclusao: efeito colateral do avanço
             --     (turmas.editar) que escreve onde a política pede turmas.alocar;
             --     só age quando a conclusão é verdadeira;
             --   • fn_aluno_modulo_hist: trigger que grava a tabela de histórico,
             --     que não tem política de insert. Sem grant para authenticated.
-            'fn_turma_modular_agenda', 'fn_aluno_modular_avaliar_conclusao',
+            -- ⚠️ fn_turma_modular_agenda nasceu aqui e SAIU no card 9.2,89: o
+            --    corpo exigia turmas.ler e filtrava a unidade — o que a RLS já
+            --    faz para um invoker —, e como definer devolvia vazio a quem lê
+            --    sem contexto, derrubando a projeção Modular em silêncio.
+            'fn_aluno_modular_avaliar_conclusao',
             'fn_aluno_modulo_hist',
             -- card 9.2,885 — o certificado do aluno Modular, três, todas com
             -- filtro de unidade no corpo:
