@@ -10,6 +10,8 @@ import '../../infraestrutura/infraestrutura_provider.dart';
 import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../trilha/trilha.dart';
+import '../../trilha/trilha_provider.dart';
 import '../../turmas/modular.dart';
 import '../../turmas/modular_provider.dart';
 import '../../util/texto.dart';
@@ -742,6 +744,18 @@ class _FormularioRemoverDaTurmaModularState
 // O avanço conjunto de módulo
 // ---------------------------------------------------------------------------
 
+/// Card 9.2,86: os três textos da oferta do livro, para a tela e o teste.
+const semPermissaoDeEntrega =
+    'A entrega do livro fica para quem registra entregas — pela ficha de cada '
+    'aluno, na aba Trilha.';
+
+const erroLivroPendente =
+    'Não foi possível saber quem ainda não tem este livro. O avanço pode '
+    'seguir; registre as entregas pela ficha de cada aluno.';
+
+const ninguemSemOLivro =
+    'Nenhum aluno ativo da turma tem este livro por receber.';
+
 /// `[Avançar módulo →]` (wireframe §8): chama `fn_turma_modular_avancar`, que
 /// fecha o módulo corrente com a data informada e abre o seguinte.
 ///
@@ -777,6 +791,11 @@ class _FormularioAvancarModuloState
   final _chave = GlobalKey<FormState>();
   final _data = TextEditingController(text: formatarData(hojeSaoPaulo()));
 
+  /// Quem foi DESMARCADO na oferta do livro (card 9.2,86). Guardar os
+  /// desmarcados, e não os marcados, é o que faz todo mundo nascer marcado —
+  /// inclusive quem a leitura trouxer depois de o diálogo abrir.
+  final _semLivro = <String>{};
+
   @override
   void dispose() {
     _data.dispose();
@@ -796,6 +815,35 @@ class _FormularioAvancarModuloState
     // (`fn_hoje()`). Pelo relógio do aparelho o formulário abriria com um dia
     // de diferença do que a função usaria.
     final data = lerData(_data.text) ?? hojeSaoPaulo();
+
+    // -- A oferta do livro (card 9.2,86) --------------------------------------
+    // Só quando o PRÓXIMO módulo é de outro livro: trocar de módulo nem sempre
+    // é trocar de apostila (decisão do dono do produto, 10/11/2026). Quem diz
+    // se é, e qual é o livro, é a view (`troca_de_livro`).
+    final turma = widget.turma;
+    final livroId = (turma.trocaDeLivro ?? false)
+        ? turma.proximoMaterialId
+        : null;
+    final permissoes = ref.watch(permissoesProvider);
+    // As três leituras de `v_aluno_trilha` (card 6.6) mais a escrita.
+    final podeEntregar =
+        permissoes.contains('estoque.lancar_saida') &&
+        permissoes.contains('estoque.ler') &&
+        permissoes.contains('alunos.ler');
+    final pendentes = livroId != null && podeEntregar
+        ? ref.watch(alunosComLivroPendenteProvider(livroId))
+        : null;
+    final candidatos = [
+      if (pendentes != null && pendentes.hasValue)
+        for (final a
+            in ref.watch(alunosPorTurmaProvider)[turma.id] ??
+                const <AlunoDaTurmaModular>[])
+          if (a.ativo && pendentes.requireValue.contains(a.alunoId)) a,
+    ];
+    final marcados = [
+      for (final a in candidatos)
+        if (!_semLivro.contains(a.alunoId)) a,
+    ];
 
     return FormularioIm360(
       titulo: 'Avançar módulo',
@@ -842,6 +890,50 @@ class _FormularioAvancarModuloState
             style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
           ),
         ),
+        if (livroId != null) ...[
+          const Divider(),
+          Text(avisoTrocaDeLivro(turma), style: Tipografia.corpo),
+          if (!podeEntregar)
+            Text(
+              semPermissaoDeEntrega,
+              style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+            )
+          // `hasError` antes de `hasValue` (design-system §5.6).
+          else if (pendentes!.hasError)
+            Text(
+              erroLivroPendente,
+              style: Tipografia.apoio.copyWith(color: cores.error),
+            )
+          else if (!pendentes.hasValue)
+            const EstadoCarregando(linhas: 1)
+          else if (candidatos.isEmpty)
+            Text(
+              ninguemSemOLivro,
+              style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+            )
+          else ...[
+            Text(
+              'Registrar a entrega ao avançar, para '
+              '${plural(marcados.length, 'aluno', 'alunos')}:',
+              style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+            ),
+            for (final a in candidatos)
+              CheckboxListTile(
+                value: !_semLivro.contains(a.alunoId),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(a.alunoNome, style: Tipografia.corpoTabela),
+                onChanged: (marcado) => setState(() {
+                  if (marcado ?? false) {
+                    _semLivro.remove(a.alunoId);
+                  } else {
+                    _semLivro.add(a.alunoId);
+                  }
+                }),
+              ),
+          ],
+        ],
       ],
       aoSalvar: () async {
         final proximoId = await ref
@@ -851,10 +943,42 @@ class _FormularioAvancarModuloState
               dataConclusao: lerData(_data.text)!,
             );
         recarregarModular(ref);
+
+        // A entrega vem DEPOIS do avanço, uma por aluno, e a falha de uma não
+        // desfaz o avanço nem impede as outras: o módulo já trocou, e o que a
+        // pessoa precisa saber é quem ficou sem o livro. Bloqueio por falta
+        // de estoque não é exceção — é um dos três status do retorno.
+        var entregues = 0;
+        final naoEntregues = <String>[];
+        if (livroId != null && marcados.isNotEmpty) {
+          final trilha = ref.read(trilhaRepositorioProvider);
+          for (final a in marcados) {
+            try {
+              final r = await trilha.registrarEntrega(
+                a.alunoId,
+                materialId: livroId,
+              );
+              if (r.status != StatusEntrega.bloqueadaSemEstoque &&
+                  r.materialId == livroId) {
+                entregues++;
+              } else {
+                naoEntregues.add(a.alunoNome);
+              }
+            } catch (_) {
+              naoEntregues.add(a.alunoNome);
+            }
+          }
+          ref.read(versaoTrilhaProvider.notifier).incrementar();
+        }
+
         // Nulo = a turma terminou. O resultado muda a próxima ação de quem
         // avançou (não há mais o que avançar), então ele volta à tela, que
         // mostra o diálogo do design-system §5.8 em vez de um snackbar.
-        return proximoId == null ? 'terminou' : 'avancou';
+        return ResultadoAvanco(
+          terminou: proximoId == null,
+          entregues: entregues,
+          naoEntregues: naoEntregues,
+        );
       },
     );
   }

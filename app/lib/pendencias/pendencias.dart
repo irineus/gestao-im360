@@ -43,6 +43,8 @@ const tiposPendencia = <String, String>{
   'PREVISAO_VENCIDA': 'Previsão de conclusão vencida',
   'ALUNO_ULTIMO_LIVRO': 'Aluno na última apostila',
   'SUGERIR_FORMADO': 'Aluno pronto para formar',
+  // card 9.2,85 — o aviso de troca de módulo da turma Modular
+  'TROCA_MODULO_ALINHAR': 'Troca de módulo — alinhar com o professor',
 };
 
 String rotuloTipoPendencia(String tipo) => tiposPendencia[tipo] ?? tipo;
@@ -259,6 +261,10 @@ enum AcaoPendencia {
   /// aqui que uma pessoa a executa. É o caso que originou a regra: escolher o
   /// bloco é justamente a parte que o `pg_cron` não podia fazer.
   executarVirada,
+
+  /// `TROCA_MODULO_ALINHAR` (card 9.2,86) — abre a tela 5 com a turma
+  /// expandida, que é onde se vê o cronograma e se avança o módulo.
+  verTurmaModular,
 }
 
 AcaoPendencia acaoDe(String tipo) => switch (tipo) {
@@ -276,6 +282,7 @@ AcaoPendencia acaoDe(String tipo) => switch (tipo) {
   'COMPRA_SEM_ESTOQUE' ||
   'ESTOQUE_ZERO' ||
   'ESTOQUE_ABAIXO_MINIMO' => AcaoPendencia.verMaterial,
+  'TROCA_MODULO_ALINHAR' => AcaoPendencia.verTurmaModular,
   _ => AcaoPendencia.nenhuma,
 };
 
@@ -299,6 +306,7 @@ String rotuloAcaoPendencia(String tipo) => switch (tipo) {
   'ESTOQUE_ZERO' ||
   'ESTOQUE_ABAIXO_MINIMO' => 'Ver material',
   'REP_VIRADA' => 'Executar',
+  'TROCA_MODULO_ALINHAR' => 'Ver turma',
   _ => '',
 };
 
@@ -323,6 +331,7 @@ String? parametroDaAcao(AcaoPendencia acao) => switch (acao) {
   AcaoPendencia.verBloco => 'bloco',
   AcaoPendencia.verPc => 'pc',
   AcaoPendencia.verMaterial => 'material',
+  AcaoPendencia.verTurmaModular => 'turma',
   AcaoPendencia.verAluno ||
   AcaoPendencia.nenhuma ||
   AcaoPendencia.executarVirada => null,
@@ -333,8 +342,22 @@ String? idDaAcao(Pendencia p) => switch (acaoDe(p.tipo)) {
   AcaoPendencia.verBloco => p.blocoId,
   AcaoPendencia.verPc => p.pcId,
   AcaoPendencia.verMaterial => p.materialId,
+  AcaoPendencia.verTurmaModular => turmaModularDaChave(p.chaveDedup),
   _ => null,
 };
+
+/// A turma Modular de uma pendência `TROCA_MODULO_ALINHAR`, lida da chave
+/// `TROCA_MODULO:<turma>:<cronograma>` (card 9.2,85).
+///
+/// Da chave, e não de uma coluna: `pendencia` não tem referência de turma
+/// Modular, e é o precedente de [sentidoVirada], que também só a chave
+/// distingue. Chave fora do formato devolve nulo — e sem id a ação não é
+/// oferecida ([referenciaDaAcaoPresente]).
+String? turmaModularDaChave(String chaveDedup) {
+  final partes = chaveDedup.split(':');
+  if (partes.length != 3 || partes[0] != 'TROCA_MODULO') return null;
+  return partes[1].isEmpty ? null : partes[1];
+}
 
 /// O **id de rota** (docs/permissoes-matriz.md §6) da tela de destino, para a
 /// central guardar a ação pelo mesmo conjunto mínimo que guarda a rota. Nulo
@@ -350,6 +373,7 @@ String? rotaDaAcao(AcaoPendencia acao) => switch (acao) {
   AcaoPendencia.verBloco => 'turmas',
   AcaoPendencia.verPc => 'salas',
   AcaoPendencia.verMaterial => 'materiais',
+  AcaoPendencia.verTurmaModular => 'turmas_modular',
   AcaoPendencia.nenhuma || AcaoPendencia.executarVirada => null,
 };
 
@@ -367,6 +391,9 @@ bool referenciaDaAcaoPresente(Pendencia p) => switch (acaoDe(p.tipo)) {
   AcaoPendencia.verPc => p.pcId != null && p.pcIdentificador != null,
   AcaoPendencia.verMaterial => p.materialId != null && p.materialNome != null,
   AcaoPendencia.executarVirada => p.alunoId != null && p.sentido != null,
+  // Aqui não há nome a conferir: a turma vem da chave. Quem não pode abrir a
+  // tela 5 é barrado pelo guarda da rota, como em toda ação.
+  AcaoPendencia.verTurmaModular => turmaModularDaChave(p.chaveDedup) != null,
   AcaoPendencia.nenhuma => false,
 };
 
@@ -393,6 +420,13 @@ String? fechamentoAutomatico(String tipo) => switch (tipo) {
         'máquina nenhuma.',
   'ROTINA_FALHOU' =>
     'Fecha sozinha na próxima execução em que a rotina correr sem erro.',
+  // ⚠️ O contrário dos outros: esta NÃO fecha quando o módulo avança (card
+  // 9.2,85). Dizer isso aqui é o que evita alguém esperar que ela suma.
+  'TROCA_MODULO_ALINHAR' =>
+    'Resolva quando o alinhamento com o professor estiver feito: resolvida, '
+        'ela não volta para este módulo. Avançar o módulo não a fecha. Só '
+        'fecha sozinha se a previsão de conclusão for adiada para além do '
+        'prazo de aviso.',
   _ => null,
 };
 

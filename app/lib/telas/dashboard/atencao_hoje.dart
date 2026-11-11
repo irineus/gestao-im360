@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../pendencias/pendencias.dart';
 import '../../pendencias/pendencias_provider.dart';
 import '../../rotas/rotas.dart';
+import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../widgets/estados.dart';
@@ -43,7 +44,15 @@ class AtencaoHoje extends ConsumerWidget {
         else
           Builder(
             builder: (context) {
-              final itens = itensAtencao(abertas.requireValue);
+              final itens = itensAtencao(
+                abertas.requireValue,
+                // Card 9.2,86: quem não tem a permissão não recebe a linha
+                // (RLS), e mostrar "0 trocas de módulo a alinhar" a essa
+                // pessoa seria um zero que ninguém mediu.
+                comTrocaDeModulo: ref
+                    .watch(permissoesProvider)
+                    .contains('turmas.alinhar_modulo'),
+              );
               if (itens.every((i) => i.quantidade == 0)) {
                 return Text(
                   semAtencaoHoje,
@@ -106,7 +115,13 @@ class ItemAtencao {
 /// Os três números, contados das pendências abertas — ALTA por severidade; a
 /// entrega bloqueada e o material abaixo do mínimo pelo TIPO que a rotina e as
 /// entregas já abrem (fase 6).
-List<ItemAtencao> itensAtencao(List<Pendencia> abertas) => [
+///
+/// O quarto, a troca de módulo a alinhar com o professor (card 9.2,86), só
+/// entra para quem tem `turmas.alinhar_modulo` ([comTrocaDeModulo]).
+List<ItemAtencao> itensAtencao(
+  List<Pendencia> abertas, {
+  bool comTrocaDeModulo = false,
+}) => [
   ItemAtencao(
     quantidade: abertas.where((p) => p.severidade == 'ALTA').length,
     singular: 'pendência de severidade alta',
@@ -125,6 +140,13 @@ List<ItemAtencao> itensAtencao(List<Pendencia> abertas) => [
     plural: 'materiais abaixo do mínimo',
     filtro: const FiltroPendencias(tipo: 'ESTOQUE_ABAIXO_MINIMO'),
   ),
+  if (comTrocaDeModulo)
+    ItemAtencao(
+      quantidade: abertas.where((p) => p.tipo == 'TROCA_MODULO_ALINHAR').length,
+      singular: 'troca de módulo a alinhar com o professor',
+      plural: 'trocas de módulo a alinhar com o professor',
+      filtro: const FiltroPendencias(tipo: 'TROCA_MODULO_ALINHAR'),
+    ),
 ];
 
 class _ItemAtencao extends StatelessWidget {

@@ -81,8 +81,14 @@ class LotacaoModular extends ConsumerWidget {
             vazioLotacaoModular,
             style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
           )
-        else
+        else ...[
           _Cartoes(cursos: cursos),
+          const SizedBox(height: Dim.e16),
+          // Card 9.2,86: o quadro "Troca de módulo" da planilha. Mesma
+          // leitura dos cartões acima (`v_turma_modular_lotacao`) — por isso
+          // mora nesta região e divide com ela o carregamento e o erro.
+          ProximasTrocasModulo(turmas: turmas.requireValue),
+        ],
       ],
     );
   }
@@ -239,6 +245,162 @@ class _LinhaAlerta extends StatelessWidget {
       ),
     ],
   );
+}
+
+// ---------------------------------------------------------------------------
+// Próximas trocas de módulo — card 9.2,86
+// ---------------------------------------------------------------------------
+
+const tituloProximasTrocas = 'Próximas trocas de módulo';
+
+/// Turmas ativas, e nenhuma com previsão de conclusão no módulo corrente.
+const vazioProximasTrocas =
+    'Nenhuma turma com previsão de conclusão do módulo atual — informe as '
+    'datas no cronograma, em Turmas Modular.';
+
+/// O quadro "Troca de módulo" da planilha (pedido do dono do produto,
+/// 06/11/2026): uma linha por turma, da troca mais próxima para a mais
+/// distante, com o que fecha, o que abre, a data e quanto falta.
+///
+/// **Nada aqui decide a cor.** Laranja e vermelho vêm de `situacao_troca`, que
+/// a view calcula com o parâmetro `troca_modulo_alerta_dias` e o hoje do banco
+/// (card 9.2,85). E a cor nunca vai sozinha: cada linha diz "faltam 5 dias",
+/// "hoje" ou "atrasada há 3 dias" por extenso (design-system §8.2).
+class ProximasTrocasModulo extends StatelessWidget {
+  const ProximasTrocasModulo({super.key, required this.turmas});
+
+  final List<TurmaModular> turmas;
+
+  @override
+  Widget build(BuildContext context) {
+    final cores = Theme.of(context).colorScheme;
+    final trocas = proximasTrocas(turmas);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          tituloProximasTrocas,
+          style: Tipografia.rotulo.copyWith(color: cores.onSurfaceVariant),
+        ),
+        const SizedBox(height: Dim.e4),
+        if (trocas.isEmpty)
+          Text(
+            vazioProximasTrocas,
+            style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+          )
+        else
+          for (final turma in trocas)
+            _LinhaTroca(
+              turma: turma,
+              // Toda linha do dashboard é atalho (wireframes §3.3), e aqui o
+              // destino é A turma: a tela 5 abre com ela expandida, que é onde
+              // se corrige a data ou se avança o módulo.
+              aoTocar: () => context.go(
+                caminhoDeRota(
+                  'turmas_modular',
+                  parametro: 'turma',
+                  valor: turma.id,
+                ),
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+/// O que o leitor de tela ouve na linha, de uma vez.
+String descricaoTroca(TurmaModular turma) => [
+  '${turma.cursoNome}, ${turma.nome}',
+  rotuloTroca(turma),
+  if (turma.moduloCorrentePrevConclusao != null)
+    'previsão ${formatarData(turma.moduloCorrentePrevConclusao!)}',
+  if (turma.diasParaTroca != null) rotuloDiasParaTroca(turma.diasParaTroca!),
+  if (turma.trocaDeLivro ?? false) 'troca de livro',
+].join(', ');
+
+class _LinhaTroca extends StatelessWidget {
+  const _LinhaTroca({required this.turma, required this.aoTocar});
+
+  final TurmaModular turma;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    final cores = tema.colorScheme;
+    final atencao = tema.brightness == Brightness.dark
+        ? Cores.atencaoEscuro
+        : Cores.atencao;
+    // Laranja na janela, vermelho no dia ou depois, neutro em dia.
+    final (cor, icone) = switch (turma.situacaoTroca) {
+      SituacaoTroca.hojeOuVencida => (cores.error, Icons.error_outline),
+      SituacaoTroca.proxima => (atencao, Icons.schedule_outlined),
+      _ => (cores.onSurfaceVariant, Icons.event_outlined),
+    };
+    final dias = turma.diasParaTroca;
+    final previsao = turma.moduloCorrentePrevConclusao;
+    final mobile = faixaDe(MediaQuery.sizeOf(context).width) == Faixa.mobile;
+
+    return Semantics(
+      button: true,
+      label: '${descricaoTroca(turma)}, abrir a turma',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: aoTocar,
+        borderRadius: BorderRadius.circular(Dim.raioBadge),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: mobile ? Dim.alvoMobile : Dim.alturaBotao,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: Dim.e4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Icon(icone, size: 16, color: cor),
+                ),
+                const SizedBox(width: Dim.e8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${turma.cursoNome} · ${turma.nome}',
+                        style: Tipografia.corpoTabela,
+                      ),
+                      Text(
+                        rotuloTroca(turma),
+                        style: Tipografia.numero(Tipografia.apoio)
+                            .copyWith(color: cores.onSurfaceVariant),
+                      ),
+                      Text(
+                        [
+                          if (previsao != null) formatarData(previsao),
+                          if (dias != null) rotuloDiasParaTroca(dias),
+                        ].join(' · '),
+                        style: Tipografia.numero(Tipografia.apoio)
+                            .copyWith(color: cor),
+                      ),
+                      if (turma.trocaDeLivro ?? false)
+                        _LinhaAlerta(
+                          texto:
+                              'troca de livro: ${turma.proximoMaterialNome ?? 'outro livro'}',
+                          cor: cores.onSurfaceVariant,
+                          icone: Icons.menu_book_outlined,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Rota get _rotaModular =>

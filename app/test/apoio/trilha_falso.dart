@@ -199,6 +199,14 @@ class TrilhaFalso implements TrilhaRepositorio {
   });
 
   @override
+  Future<Set<String>> alunosComLivroPendente(String materialId) =>
+      _ler('alunosComLivroPendente', {
+        for (final e in trilhas.entries)
+          if (e.value.any((i) => i.materialId == materialId && !i.entregue))
+            e.key,
+      });
+
+  @override
   Future<List<ItemTrilha>> trilha(String alunoId) =>
       _ler('trilha', List.of(trilhas[alunoId] ?? const <ItemTrilha>[]));
 

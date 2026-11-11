@@ -303,11 +303,12 @@ void main() {
   });
 
   group('textos', () {
-    test('os quinze tipos do check têm rótulo', () {
+    test('os dezesseis tipos do check têm rótulo', () {
       // O `check` de `pendencia.tipo` aceita quinze; os nove das fases 6 e 8 já
       // estão aqui para a primeira COMPRA_SEM_ESTOQUE da fase 6 não aparecer
       // como código cru na tela, sem erro nenhum.
-      expect(tiposPendencia.length, 15);
+      // O 16º é TROCA_MODULO_ALINHAR (card 9.2,85).
+      expect(tiposPendencia.length, 16);
       expect(
         rotuloTipoPendencia('COMPRA_SEM_ESTOQUE'),
         isNot('COMPRA_SEM_ESTOQUE'),
