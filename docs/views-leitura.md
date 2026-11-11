@@ -568,8 +568,10 @@ select t.unidade_id,
 
 O módulo corrente vem de `modulo.ordem` por join, não de coluna em `turma_modular_modulo` — é a
 regra que o card 2.2 fixou em §9 (o cronograma da turma herda a sequência do catálogo). Turma com
-todos os módulos concluídos aparece com `modulo_corrente_id` nulo, que é o estado "turma terminou",
-e não some da lotação.
+todos os módulos concluídos aparece com `modulo_corrente_id` nulo e não some da lotação. ⚠️ Desde o
+card 9.2,88 esse estado só existe para a turma **anterior ao rodízio**: o avanço do último módulo
+abre o ciclo seguinte sozinho, e a saída da que ficou sem corrente é `fn_turma_modular_abrir_ciclo`
+(`docs/turma-rodizio.md` §4.2 e §10.4).
 
 ---
 

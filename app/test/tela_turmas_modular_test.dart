@@ -93,6 +93,31 @@ void main() {
     return modular;
   }
 
+  /// Uma turma anterior ao rodízio: o único módulo concluído e nenhum ciclo
+  /// seguinte aberto — o estado de que "Abrir próximo ciclo" é a saída.
+  ModularFalso semCiclo() => ModularFalso(
+    turmas: [
+      turmaModularFalsa(
+        id: 't-velha',
+        nome: 'Depilação 2025.1',
+        cursoId: 'c-dep',
+        cursoNome: 'Depilação',
+      ),
+    ],
+    cronograma: [
+      moduloDaTurmaFalso(
+        id: 'cr-v',
+        turmaId: 't-velha',
+        moduloId: 'mod-dep-1',
+        nome: 'Técnicas básicas',
+        ordem: 1,
+        dataInicio: DateTime(2025, 3, 3),
+        prevConclusao: DateTime(2025, 6, 30),
+        concluido: true,
+      ),
+    ],
+  );
+
   Future<void> abrir(WidgetTester tester, String nome) async {
     await tester.tap(find.text(nome));
     await carregar(tester);
@@ -153,16 +178,14 @@ void main() {
       expect(find.text(avisoTurmaTerminou), findsNothing);
       expect(find.text('Montar cronograma'), findsOneWidget);
 
-      // (b) turma cujo cronograma acabou — o avanço chega ao fim.
-      final modular = ModularFalso.fixture();
-      await modular.avancar(
-        turmaId: 't-cheia',
-        dataConclusao: DateTime(2026, 9, 1),
-      );
-      await montar(tester, repositorio: modular, permissoes: secretaria);
-      await abrir(tester, 'Depilação 2026.1');
+      // (b) turma ANTERIOR ao rodízio, com tudo concluído e sem ciclo
+      // seguinte. Desde o card 9.2,88 o avanço não leva mais a este estado — a
+      // turma é cíclica —, e é por isso que ele se monta à mão aqui.
+      await montar(tester, repositorio: semCiclo(), permissoes: secretaria);
+      await abrir(tester, 'Depilação 2025.1');
       expect(find.text(avisoTurmaTerminou), findsOneWidget);
       expect(find.text(avisoSemCronograma), findsNothing);
+      expect(find.text('Abrir próximo ciclo'), findsOneWidget);
     },
   );
 
@@ -384,6 +407,12 @@ void main() {
     await carregar(tester);
 
     expect(modular.admitidos, ['t-2025|al-3005']);
+    expect(
+      modular.entradas,
+      [null],
+      reason:
+          'sem escolher, o aluno começa no módulo atual — o padrão do banco',
+    );
   });
 
   testWidgets('o formulário de adicionar avisa quando não há vaga, e o aviso '
@@ -444,18 +473,236 @@ void main() {
     );
   });
 
-  testWidgets('o avanço que fecha o ÚLTIMO módulo abre diálogo, e não '
-      'snackbar', (tester) async {
+  testWidgets('o avanço que fecha o ÚLTIMO módulo abre o ciclo seguinte — a '
+      'turma não "termina"', (tester) async {
+    // Card 9.2,90. Vermelho antes: aqui abria o diálogo "Turma terminou". A
+    // turma é cíclica (decisão do dono do produto, 10/11/2026): depois do
+    // último módulo vem o primeiro, num ciclo novo.
     final modular = ModularFalso.fixture();
+    // Leva a Eletricista 2026.1 ao módulo 3, o último do curso.
+    await modular.avancar(
+      turmaId: 't-2026',
+      dataConclusao: DateTime(2026, 10, 10),
+    );
+    modular.avancos.clear();
     await montar(tester, repositorio: modular, permissoes: secretaria);
-    await abrir(tester, 'Depilação 2026.1');
+    await abrir(tester, 'Eletricista 2026.1');
     await tocar(tester, find.text('Avançar módulo'));
+
+    expect(find.textContaining('Fecha 3. Módulo 3 — Projetos'), findsOneWidget);
+    expect(
+      find.text(
+        'Abre Módulo 1 — Comandos elétricos — a turma segue em rodízio.',
+      ),
+      findsOneWidget,
+    );
+
     await tocar(tester, find.byKey(chaveBotaoSalvar));
 
-    // Resultado que muda a próxima ação é diálogo (design-system §5.8): um
-    // snackbar de 4 s some antes de ser lido.
-    expect(find.text('Turma terminou'), findsOneWidget);
-    expect(find.text('Entendi'), findsOneWidget);
+    expect(find.text('Ciclo concluído'), findsNothing);
+    expect(find.text('Módulo avançado.'), findsOneWidget);
+    expect(find.text(avisoTurmaTerminou), findsNothing);
+    // O cartão mostra UM ciclo, o corrente: os três módulos de novo, e não os
+    // seis das duas voltas.
+    expect(find.text('ciclo 2 · 3 módulos'), findsOneWidget);
+    final turma = modular.turmas_.firstWhere((t) => t.id == 't-2026');
+    expect(turma.moduloCorrenteId, 'mod-1');
+    expect(turma.moduloCorrenteCiclo, 2);
+    expect(
+      find.text('12/06–10/08 · concluído'),
+      findsNothing,
+      reason: 'a linha do ciclo passado é histórico, não cronograma corrente',
+    );
+    expect(
+      modular.cronograma_.where((m) => m.turmaId == 't-2026' && m.ciclo == 2),
+      hasLength(3),
+    );
+  });
+
+  testWidgets('abrir próximo ciclo manda a data e a turma volta a ter módulo '
+      'corrente', (tester) async {
+    final modular = await montar(
+      tester,
+      repositorio: semCiclo(),
+      permissoes: secretaria,
+    );
+    await abrir(tester, 'Depilação 2025.1');
+    await tocar(tester, find.text('Abrir próximo ciclo'));
+
+    expect(find.text(explicaAbrirCiclo), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Início do primeiro módulo *'),
+      '01/12/2026',
+    );
+    await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+    expect(modular.ciclosAbertos, ['t-velha|2026-12-01']);
+    expect(find.text('Próximo ciclo aberto.'), findsOneWidget);
+    expect(find.text(avisoTurmaTerminou), findsNothing);
+    expect(
+      find.text('Abrir próximo ciclo'),
+      findsNothing,
+      reason: 'com módulo corrente a ação deixa de existir',
+    );
+    expect(find.text('ciclo 2 · 1 módulo'), findsOneWidget);
+  });
+
+  testWidgets('sem turmas.editar não há "Abrir próximo ciclo"', (tester) async {
+    await montar(tester, repositorio: semCiclo());
+    await abrir(tester, 'Depilação 2025.1');
+    expect(find.text(avisoTurmaTerminou), findsOneWidget);
+    expect(find.text('Abrir próximo ciclo'), findsNothing);
+  });
+
+  testWidgets('adicionar aluno oferece o módulo de entrada, e escolher o '
+      'próximo manda o id dele', (tester) async {
+    final modular = await montar(tester, permissoes: secretaria);
+    await abrir(tester, 'Eletricista 2025.2');
+    await tocar(tester, find.text('+ Adicionar aluno'));
+
+    expect(
+      find.text('Módulo atual — 1. Módulo 1 — Comandos elétricos'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Próximo módulo — Módulo 2 — Instalações prediais'),
+      findsOneWidget,
+    );
+    expect(find.text(ajudaModuloEntrada), findsOneWidget);
+
+    await tocar(tester, find.text('Eduarda Lima (3005)'));
+    await tocar(
+      tester,
+      find.text('Próximo módulo — Módulo 2 — Instalações prediais'),
+    );
+    await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+    expect(modular.admitidos, ['t-2025|al-3005']);
+    expect(modular.entradas, ['mod-2']);
+  });
+
+  testWidgets('turma sem módulo corrente não oferece módulo de entrada', (
+    tester,
+  ) async {
+    await montar(tester, permissoes: secretaria);
+    await abrir(tester, 'Eletricista 2026.2');
+    await tocar(tester, find.text('+ Adicionar aluno'));
+
+    expect(find.text('O aluno começa em'), findsNothing);
+    expect(find.textContaining('Próximo módulo —'), findsNothing);
+    expect(find.text(entraNoModuloCorrente), findsOneWidget);
+  });
+
+  testWidgets('a linha do aluno diz por onde entrou, quanto fez e quando '
+      'conclui', (tester) async {
+    final modular = ModularFalso.fixture()
+      ..progresso_.add(
+        ProgressoAlunoModular(
+          alocacaoId: 'tma-1',
+          turmaId: 't-2026',
+          alunoId: 'al-3005',
+          moduloEntradaNome: 'Módulo 2 — Instalações prediais',
+          modulosTotal: 3,
+          modulosFeitos: 1,
+          proximoModuloNome: 'Módulo 2 — Instalações prediais',
+          prevConclusao: DateTime(2027, 3, 20),
+        ),
+      );
+    await montar(tester, repositorio: modular);
+    await abrir(tester, 'Eletricista 2026.1');
+
+    expect(
+      find.textContaining('entrou em Módulo 2 — Instalações prediais'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('1 de 3 módulos'), findsOneWidget);
+    expect(
+      find.textContaining('conclusão prevista 20/03/2027'),
+      findsOneWidget,
+    );
+    // Quem saiu não tem progresso a mostrar: a linha dele é a do motivo.
+    expect(find.textContaining('de 3 módulos'), findsOneWidget);
+  });
+
+  testWidgets('quem entrou para começar no próximo módulo aparece assim, e '
+      'sem progresso a linha não inventa nada', (tester) async {
+    final modular = ModularFalso.fixture()
+      ..progresso_.add(
+        const ProgressoAlunoModular(
+          alocacaoId: 'tma-1',
+          turmaId: 't-2026',
+          alunoId: 'al-3005',
+          moduloEntradaNome: 'Módulo 3 — Projetos',
+          modulosTotal: 3,
+          modulosFeitos: 0,
+          proximoModuloNome: 'Módulo 3 — Projetos',
+          aguardandoEntrada: true,
+        ),
+      );
+    await montar(tester, repositorio: modular);
+    await abrir(tester, 'Eletricista 2026.1');
+    expect(find.textContaining('começa no próximo módulo'), findsOneWidget);
+    expect(find.textContaining('conclusão prevista'), findsNothing);
+
+    // Sem linha de progresso (leitura ainda não chegou, ou alocação que a view
+    // não devolve): só o "desde", como antes.
+    await montar(tester);
+    await abrir(tester, 'Eletricista 2026.1');
+    expect(find.textContaining('de 3 módulos'), findsNothing);
+  });
+
+  testWidgets('"Acrescentar" só oferece o que vem DEPOIS do corrente, e grava '
+      'no ciclo que a tela mostra', (tester) async {
+    // A turma está no ciclo 2, módulo 2, e a linha do módulo 3 deste ciclo
+    // ainda não existe. ⚠️ Vermelho antes: (a) a tela oferecia o módulo 1 —
+    // que neste ciclo já foi dado — e (b) gravava no ciclo 1 por omissão, onde
+    // a linha nova, não concluída, virava o módulo corrente.
+    final modular = ModularFalso(
+      turmas: [
+        turmaModularFalsa(
+          id: 't-rod',
+          nome: 'Eletricista Rodízio',
+          moduloCorrenteId: 'mod-2',
+          moduloCorrenteNome: 'Módulo 2 — Instalações prediais',
+          moduloCorrenteOrdem: 2,
+          moduloCorrenteCiclo: 2,
+          proximoModuloId: 'mod-3',
+          proximoModuloNome: 'Módulo 3 — Projetos',
+        ),
+      ],
+      cronograma: [
+        for (final (id, ordem) in [('mod-2', 2), ('mod-3', 3)])
+          moduloDaTurmaFalso(
+            id: 'c1-$id',
+            turmaId: 't-rod',
+            moduloId: id,
+            nome: 'Módulo $ordem',
+            ordem: ordem,
+            concluido: true,
+          ),
+        moduloDaTurmaFalso(
+          id: 'c2-mod-2',
+          turmaId: 't-rod',
+          moduloId: 'mod-2',
+          nome: 'Módulo 2 — Instalações prediais',
+          ordem: 2,
+          corrente: true,
+          ciclo: 2,
+        ),
+      ],
+    );
+    await montar(tester, repositorio: modular, permissoes: secretaria);
+    await abrir(tester, 'Eletricista Rodízio');
+
+    expect(find.text('ciclo 2 · 1 módulo'), findsOneWidget);
+    expect(find.text('Acrescentar 1 módulo'), findsOneWidget);
+    await tocar(tester, find.text('Acrescentar 1 módulo'));
+    expect(find.text('3. Módulo 3 — Projetos'), findsOneWidget);
+    expect(find.text('1. Módulo 1 — Comandos elétricos'), findsNothing);
+    await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+    expect(modular.modulosIncluidos, ['t-rod|mod-3']);
+    expect(modular.ciclosIncluidos, [2]);
   });
 
   testWidgets('editar as datas de um módulo grava as duas, e permite apagar', (
@@ -749,6 +996,7 @@ void main() {
         moduloCorrenteOrdem: 1,
         moduloCorrenteInicio: DateTime(2026, 9, 1),
         moduloCorrentePrevConclusao: DateTime(2026, 11, 16),
+        proximoModuloId: 'mod-2',
         proximoModuloNome: 'Produção de Fermentos Naturais',
         proximoMaterialId: trocaDeLivro ? 'mat-pan' : 'mat-chef',
         proximoMaterialNome: trocaDeLivro ? 'Panificação' : 'Chef Profissional',
@@ -1025,4 +1273,104 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byType(CheckboxListTile), findsNWidgets(2));
   });
+
+  // -------------------------------------------------------------------------
+  // Card 9.2,90 — a entrega do livro na turma em rodízio
+  // -------------------------------------------------------------------------
+
+  testWidgets('a entrega do livro só é oferecida a quem o próximo módulo '
+      'ainda FALTA', (tester) async {
+    // A Bia já fez o módulo que vai abrir, em outra volta da turma: o livro
+    // dele não é assunto dela agora, mesmo com a apostila por receber na
+    // trilha. Quem diz é a agenda de cada aluno (`v_aluno_modular_agenda`).
+    final trilha = trilhaDoLivro();
+    final modular = comTroca(dias: 0, situacao: SituacaoTroca.hojeOuVencida)
+      ..aQuemFalta['t-chef|mod-2'] = {'al-ana'};
+    await montar(
+      tester,
+      repositorio: modular,
+      permissoes: comEntrega,
+      trilha: trilha,
+    );
+    await abrir(tester, 'Chef 2026');
+    await tocar(tester, find.text('Avançar módulo'));
+
+    final caixas = find.byType(CheckboxListTile);
+    expect(caixas, findsOneWidget);
+    expect(
+      find.descendant(of: caixas, matching: find.text('Ana Souza')),
+      findsOneWidget,
+    );
+
+    await tocar(tester, find.byKey(chaveBotaoSalvar));
+    expect(trilha.chamadas.where((c) => c == 'registrarEntrega'), hasLength(1));
+  });
+
+  testWidgets('se a agenda não carrega, a tela DIZ que não sabe — e o avanço '
+      'continua possível', (tester) async {
+    final trilha = trilhaDoLivro();
+    final modular = comTroca(dias: 0, situacao: SituacaoTroca.hojeOuVencida)
+      ..erroAQuemFalta = const ErroApp(
+        mensagem: 'Sem conexão.',
+        traduzido: true,
+      );
+    await montar(
+      tester,
+      repositorio: modular,
+      permissoes: comEntrega,
+      trilha: trilha,
+    );
+    await abrir(tester, 'Chef 2026');
+    await tocar(tester, find.text('Avançar módulo'));
+
+    expect(find.text(erroLivroPendente), findsOneWidget);
+    expect(find.byType(CheckboxListTile), findsNothing);
+
+    await tocar(tester, find.byKey(chaveBotaoSalvar));
+    expect(modular.avancos, hasLength(1));
+    expect(trilha.chamadas, isNot(contains('registrarEntrega')));
+  });
+
+  testWidgets(
+    'o rodízio cabe em 390 px: progresso, ciclo e módulo de entrada',
+    (tester) async {
+      final modular = ModularFalso.fixture()
+        ..progresso_.add(
+          ProgressoAlunoModular(
+            alocacaoId: 'tma-1',
+            turmaId: 't-2026',
+            alunoId: 'al-3005',
+            moduloEntradaNome: 'Módulo 2 — Instalações prediais',
+            modulosTotal: 3,
+            modulosFeitos: 1,
+            proximoModuloNome: 'Módulo 2 — Instalações prediais',
+            prevConclusao: DateTime(2027, 3, 20),
+          ),
+        );
+      // Fecha os dois módulos que restam: a turma entra no ciclo 2.
+      await modular.avancar(
+        turmaId: 't-2026',
+        dataConclusao: DateTime(2026, 10, 10),
+      );
+      await modular.avancar(
+        turmaId: 't-2026',
+        dataConclusao: DateTime(2026, 12, 10),
+      );
+      await montar(
+        tester,
+        repositorio: modular,
+        permissoes: secretaria,
+        tamanho: const Size(390, 844),
+      );
+      expect(tester.takeException(), isNull);
+      await abrir(tester, 'Eletricista 2026.1');
+      expect(tester.takeException(), isNull);
+      expect(find.text('ciclo 2 · 3 módulos'), findsOneWidget);
+      expect(find.textContaining('1 de 3 módulos'), findsOneWidget);
+
+      await tocar(tester, find.text('Adicionar aluno'));
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('Próximo módulo —'), findsOneWidget);
+    },
+  );
 }

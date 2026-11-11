@@ -59,9 +59,15 @@ abstract interface class ModularRepositorio {
   /// Acrescenta módulos ao cronograma da turma, sem datas — é o "Montar
   /// cronograma" do wireframe §8. Grava direto em `turma_modular_modulo`, cujo
   /// `insert` exige `turmas.editar` (permissoes-matriz §4).
+  ///
+  /// [ciclo] é a volta da turma em que as linhas entram (card 9.2,90). ⚠️ Não
+  /// é opcional na prática: omitido, o banco grava ciclo 1, e numa turma que já
+  /// está no segundo ciclo a linha nova — não concluída — vira o módulo
+  /// corrente.
   Future<void> incluirModulos({
     required String turmaId,
     required List<String> moduloIds,
+    int ciclo = 1,
   });
 
   /// Edita as datas de uma linha do cronograma (wireframe §8: "cronograma de
@@ -85,7 +91,36 @@ abstract interface class ModularRepositorio {
   /// `fn_turma_modular_admitir` — devolve o id da alocação. `TURMA_LOTADA`,
   /// `ALUNO_NAO_MODULAR`, `METODO_INCOMPATIVEL` e `ALUNO_INATIVO` vêm do
   /// trigger, já traduzidos pelo código.
-  Future<String> admitir({required String turmaId, required String alunoId});
+  ///
+  /// [moduloEntradaId] (card 9.2,88) é o módulo em que o aluno começa: nulo =
+  /// o atual da turma. O banco só aceita o atual ou o próximo do rodízio
+  /// (`MODULO_ENTRADA_INVALIDO`).
+  Future<String> admitir({
+    required String turmaId,
+    required String alunoId,
+    String? moduloEntradaId,
+  });
+
+  /// O progresso dos alunos nas turmas (`v_aluno_modular_progresso`, card
+  /// 9.2,88): módulo de entrada, quantos fez e a previsão de conclusão.
+  Future<List<ProgressoAlunoModular>> progresso();
+
+  /// Os alunos da turma a quem [moduloId] **ainda falta**
+  /// (`v_aluno_modular_agenda`, card 9.2,89). É quem a entrega do livro, no
+  /// avanço, oferece: quem já fez o módulo que vai abrir não precisa do livro
+  /// dele agora.
+  Future<Set<String>> alunosAQuemFalta({
+    required String turmaId,
+    required String moduloId,
+  });
+
+  /// `fn_turma_modular_abrir_ciclo` (card 9.2,88) — para a turma anterior ao
+  /// rodízio, com todos os módulos concluídos. Devolve o `modulo_id` do novo
+  /// corrente. `TURMA_COM_MODULO_CORRENTE` se ainda há módulo em curso.
+  Future<String> abrirCiclo({
+    required String turmaId,
+    required DateTime dataInicio,
+  });
 
   /// `fn_turma_modular_remover` — saída é `ativo = false` com o motivo gravado;
   /// a tabela não tem política de `delete` (card 2.4 §4).
@@ -122,11 +157,14 @@ class ModularRepositorioSupabase implements ModularRepositorio {
       // card 9.2,85 — o aviso de troca de módulo
       'modulo_corrente_cronograma_id, proximo_modulo_nome, '
       'proximo_material_id, proximo_material_nome, troca_de_livro, '
-      'dias_para_troca, situacao_troca';
+      'dias_para_troca, situacao_troca, '
+      // card 9.2,88 — a turma em rodízio
+      'modulo_corrente_ciclo, proximo_modulo_id';
 
   static const _colunasCronograma =
       'cronograma_id, turma_id, modulo_id, modulo_nome, modulo_ordem, '
-      'material_id, data_inicio, prev_conclusao, concluido, corrente, atrasado';
+      'material_id, data_inicio, prev_conclusao, concluido, corrente, '
+      'atrasado, ciclo';
 
   static const _colunasAluno =
       'alocacao_id, turma_id, aluno_id, aluno_nome, codigo_sgf, aluno_status, '
@@ -235,11 +273,17 @@ class ModularRepositorioSupabase implements ModularRepositorio {
   Future<void> incluirModulos({
     required String turmaId,
     required List<String> moduloIds,
+    int ciclo = 1,
   }) async {
     if (moduloIds.isEmpty) return;
     await _cliente.from('turma_modular_modulo').insert([
       for (final moduloId in moduloIds)
-        {'unidade_id': unidadeId, 'turma_id': turmaId, 'modulo_id': moduloId},
+        {
+          'unidade_id': unidadeId,
+          'turma_id': turmaId,
+          'modulo_id': moduloId,
+          'ciclo': ciclo,
+        },
     ]);
   }
 
@@ -290,12 +334,54 @@ class ModularRepositorioSupabase implements ModularRepositorio {
   Future<String> admitir({
     required String turmaId,
     required String alunoId,
+    String? moduloEntradaId,
   }) async {
     final id = await _cliente.rpc<dynamic>(
       'fn_turma_modular_admitir',
-      params: {'p_turma_id': turmaId, 'p_aluno_id': alunoId},
+      params: {
+        'p_turma_id': turmaId,
+        'p_aluno_id': alunoId,
+        'p_modulo_entrada_id': moduloEntradaId,
+      },
     );
     return '$id';
+  }
+
+  @override
+  Future<List<ProgressoAlunoModular>> progresso() async {
+    final linhas = await _cliente
+        .from('v_aluno_modular_progresso')
+        .select(
+          'alocacao_id, turma_id, aluno_id, modulo_entrada_nome, '
+          'modulos_total, modulos_feitos, proximo_modulo_id, '
+          'proximo_modulo_nome, prev_conclusao, aguardando_entrada',
+        );
+    return linhas.map(ProgressoAlunoModular.deLinha).toList();
+  }
+
+  @override
+  Future<Set<String>> alunosAQuemFalta({
+    required String turmaId,
+    required String moduloId,
+  }) async {
+    final linhas = await _cliente
+        .from('v_aluno_modular_agenda')
+        .select('aluno_id')
+        .eq('turma_id', turmaId)
+        .eq('modulo_id', moduloId);
+    return {for (final l in linhas) '${l['aluno_id']}'};
+  }
+
+  @override
+  Future<String> abrirCiclo({
+    required String turmaId,
+    required DateTime dataInicio,
+  }) async {
+    final modulo = await _cliente.rpc<dynamic>(
+      'fn_turma_modular_abrir_ciclo',
+      params: {'p_turma_id': turmaId, 'p_data_inicio': dataIso(dataInicio)},
+    );
+    return '$modulo';
   }
 
   @override
@@ -320,9 +406,8 @@ class ModularRepositorioSupabase implements ModularRepositorio {
         'p_data_conclusao': dataIso(dataConclusao),
       },
     );
-    // Nulo é o **fim do cronograma**, não falha: a turma terminou. Convertê-lo
-    // em string daria `'null'`, e a tela abriria o diálogo de "próximo módulo"
-    // com um id que não existe.
+    // Desde o card 9.2,88 a turma é cíclica e o avanço sempre devolve o novo
+    // corrente. Nulo continua tratado — convertê-lo em string daria `'null'`.
     return proximo == null ? null : '$proximo';
   }
 }
