@@ -357,6 +357,32 @@ Três coisas que as decisões não diziam e a implementação teve de escolher:
 **Não feito, e virou o card 9.2,886:** reordenar a trilha de livros na admissão (§4.1) e o script
 de concorrência admissão × avanço (§11).
 
+## 10.3 O que o card 9.2,89 (11/11/2026) implementou da projeção
+
+Migração `20261111180000_projecao_rodizio.sql`, teste `107_projecao_rodizio` (17 asserções).
+
+- **`v_aluno_modular_agenda`** — view nova: os módulos que faltam a cada aluno, cada um na primeira
+  vez em que a turma lho dará, com as datas. É a lista de que `v_aluno_modular_progresso` é o
+  resumo; o teste 107 §4 compara as duas aluno a aluno.
+- **`v_projecao_aluno`** — a CTE `modular` passou a ser **por aluno** e lê essa view. As cinco CTEs
+  que extrapolavam o cronograma da turma (gaps-and-islands) saíram: a extrapolação é da agenda.
+  Fecha o aviso do §10.1 — com dois ciclos no cronograma, ninguém é contado duas vezes.
+
+⚠️ **Correção do card 9.2,88, achada aqui: `fn_turma_modular_agenda` voltou a ser `invoker`.** Ela
+nasceu `security definer` com filtro de unidade e exigência de `turmas.ler` no corpo — que é o que
+a RLS de `turma_modular` já faz para um invoker. O `definer` não comprava nada e custava uma coisa:
+sem sessão nem contexto de rotina a função devolvia **vazio**. O teste 080 lê a projeção como dono,
+sem contexto, e a aluna Modular caiu de `MODULAR` para `MEDIA_METODO` **sem erro nenhum** — a falha
+calada que o argumento do `definer` dizia evitar. O §5.1 acima descreve a função como `definer`;
+vale o que está aqui.
+
+O que **não** mudou: a cascata, os outros três degraus, a disjunção `k >= 2` com a demanda imediata
+e a queda para `MEDIA_METODO` da turma sem data nenhuma.
+
+⚠️ **Limite conhecido, do card 9.2,886:** `k = 1` é o próximo livro **pela ordem da trilha**. Para
+quem entrou pelo segundo livro e tem a trilha na ordem do curso, o livro contado como demanda
+imediata é o primeiro — que ele só usará depois.
+
 ## 11. Testes que o card 9.2,88 deve
 
 | O que provar | Como |
