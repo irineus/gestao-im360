@@ -1,6 +1,6 @@
 # Importação — card 9.1
 
-Como a planilha entra no sistema: o **formato do arquivo**, as **dezesseis verificações** da
+Como a planilha entra no sistema: o **formato do arquivo**, as **dezenove verificações** da
 validação, o que a aplicação escreve e em que ordem, e as decisões que sustentam as três
 propriedades exigidas pelo plano §8 — **reexecutável**, **auditável** e **ensaiada**.
 
@@ -110,7 +110,9 @@ Um objeto JSON. Cada chave é uma entidade, cada valor é um array de objetos. C
 importar daquela entidade. `snapshot_em` no topo é opcional e serve de **sugestão** para o campo da
 tela — quem responde pela data do snapshot é quem importa.
 
-As **dezoito entidades, na ordem de aplicação** (que é a ordem de dependência):
+As **dezenove entidades, na ordem de aplicação** (que é a ordem de dependência). Eram dezoito até o
+card 9.2,91 (11/11/2026), que acrescentou `aluno_modulo` e dois campos da turma em rodízio — as
+linhas 15 a 17. A lista tem **uma fonte** no banco, `fn_importacao_entidades()`:
 
 | # | Entidade | Chave natural | Campos |
 |---|---|---|---|
@@ -128,10 +130,11 @@ As **dezoito entidades, na ordem de aplicação** (que é a ordem de dependênci
 | 12 | `bloco_horario` | `sala` + `dia_semana` + `hora_inicio` | `dia_semana`* (1–7, ISO), `hora_inicio`* (`HH:MM`), `metodo`*, `sala`*, `professor`, `capacidade_override`, `ativo` |
 | 13 | `bloco_aluno` | `bloco` + `aluno` | `aluno`*, `sala`*, `dia_semana`*, `hora_inicio`*, `tipo`* (`REM`\|`PRE`\|`REP`\|`NOVO`), `data_inicio_prevista` |
 | 14 | `turma_modular` | `nome` | `nome`*, `metodo`*, `curso`*, `sala`*, `capacidade`*, `data_inicio`, `ativo` |
-| 15 | `turma_modular_modulo` | `turma` + `modulo` | `turma`*, `metodo`*, `curso`*, `modulo_ordem`*, `data_inicio`, `prev_conclusao`, `concluido` |
-| 16 | `turma_modular_aluno` | `turma` + `aluno` | `turma`*, `aluno`*, `data_entrada` |
-| 17 | `aluno_material` | `aluno` + `material` | `aluno`*, `metodo`*, `material`*, `ordem`*, `origem` (`COMBO`\|`MANUAL`), `entregue`, `data_entrega` |
-| 18 | `movimento_estoque` | `chave` (externa) | `chave`*, `metodo`*, `material`*, `tipo`* (`ENTRADA`\|`SAIDA`\|`AJUSTE`), `quantidade`*, `ocorrido_em`, `aluno`, `observacao` |
+| 15 | `turma_modular_modulo` | `turma` + `modulo` + `ciclo` | `turma`*, `metodo`*, `curso`*, `modulo_ordem`*, `ciclo` (inteiro ≥ 1; ausente = 1), `data_inicio`, `prev_conclusao`, `concluido` |
+| 16 | `turma_modular_aluno` | `turma` + `aluno` | `turma`*, `aluno`*, `data_entrada`, `modulo_entrada` (a **ordem** do módulo no curso da turma) |
+| 17 | `aluno_modulo` | `aluno` + `modulo` | `aluno`*, `metodo`*, `curso`*, `modulo_ordem`*, `data_conclusao`*, `observacao` |
+| 18 | `aluno_material` | `aluno` + `material` | `aluno`*, `metodo`*, `material`*, `ordem`*, `origem` (`COMBO`\|`MANUAL`), `entregue`, `data_entrega` |
+| 19 | `movimento_estoque` | `chave` (externa) | `chave`*, `metodo`*, `material`*, `tipo`* (`ENTRADA`\|`SAIDA`\|`AJUSTE`), `quantidade`*, `ocorrido_em`, `aluno`, `observacao` |
 
 `*` = obrigatório. Datas em `AAAA-MM-DD`. Referência a outra entidade vai pela **chave natural
 dela**, nunca por id — o arquivo não conhece uuid nenhum, e é isso que o torna reexecutável.
@@ -152,6 +155,19 @@ existe** só muda quando o arquivo traz a chave — o extrator do 9.2 não a emi
 mapa), e um upsert que a gravasse sempre faria a reimportação **desmarcar em silêncio** o PC que
 alguém marcou na tela de Salas e PCs. Valor que não seja booleano JSON é `ERRO`/`VALOR_INVALIDO` na
 validação.
+
+E três do card 9.2,91 (11/11/2026), da **turma em rodízio** (`docs/turma-rodizio.md` §8):
+
+- **`ciclo` ausente é 1.** É a turma que ainda não deu a volta — e é o que todo arquivo anterior ao
+  rodízio traz. Turma que já voltou ao primeiro módulo traz o mesmo módulo **duas vezes**, com
+  ciclos diferentes; sem o `ciclo` as duas linhas têm a mesma chave, e isso é `CHAVE_DUPLICADA`.
+- **`modulo_entrada` ausente é "não sei", não "nenhum".** A reimportação sem a chave **não apaga** o
+  módulo de entrada que está gravado (a mesma regra do `de_professor`). Zerar não daria erro nenhum:
+  só faria o avanço seguinte da turma tratar o aluno como quem já vinha estudando.
+- **`aluno_modulo` é o que o aluno JÁ FEZ**, com origem sempre `IMPORTACAO`. A data é a que a
+  planilha tem — a previsão que ficou gravada no módulo passado. Quem decide **quais** módulos estão
+  feitos é o extrator (`extracao/rodizio.mjs`): o último módulo iniciado está em curso, e os
+  iniciados antes dele estão feitos.
 
 Exemplo mínimo:
 
@@ -175,7 +191,7 @@ Exemplo mínimo:
 
 ---
 
-## 4. As dezesseis verificações
+## 4. As dezenove verificações
 
 **ERRO** é o que o banco recusaria: aplicar bateria no trigger e a transação voltaria inteira. Ele
 bloqueia a aplicação. **AVISO** é o que o banco aceita e uma pessoa precisa olhar — é a lista de
@@ -202,8 +218,16 @@ exceções que o card 9.3 revisa. Todas rodam em `fn_importacao_validar`, chamad
 | V14 | PC em MANUTENCAO sem manutenção aberta | AVISO | `PC_SEM_MANUTENCAO` |
 | V15 | Saída de estoque sem aluno | AVISO | `SAIDA_SEM_ALUNO` |
 | V16 | Status do arquivo diferente do status no sistema | AVISO | `STATUS_DIVERGENTE` |
+| V17 | Módulo de entrada que não é módulo do curso da turma | ERRO | `REFERENCIA_AUSENTE` |
+| V18 | Módulo "feito" com data **depois** do snapshot | AVISO | `MODULO_DATA_FUTURA` |
+| V19 | Aluno que entrou fora do módulo em curso e não tem módulo feito no curso | AVISO | `ENTRADA_SEM_MODULO_FEITO` |
 
-Seis decisões que estas dezesseis carregam e que não se leem no código sozinhas:
+As três últimas são do card 9.2,91, que também pôs `turma_modular_modulo` e `aluno_modulo` na **V6**:
+o cronograma nunca tinha estado na verificação de chave duplicada, e com o rodízio passou a
+precisar — o `on conflict do update` do passo 15 morreria com "cannot affect row a second time",
+cru, na primeira turma que trouxesse o mesmo módulo duas vezes sem dizer o ciclo.
+
+Oito decisões que elas carregam e que não se leem no código sozinhas:
 
 1. **V7 olha os DOIS lados** — arquivo e banco. Numa reimportação o material já está no banco e não
    precisa vir de novo no arquivo; numa carga do zero ele vem no mesmo arquivo, algumas entidades
@@ -222,6 +246,15 @@ Seis decisões que estas dezesseis carregam e que não se leem no código sozinh
    veredito conforme o dia em que alguém a importa.
 6. **V11 é AVISO, nunca ERRO.** Aluno sem turma é situação real da escola, e a rotina diária abre
    `ALUNO_SEM_TURMA` para ele no dia seguinte — a pendência é o destino certo, não o bloqueio.
+7. **V19 é AVISO porque o caso legítimo existe.** Entrar para começar no **próximo** módulo é regra
+   do rodízio (`docs/turma-rodizio.md` §4.3), e para o sistema esse aluno é exatamente "entrada
+   diferente do corrente, sem módulo feito". O que o aviso pega é o outro caso com a mesma cara: o
+   aluno que já vinha estudando e cujos módulos feitos não vieram no arquivo — no avanço seguinte ele
+   **não receberia** o módulo que fechar, sem erro nenhum. Só olha turma cujo cronograma vem no
+   arquivo, porque é dele que sai o módulo corrente.
+8. **V18 compara com o snapshot, como a V12.** A planilha marca módulo *iniciado*; a data do módulo
+   passado é a previsão que ficou gravada. Previsão no futuro é módulo que ainda não acabou — aplicado
+   como feito, ele sairia da agenda do aluno e adiantaria a conclusão dele.
 
 ---
 
@@ -271,6 +304,13 @@ correm mais juntas — a segunda espera e recebe `IMPORTACAO_JA_APLICADA`
   combo → curso → material.
 - **Alocação com `ativo: false`.** Só alocação ativa entra; a diferença aparece na coluna
   "ignoradas" dos totais.
+- **Módulo que o SISTEMA registrou** (card 9.2,91). Em `aluno_modulo`, só a linha de origem
+  `IMPORTACAO` é atualizada pelo arquivo. O que o avanço da turma (`TURMA`) ou a ficha (`MANUAL`)
+  registrou tem data real; a do arquivo é a previsão da planilha, e a reimportação trocaria um fato
+  por um palpite. A linha pulada aparece em "ignoradas".
+- **O módulo de entrada, quando o arquivo não o traz** — ver §3.
+- **Conclusão e certificado.** Aplicar `aluno_modulo` não avalia se o aluno concluiu o curso: quem
+  concluiu não está em turma no snapshot, e o checklist não se importa (§2.2).
 
 ### 5.4 Os totais
 

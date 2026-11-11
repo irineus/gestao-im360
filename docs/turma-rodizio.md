@@ -443,6 +443,31 @@ leituras que os cards 9.2,90 e 9.2,905 fazem — colunas e o embed `modulo(nome,
 — e a exceção à mão de ponta a ponta (registrar, `MODULO_JA_REGISTRADO`, `MOTIVO_OBRIGATORIO`,
 remover). O que continua **não verificado é a tela num navegador real**.
 
+## 10.6 O que o card 9.2,91 (11/11/2026) implementou do §8 — e o que ficou dependendo da planilha
+
+Migração `20261111210000_importacao_rodizio.sql` (só funções), teste `108_importacao_rodizio` (31
+asserções), `extracao/rodizio.mjs` com 16 testes. Detalhe do contrato em `docs/importacao.md` §3 e §4.
+
+**Feito — o importador.** O arquivo passou a trazer `ciclo` no cronograma, `modulo_entrada` na
+alocação e a entidade nova `aluno_modulo`; três verificações novas (V17 a V19). O teste 108 carrega
+uma turma no segundo ciclo com três alunos em situações diferentes e, depois de aplicar, **avança a
+turma**: o módulo vai para quem devia, não vai para quem entrou para começar no próximo, e quem
+completou o curso sai. A lista de entidades, que estava copiada em quatro funções, passou a ter uma
+fonte (`fn_importacao_entidades()`).
+
+**Feito — a regra do extrator.** `derivarRodizio` transforma a linha do aluno (módulos na ordem
+dele, `Início` SIM/NÃO, previsão) em módulo de entrada e módulos feitos
+(`docs/extracao-planilha.md` §3.2.1).
+
+⚠️ **NÃO feito, e não dá para fazer daqui: ligar a regra à planilha.** As abas por curso e a `Base
+Modular` continuam sem mapa de colunas — a planilha não está no repositório. O extrator segue
+dizendo `ABA_NAO_MAPEADA` para elas, e as entidades Modular continuam **fora** do arquivo que ele
+gera. Fecha no card 9.4, com a planilha aberta — ou antes, se Irineu mandar o arquivo ou a saída de
+`node extracao/extrair.mjs "Gestão Interativo.xlsx" --mapear`.
+
+⚠️ **A pergunta 5 da proposta continua aberta** (Base Modular × aba Chef+Panificação), e é do
+Claudir. A regra não a decide: acusa cada módulo que as duas listas não tiverem em comum.
+
 ## 11. Testes que o card 9.2,88 deve
 
 | O que provar | Como |
