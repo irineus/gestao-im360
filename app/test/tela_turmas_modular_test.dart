@@ -9,6 +9,9 @@ import 'package:gestao_im360/infraestrutura/infraestrutura_provider.dart';
 import 'package:gestao_im360/sessao/sessao_provider.dart';
 import 'package:gestao_im360/telas/turmas/tela_turmas_modular.dart';
 import 'package:gestao_im360/theme/tema.dart';
+import 'package:gestao_im360/telas/turmas/formularios_modular.dart';
+import 'package:gestao_im360/trilha/trilha.dart';
+import 'package:gestao_im360/trilha/trilha_provider.dart';
 import 'package:gestao_im360/turmas/modular.dart';
 import 'package:gestao_im360/turmas/modular_provider.dart';
 import 'package:gestao_im360/widgets/formulario.dart';
@@ -18,6 +21,7 @@ import 'apoio/carregar.dart';
 import 'apoio/catalogo_falso.dart';
 import 'apoio/infraestrutura_falso.dart';
 import 'apoio/modular_falso.dart';
+import 'apoio/trilha_falso.dart';
 
 /// A obrigação de teste de um card de **Tela** (card 2.8 §13): ocultação por
 /// permissão e estado vazio com o texto do card 2.7 — a guarda de rota já está
@@ -56,6 +60,7 @@ void main() {
     Set<String> permissoes = leitura,
     Size tamanho = const Size(1400, 1200),
     String? turmaId,
+    TrilhaFalso? trilha,
   }) async {
     final modular = repositorio ?? ModularFalso.fixture();
     tester.view.physicalSize = tamanho;
@@ -73,6 +78,8 @@ void main() {
             InfraestruturaFalso.fixture(),
           ),
           alunosRepositorioProvider.overrideWithValue(AlunosFalso.fixture()),
+          if (trilha != null)
+            trilhaRepositorioProvider.overrideWithValue(trilha),
           permissoesProvider.overrideWithValue(permissoes),
           unidadeAtualProvider.overrideWithValue('unidade-teste'),
         ],
@@ -719,5 +726,303 @@ void main() {
     // A ação primária continua alcançável, na folha/segunda linha.
     expect(find.text('Nova turma'), findsOneWidget);
     expect(find.text('Filtrar'), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------------
+  // Card 9.2,86 — o aviso de troca de módulo e a entrega do livro no avanço
+  // -------------------------------------------------------------------------
+
+  /// Uma turma a [dias] da troca, com dois alunos ativos e um que saiu. O
+  /// próximo módulo é de OUTRO livro (`mat-pan`) quando [trocaDeLivro].
+  ModularFalso comTroca({
+    required int dias,
+    required SituacaoTroca situacao,
+    bool trocaDeLivro = true,
+  }) => ModularFalso(
+    turmas: [
+      turmaModularFalsa(
+        id: 't-chef',
+        nome: 'Chef 2026',
+        alocados: 2,
+        moduloCorrenteId: 'mod-1',
+        moduloCorrenteNome: 'Massas e Molhos',
+        moduloCorrenteOrdem: 1,
+        moduloCorrenteInicio: DateTime(2026, 9, 1),
+        moduloCorrentePrevConclusao: DateTime(2026, 11, 16),
+        proximoModuloNome: 'Produção de Fermentos Naturais',
+        proximoMaterialId: trocaDeLivro ? 'mat-pan' : 'mat-chef',
+        proximoMaterialNome: trocaDeLivro ? 'Panificação' : 'Chef Profissional',
+        trocaDeLivro: trocaDeLivro,
+        diasParaTroca: dias,
+        situacaoTroca: situacao,
+      ),
+    ],
+    cronograma: [
+      moduloDaTurmaFalso(
+        id: 'cr-a',
+        turmaId: 't-chef',
+        moduloId: 'mod-1',
+        nome: 'Massas e Molhos',
+        ordem: 1,
+        dataInicio: DateTime(2026, 9, 1),
+        prevConclusao: DateTime(2026, 11, 16),
+        corrente: true,
+      ),
+      moduloDaTurmaFalso(
+        id: 'cr-b',
+        turmaId: 't-chef',
+        moduloId: 'mod-2',
+        nome: 'Produção de Fermentos Naturais',
+        ordem: 2,
+      ),
+    ],
+    alunos: [
+      alunoDaTurmaFalso(
+        alocacaoId: 'a1',
+        turmaId: 't-chef',
+        alunoId: 'al-ana',
+        nome: 'Ana Souza',
+      ),
+      alunoDaTurmaFalso(
+        alocacaoId: 'a2',
+        turmaId: 't-chef',
+        alunoId: 'al-bia',
+        nome: 'Bia Lima',
+      ),
+      alunoDaTurmaFalso(
+        alocacaoId: 'a3',
+        turmaId: 't-chef',
+        alunoId: 'al-caio',
+        nome: 'Caio Reis',
+      ),
+      alunoDaTurmaFalso(
+        alocacaoId: 'a4',
+        turmaId: 't-chef',
+        alunoId: 'al-saiu',
+        nome: 'Davi Saiu',
+        ativo: false,
+        motivoSaida: 'mudou de turno',
+      ),
+    ],
+  );
+
+  /// Ana e Bia têm o livro Panificação por receber; Caio já recebeu; Davi
+  /// também tem por receber, mas saiu da turma.
+  TrilhaFalso trilhaDoLivro({int saldo = 5}) {
+    ItemTrilha livro(String aluno, {bool entregue = false}) => ItemTrilha(
+      itemId: '$aluno-pan',
+      alunoId: aluno,
+      materialId: 'mat-pan',
+      ordem: 20,
+      posicao: 2,
+      materialCodigo: '02',
+      materialNome: 'Panificação',
+      entregue: entregue,
+      proximo: !entregue,
+      saldo: saldo,
+    );
+    return TrilhaFalso(
+      trilhas: {
+        'al-ana': [livro('al-ana')],
+        'al-bia': [livro('al-bia')],
+        'al-caio': [livro('al-caio', entregue: true)],
+        'al-saiu': [livro('al-saiu')],
+      },
+    );
+  }
+
+  const comEntrega = {...secretaria, 'estoque.lancar_saida', 'estoque.ler'};
+
+  testWidgets('a troca que se aproxima ganha selo com os dias e "troca de '
+      'livro", e o cronograma diz quanto falta', (tester) async {
+    await montar(
+      tester,
+      repositorio: comTroca(dias: 6, situacao: SituacaoTroca.proxima),
+    );
+    expect(find.text('troca de módulo em 6 dias'), findsOneWidget);
+    expect(find.text('troca de livro'), findsOneWidget);
+
+    await abrir(tester, 'Chef 2026');
+    expect(find.text('01/09–16/11 · troca: faltam 6 dias'), findsOneWidget);
+  });
+
+  testWidgets('no dia da troca o selo diz "hoje"; turma em dia não tem selo', (
+    tester,
+  ) async {
+    await montar(
+      tester,
+      repositorio: comTroca(dias: 0, situacao: SituacaoTroca.hojeOuVencida),
+    );
+    expect(find.text('troca de módulo hoje'), findsOneWidget);
+
+    await montar(
+      tester,
+      repositorio: comTroca(dias: 35, situacao: SituacaoTroca.emDia),
+    );
+    expect(find.textContaining('troca de módulo'), findsNothing);
+    expect(
+      find.text('troca de livro'),
+      findsNothing,
+      reason: 'fora do aviso a troca de livro ainda não é assunto do cartão',
+    );
+  });
+
+  testWidgets('avançar com troca de livro oferece a entrega a quem ainda não '
+      'tem o livro, e só a eles', (tester) async {
+    final trilha = trilhaDoLivro();
+    final modular = await montar(
+      tester,
+      repositorio: comTroca(dias: 0, situacao: SituacaoTroca.hojeOuVencida),
+      permissoes: comEntrega,
+      trilha: trilha,
+    );
+    await abrir(tester, 'Chef 2026');
+    await tocar(tester, find.text('Avançar módulo'));
+
+    expect(
+      find.text(
+        'O próximo módulo, Produção de Fermentos Naturais, é de outro livro: '
+        'Panificação.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Registrar a entrega ao avançar, para 2 alunos:'),
+      findsOneWidget,
+    );
+    final caixas = find.byType(CheckboxListTile);
+    expect(caixas, findsNWidgets(2));
+    expect(
+      find.descendant(of: caixas, matching: find.text('Ana Souza')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: caixas, matching: find.text('Bia Lima')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: caixas, matching: find.text('Caio Reis')),
+      findsNothing,
+      reason: 'quem já recebeu o livro não é oferecido',
+    );
+    expect(
+      find.descendant(of: caixas, matching: find.text('Davi Saiu')),
+      findsNothing,
+      reason: 'quem saiu da turma não é oferecido',
+    );
+
+    // Desmarca a Bia: só a Ana recebe.
+    await tocar(
+      tester,
+      find.descendant(of: caixas, matching: find.text('Bia Lima')),
+    );
+    expect(
+      find.text('Registrar a entrega ao avançar, para 1 aluno:'),
+      findsOneWidget,
+    );
+
+    await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+    expect(modular.avancos.single, startsWith('t-chef|'));
+    expect(
+      trilha.chamadas.where((c) => c == 'registrarEntrega'),
+      hasLength(1),
+      reason: 'uma entrega: a da Ana. A Bia foi desmarcada',
+    );
+    expect(find.text('Módulo avançado. 1 livro entregue.'), findsOneWidget);
+  });
+
+  testWidgets('sem troca de livro o avanço não oferece entrega nenhuma', (
+    tester,
+  ) async {
+    final trilha = trilhaDoLivro();
+    await montar(
+      tester,
+      repositorio: comTroca(
+        dias: 0,
+        situacao: SituacaoTroca.hojeOuVencida,
+        trocaDeLivro: false,
+      ),
+      permissoes: comEntrega,
+      trilha: trilha,
+    );
+    await abrir(tester, 'Chef 2026');
+    await tocar(tester, find.text('Avançar módulo'));
+
+    expect(find.textContaining('é de outro livro'), findsNothing);
+    expect(find.byType(CheckboxListTile), findsNothing);
+
+    await tocar(tester, find.byKey(chaveBotaoSalvar));
+    expect(trilha.chamadas, isNot(contains('registrarEntrega')));
+    expect(find.text('Módulo avançado.'), findsOneWidget);
+  });
+
+  testWidgets('sem estoque o módulo AVANÇA e a tela diz, em diálogo, quem '
+      'ficou sem o livro', (tester) async {
+    final trilha = trilhaDoLivro(saldo: 0);
+    final modular = await montar(
+      tester,
+      repositorio: comTroca(dias: 0, situacao: SituacaoTroca.hojeOuVencida),
+      permissoes: comEntrega,
+      trilha: trilha,
+    );
+    await abrir(tester, 'Chef 2026');
+    await tocar(tester, find.text('Avançar módulo'));
+    await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+    expect(
+      modular.avancos,
+      hasLength(1),
+      reason: 'a falta de estoque não desfaz nem impede o avanço',
+    );
+    expect(
+      find.text('Módulo avançado — há livro por entregar'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'Não foi possível entregar para: Ana Souza, Bia Lima.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('quem não registra entregas vê o aviso do livro, sem a lista', (
+    tester,
+  ) async {
+    final trilha = trilhaDoLivro();
+    await montar(
+      tester,
+      repositorio: comTroca(dias: 0, situacao: SituacaoTroca.hojeOuVencida),
+      permissoes: secretaria,
+      trilha: trilha,
+    );
+    await abrir(tester, 'Chef 2026');
+    await tocar(tester, find.text('Avançar módulo'));
+
+    expect(find.textContaining('é de outro livro'), findsOneWidget);
+    expect(find.text(semPermissaoDeEntrega), findsOneWidget);
+    expect(find.byType(CheckboxListTile), findsNothing);
+    expect(
+      trilha.chamadas,
+      isEmpty,
+      reason: 'sem a permissão a tela nem consulta a trilha',
+    );
+  });
+
+  testWidgets('o aviso e a oferta do livro cabem em 390 px', (tester) async {
+    await montar(
+      tester,
+      repositorio: comTroca(dias: -12, situacao: SituacaoTroca.hojeOuVencida),
+      permissoes: comEntrega,
+      trilha: trilhaDoLivro(),
+      tamanho: const Size(390, 844),
+    );
+    expect(tester.takeException(), isNull);
+    await abrir(tester, 'Chef 2026');
+    expect(tester.takeException(), isNull);
+    await tocar(tester, find.text('Avançar módulo'));
+    expect(tester.takeException(), isNull);
+    expect(find.byType(CheckboxListTile), findsNWidgets(2));
   });
 }

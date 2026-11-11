@@ -51,6 +51,15 @@ final proximosLivrosProvider = FutureProvider<Map<String, String>>(
   (ref) => _traduzindo(_repositorio(ref).proximosLivros),
 );
 
+/// Quem ainda não recebeu um livro que tem na trilha (card 9.2,86) — a lista
+/// que o avanço de módulo oferece quando o próximo módulo é de outro livro.
+final alunosComLivroPendenteProvider =
+    FutureProvider.family<Set<String>, String>(
+      (ref, materialId) => _traduzindo(
+        () => _repositorio(ref).alunosComLivroPendente(materialId),
+      ),
+    );
+
 /// O ritmo do aluno (card 8.1, item A8). Provider próprio e não parte da
 /// trilha: a região tem os **três** estados, e um erro aqui não pode apagar a
 /// lista de apostilas ao lado.

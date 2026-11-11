@@ -48,6 +48,13 @@ class TurmaModular {
     this.moduloCorrentePrevConclusao,
     this.moduloAtrasado = false,
     this.dataInicio,
+    this.moduloCorrenteCronogramaId,
+    this.proximoModuloNome,
+    this.proximoMaterialId,
+    this.proximoMaterialNome,
+    this.trocaDeLivro,
+    this.diasParaTroca,
+    this.situacaoTroca,
   });
 
   factory TurmaModular.deLinha(Map<String, dynamic> linha) => TurmaModular(
@@ -69,6 +76,17 @@ class TurmaModular {
     moduloCorrentePrevConclusao: _data(linha['modulo_corrente_prev_conclusao']),
     moduloAtrasado: linha['modulo_atrasado'] as bool? ?? false,
     dataInicio: _data(linha['data_inicio']),
+    moduloCorrenteCronogramaId: linha['modulo_corrente_cronograma_id'] == null
+        ? null
+        : '${linha['modulo_corrente_cronograma_id']}',
+    proximoModuloNome: linha['proximo_modulo_nome'] as String?,
+    proximoMaterialId: linha['proximo_material_id'] == null
+        ? null
+        : '${linha['proximo_material_id']}',
+    proximoMaterialNome: linha['proximo_material_nome'] as String?,
+    trocaDeLivro: linha['troca_de_livro'] as bool?,
+    diasParaTroca: (linha['dias_para_troca'] as num?)?.toInt(),
+    situacaoTroca: situacaoTrocaDe(linha['situacao_troca'] as String?),
   );
 
   final String id;
@@ -103,6 +121,36 @@ class TurmaModular {
   /// outro fuso, e a turma apareceria atrasada um dia antes ou depois.
   final bool moduloAtrasado;
 
+  // -- O aviso de troca de módulo (card 9.2,85/9.2,86) -----------------------
+
+  /// A linha do cronograma do módulo corrente — é o que a chave da pendência
+  /// `TROCA_MODULO_ALINHAR` carrega, ao lado da turma.
+  final String? moduloCorrenteCronogramaId;
+
+  /// O próximo módulo do **catálogo** do curso que a turma ainda não
+  /// concluiu. Nulo quando a turma está no último.
+  final String? proximoModuloNome;
+  final String? proximoMaterialId;
+  final String? proximoMaterialNome;
+
+  /// O próximo módulo é de **outro livro**. Nulo sem próximo módulo: nulo é
+  /// "não há troca a anunciar", e não "o livro continua".
+  final bool? trocaDeLivro;
+
+  /// Previsão de conclusão do módulo corrente menos o hoje **do banco**
+  /// (`fn_hoje()`). Zero é hoje; negativo, vencida; nulo sem previsão. Nunca
+  /// recalculado aqui, pela mesma razão de [moduloAtrasado].
+  final int? diasParaTroca;
+
+  /// Laranja na janela de `troca_modulo_alerta_dias`, vermelho **já no dia** —
+  /// borda diferente da de [moduloAtrasado], de propósito. Vem da view.
+  final SituacaoTroca? situacaoTroca;
+
+  /// A troca pede atenção: está na janela, é hoje ou já passou.
+  bool get trocaEmAviso =>
+      situacaoTroca == SituacaoTroca.proxima ||
+      situacaoTroca == SituacaoTroca.hojeOuVencida;
+
   bool get semModuloCorrente => moduloCorrenteId == null;
 
   /// Ocupação maior que a capacidade. Estado real — o importador do card 9.1
@@ -121,6 +169,117 @@ class TurmaModular {
     final ordem = moduloCorrenteOrdem;
     return ordem == null ? nome : '$ordem. $nome';
   }
+}
+
+// ---------------------------------------------------------------------------
+// O aviso de troca de módulo (card 9.2,86)
+// ---------------------------------------------------------------------------
+
+/// `situacao_troca` de `v_turma_modular_lotacao`. Quem decide a situação é a
+/// view, com o parâmetro `troca_modulo_alerta_dias` e o hoje do banco; aqui só
+/// há o nome.
+enum SituacaoTroca { emDia, proxima, hojeOuVencida, semPrevisao }
+
+/// Código desconhecido vira nulo, e não `emDia`: o dia em que o banco ganhar
+/// uma quinta situação, a tela deixa de pintar em vez de dizer "em dia" sobre
+/// o que não sabe.
+SituacaoTroca? situacaoTrocaDe(String? codigo) => switch (codigo) {
+  'EM_DIA' => SituacaoTroca.emDia,
+  'PROXIMA' => SituacaoTroca.proxima,
+  'HOJE_OU_VENCIDA' => SituacaoTroca.hojeOuVencida,
+  'SEM_PREVISAO' => SituacaoTroca.semPrevisao,
+  _ => null,
+};
+
+/// `faltam 5 dias` / `falta 1 dia` / `hoje` / `atrasada há 3 dias`.
+String rotuloDiasParaTroca(int dias) => switch (dias) {
+  0 => 'hoje',
+  1 => 'falta 1 dia',
+  > 1 => 'faltam $dias dias',
+  -1 => 'atrasada há 1 dia',
+  _ => 'atrasada há ${-dias} dias',
+};
+
+/// O selo do cartão da turma: `troca de módulo em 5 dias`, `troca de módulo
+/// hoje`, `troca de módulo atrasada há 3 dias`. Nulo fora do aviso.
+String? seloTroca(TurmaModular turma) {
+  final dias = turma.diasParaTroca;
+  if (!turma.trocaEmAviso || dias == null) return null;
+  return switch (dias) {
+    0 => 'troca de módulo hoje',
+    1 => 'troca de módulo amanhã',
+    > 1 => 'troca de módulo em $dias dias',
+    -1 => 'troca de módulo atrasada há 1 dia',
+    _ => 'troca de módulo atrasada há ${-dias} dias',
+  };
+}
+
+/// `2. Garde Manger → Carnes, Aves e Suínos` — o que fecha e o que abre. Sem
+/// próximo módulo, só o corrente.
+String rotuloTroca(TurmaModular turma) {
+  final atual = turma.moduloCorrenteRotulo ?? '—';
+  final proximo = turma.proximoModuloNome;
+  return proximo == null ? atual : '$atual → $proximo';
+}
+
+/// As turmas com troca de módulo **prevista**, da mais próxima para a mais
+/// distante — o painel "Próximas trocas de módulo" do Dashboard, que é o
+/// quadro "Troca de módulo" da planilha.
+///
+/// Turma sem módulo corrente ou sem previsão fica de fora: não há data a
+/// ordenar, e quem diz isso é a tela 5 ("sem previsão"). A ordem é total —
+/// dias, curso, turma — para a lista não se reordenar sozinha entre leituras.
+List<TurmaModular> proximasTrocas(Iterable<TurmaModular> turmas) =>
+    [
+      for (final t in turmas)
+        if (t.diasParaTroca != null && t.moduloCorrenteId != null) t,
+    ]..sort((a, b) {
+      final dias = a.diasParaTroca!.compareTo(b.diasParaTroca!);
+      if (dias != 0) return dias;
+      final curso = a.cursoNome.toLowerCase().compareTo(
+        b.cursoNome.toLowerCase(),
+      );
+      return curso != 0
+          ? curso
+          : a.nome.toLowerCase().compareTo(b.nome.toLowerCase());
+    });
+
+/// A pergunta da entrega, no diálogo de avanço, quando o próximo módulo é de
+/// outro livro (decisão do dono do produto, 10/11/2026: "trocar de módulo não
+/// significa trocar de livro" — a oferta só existe neste caso).
+String avisoTrocaDeLivro(TurmaModular turma) =>
+    'O próximo módulo, ${turma.proximoModuloNome}, é de outro livro: '
+    '${turma.proximoMaterialNome}.';
+
+/// O que o avanço de módulo fez, para a tela decidir como dizer (card 9.2,86).
+///
+/// Além de "avançou" ou "terminou", carrega o desfecho da entrega do livro,
+/// quando ela foi oferecida: quantos receberam e **quem não recebeu** — por
+/// falta de estoque ou por erro —, que é a informação que muda a próxima ação
+/// de quem avançou.
+@immutable
+class ResultadoAvanco {
+  const ResultadoAvanco({
+    required this.terminou,
+    this.entregues = 0,
+    this.naoEntregues = const [],
+  });
+
+  /// A turma fechou o último módulo do cronograma.
+  final bool terminou;
+
+  /// Alunos que receberam o livro do próximo módulo nesta operação.
+  final int entregues;
+
+  /// Nomes de quem estava marcado e **não** recebeu.
+  final List<String> naoEntregues;
+
+  bool get temFalhaDeEntrega => naoEntregues.isNotEmpty;
+
+  /// `Módulo avançado.` / `Módulo avançado. 8 livros entregues.`
+  String get confirmacao => entregues == 0
+      ? 'Módulo avançado.'
+      : 'Módulo avançado. ${plural(entregues, 'livro entregue', 'livros entregues')}.';
 }
 
 // ---------------------------------------------------------------------------
