@@ -468,6 +468,28 @@ gera. Fecha no card 9.4, com a planilha aberta — ou antes, se Irineu mandar o 
 ⚠️ **A pergunta 5 da proposta continua aberta** (Base Modular × aba Chef+Panificação), e é do
 Claudir. A regra não a decide: acusa cada módulo que as duas listas não tiverem em comum.
 
+## 10.7 O que o card 9.2,886 (12/11/2026) fechou — e a decisão que ele deixou para Irineu
+
+**Feito — concorrência admissão × avanço.** `supabase/tests_concorrencia/admissao_avanco_modular.sh`:
+uma sessão admite um aluno enquanto a outra avança o módulo da mesma turma, nas duas ordens. Com o
+lock o aluno entra pelo módulo novo (sem o antigo) ou pelo antigo (e o recebe). **Contraprova
+feita:** com as duas funções sem o `pg_advisory_xact_lock`, as duas rodadas reprovam com o estado do
+meio — entrou pelo módulo que fechou e não o recebeu.
+
+⚠️ **NÃO feito — a ordem dos livros de quem entra pelo segundo livro.** A trilha do aluno Modular
+nasce na ordem do curso (livro 1, livro 2). Quem entra num módulo do **segundo** livro precisa dele
+primeiro, e hoje a aba Trilha mostra o livro 1 como "próximo" — e a entrega sem material escolhido
+entregaria o livro errado. A entrega oferecida **na troca de módulo** (card 9.2,86) não sofre disso:
+ela passa o livro certo. Há dois caminhos, e a escolha mexe na regra de entrega, que é o coração do
+estoque — por isso ficou para Irineu:
+
+- **(a)** reordenar a trilha na admissão (um motivo novo no histórico, como efeito colateral da
+  admissão); ou
+- **(b)** não reordenar, e fazer a aba Trilha e a entrega do aluno Modular lerem o "próximo livro"
+  do progresso de módulos. **Recomendação da sessão: (b)** — não cria uma segunda fonte da ordem.
+
+Enquanto não se decide, vale o que está: na aba Trilha do aluno Modular, escolher o livro à mão.
+
 ## 11. Testes que o card 9.2,88 deve
 
 | O que provar | Como |

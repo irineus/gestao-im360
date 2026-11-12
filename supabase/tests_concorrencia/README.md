@@ -25,6 +25,7 @@ voz alta no log e no resumo da execução, em vez de passar calado.
 | `admissao_turma_modular.sh` ✅ | **7.4,5** (05/09/2026) | `fn_turma_modular_admitir` — duas admissões simultâneas na única vaga da turma Modular |
 | `importacao_aplicar_dupla.sh` ✅ | **9.2,68** (24/09/2026) | `fn_importacao_aplicar` — duas aplicações simultâneas do mesmo lote: a segunda espera (`for update`) e recebe `IMPORTACAO_JA_APLICADA`; sem a trava ela aplicava de novo e devolvia APLICADA |
 | `rotina_diaria_dupla.sh` ✅ | **9.2,65** (24/09/2026) | `fn_rotina_diaria_executar` / `rt_diaria` — duas execuções da rotina diária da mesma unidade: a segunda recebe `JA_EM_EXECUCAO` sem esperar (`pg_try_advisory_xact_lock`) |
+| `admissao_avanco_modular.sh` ✅ | **9.2,886** (12/11/2026) | `fn_turma_modular_admitir` × `fn_turma_modular_avancar` — uma admissão e um avanço simultâneos na mesma turma em rodízio: nas duas ordens o aluno fica num estado que uma ordem serial produz (entrou pelo módulo novo, ou pelo antigo **e o recebeu**) |
 
 ## O que o primeiro script ensinou (card 5.3)
 
@@ -117,3 +118,19 @@ uma particularidade desta parte.
 - **Uma terceira chamada, depois do fim da primeira, tem de rodar**: prova que a trava é de
   transação (`_xact`) e não de sessão — uma trava de sessão presa numa conexão do pool travaria o
   botão da direção para sempre.
+
+## O que o sexto script ensinou (card 9.2,886, 12/11/2026)
+
+- **Nem toda corrida é por vaga.** Os quatro primeiros medem um agregado que estoura (11 em 10, saldo
+  −1). Este mede uma **ordem**: admissão e avanço da mesma turma. Sem o lock ninguém passa do limite
+  de nada — o aluno só fica num estado que nenhuma das duas ordens produz: entrou pelo módulo que
+  acabou de fechar e **não o recebeu**. Para o sistema ele é quem "entrou para começar no próximo
+  módulo", e o módulo fica para a próxima volta da turma, sem erro em lugar nenhum.
+- **A asserção é o estado final inteiro, numa string** (`entrada/corrente/tem_o_1`), e cada rodada
+  exige um valor **diferente** — `2/2/0` quando o avanço chega primeiro, `1/2/1` quando a admissão
+  chega primeiro. A contraprova (as duas funções sem o `pg_advisory_xact_lock`) deu `1/2/0` **nas
+  duas rodadas**, cada uma reprovando sozinha. Uma asserção que aceitasse "qualquer estado válido"
+  não distinguiria as duas ordens e passaria com metade da trava.
+- **O script cria a própria turma.** Os scripts rodam em ordem alfabética, e este vem antes de
+  `admissao_turma_modular.sh`, que exige a `Eletricista Individual 2026` em 1/0 com o cronograma da
+  fixture. Avançar o módulo dela aqui quebraria o cenário do vizinho — e o vizinho é que reprovaria.
