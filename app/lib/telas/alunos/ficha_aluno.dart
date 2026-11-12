@@ -11,6 +11,8 @@ import '../../rotas/rotas.dart';
 import '../../sessao/sessao_provider.dart';
 import '../../trilha/trilha.dart';
 import '../../trilha/trilha_provider.dart';
+import '../../turmas/modular.dart';
+import '../../turmas/modular_provider.dart';
 import '../../turmas/turmas.dart';
 import '../../turmas/turmas_provider.dart';
 import '../../theme/dimensoes.dart';
@@ -113,11 +115,20 @@ class _Ficha extends ConsumerWidget {
     for (final c in combos) {
       if (c.id == aluno.comboId) nomeCombo = c.nome;
     }
+    // Decisão D2 (card 9.2,87): em turma Modular vale a previsão CALCULADA
+    // pela agenda da turma, e a digitada deixa de ser lida.
+    final previsao = previsaoQueVale(
+      alunoId: aluno.id,
+      digitada: aluno.prevConclusaoCurso,
+      progresso:
+          ref.watch(progressoModularProvider).value ??
+          const <ProgressoAlunoModular>[],
+    );
     final linhaApoio = [
       nomeMetodo ?? 'método —',
       nomeCombo == null ? 'sem combo' : 'combo $nomeCombo',
-      if (aluno.prevConclusaoCurso != null)
-        'prev. conclusão ${formatarData(aluno.prevConclusaoCurso!)}',
+      if (previsao.data != null)
+        'prev. conclusão ${formatarData(previsao.data!)}',
       if (aluno.statusDesde != null)
         '${aluno.status} desde ${formatarData(aluno.statusDesde!)}',
     ].join(' · ');
@@ -226,6 +237,8 @@ class _Ficha extends ConsumerWidget {
                   aluno: aluno,
                   nomeMetodo: nomeMetodo,
                   nomeCombo: nomeCombo,
+                  previsao: previsao.data,
+                  previsaoCalculada: previsao.calculada,
                 ),
                 AbaTrilha(aluno: aluno),
                 AbaTurmas(aluno: aluno),
@@ -251,7 +264,14 @@ class AbaDados extends StatelessWidget {
     required this.aluno,
     this.nomeMetodo,
     this.nomeCombo,
+    this.previsao,
+    this.previsaoCalculada = false,
   });
+
+  /// A previsão de conclusão que vale — a calculada pela agenda da turma
+  /// Modular quando [previsaoCalculada], a digitada no cadastro no resto.
+  final DateTime? previsao;
+  final bool previsaoCalculada;
 
   final Aluno aluno;
   final String? nomeMetodo;
@@ -273,10 +293,10 @@ class AbaDados extends StatelessWidget {
         aluno.statusDesde == null ? '—' : formatarData(aluno.statusDesde!),
       ),
       (
-        'Previsão de conclusão',
-        aluno.prevConclusaoCurso == null
-            ? '—'
-            : formatarData(aluno.prevConclusaoCurso!),
+        previsaoCalculada
+            ? 'Previsão de conclusão (calculada pela turma)'
+            : 'Previsão de conclusão',
+        previsao == null ? '—' : formatarData(previsao!),
       ),
       if (aluno.conferido) ('Conferência da migração', 'Conferido'),
     ];

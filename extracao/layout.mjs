@@ -140,9 +140,14 @@ export const ABAS_NAO_MAPEADAS = [
   {
     aba: 'abas por curso (Massagem, Manicure, Chef+Panificação, Combo Beleza, '
       + 'Violão, Pizzaiolo, Eletricista, Corte e Costura, Depilação)',
-    entidades: ['turma_modular', 'turma_modular_modulo', 'turma_modular_aluno'],
-    porque: 'datas de início e previsão por módulo da turma; o layout está descrito '
-      + 'em prosa na análise §2, sem posições.',
+    entidades: ['turma_modular', 'turma_modular_modulo', 'turma_modular_aluno',
+      'aluno_modulo'],
+    // Card 9.2,91: a FORMA da linha do aluno é conhecida desde 06/11/2026 (por
+    // aluno, os módulos na ordem em que ele faz, cada um com Início SIM/NÃO e a
+    // previsão) e a regra que a transforma está pronta em `rodizio.mjs`. O que
+    // falta é só a posição das colunas.
+    porque: 'módulo de entrada e módulos feitos de cada aluno, e as datas por módulo '
+      + 'da turma; a regra está em extracao/rodizio.mjs, falta a posição das colunas.',
   },
   {
     aba: 'Pedidos',
@@ -173,7 +178,7 @@ export const ORDEM_ENTIDADES = [
   'professor', 'sala', 'pc', 'pc_manutencao', 'material', 'curso',
   'curso_material', 'modulo', 'combo', 'combo_curso', 'aluno', 'bloco_horario',
   'bloco_aluno', 'turma_modular', 'turma_modular_modulo', 'turma_modular_aluno',
-  'aluno_material', 'movimento_estoque',
+  'aluno_modulo', 'aluno_material', 'movimento_estoque',
 ];
 
 // As que este script produz hoje. `combo`/`combo_curso` estão fora e NÃO é falta de

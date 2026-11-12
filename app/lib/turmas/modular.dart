@@ -697,3 +697,158 @@ const ajudaModuloEntrada =
 
 DateTime? _data(Object? valor) =>
     valor == null ? null : DateTime.parse('$valor');
+
+// ---------------------------------------------------------------------------
+// A sequência de módulos do aluno, na ficha (card 9.2,905)
+// ---------------------------------------------------------------------------
+
+/// Um módulo que o aluno **fez** — uma linha de `aluno_modulo` (card 9.2,88).
+/// A existência da linha é o fato: "a fazer" é a ausência dela.
+@immutable
+class ModuloFeito {
+  const ModuloFeito({
+    required this.moduloId,
+    required this.moduloNome,
+    required this.moduloOrdem,
+    required this.cursoNome,
+    required this.dataConclusao,
+    required this.origem,
+    this.observacao,
+  });
+
+  factory ModuloFeito.deLinha(Map<String, dynamic> linha) {
+    final modulo = linha['modulo'] as Map<String, dynamic>? ?? const {};
+    final curso = modulo['curso'] as Map<String, dynamic>? ?? const {};
+    return ModuloFeito(
+      moduloId: '${linha['modulo_id']}',
+      moduloNome: modulo['nome'] as String? ?? '—',
+      moduloOrdem: (modulo['ordem'] as num?)?.toInt() ?? 0,
+      cursoNome: curso['nome'] as String? ?? '',
+      dataConclusao: _data(linha['data_conclusao']) ?? DateTime(1970),
+      origem: '${linha['origem']}',
+      observacao: linha['observacao'] as String?,
+    );
+  }
+
+  final String moduloId;
+  final String moduloNome;
+  final int moduloOrdem;
+  final String cursoNome;
+  final DateTime dataConclusao;
+
+  /// `TURMA` (o avanço da turma gravou), `MANUAL` (lançado na ficha) ou
+  /// `IMPORTACAO`.
+  final String origem;
+  final String? observacao;
+}
+
+/// De onde veio o registro, em palavras de quem lê a ficha. Código que o app
+/// não conhece volta como veio — inventar rótulo esconderia a novidade.
+String rotuloOrigemModulo(String origem) => switch (origem) {
+  'TURMA' => 'com a turma',
+  'MANUAL' => 'lançado à mão',
+  'IMPORTACAO' => 'veio da planilha',
+  _ => origem,
+};
+
+/// `concluído em 10/10/2026 · com a turma`.
+String apoioModuloFeito(ModuloFeito m) => [
+  'concluído em ${formatarData(m.dataConclusao)}',
+  rotuloOrigemModulo(m.origem),
+  if ((m.observacao ?? '').trim().isNotEmpty) m.observacao!.trim(),
+].join(' · ');
+
+/// Um módulo que **falta** ao aluno — as linhas não feitas de
+/// `v_aluno_modular_modulo`, na ordem em que a turma os dará.
+@immutable
+class ModuloAFazer {
+  const ModuloAFazer({
+    required this.turmaId,
+    required this.moduloId,
+    required this.moduloNome,
+    required this.moduloOrdem,
+    required this.sequencia,
+    this.deEntrada = false,
+    this.dataPrevistaInicio,
+    this.dataPrevistaFim,
+  });
+
+  factory ModuloAFazer.deLinha(Map<String, dynamic> linha) => ModuloAFazer(
+    turmaId: '${linha['turma_id']}',
+    moduloId: '${linha['modulo_id']}',
+    moduloNome: '${linha['modulo_nome']}',
+    moduloOrdem: (linha['modulo_ordem'] as num?)?.toInt() ?? 0,
+    sequencia: (linha['sequencia'] as num?)?.toInt() ?? 0,
+    deEntrada: linha['de_entrada'] as bool? ?? false,
+    dataPrevistaInicio: _data(linha['data_prevista_inicio']),
+    dataPrevistaFim: _data(linha['data_prevista_fim']),
+  );
+
+  final String turmaId;
+  final String moduloId;
+  final String moduloNome;
+  final int moduloOrdem;
+
+  /// A ordem de leitura da view — a ordem em que a turma dará os módulos.
+  final int sequencia;
+
+  /// É o módulo em que o aluno entrou na turma.
+  final bool deEntrada;
+  final DateTime? dataPrevistaInicio;
+  final DateTime? dataPrevistaFim;
+}
+
+/// `previsto 11/10/2026 a 20/11/2026`; sem data, `sem data prevista` — a turma
+/// não tem datas de onde a agenda possa sair.
+String apoioModuloAFazer(ModuloAFazer m) {
+  final inicio = m.dataPrevistaInicio;
+  final fim = m.dataPrevistaFim;
+  final quando = inicio == null && fim == null
+      ? 'sem data prevista'
+      : inicio != null && fim != null
+      ? 'previsto ${formatarData(inicio)} a ${formatarData(fim)}'
+      : 'previsto ${formatarData((inicio ?? fim)!)}';
+  return [quando, if (m.deEntrada) 'módulo de entrada'].join(' · ');
+}
+
+/// A previsão de conclusão **calculada** do aluno em turma Modular (decisão D2
+/// do card 9.2,87): a maior entre as turmas em que ele está. Devolve
+/// `(emTurma, data)` — em turma e sem data é "a turma não tem datas", que não
+/// é a mesma coisa que não estar em turma.
+({bool emTurma, DateTime? data}) previsaoCalculada(
+  Iterable<ProgressoAlunoModular> progresso,
+  String alunoId,
+) {
+  var emTurma = false;
+  DateTime? data;
+  for (final p in progresso) {
+    if (p.alunoId != alunoId) continue;
+    emTurma = true;
+    final prev = p.prevConclusao;
+    if (prev != null && (data == null || prev.isAfter(data))) data = prev;
+  }
+  return (emTurma: emTurma, data: data);
+}
+
+/// A previsão de conclusão que a ficha **mostra** (decisão D2): em turma
+/// Modular, a calculada — mesmo quando ela é nula, porque a digitada deixou de
+/// ser lida para esse aluno; fora de turma, a digitada.
+({DateTime? data, bool calculada}) previsaoQueVale({
+  required String? alunoId,
+  required DateTime? digitada,
+  required Iterable<ProgressoAlunoModular> progresso,
+}) {
+  if (alunoId != null) {
+    final c = previsaoCalculada(progresso, alunoId);
+    if (c.emTurma) return (data: c.data, calculada: true);
+  }
+  return (data: digitada, calculada: false);
+}
+
+/// O que a ficha diz no lugar do campo editável (decisão D2).
+const previsaoCalculadaAjuda =
+    'Calculada pela agenda da turma Modular: é a data em que a turma termina o '
+    'último módulo que falta ao aluno. Não se edita aqui — muda quando as '
+    'datas da turma mudam.';
+
+const previsaoCalculadaSemData = 'sem previsão — a turma ainda não tem datas';

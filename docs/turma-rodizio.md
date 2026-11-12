@@ -414,6 +414,60 @@ da fila de certificados.
 ⚠️ **Não verificado em navegador:** como nos cards anteriores do lote, a tela foi exercitada por
 teste de widget (desktop e 390 px), não num navegador real contra o banco.
 
+## 10.5 O que o card 9.2,905 (11/11/2026) implementou no cadastro e na ficha do aluno
+
+Só app — nenhuma migração. Testes: 12 em `app/test/tela_alunos_test.dart` (grupo "turma em rodízio"),
+6 em `modular_test.dart`, 2 em `certificados_test.dart` e 1 em `tela_certificados_test.dart`; a suíte
+do app fecha em 1.113.
+
+| Onde | O que faz | De onde vem |
+|---|---|---|
+| **Matricular aluno** (método Modular, para quem tem `turmas.alocar`) | Campo **Turma Modular** e, escolhida a turma, "o aluno começa em: módulo atual / próximo módulo". O aluno já entra na turma ao matricular. | `fn_turma_modular_admitir(…, p_modulo_entrada_id)` |
+| **Ficha → aba Turmas → Turma Modular** | A linha da turma ganhou "entrou em … · 3 de 6 módulos". | `v_aluno_modular_progresso` |
+| **Ficha → aba Turmas → Módulos** (seção nova, para aluno do método Modular) | **Feitos**, com a data e de onde veio o registro (com a turma / lançado à mão / veio da planilha); **A fazer**, na ordem em que a turma dará, com a data prevista; e a **conclusão prevista**. | `aluno_modulo` + `v_aluno_modular_modulo` |
+| **Exceção à mão** (`alunos.editar_trilha`) | "Registrar módulo feito" (curso, módulo, data, observação) e "Remover" com motivo obrigatório. | `fn_aluno_modulo_registrar` / `fn_aluno_modulo_remover` |
+| **Previsão de conclusão** (decisão D2) | Para o aluno em turma Modular o campo do cadastro **não se edita** e mostra a calculada; o cabeçalho e a aba Dados da ficha mostram a mesma. A coluna digitada não é apagada — volta a valer se ele sair da turma. | `v_aluno_modular_progresso.prev_conclusao` |
+| **Fila de certificados** | Para o aluno Modular, `ULTIMO_LIVRO` lê-se **"Último módulo"**; o filtro passou a "Último livro ou módulo". | `v_certificado_fila.metodo_codigo` |
+
+⚠️ **A matrícula com turma são duas chamadas, e a segunda pode falhar com a primeira já feita.** Se
+a turma recusa (lotada, por exemplo), o aluno **já existe**. O formulário fecha e um diálogo diz o
+que aconteceu e o motivo — "Aluno matriculado — sem turma". Deixar o erro subir manteria o
+formulário aberto, e um segundo clique em "Matricular" criaria o aluno de novo.
+
+⚠️ **A lista do que falta só existe para quem está numa turma.** A ordem e as datas saem da agenda da
+turma; sem turma não há de onde tirá-las, e a ficha diz isso em vez de mostrar uma lista vazia. Os
+feitos ficam sempre: o que o aluno estudou não depende de onde ele está hoje.
+
+**Conferido contra o banco, e não só por teste de widget** (stack local, usuário de fixture): as sete
+leituras que os cards 9.2,90 e 9.2,905 fazem — colunas e o embed `modulo(nome, ordem, curso(nome))`
+— e a exceção à mão de ponta a ponta (registrar, `MODULO_JA_REGISTRADO`, `MOTIVO_OBRIGATORIO`,
+remover). O que continua **não verificado é a tela num navegador real**.
+
+## 10.6 O que o card 9.2,91 (11/11/2026) implementou do §8 — e o que ficou dependendo da planilha
+
+Migração `20261111210000_importacao_rodizio.sql` (só funções), teste `108_importacao_rodizio` (31
+asserções), `extracao/rodizio.mjs` com 16 testes. Detalhe do contrato em `docs/importacao.md` §3 e §4.
+
+**Feito — o importador.** O arquivo passou a trazer `ciclo` no cronograma, `modulo_entrada` na
+alocação e a entidade nova `aluno_modulo`; três verificações novas (V17 a V19). O teste 108 carrega
+uma turma no segundo ciclo com três alunos em situações diferentes e, depois de aplicar, **avança a
+turma**: o módulo vai para quem devia, não vai para quem entrou para começar no próximo, e quem
+completou o curso sai. A lista de entidades, que estava copiada em quatro funções, passou a ter uma
+fonte (`fn_importacao_entidades()`).
+
+**Feito — a regra do extrator.** `derivarRodizio` transforma a linha do aluno (módulos na ordem
+dele, `Início` SIM/NÃO, previsão) em módulo de entrada e módulos feitos
+(`docs/extracao-planilha.md` §3.2.1).
+
+⚠️ **NÃO feito, e não dá para fazer daqui: ligar a regra à planilha.** As abas por curso e a `Base
+Modular` continuam sem mapa de colunas — a planilha não está no repositório. O extrator segue
+dizendo `ABA_NAO_MAPEADA` para elas, e as entidades Modular continuam **fora** do arquivo que ele
+gera. Fecha no card 9.4, com a planilha aberta — ou antes, se Irineu mandar o arquivo ou a saída de
+`node extracao/extrair.mjs "Gestão Interativo.xlsx" --mapear`.
+
+⚠️ **A pergunta 5 da proposta continua aberta** (Base Modular × aba Chef+Panificação), e é do
+Claudir. A regra não a decide: acusa cada módulo que as duas listas não tiverem em comum.
+
 ## 11. Testes que o card 9.2,88 deve
 
 | O que provar | Como |

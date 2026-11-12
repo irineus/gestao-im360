@@ -246,6 +246,23 @@ class ModularFalso implements ModularRepositorio {
   final List<String> datasSalvas = [];
   final List<String> modulosExcluidos = [];
 
+  /// `aluno_modulo` por aluno (card 9.2,905) — o que cada um já fez.
+  final Map<String, List<ModuloFeito>> feitos_ = {};
+
+  /// As linhas NÃO feitas de `v_aluno_modular_modulo` por aluno, na ordem da
+  /// turma. Vazio para quem não está em turma.
+  final Map<String, List<ModuloAFazer>> aFazer_ = {};
+
+  /// `aluno|módulo|data|observação` de cada `registrarModulo`.
+  final List<String> modulosRegistrados = [];
+
+  /// `aluno|módulo|motivo` de cada `removerModulo`.
+  final List<String> modulosTirados = [];
+
+  /// O erro que `registrarModulo` levanta — `MODULO_JA_REGISTRADO`,
+  /// `SEM_PERMISSAO`. Nulo = caminho feliz.
+  ErroApp? erroAoRegistrarModulo;
+
   /// O `ciclo` de cada `incluirModulos`, na ordem das chamadas (card 9.2,90).
   final List<int> ciclosIncluidos = [];
 
@@ -308,6 +325,64 @@ class ModularFalso implements ModularRepositorio {
           for (final a in alunos_)
             if (a.turmaId == turmaId && a.ativo) a.alunoId,
         };
+  }
+
+  @override
+  Future<List<ModuloFeito>> modulosFeitos(String alunoId) async {
+    await _lerOuFalhar();
+    return List.of(feitos_[alunoId] ?? const []);
+  }
+
+  @override
+  Future<List<ModuloAFazer>> modulosAFazer(String alunoId) async {
+    await _lerOuFalhar();
+    return List.of(aFazer_[alunoId] ?? const []);
+  }
+
+  @override
+  Future<void> registrarModulo({
+    required String alunoId,
+    required String moduloId,
+    required DateTime dataConclusao,
+    String? observacao,
+  }) async {
+    modulosRegistrados.add(
+      '$alunoId|$moduloId|${dataIso(dataConclusao)}|${observacao ?? ''}',
+    );
+    final erro = erroAoRegistrarModulo;
+    if (erro != null) throw erro;
+    // Reproduz `fn_aluno_modulo_registrar`: o módulo deixa de faltar e passa a
+    // constar como feito, com origem MANUAL.
+    final faltavam = aFazer_[alunoId] ?? <ModuloAFazer>[];
+    final era = faltavam.where((m) => m.moduloId == moduloId).firstOrNull;
+    aFazer_[alunoId] = [
+      for (final m in faltavam)
+        if (m.moduloId != moduloId) m,
+    ];
+    (feitos_[alunoId] ??= []).add(
+      ModuloFeito(
+        moduloId: moduloId,
+        moduloNome: era?.moduloNome ?? moduloId,
+        moduloOrdem: era?.moduloOrdem ?? 0,
+        cursoNome: '',
+        dataConclusao: dataConclusao,
+        origem: 'MANUAL',
+        observacao: observacao,
+      ),
+    );
+  }
+
+  @override
+  Future<void> removerModulo({
+    required String alunoId,
+    required String moduloId,
+    required String motivo,
+  }) async {
+    modulosTirados.add('$alunoId|$moduloId|$motivo');
+    feitos_[alunoId] = [
+      for (final m in feitos_[alunoId] ?? const <ModuloFeito>[])
+        if (m.moduloId != moduloId) m,
+    ];
   }
 
   @override

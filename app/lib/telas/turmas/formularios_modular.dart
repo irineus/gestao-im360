@@ -610,15 +610,7 @@ class _FormularioAdicionarNaTurmaModularState
       FiltroAlunos(busca: _busca.text, ocultarEncerrados: false),
     );
 
-    // A escolha só existe quando há DOIS módulos para escolher: turma sem
-    // módulo corrente, ou curso de um módulo só, não tem "próximo". Quem valida
-    // é o banco (`MODULO_ENTRADA_INVALIDO`); a tela só oferece o que a view
-    // disse que existe.
-    final proximoId = turma.proximoModuloId;
-    final podeEscolherEntrada =
-        turma.moduloCorrenteId != null &&
-        proximoId != null &&
-        proximoId != turma.moduloCorrenteId;
+    final podeEscolherEntrada = temEscolhaDeEntrada(turma);
     final cores = Theme.of(context).colorScheme;
 
     return FormularioIm360(
@@ -658,23 +650,12 @@ class _FormularioAdicionarNaTurmaModularState
           selecionado: _alunoId,
           aoSelecionar: (id) => setState(() => _alunoId = id),
         ),
-        if (podeEscolherEntrada) ...[
-          Padding(
-            padding: const EdgeInsets.only(top: Dim.e8),
-            child: Text('O aluno começa em', style: Tipografia.corpo),
+        if (podeEscolherEntrada)
+          EscolhaModuloEntrada(
+            turma: turma,
+            noProximo: _noProximo,
+            aoMudar: (valor) => setState(() => _noProximo = valor),
           ),
-          LinhaEscolha(
-            rotulo: 'Módulo atual — ${turma.moduloCorrenteRotulo}',
-            marcada: !_noProximo,
-            aoTocar: () => setState(() => _noProximo = false),
-          ),
-          LinhaEscolha(
-            rotulo: 'Próximo módulo — ${turma.proximoModuloNome ?? '—'}',
-            apoio: 'Para quem entra perto da troca de módulo.',
-            marcada: _noProximo,
-            aoTocar: () => setState(() => _noProximo = true),
-          ),
-        ],
         Text(
           podeEscolherEntrada ? ajudaModuloEntrada : entraNoModuloCorrente,
           style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
@@ -691,15 +672,63 @@ class _FormularioAdicionarNaTurmaModularState
               turmaId: turma.id,
               alunoId: aluno,
               // Nulo = o atual da turma, que é o padrão do banco.
-              moduloEntradaId: podeEscolherEntrada && _noProximo
-                  ? proximoId
-                  : null,
+              moduloEntradaId: moduloDeEntrada(turma, noProximo: _noProximo),
             );
         recarregarModular(ref);
         return 'salvo';
       },
     );
   }
+}
+
+/// A escolha só existe quando há DOIS módulos para escolher: turma sem módulo
+/// corrente, ou curso de um módulo só, não tem "próximo". Quem valida é o banco
+/// (`MODULO_ENTRADA_INVALIDO`); a tela só oferece o que a view disse que existe.
+bool temEscolhaDeEntrada(TurmaModular turma) =>
+    turma.moduloCorrenteId != null &&
+    turma.proximoModuloId != null &&
+    turma.proximoModuloId != turma.moduloCorrenteId;
+
+/// O `p_modulo_entrada_id` da admissão: nulo = o atual da turma, que é o padrão
+/// do banco.
+String? moduloDeEntrada(TurmaModular turma, {required bool noProximo}) =>
+    temEscolhaDeEntrada(turma) && noProximo ? turma.proximoModuloId : null;
+
+/// "O aluno começa em: módulo atual / próximo módulo" (card 9.2,88) — usado ao
+/// adicionar o aluno à turma e na matrícula (card 9.2,905).
+class EscolhaModuloEntrada extends StatelessWidget {
+  const EscolhaModuloEntrada({
+    super.key,
+    required this.turma,
+    required this.noProximo,
+    required this.aoMudar,
+  });
+
+  final TurmaModular turma;
+  final bool noProximo;
+  final ValueChanged<bool> aoMudar;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(top: Dim.e8),
+        child: Text('O aluno começa em', style: Tipografia.corpo),
+      ),
+      LinhaEscolha(
+        rotulo: 'Módulo atual — ${turma.moduloCorrenteRotulo}',
+        marcada: !noProximo,
+        aoTocar: () => aoMudar(false),
+      ),
+      LinhaEscolha(
+        rotulo: 'Próximo módulo — ${turma.proximoModuloNome ?? '—'}',
+        apoio: 'Para quem entra perto da troca de módulo.',
+        marcada: noProximo,
+        aoTocar: () => aoMudar(true),
+      ),
+    ],
+  );
 }
 
 /// A consequência que não se adivinha: quem entra hoje entra no módulo em que a

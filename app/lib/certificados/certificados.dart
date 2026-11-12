@@ -32,10 +32,22 @@ const situacoesDaFila = <String>[situacaoFim, situacaoUltimoLivro];
 
 /// Código desconhecido volta como veio: inventar rótulo para uma situação que o
 /// banco passou a usar esconderia justamente a novidade.
-String rotuloSituacao(String codigo) => switch (codigo) {
-  situacaoFim => 'Fim do curso',
-  situacaoUltimoLivro => 'Último livro',
-  _ => codigo,
+///
+/// [modular] (card 9.2,905): para o aluno do método Modular a fila conta
+/// **módulos**, e não apostilas (decisão D1 do card 9.2,87, na view desde o
+/// 9.2,885) — o código continua `ULTIMO_LIVRO`, e o que ele quer dizer é "no
+/// último módulo". No Modular o último livro é entregue meses antes do fim.
+String rotuloSituacao(String codigo, {bool modular = false}) =>
+    switch (codigo) {
+      situacaoFim => 'Fim do curso',
+      situacaoUltimoLivro => modular ? 'Último módulo' : 'Último livro',
+      _ => codigo,
+    };
+
+/// O rótulo do **filtro**, que vale para os dois métodos de uma vez.
+String rotuloSituacaoFiltro(String codigo) => switch (codigo) {
+  situacaoUltimoLivro => 'Último livro ou módulo',
+  _ => rotuloSituacao(codigo),
 };
 
 // ---------------------------------------------------------------------------
@@ -113,6 +125,7 @@ class LinhaFilaCertificado {
     required this.alunoStatus,
     required this.metodoId,
     required this.metodoNome,
+    this.metodoCodigo,
     required this.situacao,
     required this.itensPendentes,
     this.checklistId,
@@ -131,6 +144,7 @@ class LinhaFilaCertificado {
         alunoStatus: '${linha['aluno_status']}',
         metodoId: '${linha['metodo_id']}',
         metodoNome: '${linha['metodo_nome']}',
+        metodoCodigo: linha['metodo_codigo'] as String?,
         situacao: '${linha['situacao']}',
         itensPendentes: (linha['itens_pendentes'] as num?)?.toInt() ?? 0,
         checklistId: linha['checklist_id'] as String?,
@@ -149,6 +163,16 @@ class LinhaFilaCertificado {
   final String alunoStatus;
   final String metodoId;
   final String metodoNome;
+
+  /// `INTERATIVO`, `INGLES` ou `MODULAR` — é o que diz se a fila contou
+  /// apostilas ou módulos para este aluno.
+  final String? metodoCodigo;
+
+  bool get modular => metodoCodigo == 'MODULAR';
+
+  /// A situação em palavras, já no vocabulário do método do aluno.
+  String get rotuloSituacaoDoAluno =>
+      rotuloSituacao(situacao, modular: modular);
 
   /// [situacaoFim] ou [situacaoUltimoLivro].
   final String situacao;
@@ -414,7 +438,8 @@ const semChecklist = 'Sem checklist';
 /// O aluno da fila que ainda não tem checklist — e por que isso é normal.
 const explicacaoSemChecklist =
     'O checklist é aberto sozinho quando o aluno recebe a última apostila da '
-    'trilha. Dá para abrir antes, para adiantar o pedido do certificado.';
+    'trilha — ou, no método Modular, quando conclui o último módulo. Dá para '
+    'abrir antes, para adiantar o pedido do certificado.';
 
 /// A nota do wireframe §12.2, palavra por palavra no que ela decide: o sistema
 /// **sugere**, e quem forma o aluno é uma pessoa.
