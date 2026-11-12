@@ -27,9 +27,9 @@ este projeto já catalogou nos cards 2.3, 2.4, 3.4 e 3.5.
 | Objeto | Conteúdo |
 |---|---|
 | `unidade` | Uma linha: `codigo = 'MATRIZ'`, `nome = 'Instituto Mix Charqueadas'` |
-| `permissao` | 50 códigos — as 49 do card 2.4 §3 e `salas.acessar_credencial` do card 2.9 |
+| `permissao` | 51 códigos — as 49 do card 2.4 §3, `salas.acessar_credencial` do card 2.9 e `turmas.alinhar_modulo` do card 9.2,85 |
 | `perfil` | DIRECAO, PEDAGOGICO, SECRETARIA, MONITOR |
-| `perfil_permissao` | Matriz do card 2.4 §5 — direção 50, secretaria 37, pedagógico 22, monitor 14 |
+| `perfil_permissao` | Matriz do card 2.4 §5 — direção 51, secretaria 37, pedagógico 23, monitor 14 (desde o card 9.2,85) |
 | `parametro` | 17 parâmetros de negócio (§3) + `direcao_inicial_email` |
 | `usuario_perfil` | O primeiro usuário de direção, por bootstrap (§4) |
 

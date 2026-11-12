@@ -690,7 +690,7 @@ do §15.2: o marco seguinte começa num cadastro que o anterior não pediu.
 
 | # | Critério | Como se verifica |
 |---|---|---|
-| 1 | Os 50 códigos do card 2.4 existem em `permissao` e a matriz inicial confere: direção 50, secretaria 37, pedagógico 22, monitor 14 | consulta, não conferência a olho |
+| 1 | Os **51** códigos existem em `permissao` e a matriz inicial confere: direção **51**, secretaria 37, pedagógico **23**, monitor 14 | consulta, não conferência a olho |
 | 2 | Para cada perfil, o menu exibe **exatamente** as rotas do mapa do card 2.4 §6 — nem uma a menos, nem uma a mais | quatro logins |
 | 3 | As três permissões de exceção (`alunos.formar_sem_certificado`, `alunos.reverter_status`, `compras.receber_excedente`) só aparecem para a direção | quatro logins |
 | 4 | Nenhuma tela abre **vazia** por falta de permissão — o modo de falha do card 2.4 | quatro logins × telas do perfil |
@@ -705,6 +705,12 @@ monitor 14, que é o que o seed do card 3.6 grava e a suíte `022_seed_inicial` 
 nesta data: 50 códigos, 12 domínios, `perfil_permissao` com 123 linhas = 50+37+22+14. **É o critério
 que estava errado, não o sistema** — e um critério de aceite errado reprova software correto, que é
 o pior desfecho possível para um marco.
+
+⚠️ **E foram corrigidos de novo em 12/11/2026 (card 9.2,886): eram 50 / direção 50 / pedagógico 22.**
+Envelheceram no card **9.2,85** (10/11/2026), que acrescentou `turmas.alinhar_modulo` à direção e ao
+pedagógico — `docs/permissoes-matriz.md` §5 já dizia 51 / 37 / 23 / 14, e a suíte `022_seed_inicial`
+assere isso. É a **segunda** vez que este critério envelhece pelo mesmo motivo: ele repete um número
+que tem dono em outro documento. Quem acrescentar permissão confere esta linha.
 
 **Reprova se:** aparecer qualquer erro cru do PostgREST/Postgres em tela; qualquer tela vazia por
 RLS; qualquer política exigindo permissão que o seed não cria (é o C11 — não deveria chegar aqui).
@@ -905,6 +911,68 @@ leitura no dia; o backup pós-carga existe e foi restaurado em teste; e há **pl
 
 **Reprova se:** qualquer divergência de contagem; qualquer migração pendente; qualquer pendência
 `ROTINA_FALHOU` aberta; ausência de plano de volta.
+
+---
+
+### 15.5 O que a rodada 2 muda nos marcos — aviso de troca de módulo e turma em rodízio (12/11/2026)
+
+Os cards 9.2,85 a 9.2,91 mexeram em telas que os marcos já tinham exercitado ou iam exercitar. Esta
+seção diz, marco a marco, **o que continua valendo, o que precisa ser refeito e o que é novo** — para
+que ninguém reteste o que não mudou nem deixe de retestar o que mudou. A versão para os usuários é o
+documento de entrega da rodada 2 (card 9.2,92).
+
+**Estado de partida, pelo registro** (subpágina "Retorno dos usuários — achados por rodada", última
+entrada em 02/10/2026): M1 com os critérios 2, 3 e 4 verdes para monitor, secretaria e pedagógico;
+M2 com o critério 6 e metade do 8 verdes, e o resto parado por falta de **combo** no homolog; M3 não
+iniciado. ⚠️ Se houve teste depois de 02/10 que não foi registrado, esta tabela está atrás.
+
+| Marco | Item | Situação | Por quê |
+|---|---|---|---|
+| M1 | Critério 1 (matriz de permissões) | **refazer a consulta** | são 51 códigos; direção 51, pedagógico 23 |
+| M1 | Critérios 2 e 3 (menus por perfil) | vale o que foi testado | nenhum item de menu novo, nenhuma rota nova |
+| M1 | Critério 4 (nenhuma tela vazia por permissão) | **refazer em quatro telas** | Turmas Modular, ficha do aluno (aba Turmas), Certificados e Pendências ganharam leituras novas; a pendência de alinhamento é invisível de propósito para secretaria e monitor |
+| M1 | Critérios 5 e 6 | vale o que foi testado | status de aluno não mudou |
+| M1 | Roteiro: matricular aluno | **refazer para aluno Modular** | a matrícula ganhou turma e módulo de entrada |
+| M2 | Critérios 1 a 7 (trilha, entrega, estoque, bloco) | não mudou | a entrega pela aba Trilha e os blocos são os mesmos — mas seguem **não testados**, esperando o combo |
+| M2 | Critério 8 (jornada do monitor no celular) | **acrescentar um passo** | o monitor vê o selo de troca e o progresso do aluno; conferir que ele **não** vê a pendência de alinhamento nem o botão de avançar |
+| M3 | Critério 1 (um aluno por degrau da projeção) | **refazer o degrau MODULAR** | a regra passou a ser por aluno: o livro entra quando a turma chega ao primeiro módulo dele que ainda falta ao aluno |
+| M3 | Critérios 2 a 5 | não mudou | — |
+| novo | **R1** — aviso de troca de módulo | novo | selo laranja/vermelho, pendência só para direção e pedagógico, entrega do livro no avanço |
+| novo | **R2** — turma em rodízio | novo | ciclo, módulo de entrada, progresso, conclusão do aluno, exceção à mão, certificado na conclusão dos módulos |
+
+**Pré-condições de dado para R1 e R2**, todas no homolog e todas de gente (nenhuma migração grava
+dado de negócio): um curso Modular com **dois livros** e ao menos **três módulos**, com o combo ligado
+a ele; uma turma Modular com cronograma **com datas** (a previsão do módulo em curso a menos de 10
+dias, para o aviso nascer); dois alunos Modular ativos; estoque do segundo livro.
+
+**R1 — aprova se, e só se:**
+
+| # | Critério | Quem |
+|---|---|---|
+| 1 | Com a previsão do módulo a 10 dias ou menos, a turma mostra o selo laranja com os dias; no dia, vermelho | qualquer perfil com turmas |
+| 2 | Na manhã seguinte à data entrar na janela, a pendência "Troca de módulo — alinhar com o professor" existe — **uma** por turma e por módulo | direção ou pedagógico |
+| 3 | Secretaria e monitor **não** veem essa pendência, nem na central nem no contador | os dois perfis |
+| 4 | Resolver a pendência não avança o módulo; avançar o módulo não a resolve; adiar a data para fora da janela a fecha | direção ou pedagógico |
+| 5 | Ao avançar para um módulo de **outro livro**, a tela oferece a entrega aos alunos que não o têm; confirmada, o estoque baixa e a trilha marca | secretaria |
+| 6 | Sem estoque, o módulo avança e a tela diz quem ficou sem o livro | secretaria |
+
+**R2 — aprova se, e só se:**
+
+| # | Critério | Quem |
+|---|---|---|
+| 1 | Avançar o **último** módulo abre o primeiro, em ciclo novo; a tela mostra só o ciclo corrente e nunca diz "turma terminou" | secretaria ou pedagógico |
+| 2 | Aluno admitido no módulo atual recebe o módulo quando a turma avança; admitido no **próximo**, não recebe | secretaria |
+| 3 | A linha do aluno e a ficha mostram por onde entrou, quantos fez, o que falta na ordem da turma e a conclusão prevista — e a previsão muda quando a data de um módulo da turma muda | qualquer perfil |
+| 4 | O aluno que completa todos os módulos do curso sai da turma sozinho e, concluídos todos os cursos do combo, aparece na fila de certificados como "Fim do curso" | pedagógico |
+| 5 | Registrar e remover módulo à mão funcionam, com motivo obrigatório na remoção; o monitor não vê os dois botões | secretaria; monitor |
+| 6 | Matrícula de aluno Modular com turma: o aluno aparece na turma; com a turma cheia, o diálogo diz que ele ficou sem turma | secretaria |
+| 7 | No cadastro do aluno em turma Modular a previsão de conclusão não se edita | secretaria |
+
+**Reprova se:** a turma voltar a um módulo já dado sem que ninguém peça; um aluno receber um módulo
+que não cursou, ou não receber o que cursou; a pendência de alinhamento aparecer para quem não deve.
+
+**Fora desta rodada:** a carga das turmas Modular pela planilha (card 9.2,915) e a ordem dos livros
+de quem entra pelo segundo livro (card 9.2,886, item 1).
 
 ---
 
