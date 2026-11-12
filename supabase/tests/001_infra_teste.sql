@@ -59,13 +59,13 @@ select is(
 -- compararia a tela real contra ela e passaria.
 select is(
   (select count(*)::bigint from public.permissao where unidade_id = tests.unidade('ESCOLA_A')),
-  50::bigint,
-  'catalogo completo do card 2.4 §3 mais o 50º código do card 2.9');
+  51::bigint,
+  'catalogo completo do card 2.4 §3, o 50º código do card 2.9 e o 51º do card 9.2,85');
 
 select is(
   (select count(*)::bigint from public.permissao
     where unidade_id = tests.unidade('ESCOLA_B')),
-  50::bigint,
+  51::bigint,
   'a segunda unidade recebe o MESMO catalogo — isolamento comparavel, nao assimetrico');
 
 -- Prova de fonte única: o conjunto de códigos da fixture é IDÊNTICO ao da
@@ -81,8 +81,8 @@ select is(
   (select count(*)::bigint from public.perfil_permissao pp
      join public.perfil pe on pe.id = pp.perfil_id
     where pe.unidade_id = tests.unidade('ESCOLA_A') and pe.codigo = 'DIRECAO'),
-  50::bigint,
-  'direcao de A tem os 50 codigos (matriz de docs/permissoes-matriz.md §5)');
+  51::bigint,
+  'direcao de A tem os 51 codigos (matriz de docs/permissoes-matriz.md §5)');
 
 select is(
   (select count(*)::bigint from public.perfil_permissao pp

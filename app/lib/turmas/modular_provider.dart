@@ -81,6 +81,49 @@ final alunosModularProvider = FutureProvider<List<AlunoDaTurmaModular>>((ref) {
   return _traduzindo(_repositorio(ref).alunos);
 });
 
+/// O progresso dos alunos nas turmas em rodízio (card 9.2,90).
+///
+/// Vazio para quem não tem `alunos.ler`, pela mesma razão de
+/// [alunosModularProvider]: a view junta `aluno` internamente, e a RLS
+/// devolveria zero linhas em silêncio.
+final progressoModularProvider = FutureProvider<List<ProgressoAlunoModular>>((
+  ref,
+) {
+  if (!ref.watch(permissoesProvider).contains('alunos.ler')) {
+    return Future.value(const <ProgressoAlunoModular>[]);
+  }
+  return _traduzindo(_repositorio(ref).progresso);
+});
+
+/// `alocacao_id` → progresso do aluno.
+final progressoPorAlocacaoProvider =
+    Provider<Map<String, ProgressoAlunoModular>>(
+      (ref) => progressoPorAlocacao(
+        ref.watch(progressoModularProvider).value ??
+            const <ProgressoAlunoModular>[],
+      ),
+    );
+
+/// Os módulos que o aluno fez — por `alunoId` (card 9.2,905).
+final modulosFeitosProvider = FutureProvider.family<List<ModuloFeito>, String>(
+  (ref, alunoId) => _traduzindo(() => _repositorio(ref).modulosFeitos(alunoId)),
+);
+
+/// Os módulos que faltam ao aluno, na ordem da turma — por `alunoId`.
+final modulosAFazerProvider = FutureProvider.family<List<ModuloAFazer>, String>(
+  (ref, alunoId) => _traduzindo(() => _repositorio(ref).modulosAFazer(alunoId)),
+);
+
+/// Os alunos de uma turma a quem um módulo ainda falta — `(turmaId, moduloId)`.
+final alunosAQuemFaltaProvider =
+    FutureProvider.family<Set<String>, (String, String)>(
+      (ref, chave) => _traduzindo(
+        () =>
+            _repositorio(ref)
+                .alunosAQuemFalta(turmaId: chave.$1, moduloId: chave.$2),
+      ),
+    );
+
 /// `turma_id` → alunos dela, ativos primeiro.
 final alunosPorTurmaProvider = Provider<Map<String, List<AlunoDaTurmaModular>>>(
   (ref) => agruparPorTurma(

@@ -30,8 +30,8 @@ select is(
 
 select is(
   (select count(*)::bigint from public.permissao where unidade_id = (select id from u_real)),
-  50::bigint,
-  'catalogo com os 49 codigos do card 2.4 §3 mais salas.acessar_credencial (card 2.9)');
+  51::bigint,
+  'catalogo com os 49 codigos do card 2.4 §3, salas.acessar_credencial (card 2.9) e turmas.alinhar_modulo (card 9.2,85)');
 
 -- `dominio` é derivado do próprio código na função de seed; a asserção existe
 -- para o dia em que alguém acrescentar a coluna à mão numa linha nova.
@@ -68,8 +68,8 @@ select is(
        select count(*) as cnt from public.perfil_permissao pp where pp.perfil_id = pe.id
      ) c
     where pe.unidade_id = (select id from u_real)),
-  'DIRECAO=50,MONITOR=14,PEDAGOGICO=22,SECRETARIA=37',
-  'totais da matriz inicial: direcao 50, monitor 14, pedagogico 22, secretaria 37');
+  'DIRECAO=51,MONITOR=14,PEDAGOGICO=23,SECRETARIA=37',
+  'totais da matriz inicial: direcao 51, monitor 14, pedagogico 23, secretaria 37');
 
 -- Os três pontos que Irineu confirmou em 01/09/2026 (card 2.4 §9). Escritos como
 -- asserção porque são decisão do dono do produto, não consequência de nada: se
@@ -114,8 +114,9 @@ select is(
   'rep_capacidade_semanal=1,rep_faltas_max=2,rep_janela_volta_dias=30,rep_prazo_dias=30,'
   'ritmo_calibracao_dias=180,ritmo_intervalo_max_dias=120,ritmo_intervalo_min_dias=7,'
   'ritmo_janela_entregas=4,ritmo_padrao_dias_INGLES=30,ritmo_padrao_dias_INTERATIVO=30,'
-  'ritmo_padrao_dias_MODULAR=45,ritmo_padrao_dias_PADRAO=30,standby_alerta_dias=30',
-  'os 16 parametros das regras ja especificadas, com os valores dos cards 2.1, 2.5, Ordem 5 e 11.5,5');
+  'ritmo_padrao_dias_MODULAR=45,ritmo_padrao_dias_PADRAO=30,standby_alerta_dias=30,'
+  'troca_modulo_alerta_dias=10',
+  'os 17 parametros das regras ja especificadas, com os valores dos cards 2.1, 2.5, Ordem 5, 11.5,5 e 9.2,85');
 
 -- fn_param_int lê pela unidade corrente; em contexto de rotina a unidade vem da
 -- GUC (card 2.2 §2.2). É a leitura que a projeção e a virada REP fazem de
@@ -174,7 +175,7 @@ select is(
 
 select is(
   (select count(*)::bigint from public.permissao where unidade_id = (select id from u_real)),
-  50::bigint,
+  51::bigint,
   'reexecutar o seed nao duplica o catalogo');
 
 -- O caso residual que este arquivo assumia até o card 4.7.5: desmarcar de

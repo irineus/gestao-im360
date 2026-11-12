@@ -6,7 +6,7 @@
 /// (card 2.8 §9.3).
 ///
 /// ⚠️ **Nada neste arquivo valida nada.** Quem valida é `fn_importacao_validar`,
-/// com as dezesseis verificações de `docs/importacao.md` §4, e quem aplica é
+/// com as dezenove verificações de `docs/importacao.md` §4, e quem aplica é
 /// `fn_importacao_aplicar`. O que a tela faz aqui é abrir o arquivo, conferir
 /// que é um objeto JSON e CONTAR o que ele traz por entidade — o "265 alunos
 /// lidos" do passo 3 do wireframe. Uma segunda validação em Dart seria a
@@ -19,7 +19,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 // ---------------------------------------------------------------------------
-// As dezoito entidades do arquivo, na ORDEM DE DEPENDÊNCIA
+// As dezenove entidades do arquivo, na ORDEM DE DEPENDÊNCIA
 // ---------------------------------------------------------------------------
 
 /// Cópia literal da lista de `fn_importacao_registrar` (migração
@@ -45,6 +45,7 @@ const entidadesImportacao = <String>[
   'turma_modular',
   'turma_modular_modulo',
   'turma_modular_aluno',
+  'aluno_modulo',
   'aluno_material',
   'movimento_estoque',
 ];
@@ -69,6 +70,7 @@ String rotuloEntidade(String codigo) => switch (codigo) {
   'turma_modular' => 'Turmas Modular',
   'turma_modular_modulo' => 'Cronograma Modular',
   'turma_modular_aluno' => 'Alunos em turmas Modular',
+  'aluno_modulo' => 'Módulos feitos por aluno',
   'aluno_material' => 'Trilhas',
   'movimento_estoque' => 'Movimentos de estoque',
   'importacao' => 'Importação',

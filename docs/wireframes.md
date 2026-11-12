@@ -443,8 +443,13 @@ Rota: `turmas.ler + salas.ler + materiais.ler`. Perfis: todos.
 ```
 
 - Fonte: `v_turma_modular_lotacao` (cabeçalho e lotação) + cronograma de `turma_modular_modulo`.
-  Módulo corrente e atraso vêm da view (`modulo_atrasado`); turma com tudo concluído aparece como
-  "turma terminou" e **não some** da lista.
+  Módulo corrente e atraso vêm da view (`modulo_atrasado`). ⚠️ Desde o card 9.2,88 a turma é
+  **cíclica** — depois do último módulo vem o primeiro, num ciclo novo —, e o estado "turma
+  terminou" deixou de existir para turma ativa: a tela mostra o ciclo corrente e, para a turma
+  anterior ao rodízio com tudo concluído, oferece `[Abrir próximo ciclo]` (card 9.2,90,
+  `docs/turma-rodizio.md` §10.4). A matrícula do aluno Modular já escolhe a turma e o módulo de
+  entrada, e a aba Turmas da ficha ganhou a seção **Módulos** — feitos, a fazer e a conclusão
+  prevista (card 9.2,905, §10.5).
 - `[Avançar módulo →]` (`turmas.editar`) chama a função do card 7.2 — avanço é **da turma em
   conjunto** (decisão do plano); o diálogo confirma o módulo que fecha e o que abre, com datas.
   Turma sem cronograma futuro mostra o aviso da pendência `TURMA_MODULAR_SEM_CRONOGRAMA` (card de

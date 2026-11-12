@@ -47,7 +47,7 @@ class CertificadosRepositorioSupabase implements CertificadosRepositorio {
 
   static const _colunasFila =
       'aluno_id, aluno_nome, codigo_sgf, aluno_status, metodo_id, metodo_nome, '
-      'situacao, itens_pendentes, checklist_id, data_fim_curso, pedagogico_ok, '
+      'metodo_codigo, situacao, itens_pendentes, checklist_id, data_fim_curso, pedagogico_ok, '
       'financeiro_ok, formatura, certificado_status';
 
   /// Os quatro "quem" (card 9.2,74): os ids `*_por`, e o nome de cada um sai

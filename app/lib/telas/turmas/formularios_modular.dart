@@ -10,10 +10,13 @@ import '../../infraestrutura/infraestrutura_provider.dart';
 import '../../sessao/sessao_provider.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
+import '../../trilha/trilha.dart';
+import '../../trilha/trilha_provider.dart';
 import '../../turmas/modular.dart';
 import '../../turmas/modular_provider.dart';
 import '../../util/texto.dart';
 import '../../widgets/botoes.dart';
+import '../../widgets/escolha.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
 import 'formularios_alocacao.dart' show ListaCandidatos, escolhaAluno;
@@ -313,12 +316,19 @@ class FormularioMontarCronograma extends ConsumerStatefulWidget {
     super.key,
     required this.turma,
     required this.faltantes,
+    this.ciclo = 1,
   });
 
   final TurmaModular turma;
 
   /// Módulos do curso ainda fora do cronograma, na ordem do catálogo.
   final List<Modulo> faltantes;
+
+  /// O ciclo em que as linhas entram — o que a tela está mostrando (card
+  /// 9.2,90). ⚠️ Sem isto a linha nascia no ciclo 1 por omissão, e numa turma
+  /// que já está no segundo ciclo um módulo "não concluído" do primeiro passava
+  /// a ser o corrente: a turma voltava um ciclo inteiro.
+  final int ciclo;
 
   @override
   ConsumerState<FormularioMontarCronograma> createState() =>
@@ -376,6 +386,7 @@ class _FormularioMontarCronogramaState
                 for (final m in faltantes)
                   if (m.id != null) m.id!,
               ],
+              ciclo: widget.ciclo,
             );
         recarregarModular(ref);
         return 'salvo';
@@ -544,6 +555,9 @@ class _FormularioAdicionarNaTurmaModularState
   final _busca = TextEditingController();
   String? _alunoId;
 
+  /// Card 9.2,90: o aluno começa no PRÓXIMO módulo do rodízio, e não no atual.
+  bool _noProximo = false;
+
   @override
   void dispose() {
     _busca.dispose();
@@ -596,6 +610,9 @@ class _FormularioAdicionarNaTurmaModularState
       FiltroAlunos(busca: _busca.text, ocultarEncerrados: false),
     );
 
+    final podeEscolherEntrada = temEscolhaDeEntrada(turma);
+    final cores = Theme.of(context).colorScheme;
+
     return FormularioIm360(
       titulo: 'Adicionar aluno',
       chave: _chave,
@@ -633,11 +650,15 @@ class _FormularioAdicionarNaTurmaModularState
           selecionado: _alunoId,
           aoSelecionar: (id) => setState(() => _alunoId = id),
         ),
-        Text(
-          entraNoModuloCorrente,
-          style: Tipografia.apoio.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+        if (podeEscolherEntrada)
+          EscolhaModuloEntrada(
+            turma: turma,
+            noProximo: _noProximo,
+            aoMudar: (valor) => setState(() => _noProximo = valor),
           ),
+        Text(
+          podeEscolherEntrada ? ajudaModuloEntrada : entraNoModuloCorrente,
+          style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
         ),
       ],
       aoSalvar: () async {
@@ -647,7 +668,12 @@ class _FormularioAdicionarNaTurmaModularState
         }
         await ref
             .read(modularRepositorioProvider)
-            .admitir(turmaId: turma.id, alunoId: aluno);
+            .admitir(
+              turmaId: turma.id,
+              alunoId: aluno,
+              // Nulo = o atual da turma, que é o padrão do banco.
+              moduloEntradaId: moduloDeEntrada(turma, noProximo: _noProximo),
+            );
         recarregarModular(ref);
         return 'salvo';
       },
@@ -655,11 +681,63 @@ class _FormularioAdicionarNaTurmaModularState
   }
 }
 
+/// A escolha só existe quando há DOIS módulos para escolher: turma sem módulo
+/// corrente, ou curso de um módulo só, não tem "próximo". Quem valida é o banco
+/// (`MODULO_ENTRADA_INVALIDO`); a tela só oferece o que a view disse que existe.
+bool temEscolhaDeEntrada(TurmaModular turma) =>
+    turma.moduloCorrenteId != null &&
+    turma.proximoModuloId != null &&
+    turma.proximoModuloId != turma.moduloCorrenteId;
+
+/// O `p_modulo_entrada_id` da admissão: nulo = o atual da turma, que é o padrão
+/// do banco.
+String? moduloDeEntrada(TurmaModular turma, {required bool noProximo}) =>
+    temEscolhaDeEntrada(turma) && noProximo ? turma.proximoModuloId : null;
+
+/// "O aluno começa em: módulo atual / próximo módulo" (card 9.2,88) — usado ao
+/// adicionar o aluno à turma e na matrícula (card 9.2,905).
+class EscolhaModuloEntrada extends StatelessWidget {
+  const EscolhaModuloEntrada({
+    super.key,
+    required this.turma,
+    required this.noProximo,
+    required this.aoMudar,
+  });
+
+  final TurmaModular turma;
+  final bool noProximo;
+  final ValueChanged<bool> aoMudar;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Padding(
+        padding: const EdgeInsets.only(top: Dim.e8),
+        child: Text('O aluno começa em', style: Tipografia.corpo),
+      ),
+      LinhaEscolha(
+        rotulo: 'Módulo atual — ${turma.moduloCorrenteRotulo}',
+        marcada: !noProximo,
+        aoTocar: () => aoMudar(false),
+      ),
+      LinhaEscolha(
+        rotulo: 'Próximo módulo — ${turma.proximoModuloNome ?? '—'}',
+        apoio: 'Para quem entra perto da troca de módulo.',
+        marcada: noProximo,
+        aoTocar: () => aoMudar(true),
+      ),
+    ],
+  );
+}
+
 /// A consequência que não se adivinha: quem entra hoje entra no módulo em que a
-/// turma está, e não no primeiro (card 2.2 §9 — a turma avança em conjunto).
+/// turma está, e não no primeiro — e faz os que ficaram para trás quando a
+/// turma voltar a eles (card 9.2,88: a turma é cíclica).
 const entraNoModuloCorrente =
-    'O aluno entra no módulo em que a turma está agora, não no primeiro: a '
-    'turma Modular avança em conjunto.';
+    'O aluno começa no módulo em que a turma está agora, não no primeiro. Os '
+    'módulos que ficaram para trás ele faz quando a turma voltar a eles — a '
+    'turma Modular segue em rodízio.';
 
 /// Tira o aluno da turma (`fn_turma_modular_remover`). Saída é `ativo = false`
 /// com o motivo gravado — a tabela não tem `delete` para ninguém (card 2.4 §4).
@@ -742,6 +820,84 @@ class _FormularioRemoverDaTurmaModularState
 // O avanço conjunto de módulo
 // ---------------------------------------------------------------------------
 
+/// `[Abrir próximo ciclo]` (card 9.2,90): `fn_turma_modular_abrir_ciclo`.
+///
+/// Só aparece para a turma **anterior ao rodízio** que concluiu todos os
+/// módulos e ficou sem módulo corrente. A turma em rodízio nunca chega aqui: o
+/// avanço do último módulo abre o ciclo seguinte sozinho.
+class FormularioAbrirCiclo extends ConsumerStatefulWidget {
+  const FormularioAbrirCiclo({super.key, required this.turma});
+
+  final TurmaModular turma;
+
+  @override
+  ConsumerState<FormularioAbrirCiclo> createState() =>
+      _FormularioAbrirCicloState();
+}
+
+class _FormularioAbrirCicloState extends ConsumerState<FormularioAbrirCiclo> {
+  final _chave = GlobalKey<FormState>();
+  // "Hoje" de São Paulo, que é o default de `p_data_inicio` no banco.
+  final _data = TextEditingController(text: formatarData(hojeSaoPaulo()));
+
+  @override
+  void dispose() {
+    _data.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final turma = widget.turma;
+    return FormularioIm360(
+      titulo: 'Abrir próximo ciclo',
+      chave: _chave,
+      rotuloSalvar: 'Abrir ciclo',
+      campos: [
+        Text('${turma.nome} · ${turma.cursoNome}', style: Tipografia.corpo),
+        Text(explicaAbrirCiclo, style: Tipografia.corpo),
+        TextFormField(
+          controller: _data,
+          style: Tipografia.numero(Tipografia.corpo),
+          decoration: const InputDecoration(
+            labelText: 'Início do primeiro módulo *',
+            hintText: 'dd/mm/aaaa',
+            helperText:
+                'As datas dos demais módulos se informam depois, um a um; o '
+                'avanço preenche as do seguinte com o ritmo médio da turma.',
+            helperMaxLines: 3,
+          ),
+          validator: validarData,
+        ),
+      ],
+      aoSalvar: () async {
+        await ref
+            .read(modularRepositorioProvider)
+            .abrirCiclo(turmaId: turma.id, dataInicio: lerData(_data.text)!);
+        recarregarModular(ref);
+        return 'salvo';
+      },
+    );
+  }
+}
+
+const explicaAbrirCiclo =
+    'A turma volta ao primeiro módulo do curso, num ciclo novo. Os módulos já '
+    'concluídos ficam guardados como histórico, e cada aluno continua com os '
+    'módulos que já fez.';
+
+/// Card 9.2,86: os três textos da oferta do livro, para a tela e o teste.
+const semPermissaoDeEntrega =
+    'A entrega do livro fica para quem registra entregas — pela ficha de cada '
+    'aluno, na aba Trilha.';
+
+const erroLivroPendente =
+    'Não foi possível saber quem ainda não tem este livro. O avanço pode '
+    'seguir; registre as entregas pela ficha de cada aluno.';
+
+const ninguemSemOLivro =
+    'Nenhum aluno ativo da turma tem este livro por receber.';
+
 /// `[Avançar módulo →]` (wireframe §8): chama `fn_turma_modular_avancar`, que
 /// fecha o módulo corrente com a data informada e abre o seguinte.
 ///
@@ -753,19 +909,15 @@ class FormularioAvancarModulo extends ConsumerStatefulWidget {
     super.key,
     required this.turma,
     required this.cronograma,
-    this.faltantes = 0,
   });
 
   final TurmaModular turma;
 
-  /// O cronograma da turma, na ordem do catálogo — é dele que saem o módulo que
-  /// fecha e o que abre, para o diálogo dizer os dois antes do clique.
+  /// O cronograma do **ciclo corrente** da turma, na ordem do catálogo — é dele
+  /// que saem o módulo que fecha e o que abre, para o diálogo dizer os dois
+  /// antes do clique. Depois do último, quem diz o que abre é a view
+  /// (`proximo_modulo_nome`): a turma é cíclica (card 9.2,90).
   final List<ModuloDaTurma> cronograma;
-
-  /// Quantos módulos do curso ainda estão FORA do cronograma (item B2): sem
-  /// isso o diálogo anunciava o fim da turma com "Acrescentar 2 módulo(s)"
-  /// visível na mesma tela.
-  final int faltantes;
 
   @override
   ConsumerState<FormularioAvancarModulo> createState() =>
@@ -776,6 +928,11 @@ class _FormularioAvancarModuloState
     extends ConsumerState<FormularioAvancarModulo> {
   final _chave = GlobalKey<FormState>();
   final _data = TextEditingController(text: formatarData(hojeSaoPaulo()));
+
+  /// Quem foi DESMARCADO na oferta do livro (card 9.2,86). Guardar os
+  /// desmarcados, e não os marcados, é o que faz todo mundo nascer marcado —
+  /// inclusive quem a leitura trouxer depois de o diálogo abrir.
+  final _semLivro = <String>{};
 
   @override
   void dispose() {
@@ -797,6 +954,52 @@ class _FormularioAvancarModuloState
     // de diferença do que a função usaria.
     final data = lerData(_data.text) ?? hojeSaoPaulo();
 
+    // -- A oferta do livro (card 9.2,86) --------------------------------------
+    // Só quando o PRÓXIMO módulo é de outro livro: trocar de módulo nem sempre
+    // é trocar de apostila (decisão do dono do produto, 10/11/2026). Quem diz
+    // se é, e qual é o livro, é a view (`troca_de_livro`).
+    final turma = widget.turma;
+    final livroId = (turma.trocaDeLivro ?? false)
+        ? turma.proximoMaterialId
+        : null;
+    final permissoes = ref.watch(permissoesProvider);
+    // As três leituras de `v_aluno_trilha` (card 6.6) mais a escrita.
+    final podeEntregar =
+        permissoes.contains('estoque.lancar_saida') &&
+        permissoes.contains('estoque.ler') &&
+        permissoes.contains('alunos.ler');
+    final pendentes = livroId != null && podeEntregar
+        ? ref.watch(alunosComLivroPendenteProvider(livroId))
+        : null;
+    // Card 9.2,90: na turma em rodízio o módulo que abre não é de todo mundo —
+    // quem já o fez em outra volta não precisa do livro dele agora. A lista
+    // sai da agenda de cada aluno (`v_aluno_modular_agenda`), e não de uma
+    // conta feita aqui.
+    final proximoModuloId = turma.proximoModuloId;
+    final aQuemFalta =
+        livroId != null && podeEntregar && proximoModuloId != null
+        ? ref.watch(alunosAQuemFaltaProvider((turma.id, proximoModuloId)))
+        : null;
+    final leituraFalhou =
+        (pendentes?.hasError ?? false) || (aQuemFalta?.hasError ?? false);
+    final leituraPronta =
+        (pendentes?.hasValue ?? false) && (aQuemFalta?.hasValue ?? true);
+    final candidatos = [
+      if (leituraPronta && !leituraFalhou)
+        for (final a
+            in ref.watch(alunosPorTurmaProvider)[turma.id] ??
+                const <AlunoDaTurmaModular>[])
+          if (a.ativo &&
+              pendentes!.requireValue.contains(a.alunoId) &&
+              (aQuemFalta == null ||
+                  aQuemFalta.requireValue.contains(a.alunoId)))
+            a,
+    ];
+    final marcados = [
+      for (final a in candidatos)
+        if (!_semLivro.contains(a.alunoId)) a,
+    ];
+
     return FormularioIm360(
       titulo: 'Avançar módulo',
       chave: _chave,
@@ -811,7 +1014,7 @@ class _FormularioAvancarModuloState
           corrente: corrente,
           proximo: proximo,
           dataConclusao: data,
-          faltantes: widget.faltantes,
+          proximoDoRodizio: turma.proximoModuloNome,
         ))
           Padding(
             padding: const EdgeInsets.only(top: Dim.e4),
@@ -842,6 +1045,50 @@ class _FormularioAvancarModuloState
             style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
           ),
         ),
+        if (livroId != null) ...[
+          const Divider(),
+          Text(avisoTrocaDeLivro(turma), style: Tipografia.corpo),
+          if (!podeEntregar)
+            Text(
+              semPermissaoDeEntrega,
+              style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+            )
+          // `hasError` antes de `hasValue` (design-system §5.6).
+          else if (leituraFalhou)
+            Text(
+              erroLivroPendente,
+              style: Tipografia.apoio.copyWith(color: cores.error),
+            )
+          else if (!leituraPronta)
+            const EstadoCarregando(linhas: 1)
+          else if (candidatos.isEmpty)
+            Text(
+              ninguemSemOLivro,
+              style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+            )
+          else ...[
+            Text(
+              'Registrar a entrega ao avançar, para '
+              '${plural(marcados.length, 'aluno', 'alunos')}:',
+              style: Tipografia.apoio.copyWith(color: cores.onSurfaceVariant),
+            ),
+            for (final a in candidatos)
+              CheckboxListTile(
+                value: !_semLivro.contains(a.alunoId),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(a.alunoNome, style: Tipografia.corpoTabela),
+                onChanged: (marcado) => setState(() {
+                  if (marcado ?? false) {
+                    _semLivro.remove(a.alunoId);
+                  } else {
+                    _semLivro.add(a.alunoId);
+                  }
+                }),
+              ),
+          ],
+        ],
       ],
       aoSalvar: () async {
         final proximoId = await ref
@@ -851,10 +1098,43 @@ class _FormularioAvancarModuloState
               dataConclusao: lerData(_data.text)!,
             );
         recarregarModular(ref);
-        // Nulo = a turma terminou. O resultado muda a próxima ação de quem
-        // avançou (não há mais o que avançar), então ele volta à tela, que
-        // mostra o diálogo do design-system §5.8 em vez de um snackbar.
-        return proximoId == null ? 'terminou' : 'avancou';
+
+        // A entrega vem DEPOIS do avanço, uma por aluno, e a falha de uma não
+        // desfaz o avanço nem impede as outras: o módulo já trocou, e o que a
+        // pessoa precisa saber é quem ficou sem o livro. Bloqueio por falta
+        // de estoque não é exceção — é um dos três status do retorno.
+        var entregues = 0;
+        final naoEntregues = <String>[];
+        if (livroId != null && marcados.isNotEmpty) {
+          final trilha = ref.read(trilhaRepositorioProvider);
+          for (final a in marcados) {
+            try {
+              final r = await trilha.registrarEntrega(
+                a.alunoId,
+                materialId: livroId,
+              );
+              if (r.status != StatusEntrega.bloqueadaSemEstoque &&
+                  r.materialId == livroId) {
+                entregues++;
+              } else {
+                naoEntregues.add(a.alunoNome);
+              }
+            } catch (_) {
+              naoEntregues.add(a.alunoNome);
+            }
+          }
+          ref.read(versaoTrilhaProvider.notifier).incrementar();
+        }
+
+        // Desde o card 9.2,88 o avanço abre o ciclo seguinte sozinho, e nulo
+        // deixou de ser o caminho normal. Continua tratado: se o banco não
+        // abrir módulo nenhum, a próxima ação muda (abrir o ciclo à mão), e
+        // isso é diálogo do design-system §5.8, não snackbar.
+        return ResultadoAvanco(
+          terminou: proximoId == null,
+          entregues: entregues,
+          naoEntregues: naoEntregues,
+        );
       },
     );
   }

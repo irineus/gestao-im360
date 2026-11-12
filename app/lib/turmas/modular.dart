@@ -48,6 +48,15 @@ class TurmaModular {
     this.moduloCorrentePrevConclusao,
     this.moduloAtrasado = false,
     this.dataInicio,
+    this.moduloCorrenteCronogramaId,
+    this.proximoModuloNome,
+    this.proximoMaterialId,
+    this.proximoMaterialNome,
+    this.trocaDeLivro,
+    this.diasParaTroca,
+    this.situacaoTroca,
+    this.moduloCorrenteCiclo,
+    this.proximoModuloId,
   });
 
   factory TurmaModular.deLinha(Map<String, dynamic> linha) => TurmaModular(
@@ -69,6 +78,21 @@ class TurmaModular {
     moduloCorrentePrevConclusao: _data(linha['modulo_corrente_prev_conclusao']),
     moduloAtrasado: linha['modulo_atrasado'] as bool? ?? false,
     dataInicio: _data(linha['data_inicio']),
+    moduloCorrenteCronogramaId: linha['modulo_corrente_cronograma_id'] == null
+        ? null
+        : '${linha['modulo_corrente_cronograma_id']}',
+    proximoModuloNome: linha['proximo_modulo_nome'] as String?,
+    proximoMaterialId: linha['proximo_material_id'] == null
+        ? null
+        : '${linha['proximo_material_id']}',
+    proximoMaterialNome: linha['proximo_material_nome'] as String?,
+    trocaDeLivro: linha['troca_de_livro'] as bool?,
+    diasParaTroca: (linha['dias_para_troca'] as num?)?.toInt(),
+    situacaoTroca: situacaoTrocaDe(linha['situacao_troca'] as String?),
+    moduloCorrenteCiclo: (linha['modulo_corrente_ciclo'] as num?)?.toInt(),
+    proximoModuloId: linha['proximo_modulo_id'] == null
+        ? null
+        : '${linha['proximo_modulo_id']}',
   );
 
   final String id;
@@ -103,6 +127,43 @@ class TurmaModular {
   /// outro fuso, e a turma apareceria atrasada um dia antes ou depois.
   final bool moduloAtrasado;
 
+  // -- O aviso de troca de módulo (card 9.2,85/9.2,86) -----------------------
+
+  /// A linha do cronograma do módulo corrente — é o que a chave da pendência
+  /// `TROCA_MODULO_ALINHAR` carrega, ao lado da turma.
+  final String? moduloCorrenteCronogramaId;
+
+  /// O próximo módulo do **rodízio** (card 9.2,88): o de ordem seguinte no
+  /// catálogo do curso e, depois do último, o primeiro. Nulo sem módulo
+  /// corrente ou em curso de um módulo só.
+  final String? proximoModuloId;
+  final String? proximoModuloNome;
+  final String? proximoMaterialId;
+  final String? proximoMaterialNome;
+
+  /// O próximo módulo é de **outro livro**. Nulo sem próximo módulo: nulo é
+  /// "não há troca a anunciar", e não "o livro continua".
+  final bool? trocaDeLivro;
+
+  /// Previsão de conclusão do módulo corrente menos o hoje **do banco**
+  /// (`fn_hoje()`). Zero é hoje; negativo, vencida; nulo sem previsão. Nunca
+  /// recalculado aqui, pela mesma razão de [moduloAtrasado].
+  final int? diasParaTroca;
+
+  /// Laranja na janela de `troca_modulo_alerta_dias`, vermelho **já no dia** —
+  /// borda diferente da de [moduloAtrasado], de propósito. Vem da view.
+  final SituacaoTroca? situacaoTroca;
+
+  /// O ciclo — a volta da turma pelos módulos do curso — do módulo corrente
+  /// (card 9.2,88). A turma é cíclica: depois do último módulo vem o primeiro,
+  /// num ciclo novo.
+  final int? moduloCorrenteCiclo;
+
+  /// A troca pede atenção: está na janela, é hoje ou já passou.
+  bool get trocaEmAviso =>
+      situacaoTroca == SituacaoTroca.proxima ||
+      situacaoTroca == SituacaoTroca.hojeOuVencida;
+
   bool get semModuloCorrente => moduloCorrenteId == null;
 
   /// Ocupação maior que a capacidade. Estado real — o importador do card 9.1
@@ -121,6 +182,117 @@ class TurmaModular {
     final ordem = moduloCorrenteOrdem;
     return ordem == null ? nome : '$ordem. $nome';
   }
+}
+
+// ---------------------------------------------------------------------------
+// O aviso de troca de módulo (card 9.2,86)
+// ---------------------------------------------------------------------------
+
+/// `situacao_troca` de `v_turma_modular_lotacao`. Quem decide a situação é a
+/// view, com o parâmetro `troca_modulo_alerta_dias` e o hoje do banco; aqui só
+/// há o nome.
+enum SituacaoTroca { emDia, proxima, hojeOuVencida, semPrevisao }
+
+/// Código desconhecido vira nulo, e não `emDia`: o dia em que o banco ganhar
+/// uma quinta situação, a tela deixa de pintar em vez de dizer "em dia" sobre
+/// o que não sabe.
+SituacaoTroca? situacaoTrocaDe(String? codigo) => switch (codigo) {
+  'EM_DIA' => SituacaoTroca.emDia,
+  'PROXIMA' => SituacaoTroca.proxima,
+  'HOJE_OU_VENCIDA' => SituacaoTroca.hojeOuVencida,
+  'SEM_PREVISAO' => SituacaoTroca.semPrevisao,
+  _ => null,
+};
+
+/// `faltam 5 dias` / `falta 1 dia` / `hoje` / `atrasada há 3 dias`.
+String rotuloDiasParaTroca(int dias) => switch (dias) {
+  0 => 'hoje',
+  1 => 'falta 1 dia',
+  > 1 => 'faltam $dias dias',
+  -1 => 'atrasada há 1 dia',
+  _ => 'atrasada há ${-dias} dias',
+};
+
+/// O selo do cartão da turma: `troca de módulo em 5 dias`, `troca de módulo
+/// hoje`, `troca de módulo atrasada há 3 dias`. Nulo fora do aviso.
+String? seloTroca(TurmaModular turma) {
+  final dias = turma.diasParaTroca;
+  if (!turma.trocaEmAviso || dias == null) return null;
+  return switch (dias) {
+    0 => 'troca de módulo hoje',
+    1 => 'troca de módulo amanhã',
+    > 1 => 'troca de módulo em $dias dias',
+    -1 => 'troca de módulo atrasada há 1 dia',
+    _ => 'troca de módulo atrasada há ${-dias} dias',
+  };
+}
+
+/// `2. Garde Manger → Carnes, Aves e Suínos` — o que fecha e o que abre. Sem
+/// próximo módulo, só o corrente.
+String rotuloTroca(TurmaModular turma) {
+  final atual = turma.moduloCorrenteRotulo ?? '—';
+  final proximo = turma.proximoModuloNome;
+  return proximo == null ? atual : '$atual → $proximo';
+}
+
+/// As turmas com troca de módulo **prevista**, da mais próxima para a mais
+/// distante — o painel "Próximas trocas de módulo" do Dashboard, que é o
+/// quadro "Troca de módulo" da planilha.
+///
+/// Turma sem módulo corrente ou sem previsão fica de fora: não há data a
+/// ordenar, e quem diz isso é a tela 5 ("sem previsão"). A ordem é total —
+/// dias, curso, turma — para a lista não se reordenar sozinha entre leituras.
+List<TurmaModular> proximasTrocas(Iterable<TurmaModular> turmas) =>
+    [
+      for (final t in turmas)
+        if (t.diasParaTroca != null && t.moduloCorrenteId != null) t,
+    ]..sort((a, b) {
+      final dias = a.diasParaTroca!.compareTo(b.diasParaTroca!);
+      if (dias != 0) return dias;
+      final curso = a.cursoNome.toLowerCase().compareTo(
+        b.cursoNome.toLowerCase(),
+      );
+      return curso != 0
+          ? curso
+          : a.nome.toLowerCase().compareTo(b.nome.toLowerCase());
+    });
+
+/// A pergunta da entrega, no diálogo de avanço, quando o próximo módulo é de
+/// outro livro (decisão do dono do produto, 10/11/2026: "trocar de módulo não
+/// significa trocar de livro" — a oferta só existe neste caso).
+String avisoTrocaDeLivro(TurmaModular turma) =>
+    'O próximo módulo, ${turma.proximoModuloNome}, é de outro livro: '
+    '${turma.proximoMaterialNome}.';
+
+/// O que o avanço de módulo fez, para a tela decidir como dizer (card 9.2,86).
+///
+/// Além de "avançou" ou "terminou", carrega o desfecho da entrega do livro,
+/// quando ela foi oferecida: quantos receberam e **quem não recebeu** — por
+/// falta de estoque ou por erro —, que é a informação que muda a próxima ação
+/// de quem avançou.
+@immutable
+class ResultadoAvanco {
+  const ResultadoAvanco({
+    required this.terminou,
+    this.entregues = 0,
+    this.naoEntregues = const [],
+  });
+
+  /// A turma fechou o último módulo do cronograma.
+  final bool terminou;
+
+  /// Alunos que receberam o livro do próximo módulo nesta operação.
+  final int entregues;
+
+  /// Nomes de quem estava marcado e **não** recebeu.
+  final List<String> naoEntregues;
+
+  bool get temFalhaDeEntrega => naoEntregues.isNotEmpty;
+
+  /// `Módulo avançado.` / `Módulo avançado. 8 livros entregues.`
+  String get confirmacao => entregues == 0
+      ? 'Módulo avançado.'
+      : 'Módulo avançado. ${plural(entregues, 'livro entregue', 'livros entregues')}.';
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +315,7 @@ class ModuloDaTurma {
     this.concluido = false,
     this.corrente = false,
     this.atrasado = false,
+    this.ciclo = 1,
   });
 
   factory ModuloDaTurma.deLinha(Map<String, dynamic> linha) => ModuloDaTurma(
@@ -157,6 +330,7 @@ class ModuloDaTurma {
     concluido: linha['concluido'] as bool? ?? false,
     corrente: linha['corrente'] as bool? ?? false,
     atrasado: linha['atrasado'] as bool? ?? false,
+    ciclo: (linha['ciclo'] as num?)?.toInt() ?? 1,
   );
 
   /// `turma_modular_modulo.id` — é o que a edição de datas atualiza.
@@ -174,6 +348,10 @@ class ModuloDaTurma {
   /// expressão de `fn_turma_modular_modulo_corrente`.
   final bool corrente;
   final bool atrasado;
+
+  /// A volta da turma a que esta linha pertence (card 9.2,88). As linhas dos
+  /// ciclos passados ficam: são o histórico de quando a turma deu cada módulo.
+  final int ciclo;
 
   bool get semDatas => dataInicio == null && prevConclusao == null;
 
@@ -295,10 +473,27 @@ Map<String, List<ModuloDaTurma>> agruparCronograma(
     (mapa[m.turmaId] ??= []).add(m);
   }
   for (final lista in mapa.values) {
-    lista.sort((a, b) => a.moduloOrdem.compareTo(b.moduloOrdem));
+    // Por (ciclo, ordem) — a mesma ordem com que o banco escolhe o corrente
+    // (card 9.2,88). Só por ordem, os módulos de dois ciclos se intercalam.
+    lista.sort((a, b) {
+      final ciclo = a.ciclo.compareTo(b.ciclo);
+      return ciclo != 0 ? ciclo : a.moduloOrdem.compareTo(b.moduloOrdem);
+    });
   }
   return mapa;
 }
+
+/// O ciclo que a tela mostra: o do módulo corrente e, sem corrente (turma
+/// anterior ao rodízio, com tudo concluído), o último que existe.
+int cicloVisivel(TurmaModular turma, List<ModuloDaTurma> linhas) =>
+    turma.moduloCorrenteCiclo ??
+    linhas.fold<int>(1, (maior, m) => m.ciclo > maior ? m.ciclo : maior);
+
+/// As linhas do cronograma de um ciclo só, na ordem do catálogo.
+List<ModuloDaTurma> linhasDoCiclo(List<ModuloDaTurma> linhas, int ciclo) => [
+  for (final m in linhas)
+    if (m.ciclo == ciclo) m,
+];
 
 // ---------------------------------------------------------------------------
 // Filtro — estado da tela, desligável e visível (design-system §5.3)
@@ -362,16 +557,15 @@ List<TurmaModular> ordenarTurmas(List<TurmaModular> turmas) => List.of(turmas)
 /// então aplica `data_conclusao + 1` com o passo médio da turma. Dizer aqui um
 /// número que o banco pode não usar seria a segunda conta que o card 2.3 §4.1
 /// proíbe.
-/// ⚠️ [faltantes] é o número de módulos do curso que **ainda não estão** no
-/// cronograma. Sem ele o diálogo anunciava o fim da turma olhando só o
-/// cronograma — e a tela mostrava, na mesma altura, um botão "Acrescentar 2
-/// módulo(s)" (item B2). A frase não pré-valida nada: o avanço continua
-/// permitido, e quem decide é `fn_turma_modular_avancar`.
+///
+/// [proximoDoRodizio] é o `proximo_modulo_nome` da view: o que o avanço abre
+/// quando o ciclo não tem linha seguinte — o módulo seguinte do catálogo ou,
+/// depois do último, o primeiro, num ciclo novo (card 9.2,90).
 List<String> resumoAvanco({
   required ModuloDaTurma? corrente,
   required ModuloDaTurma? proximo,
   required DateTime dataConclusao,
-  int faltantes = 0,
+  String? proximoDoRodizio,
 }) => [
   if (corrente != null)
     'Fecha ${rotuloModulo(corrente.moduloOrdem, corrente.moduloNome)} '
@@ -379,21 +573,22 @@ List<String> resumoAvanco({
   if (proximo != null)
     'Abre ${rotuloModulo(proximo.moduloOrdem, proximo.moduloNome)}'
         '${proximo.semDatas ? '' : ' (${proximo.periodo})'}.'
-  else if (faltantes > 0)
-    'Não há módulo seguinte no cronograma, mas o curso tem '
-        '${plural(faltantes, 'módulo fora dele', 'módulos fora dele')} — '
-        'acrescente-os antes de avançar, ou a turma passa a "turma terminou".'
+  // Card 9.2,90: a turma é cíclica. Sem linha seguinte no cronograma, o
+  // avanço traz o próximo módulo do rodízio — o seguinte do catálogo ou,
+  // depois do último, o primeiro, num ciclo novo. Quem o diz é a view
+  // (`proximo_modulo_nome`); a frase não promete datas.
+  else if (proximoDoRodizio != null)
+    'Abre $proximoDoRodizio — a turma segue em rodízio.'
   else
-    'Não há módulo seguinte no cronograma: a turma passa ao estado '
-        '"turma terminou".',
+    'A turma segue em rodízio: o próximo módulo abre com o avanço.',
 ];
 
 /// O aviso do avanço, que é a decisão do plano posta em uma linha: **a turma
 /// avança em conjunto**. Não existe avanço por aluno (card 2.2 §9), e quem
 /// entrar depois entra no módulo corrente.
 const avisoAvancoConjunto =
-    'A turma inteira avança junto: todos os alunos passam ao módulo seguinte '
-    'na mesma data. Não há avanço por aluno.';
+    'A turma inteira avança junto, na mesma data. Cada aluno ativo da turma '
+    'recebe o módulo que fechou; quem entrou para começar no próximo, não.';
 
 /// O aviso da turma sem cronograma (wireframe §8): sem datas, a projeção de
 /// demanda dela cai para a média do método.
@@ -404,8 +599,256 @@ const avisoSemCronograma =
 
 /// Turma cujo cronograma acabou — o estado "turma terminou" (wireframe §8).
 const avisoTurmaTerminou =
-    'Todos os módulos do cronograma foram concluídos. A turma continua na '
-    'lista: desative-a quando ela realmente encerrar.';
+    'Todos os módulos do cronograma foram concluídos e o ciclo seguinte ainda '
+    'não foi aberto. Abra o próximo ciclo para a turma continuar o rodízio, '
+    'ou desative-a se ela encerrou.';
+
+// ---------------------------------------------------------------------------
+// O progresso do aluno na turma em rodízio (card 9.2,90)
+// ---------------------------------------------------------------------------
+
+/// Uma linha de `v_aluno_modular_progresso` (card 9.2,88): o que o aluno já
+/// fez e quando conclui. **Tudo derivado no banco** — a sequência do aluno não
+/// é guardada, e nada aqui a recalcula.
+@immutable
+class ProgressoAlunoModular {
+  const ProgressoAlunoModular({
+    required this.alocacaoId,
+    required this.turmaId,
+    required this.alunoId,
+    this.moduloEntradaNome,
+    required this.modulosTotal,
+    required this.modulosFeitos,
+    this.proximoModuloId,
+    this.proximoModuloNome,
+    this.prevConclusao,
+    this.aguardandoEntrada = false,
+  });
+
+  factory ProgressoAlunoModular.deLinha(Map<String, dynamic> linha) =>
+      ProgressoAlunoModular(
+        alocacaoId: '${linha['alocacao_id']}',
+        turmaId: '${linha['turma_id']}',
+        alunoId: '${linha['aluno_id']}',
+        moduloEntradaNome: linha['modulo_entrada_nome'] as String?,
+        modulosTotal: (linha['modulos_total'] as num?)?.toInt() ?? 0,
+        modulosFeitos: (linha['modulos_feitos'] as num?)?.toInt() ?? 0,
+        proximoModuloId: linha['proximo_modulo_id'] == null
+            ? null
+            : '${linha['proximo_modulo_id']}',
+        proximoModuloNome: linha['proximo_modulo_nome'] as String?,
+        prevConclusao: _data(linha['prev_conclusao']),
+        aguardandoEntrada: linha['aguardando_entrada'] as bool? ?? false,
+      );
+
+  final String alocacaoId;
+  final String turmaId;
+  final String alunoId;
+
+  /// O módulo em que o aluno entrou. Nulo em alocação anterior ao rodízio.
+  final String? moduloEntradaNome;
+  final int modulosTotal;
+  final int modulosFeitos;
+
+  /// O próximo módulo **dele**, que pode não ser o da turma: quem ficou sem um
+  /// módulo só o refaz quando a turma voltar a ele.
+  final String? proximoModuloId;
+  final String? proximoModuloNome;
+
+  /// A data em que a turma termina o último módulo que lhe falta. Nula quando
+  /// a turma não tem data nenhuma.
+  final DateTime? prevConclusao;
+
+  /// Entrou para começar no PRÓXIMO módulo e ainda não começou: o módulo em
+  /// curso hoje não é dele.
+  final bool aguardandoEntrada;
+
+  /// `3 de 6 módulos`.
+  String get feitosTexto =>
+      '$modulosFeitos de ${plural(modulosTotal, 'módulo', 'módulos')}';
+}
+
+/// O que a linha do aluno diz do progresso dele: `entrou em Massas e Molhos ·
+/// 3 de 6 módulos · conclusão prevista 20/03/2027`. Só o que se sabe — sem
+/// módulo de entrada ou sem previsão, a parte some em vez de virar traço.
+String resumoProgresso(ProgressoAlunoModular p) => [
+  if (p.moduloEntradaNome != null) 'entrou em ${p.moduloEntradaNome}',
+  p.feitosTexto,
+  if (p.aguardandoEntrada)
+    'começa no próximo módulo'
+  else if (p.proximoModuloNome != null)
+    'falta ${p.proximoModuloNome}${p.modulosTotal - p.modulosFeitos > 1 ? ' e mais ${p.modulosTotal - p.modulosFeitos - 1}' : ''}',
+  if (p.prevConclusao != null)
+    'conclusão prevista ${formatarData(p.prevConclusao!)}',
+].join(' · ');
+
+/// `alocacao_id` → progresso.
+Map<String, ProgressoAlunoModular> progressoPorAlocacao(
+  Iterable<ProgressoAlunoModular> linhas,
+) => {for (final p in linhas) p.alocacaoId: p};
+
+/// As duas escolhas do módulo de entrada (card 9.2,88): o atual da turma — o
+/// padrão — ou o próximo, para quem entra perto de uma troca e não vai
+/// aproveitar o módulo em curso.
+const ajudaModuloEntrada =
+    'Quem começa no módulo atual o recebe quando a turma avançar. Quem entra '
+    'perto de uma troca pode começar no próximo — e fará o atual quando a '
+    'turma voltar a ele.';
 
 DateTime? _data(Object? valor) =>
     valor == null ? null : DateTime.parse('$valor');
+
+// ---------------------------------------------------------------------------
+// A sequência de módulos do aluno, na ficha (card 9.2,905)
+// ---------------------------------------------------------------------------
+
+/// Um módulo que o aluno **fez** — uma linha de `aluno_modulo` (card 9.2,88).
+/// A existência da linha é o fato: "a fazer" é a ausência dela.
+@immutable
+class ModuloFeito {
+  const ModuloFeito({
+    required this.moduloId,
+    required this.moduloNome,
+    required this.moduloOrdem,
+    required this.cursoNome,
+    required this.dataConclusao,
+    required this.origem,
+    this.observacao,
+  });
+
+  factory ModuloFeito.deLinha(Map<String, dynamic> linha) {
+    final modulo = linha['modulo'] as Map<String, dynamic>? ?? const {};
+    final curso = modulo['curso'] as Map<String, dynamic>? ?? const {};
+    return ModuloFeito(
+      moduloId: '${linha['modulo_id']}',
+      moduloNome: modulo['nome'] as String? ?? '—',
+      moduloOrdem: (modulo['ordem'] as num?)?.toInt() ?? 0,
+      cursoNome: curso['nome'] as String? ?? '',
+      dataConclusao: _data(linha['data_conclusao']) ?? DateTime(1970),
+      origem: '${linha['origem']}',
+      observacao: linha['observacao'] as String?,
+    );
+  }
+
+  final String moduloId;
+  final String moduloNome;
+  final int moduloOrdem;
+  final String cursoNome;
+  final DateTime dataConclusao;
+
+  /// `TURMA` (o avanço da turma gravou), `MANUAL` (lançado na ficha) ou
+  /// `IMPORTACAO`.
+  final String origem;
+  final String? observacao;
+}
+
+/// De onde veio o registro, em palavras de quem lê a ficha. Código que o app
+/// não conhece volta como veio — inventar rótulo esconderia a novidade.
+String rotuloOrigemModulo(String origem) => switch (origem) {
+  'TURMA' => 'com a turma',
+  'MANUAL' => 'lançado à mão',
+  'IMPORTACAO' => 'veio da planilha',
+  _ => origem,
+};
+
+/// `concluído em 10/10/2026 · com a turma`.
+String apoioModuloFeito(ModuloFeito m) => [
+  'concluído em ${formatarData(m.dataConclusao)}',
+  rotuloOrigemModulo(m.origem),
+  if ((m.observacao ?? '').trim().isNotEmpty) m.observacao!.trim(),
+].join(' · ');
+
+/// Um módulo que **falta** ao aluno — as linhas não feitas de
+/// `v_aluno_modular_modulo`, na ordem em que a turma os dará.
+@immutable
+class ModuloAFazer {
+  const ModuloAFazer({
+    required this.turmaId,
+    required this.moduloId,
+    required this.moduloNome,
+    required this.moduloOrdem,
+    required this.sequencia,
+    this.deEntrada = false,
+    this.dataPrevistaInicio,
+    this.dataPrevistaFim,
+  });
+
+  factory ModuloAFazer.deLinha(Map<String, dynamic> linha) => ModuloAFazer(
+    turmaId: '${linha['turma_id']}',
+    moduloId: '${linha['modulo_id']}',
+    moduloNome: '${linha['modulo_nome']}',
+    moduloOrdem: (linha['modulo_ordem'] as num?)?.toInt() ?? 0,
+    sequencia: (linha['sequencia'] as num?)?.toInt() ?? 0,
+    deEntrada: linha['de_entrada'] as bool? ?? false,
+    dataPrevistaInicio: _data(linha['data_prevista_inicio']),
+    dataPrevistaFim: _data(linha['data_prevista_fim']),
+  );
+
+  final String turmaId;
+  final String moduloId;
+  final String moduloNome;
+  final int moduloOrdem;
+
+  /// A ordem de leitura da view — a ordem em que a turma dará os módulos.
+  final int sequencia;
+
+  /// É o módulo em que o aluno entrou na turma.
+  final bool deEntrada;
+  final DateTime? dataPrevistaInicio;
+  final DateTime? dataPrevistaFim;
+}
+
+/// `previsto 11/10/2026 a 20/11/2026`; sem data, `sem data prevista` — a turma
+/// não tem datas de onde a agenda possa sair.
+String apoioModuloAFazer(ModuloAFazer m) {
+  final inicio = m.dataPrevistaInicio;
+  final fim = m.dataPrevistaFim;
+  final quando = inicio == null && fim == null
+      ? 'sem data prevista'
+      : inicio != null && fim != null
+      ? 'previsto ${formatarData(inicio)} a ${formatarData(fim)}'
+      : 'previsto ${formatarData((inicio ?? fim)!)}';
+  return [quando, if (m.deEntrada) 'módulo de entrada'].join(' · ');
+}
+
+/// A previsão de conclusão **calculada** do aluno em turma Modular (decisão D2
+/// do card 9.2,87): a maior entre as turmas em que ele está. Devolve
+/// `(emTurma, data)` — em turma e sem data é "a turma não tem datas", que não
+/// é a mesma coisa que não estar em turma.
+({bool emTurma, DateTime? data}) previsaoCalculada(
+  Iterable<ProgressoAlunoModular> progresso,
+  String alunoId,
+) {
+  var emTurma = false;
+  DateTime? data;
+  for (final p in progresso) {
+    if (p.alunoId != alunoId) continue;
+    emTurma = true;
+    final prev = p.prevConclusao;
+    if (prev != null && (data == null || prev.isAfter(data))) data = prev;
+  }
+  return (emTurma: emTurma, data: data);
+}
+
+/// A previsão de conclusão que a ficha **mostra** (decisão D2): em turma
+/// Modular, a calculada — mesmo quando ela é nula, porque a digitada deixou de
+/// ser lida para esse aluno; fora de turma, a digitada.
+({DateTime? data, bool calculada}) previsaoQueVale({
+  required String? alunoId,
+  required DateTime? digitada,
+  required Iterable<ProgressoAlunoModular> progresso,
+}) {
+  if (alunoId != null) {
+    final c = previsaoCalculada(progresso, alunoId);
+    if (c.emTurma) return (data: c.data, calculada: true);
+  }
+  return (data: digitada, calculada: false);
+}
+
+/// O que a ficha diz no lugar do campo editável (decisão D2).
+const previsaoCalculadaAjuda =
+    'Calculada pela agenda da turma Modular: é a data em que a turma termina o '
+    'último módulo que falta ao aluno. Não se edita aqui — muda quando as '
+    'datas da turma mudam.';
+
+const previsaoCalculadaSemData = 'sem previsão — a turma ainda não tem datas';

@@ -19,7 +19,9 @@ import '../../widgets/confirmacao.dart';
 import '../../widgets/estados.dart';
 import '../../widgets/formulario.dart';
 import '../../widgets/painel_detalhe.dart';
+import '../../turmas/modular_provider.dart';
 import '../turmas/formularios_alocacao.dart';
+import 'secao_modulos.dart';
 
 /// Aba **Turmas** da ficha do aluno (docs/wireframes.md §6.4), card 5.7.
 ///
@@ -65,6 +67,12 @@ class AbaTurmas extends ConsumerWidget {
               const <VinculoTurma>[])
         if (v.modular) v,
     ];
+    // A seção de módulos é do aluno do método Modular — com ou sem turma: o
+    // que ele já estudou não some quando ele sai da turma (card 9.2,905). Com
+    // o catálogo ainda carregando vale o vínculo, que diz a mesma coisa.
+    final metodoModular = (ref.watch(metodosProvider).value ?? const <Metodo>[])
+        .any((m) => m.id == aluno.metodoId && m.modular);
+    final mostraModulos = metodoModular || modulares.isNotEmpty;
 
     return ListView(
       padding: const EdgeInsets.all(Dim.e16),
@@ -92,10 +100,14 @@ class AbaTurmas extends ConsumerWidget {
           const TituloSecao(
             texto: 'Turma Modular',
             apoio:
-                'A turma avança pelos módulos em conjunto. Entrar e sair dela '
-                'se faz na tela Turmas Modular.',
+                'A turma segue pelos módulos em rodízio, todos juntos. Entrar e '
+                'sair dela se faz na tela Turmas Modular.',
           ),
           _Modulares(vinculos: modulares),
+        ],
+        if (mostraModulos) ...[
+          const SizedBox(height: Dim.e24),
+          SecaoModulosDoAluno(aluno: aluno),
         ],
         const SizedBox(height: Dim.e24),
         _SituacaoRep(aluno: aluno),
@@ -313,14 +325,18 @@ class _Blocos extends ConsumerWidget {
 /// As turmas Modular do aluno (card 9.2,6): nome, desde quando e, se for o
 /// caso, que a turma foi desativada. Sem ação aqui — admitir e remover passam
 /// pela capacidade da turma e moram na tela 5 (card 7.3).
-class _Modulares extends StatelessWidget {
+class _Modulares extends ConsumerWidget {
   const _Modulares({required this.vinculos});
 
   final List<VinculoTurma> vinculos;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cores = Theme.of(context).colorScheme;
+    // Card 9.2,905: por onde entrou e quantos módulos fez, da mesma view que
+    // a tela Turmas Modular lê. Sem a linha (leitura a caminho, alocação que
+    // a view não devolve) fica só o "desde", como antes.
+    final progresso = ref.watch(progressoPorAlocacaoProvider);
     final orfa = vinculos.any((v) => !v.turmaAtiva);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -335,9 +351,12 @@ class _Modulares extends StatelessWidget {
                   style: Tipografia.apoio.copyWith(color: cores.error),
                 ),
             ],
-            apoio: v.dataEntrada == null
-                ? ''
-                : 'na turma desde ${formatarData(v.dataEntrada!)}',
+            apoio: [
+              if (v.dataEntrada != null)
+                'na turma desde ${formatarData(v.dataEntrada!)}',
+              if (progresso[v.alocacaoId] != null)
+                resumoProgressoNaFicha(progresso[v.alocacaoId]!),
+            ].join(' · '),
           ),
         if (orfa) ...[
           const SizedBox(height: Dim.e8),

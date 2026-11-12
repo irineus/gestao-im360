@@ -55,7 +55,7 @@ const textoImportacaoRelatorioCarregando = 'O relatório ainda está carregando.
 /// O rótulo de cada código de ocorrência, para o resumo por código do passo 3
 /// (item E2: o §16 desenha "265 alunos lidos · 20 sem turma · 2 códigos
 /// divergentes", e um resumo por código é o que o 9.3 quer ver primeiro). A
-/// lista é a das dezesseis verificações de `docs/importacao.md` §5; código que
+/// lista é a das dezenove verificações de `docs/importacao.md` §4; código que
 /// a tela não conhece aparece como está, porque esconder seria pior.
 String rotuloCodigoOcorrencia(String codigo) => switch (codigo) {
   'ENTIDADE_INVALIDA' => 'Entidade em formato inválido',
@@ -75,6 +75,10 @@ String rotuloCodigoOcorrencia(String codigo) => switch (codigo) {
   'PC_SEM_MANUTENCAO' => 'PC em manutenção sem registro',
   'SAIDA_SEM_ALUNO' => 'Saída de estoque sem aluno',
   'STATUS_DIVERGENTE' => 'Status divergente do sistema',
+  // Card 9.2,91 — a turma em rodízio no arquivo (V18 e V19).
+  'MODULO_DATA_FUTURA' => 'Módulo feito com data futura',
+  'ENTRADA_SEM_MODULO_FEITO' =>
+    'Entrou fora do módulo em curso, sem módulo feito',
   _ => codigo,
 };
 

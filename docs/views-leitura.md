@@ -219,6 +219,11 @@ comment on view public.v_estoque_atual is
 
 ### 5.1 `v_demanda_imediata_aluno` — card 6.4
 
+> ⚠️ **Desde o card 9.2,886 (12/11/2026)** o "próximo livro" não é mais a menor `ordem` pendente:
+> é o `seq = 1` de `v_aluno_material_sequencia`, que para o aluno em turma Modular segue os módulos
+> que lhe faltam (`docs/turma-rodizio.md` §10.8). Para os outros a regra é a mesma de antes. O SQL
+> abaixo é o da criação; a definição em vigor está na migração `20261112120000_proximo_livro_modular.sql`.
+
 Detalhe primeiro, agregado depois: a tela de projeção (7.8) pede *drill-down* por aluno, e ter duas
 consultas independentes para o total e para o detalhe é como o total e o detalhe passam a divergir.
 
@@ -509,6 +514,12 @@ select b.unidade_id,
 
 ### 7.2 `v_turma_modular_lotacao` — ~~cards 7.4 e 5.9~~ **card 7.3** (05/09/2026)
 
+> **Card 9.2,85 (10/11/2026) — oito colunas novas no fim, para o aviso de troca de módulo:**
+> `modulo_corrente_cronograma_id`, `proximo_modulo_id`, `proximo_modulo_nome`, `proximo_material_id`,
+> `proximo_material_nome`, `troca_de_livro`, `dias_para_troca` e `situacao_troca`. O SQL vigente é o
+> de `20261110120000_aviso_troca_modulo.sql` §4, e a fonte das regras é `docs/aviso-troca-modulo.md`
+> §2.1. ⚠️ `modulo_atrasado` **não mudou**: `situacao_troca` tem borda própria (vermelho já no dia).
+
 > ⚠️ **A view NÃO expõe `data_inicio` da turma, e é por isso que a tela 5 não deixa editá-la**
 > (card 8.1,5, 05/09/2026, item A2). O defeito corrigido lá era o oposto do que parece: o `update`
 > reenviava `data_inicio = hoje` e **toda** edição da turma — renomear, mudar capacidade,
@@ -562,8 +573,10 @@ select t.unidade_id,
 
 O módulo corrente vem de `modulo.ordem` por join, não de coluna em `turma_modular_modulo` — é a
 regra que o card 2.2 fixou em §9 (o cronograma da turma herda a sequência do catálogo). Turma com
-todos os módulos concluídos aparece com `modulo_corrente_id` nulo, que é o estado "turma terminou",
-e não some da lotação.
+todos os módulos concluídos aparece com `modulo_corrente_id` nulo e não some da lotação. ⚠️ Desde o
+card 9.2,88 esse estado só existe para a turma **anterior ao rodízio**: o avanço do último módulo
+abre o ciclo seguinte sozinho, e a saída da que ficou sem corrente é `fn_turma_modular_abrir_ciclo`
+(`docs/turma-rodizio.md` §4.2 e §10.4).
 
 ---
 

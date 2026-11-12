@@ -7,6 +7,7 @@ import '../../catalogo/catalogo_provider.dart';
 import '../../erros/erro_app.dart';
 import '../../rotas/rotas.dart';
 import '../../sessao/sessao_provider.dart';
+import '../../theme/cores.dart';
 import '../../theme/dimensoes.dart';
 import '../../theme/tipografia.dart';
 import '../../turmas/modular.dart';
@@ -345,37 +346,47 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
     }
   }
 
-  Future<void> _avancar(
-    List<ModuloDaTurma> cronograma,
-    List<Modulo> faltantes,
-  ) async {
-    final resultado = await mostrarFormulario<String>(
+  Future<void> _avancar(List<ModuloDaTurma> cronograma) async {
+    final resultado = await mostrarFormulario<ResultadoAvanco>(
       context,
-      construtor: (_) => FormularioAvancarModulo(
-        turma: widget.turma,
-        cronograma: cronograma,
-        // Sem isto o diálogo anunciava o fim da turma tendo módulos do curso
-        // ainda fora do cronograma, ao lado de um botão "Acrescentar 2
-        // módulo(s)" (item B2).
-        faltantes: faltantes.length,
-      ),
+      construtor: (_) =>
+          FormularioAvancarModulo(turma: widget.turma, cronograma: cronograma),
     );
     if (!mounted || resultado == null) return;
     // Resultado que muda o que a pessoa fará em seguida é **diálogo**, nunca
     // snackbar (design-system §5.8): "a turma terminou" some antes de ser lido,
     // e é a informação que decide se ainda há o que avançar.
-    if (resultado == 'terminou') {
+    // O livro que não saiu também é diálogo, pela mesma razão: quem avançou
+    // precisa saber QUEM ficou sem, e isso não cabe num aviso que some.
+    if (resultado.temFalhaDeEntrega) {
+      await mostrarEntregasPendentes(context, resultado: resultado);
+      if (!mounted) return;
+    }
+    if (resultado.terminou) {
       await mostrarResultadoAvanco(context, turma: widget.turma);
-    } else {
-      confirmarEfemero(context, 'Módulo avançado.');
+    } else if (!resultado.temFalhaDeEntrega) {
+      confirmarEfemero(context, resultado.confirmacao);
     }
   }
 
-  Future<void> _montarCronograma(List<Modulo> faltantes) async {
+  Future<void> _abrirCiclo() async {
     final resultado = await mostrarFormulario<String>(
       context,
-      construtor: (_) =>
-          FormularioMontarCronograma(turma: widget.turma, faltantes: faltantes),
+      construtor: (_) => FormularioAbrirCiclo(turma: widget.turma),
+    );
+    if (resultado != null && mounted) {
+      confirmarEfemero(context, 'Próximo ciclo aberto.');
+    }
+  }
+
+  Future<void> _montarCronograma(List<Modulo> faltantes, int ciclo) async {
+    final resultado = await mostrarFormulario<String>(
+      context,
+      construtor: (_) => FormularioMontarCronograma(
+        turma: widget.turma,
+        faltantes: faltantes,
+        ciclo: ciclo,
+      ),
     );
     if (resultado != null && mounted) {
       confirmarEfemero(context, 'Cronograma atualizado.');
@@ -397,17 +408,31 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
     final estadoCronograma = _estadoDe([asyncCronograma, asyncModulos]);
     final pronto = estadoCronograma == _EstadoCronograma.pronto;
 
-    final cronograma = pronto
+    // Card 9.2,90: a turma é cíclica, e a tela mostra UM ciclo — o do módulo
+    // corrente. As linhas dos ciclos passados continuam no banco, como
+    // histórico; listá-las todas aqui poria cada módulo duas, três vezes.
+    final todosOsCiclos = pronto
         ? (ref.watch(cronogramaPorTurmaProvider)[turma.id] ??
               const <ModuloDaTurma>[])
         : const <ModuloDaTurma>[];
+    final ciclo = cicloVisivel(turma, todosOsCiclos);
+    final cronograma = linhasDoCiclo(todosOsCiclos, ciclo);
     final modulosDoCurso = pronto
         ? (asyncModulos.value ?? const <Modulo>[])
         : const <Modulo>[];
     final noCronograma = modulosNoCronograma(cronograma);
+    // ⚠️ Com módulo corrente, só falta o que vem DEPOIS dele no catálogo. O de
+    // ordem menor pertence ao ciclo seguinte, que o avanço abre sozinho:
+    // acrescentá-lo a este ciclo, não concluído, faria dele o corrente e a
+    // turma voltaria atrás (card 9.2,90 — é a mesma regra do passo 5 de
+    // `fn_turma_modular_avancar`).
+    final ordemCorrente = turma.moduloCorrenteOrdem;
     final faltantes = [
       for (final m in modulosDoCurso)
-        if (m.id != null && !noCronograma.contains(m.id)) m,
+        if (m.id != null &&
+            !noCronograma.contains(m.id) &&
+            (ordemCorrente == null || m.ordem > ordemCorrente))
+          m,
     ];
 
     final subtitulo = [
@@ -458,10 +483,36 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
                                       texto: 'lotada',
                                       icone: Icons.group_outlined,
                                     ),
-                                  if (turma.moduloAtrasado)
+                                  // Card 9.2,86: o aviso de troca de módulo
+                                  // diz QUANTO falta, e por isso toma o
+                                  // lugar do selo "módulo atrasado" quando
+                                  // existe — os dois juntos diriam a mesma
+                                  // coisa duas vezes.
+                                  if (seloTroca(turma) case final selo?)
+                                    _Selo(
+                                      texto: selo,
+                                      icone:
+                                          turma.situacaoTroca ==
+                                              SituacaoTroca.hojeOuVencida
+                                          ? Icons.error_outline
+                                          : Icons.schedule_outlined,
+                                      erro:
+                                          turma.situacaoTroca ==
+                                          SituacaoTroca.hojeOuVencida,
+                                      atencao:
+                                          turma.situacaoTroca ==
+                                          SituacaoTroca.proxima,
+                                    )
+                                  else if (turma.moduloAtrasado)
                                     const _Selo(
                                       texto: 'módulo atrasado',
                                       icone: Icons.schedule_outlined,
+                                    ),
+                                  if (turma.trocaEmAviso &&
+                                      (turma.trocaDeLivro ?? false))
+                                    const _Selo(
+                                      texto: 'troca de livro',
+                                      icone: Icons.menu_book_outlined,
                                     ),
                                 ],
                               ),
@@ -530,8 +581,9 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
                     turma: turma,
                     estado: estadoCronograma,
                     linhas: cronograma,
+                    ciclo: ciclo,
                     faltantes: faltantes,
-                    aoMontar: () => _montarCronograma(faltantes),
+                    aoMontar: () => _montarCronograma(faltantes, ciclo),
                     aoRepetir: ref
                         .read(versaoModularProvider.notifier)
                         .incrementar,
@@ -563,10 +615,22 @@ class _CartaoTurmaModularState extends ConsumerState<CartaoTurmaModular> {
                               : turma.semModuloCorrente
                               ? const DesabilitadoCom(
                                   'Todos os módulos do cronograma já foram '
-                                  'concluídos.',
+                                  'concluídos. Abra o próximo ciclo.',
                                 )
                               : null,
-                          aoTocar: () => _avancar(cronograma, faltantes),
+                          aoTocar: () => _avancar(cronograma),
+                        ),
+                      // Card 9.2,90: turma anterior ao rodízio, com tudo
+                      // concluído e sem ciclo seguinte. A turma em rodízio
+                      // nunca chega aqui — o avanço abre o ciclo sozinho.
+                      if (pronto &&
+                          cronograma.isNotEmpty &&
+                          turma.semModuloCorrente)
+                        BotaoAcao(
+                          rotulo: 'Abrir próximo ciclo',
+                          icone: Icons.replay,
+                          exigePermissao: 'turmas.editar',
+                          aoTocar: _abrirCiclo,
                         ),
                       BotaoAcao(
                         rotulo: 'Adicionar aluno',
@@ -612,7 +676,7 @@ String _resumoModulo(
   }
   if (semCronograma) return 'Sem cronograma de módulos';
   final rotulo = turma.moduloCorrenteRotulo;
-  if (rotulo == null) return 'Turma terminou — todos os módulos concluídos';
+  if (rotulo == null) return 'Módulos concluídos — abra o próximo ciclo';
   final prev = turma.moduloCorrentePrevConclusao;
   final periodo = prev == null
       ? 'sem previsão'
@@ -631,22 +695,41 @@ String avisoAcimaCapacidadeTurma(int alocados, int capacidade) =>
 /// vocabulário próprio (status do aluno, tipo na turma) e misturá-los aqui
 /// quebraria a regra do card 1.9 §6.
 class _Selo extends StatelessWidget {
-  const _Selo({required this.texto, required this.icone, this.erro = false});
+  const _Selo({
+    required this.texto,
+    required this.icone,
+    this.erro = false,
+    this.atencao = false,
+  });
 
   final String texto;
   final IconData icone;
   final bool erro;
 
+  /// Âmbar — a troca de módulo que se aproxima (card 9.2,86).
+  final bool atencao;
+
   @override
   Widget build(BuildContext context) {
-    final cores = Theme.of(context).colorScheme;
-    final cor = erro ? cores.error : cores.onSurfaceVariant;
+    final tema = Theme.of(context);
+    final cores = tema.colorScheme;
+    final cor = erro
+        ? cores.error
+        : atencao
+        ? (tema.brightness == Brightness.dark
+              ? Cores.atencaoEscuro
+              : Cores.atencao)
+        : cores.onSurfaceVariant;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icone, size: 16, color: cor),
         const SizedBox(width: Dim.e4),
-        Text(texto, style: Tipografia.apoio.copyWith(color: cor)),
+        // `Flexible`: o selo da troca de módulo é longo ("troca de módulo
+        // atrasada há 12 dias") e em 390 px estourava a linha (card 9.2,86).
+        Flexible(
+          child: Text(texto, style: Tipografia.apoio.copyWith(color: cor)),
+        ),
       ],
     );
   }
@@ -669,11 +752,15 @@ class _Cronograma extends ConsumerWidget {
     required this.faltantes,
     required this.aoMontar,
     required this.aoRepetir,
+    this.ciclo = 1,
   });
 
   final TurmaModular turma;
   final _EstadoCronograma estado;
   final List<ModuloDaTurma> linhas;
+
+  /// A volta da turma que a região mostra (card 9.2,90).
+  final int ciclo;
   final List<Modulo> faltantes;
   final VoidCallback aoMontar;
   final VoidCallback aoRepetir;
@@ -703,9 +790,14 @@ class _Cronograma extends ConsumerWidget {
       children: [
         TituloSecao(
           texto: 'Cronograma',
+          // O ciclo só é dito a partir do segundo: na primeira volta ele não
+          // informa nada, e "ciclo 1" numa turma nova parece jargão.
           apoio: linhas.isEmpty
               ? 'nenhum módulo'
-              : plural(linhas.length, 'módulo', 'módulos'),
+              : [
+                  if (ciclo > 1) 'ciclo $ciclo',
+                  plural(linhas.length, 'módulo', 'módulos'),
+                ].join(' · '),
         ),
         if (linhas.isEmpty)
           Padding(
@@ -775,9 +867,27 @@ class _LinhaModulo extends StatelessWidget {
         'a fazer',
       ),
     };
-    final apoio = modulo.atrasado
+    // Card 9.2,86: o módulo CORRENTE diz quanto falta para a troca, com a cor
+    // da situação da turma — que é da view de lotação, e não uma segunda
+    // conta por linha (card 9.2,85).
+    final dias = turma.diasParaTroca;
+    final emAviso = modulo.corrente && turma.trocaEmAviso && dias != null;
+    final vermelho = emAviso
+        ? turma.situacaoTroca == SituacaoTroca.hojeOuVencida
+        : modulo.atrasado;
+    final apoio = emAviso
+        ? '${modulo.periodo} · troca: ${rotuloDiasParaTroca(dias)}'
+        : modulo.atrasado
         ? '${modulo.periodo} · atrasado'
         : '${modulo.periodo} · $estado';
+    final tema = Theme.of(context);
+    final corApoio = vermelho
+        ? cores.error
+        : emAviso
+        ? (tema.brightness == Brightness.dark
+              ? Cores.atencaoEscuro
+              : Cores.atencao)
+        : cores.onSurfaceVariant;
 
     final conteudo = Padding(
       padding: const EdgeInsets.symmetric(vertical: Dim.e4),
@@ -795,11 +905,8 @@ class _LinhaModulo extends StatelessWidget {
                 ),
                 Text(
                   apoio,
-                  style: Tipografia.numero(Tipografia.apoio).copyWith(
-                    color: modulo.atrasado
-                        ? cores.error
-                        : cores.onSurfaceVariant,
-                  ),
+                  style: Tipografia.numero(Tipografia.apoio)
+                      .copyWith(color: corApoio),
                 ),
               ],
             ),
@@ -982,12 +1089,20 @@ class _LinhaAlunoModular extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cores = Theme.of(context).colorScheme;
+    // Card 9.2,90: o progresso do aluno na turma em rodízio — o equivalente
+    // às colunas de módulo da aba de turma da planilha. Vem do banco
+    // (`v_aluno_modular_progresso`); enquanto não chega, a linha diz só o que
+    // já sabe, e não um "0 de 0".
+    final progresso = aluno.ativo
+        ? ref.watch(progressoPorAlocacaoProvider)[aluno.alocacaoId]
+        : null;
     final apoio = <String>[
       if (aluno.codigoSgf != null) aluno.codigoSgf!,
       if (aluno.ativo)
         'desde ${formatarData(aluno.dataEntrada)}'
       else
         'saiu${aluno.motivoSaida == null ? '' : ' — ${aluno.motivoSaida}'}',
+      if (progresso != null) resumoProgresso(progresso),
     ];
 
     return LinhaTurma(
@@ -1108,24 +1223,62 @@ class DialogoTurmasInativas extends ConsumerWidget {
   }
 }
 
-/// O avanço que fechou o **último** módulo: a turma terminou.
+/// O avanço que fechou o último módulo **sem abrir o seguinte**.
+///
+/// Desde o card 9.2,88 isso não é o caminho normal — a turma é cíclica, e o
+/// avanço abre o ciclo seguinte sozinho. O diálogo fica para o caso em que o
+/// banco não devolve módulo nenhum (curso sem módulos, por exemplo).
 ///
 /// Diálogo, e não confirmação efêmera (design-system §5.8): é o resultado que
-/// muda a próxima ação de quem avançou — não há mais módulo, e o que resta é
-/// decidir o que fazer com a turma.
+/// muda a próxima ação de quem avançou.
 Future<void> mostrarResultadoAvanco(
   BuildContext context, {
   required TurmaModular turma,
 }) => showDialog<void>(
   context: context,
   builder: (contexto) => AlertDialog(
-    title: const Text('Turma terminou'),
+    title: const Text('Ciclo concluído'),
     content: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
       child: Text(
-        '${turma.nome} concluiu o último módulo do cronograma. A turma '
-        'continua na lista: desative-a quando ela realmente encerrar, ou '
-        'acrescente módulos ao cronograma.',
+        '${turma.nome} concluiu o último módulo do cronograma e o ciclo '
+        'seguinte não abriu sozinho. Use "Abrir próximo ciclo" para a turma '
+        'continuar o rodízio.',
+        style: Tipografia.corpo,
+      ),
+    ),
+    actions: [
+      FilledButton(
+        onPressed: () => Navigator.of(contexto).pop(),
+        child: const Text('Entendi'),
+      ),
+    ],
+  ),
+);
+
+/// O avanço aconteceu, e parte dos livros **não** saiu (card 9.2,86).
+///
+/// Diálogo, e não confirmação efêmera (design-system §5.8): o módulo avançou e
+/// isso não se desfaz, mas há aluno sem o livro do módulo que começa — e o
+/// caminho para resolver é a ficha dele.
+Future<void> mostrarEntregasPendentes(
+  BuildContext context, {
+  required ResultadoAvanco resultado,
+}) => showDialog<void>(
+  context: context,
+  builder: (contexto) => AlertDialog(
+    title: const Text('Módulo avançado — há livro por entregar'),
+    content: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: Text(
+        [
+          if (resultado.entregues > 0)
+            '${plural(resultado.entregues, 'livro foi entregue', 'livros foram entregues')}.',
+          'Não foi possível entregar para: '
+              '${resultado.naoEntregues.join(', ')}. '
+              'Confira o estoque e registre a entrega pela ficha do aluno, na '
+              'aba Trilha.',
+        ].join(' '),
         style: Tipografia.corpo,
       ),
     ),

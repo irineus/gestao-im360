@@ -300,6 +300,14 @@ quatro degraus contaria a aceleração duas vezes.
 
 ### 5.4 `MODULAR`
 
+> ⚠️ **Substituído em 11/11/2026 pelo card 9.2,89** (turma em rodízio, `docs/turma-rodizio.md` §6 e
+> §10.3). O livro passou a ser necessário quando a turma entra no **primeiro módulo, dos que faltam
+> ao aluno**, daquele livro — por **aluno**, e não mais por turma: em rodízio cada aluno está numa
+> altura diferente da volta. As três regras de data abaixo continuam valendo, mas moram em
+> `fn_turma_modular_agenda` (card 9.2,88), a única definição de quando a turma dará cada módulo; a
+> view lê `v_aluno_modular_agenda` e não extrapola mais nada. O texto abaixo fica como registro da
+> regra anterior.
+
 O livro do aluno Modular é necessário quando a turma entra no **primeiro módulo daquele livro**
 (plano §6). O cronograma é `turma_modular_modulo`, e **a ordem vem de `modulo.ordem`**, não da
 tabela do cronograma (card 2.2 §9).

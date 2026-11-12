@@ -413,22 +413,41 @@ select is(
   to_char(public.fn_hoje() + 31, 'DD/MM/YYYY'),
   'a previsao do proximo usa o passo APRENDIDO com os modulos ja datados');
 
--- Avançar o último módulo devolve NULO: é o estado "turma terminou", e não um
--- erro. A turma continua ativa e continua aparecendo na lotação do card 7.4.
+-- ⚠️ Card 9.2,88 — a turma é CÍCLICA. Até aqui avançar o último módulo
+--    devolvia NULO ("a turma terminou"); em rodízio ele abre o ciclo seguinte e
+--    devolve o PRIMEIRO módulo do curso. O detalhe do rodízio é do teste 105.
+-- Em tabela, como o avanço anterior: função volátil no `where` seria chamada
+-- uma vez por linha de `modulo`, e a turma avançaria três vezes.
+create temporary table t_avanco_ultimo as
+select public.fn_turma_modular_avancar((select turma_a from t_ids),
+                                       public.fn_hoje() + 31) as novo;
+
 select is(
-  public.fn_turma_modular_avancar((select turma_a from t_ids), public.fn_hoje() + 31),
-  null,
-  'avancar o ULTIMO modulo devolve NULO — a turma terminou');
+  (select m.nome from public.modulo m
+    where m.id = (select novo from t_avanco_ultimo)),
+  'Módulo 1 — Comandos elétricos',
+  'avancar o ULTIMO modulo abre o ciclo seguinte e devolve o PRIMEIRO modulo (card 9.2,88)');
 
 reset role;
+
+-- `TURMA_SEM_MODULO_CORRENTE` sobrou só para a turma ANTERIOR ao rodízio: a que
+-- concluiu todos os módulos sem ciclo seguinte aberto. O estado é montado à
+-- mão, como dono — nenhuma função o produz mais.
+update public.turma_modular_modulo
+   set concluido = true
+ where turma_id = (select id from public.turma_modular
+                    where unidade_id = tests.unidade('ESCOLA_A')
+                      and nome = 'Eletricista Individual 2026');
 
 select is(
   tests.codigo_do_erro(
     format($$select public.fn_turma_modular_avancar(%L::uuid)$$,
-           (select turma_a from t_ids)),
+           (select id from public.turma_modular
+             where unidade_id = tests.unidade('ESCOLA_A')
+               and nome = 'Eletricista Individual 2026')),
     tests.uid('direcao@escola-a.test')),
   'TURMA_SEM_MODULO_CORRENTE',
-  'avancar turma ja terminada e erro, com codigo proprio');
+  'turma anterior ao rodizio, com tudo concluido, tem codigo proprio — a saida e abrir o ciclo');
 
 reset role;
 
@@ -468,8 +487,9 @@ select is(
 reset role;
 
 -- «A turma avança em conjunto — não existe avanço por aluno» (card 2.2 §9): o
--- avanço não pode ter tocado em `turma_modular_aluno`. Eduarda continua lá, com
--- a mesma data de entrada.
+-- avanço não tirou ninguém da turma. Eduarda continua lá, com a mesma data de
+-- entrada — fez os módulos 2 e 3 e ainda lhe falta o 1 (card 9.2,88: o que é
+-- por aluno é o REGISTRO do que ele fez, não o avanço).
 select is(
   (select format('%s aluno(s) ativo(s), entrada %s',
                  count(*) filter (where ta.ativo),
@@ -477,7 +497,7 @@ select is(
      from public.turma_modular_aluno ta
     where ta.turma_id = (select turma_a from t_ids) and ta.ativo),
   format('1 aluno(s) ativo(s), entrada %s', to_char(public.fn_hoje() - 60, 'DD/MM/YYYY')),
-  'o avanco e da TURMA: nada em turma_modular_aluno se moveu');
+  'o avanco e da TURMA: a aluna continua na turma, com a mesma data de entrada');
 
 -- ===========================================================================
 -- 5. A desalocação sem ator grava o motivo — a coluna deste card
@@ -534,6 +554,8 @@ select is(
      from public.turma_modular_modulo tm
      join public.modulo m on m.id = tm.modulo_id
     where tm.turma_id = (select turma_a from t_ids)
+      -- card 9.2,88: o avanço da seção 4 abriu o ciclo 2; a junta é por ciclo
+      and tm.ciclo = 1
       and m.material_id in (select am.material_id from public.aluno_material am
                              where am.aluno_id = (select eduarda from t_ids))),
   '3 modulo(s) sobre 2 livro(s)',

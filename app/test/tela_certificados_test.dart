@@ -88,6 +88,33 @@ void main() {
       expect(find.text(rotuloSituacao(situacaoFim)), findsNWidgets(2));
     });
 
+    testWidgets('o aluno MODULAR no último módulo aparece assim, e não como '
+        '"último livro" (card 9.2,905)', (tester) async {
+      certificados.fila_ = [
+        ...certificados.fila_,
+        const LinhaFilaCertificado(
+          alunoId: 'aluno-mod',
+          alunoNome: 'Eduarda Lima',
+          codigoSgf: '3005',
+          alunoStatus: 'ATIVO',
+          metodoId: 'm-mod',
+          metodoNome: 'Modular',
+          metodoCodigo: 'MODULAR',
+          situacao: situacaoUltimoLivro,
+          itensPendentes: 1,
+        ),
+      ];
+      await montar(tester);
+
+      expect(find.text('Último módulo'), findsOneWidget);
+      expect(find.text('Último livro'), findsOneWidget, reason: 'a Ana');
+
+      // No celular o rótulo vai no subtítulo do cartão.
+      await montar(tester, tamanho: const Size(390, 844));
+      expect(tester.takeException(), isNull);
+      expect(find.text('Último módulo · Modular'), findsOneWidget);
+    });
+
     testWidgets('FIM vem na frente da fila, e o mais antigo primeiro', (
       tester,
     ) async {

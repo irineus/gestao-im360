@@ -103,6 +103,41 @@ void main() {
       );
     });
 
+    test('para o aluno MODULAR, ULTIMO_LIVRO lê-se "Último módulo"', () {
+      // Card 9.2,905 (decisão D1 do 9.2,87): no Modular a fila conta módulos —
+      // o último livro é entregue meses antes do fim do curso, e chamá-lo de
+      // "último livro" diria que o aluno está a um livro de sair.
+      expect(
+        rotuloSituacao(situacaoUltimoLivro, modular: true),
+        'Último módulo',
+      );
+      expect(rotuloSituacao(situacaoFim, modular: true), 'Fim do curso');
+      // O filtro vale para os dois métodos de uma vez.
+      expect(
+        rotuloSituacaoFiltro(situacaoUltimoLivro),
+        'Último livro ou módulo',
+      );
+      expect(rotuloSituacaoFiltro(situacaoFim), 'Fim do curso');
+    });
+
+    test('a linha da fila sabe se o aluno é Modular pelo código do método', () {
+      LinhaFilaCertificado daFila(String? codigo) =>
+          LinhaFilaCertificado.deLinha({
+            'aluno_id': 'a',
+            'aluno_nome': 'Ana',
+            'aluno_status': 'ATIVO',
+            'metodo_id': 'm',
+            'metodo_nome': 'Modular',
+            'metodo_codigo': codigo,
+            'situacao': situacaoUltimoLivro,
+            'itens_pendentes': 1,
+          });
+      expect(daFila('MODULAR').rotuloSituacaoDoAluno, 'Último módulo');
+      expect(daFila('INTERATIVO').rotuloSituacaoDoAluno, 'Último livro');
+      // Sem o código (view antiga), o rótulo de sempre — nunca um palpite.
+      expect(daFila(null).rotuloSituacaoDoAluno, 'Último livro');
+    });
+
     test('situação desconhecida volta como veio', () {
       // Inventar um rótulo bonito para um valor que o banco passou a usar
       // esconderia justamente a novidade.

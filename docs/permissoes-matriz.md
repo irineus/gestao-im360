@@ -128,7 +128,7 @@ precisa poder derrubar a capacidade de uma turma.
 Não existe `professores.excluir`: professor sai por `ativo = false`, senão a grade histórica perde o
 nome de quem deu a aula.
 
-### 3.4 `turmas` (6)
+### 3.4 `turmas` (7)
 
 | Código | Origem | O que autoriza |
 |---|---|---|
@@ -138,6 +138,7 @@ nome de quem deu a aula.
 | `turmas.excluir` | 2.4 | Excluir bloco/turma sem alocação e linha de cronograma |
 | `turmas.alocar` | 2.2 | `fn_bloco_admitir` / `fn_bloco_remover`, alocação Modular e `fn_reposicao_registrar` |
 | `turmas.lancar_reposicao_retroativa` | 2.2 | Reposição com data no passado (`tg_reposicao_admissao`) |
+| `turmas.alinhar_modulo` | **9.2,85** | Ver **e** resolver a pendência `TROCA_MODULO_ALINHAR` — o alinhamento da troca de módulo com o professor. O 51º código (10/11/2026), e o único que restringe um **tipo** de pendência: as políticas de `pendencia` o exigem só para esse tipo (`docs/aviso-troca-modulo.md` §2.3) |
 
 **`turmas.alocar` cobre admitir *e* remover**, contra a sugestão do plano (§3: "alocar aluno, remover
 aluno"). Dois motivos: quem pode colocar precisa poder desfazer o próprio erro, e a remoção também
@@ -206,7 +207,9 @@ Todas as políticas trazem, além do que está na coluna, o filtro `unidade_id =
 | `pedido_compra` | `compras.ler` | `compras.criar` | `compras.editar` ∨ `compras.receber` | — |
 | `pedido_item` | `compras.ler` | `compras.criar` ∨ `compras.editar` | `compras.editar` ∨ `compras.receber` | `compras.excluir` |
 | **`certificado_checklist`** | `certificados.ler` | `certificados.criar` | `certificados.marcar_pedagogico` ∨ `certificados.marcar_financeiro` ∨ `certificados.alterar_status` | — |
-| **`pendencia`** | `pendencias.ler` | *só* `unidade_id = fn_unidade_atual()` | `pendencias.resolver` | — |
+| **`aluno_modulo`** (card 9.2,88) | `alunos.ler` ∨ `turmas.editar` | `turmas.editar` ∨ `alunos.editar_trilha` | `alunos.editar_trilha` | `alunos.editar_trilha` |
+| **`aluno_modulo_hist`** (card 9.2,88) | `alunos.ler` | — (só o trigger, definer) | — | — |
+| **`pendencia`** | `pendencias.ler` (∧ `turmas.alinhar_modulo` no tipo `TROCA_MODULO_ALINHAR` — card 9.2,85) | *só* `unidade_id = fn_unidade_atual()` | `pendencias.resolver` (∧ `turmas.alinhar_modulo` no mesmo tipo) | — |
 
 **`movimento_estoque`, insert por tipo:**
 
@@ -282,6 +285,7 @@ inicial, não uma regra.
 | `turmas.excluir` | ✔ | ✔ | ✔ | |
 | `turmas.alocar` | ✔ | ✔ | ✔ | |
 | `turmas.lancar_reposicao_retroativa` | ✔ | ✔ | ✔ | |
+| `turmas.alinhar_modulo` | ✔ | ✔ | | |
 | `estoque.ler` | ✔ | ✔ | ✔ | ✔ |
 | `estoque.lancar_saida` | ✔ | | ✔ | ✔ |
 | `estoque.estornar` | ✔ | | ✔ | |
@@ -301,8 +305,9 @@ inicial, não uma regra.
 | `pendencias.resolver` | ✔ | ✔ | ✔ | |
 
 Totais: direção 49, secretaria 37, pedagógico 22, monitor 13 — **com `salas.acessar_credencial`
-(card 2.9): direção 50, secretaria 37, pedagógico 22, monitor 14**, que é o que o seed do card 3.6
-grava e a suíte `022_seed_inicial` assere.
+(card 2.9): direção 50, secretaria 37, pedagógico 22, monitor 14** — e, desde o card 9.2,85
+(10/11/2026), **com `turmas.alinhar_modulo`: direção 51, secretaria 37, pedagógico 23, monitor 14**,
+que é o que o seed grava e a suíte `022_seed_inicial` assere.
 
 ### 5.1 Onde a matriz teve de ir além do plano, e por quê
 

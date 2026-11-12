@@ -224,9 +224,22 @@ abstract final class CatalogoErros {
     'TURMA_SEM_CRONOGRAMA':
         'Esta turma não tem cronograma de módulos. Monte o cronograma antes de '
         'avançar o módulo.',
+    // Desde o card 9.2,88 só turma ANTERIOR ao rodízio chega aqui: a turma em
+    // rodízio abre o ciclo seguinte sozinha no avanço do último módulo.
     'TURMA_SEM_MODULO_CORRENTE':
-        'Todos os módulos desta turma já foram concluídos. Desative a turma ou '
-        'acrescente módulos ao cronograma.',
+        'Todos os módulos desta turma já foram concluídos. Abra o próximo ciclo '
+        'para a turma continuar o rodízio.',
+
+    // --- card 9.2,88 (turma Modular em rodízio)
+    'TURMA_COM_MODULO_CORRENTE':
+        'Esta turma ainda tem módulo em curso. O próximo ciclo abre sozinho '
+        'quando o último módulo for avançado.',
+    'MODULO_ENTRADA_INVALIDO':
+        'O aluno só pode entrar no módulo atual da turma ou no próximo.',
+    'MODULO_INEXISTENTE': 'Este módulo não foi encontrado.',
+    'MODULO_JA_REGISTRADO': 'Este módulo já está registrado para o aluno.',
+    'MODULO_NAO_REGISTRADO':
+        'Este módulo não está registrado para o aluno — não há o que remover.',
     'DATA_OBRIGATORIA': 'Informe a data para continuar.',
 
     // --- card 8.3 (checklist de certificado)

@@ -142,7 +142,31 @@ void main() {
       expect(rotuloAmbiente('staging'), 'staging');
     });
 
-    test('as dezoito entidades têm rótulo em português', () {
+    test('aluno_modulo vem logo depois da alocação Modular — a ordem do banco', () {
+      // Card 9.2,91. A lista do app espelha `fn_importacao_entidades()`: fora
+      // de ordem, o relatório do passo 3 leria as ocorrências na ordem errada.
+      final i = entidadesImportacao.indexOf('turma_modular_aluno');
+      expect(entidadesImportacao[i + 1], 'aluno_modulo');
+      expect(entidadesImportacao, hasLength(19));
+      expect(rotuloEntidade('aluno_modulo'), 'Módulos feitos por aluno');
+    });
+
+    test(
+      'os dois avisos do rodízio têm rótulo, e código novo volta como veio',
+      () {
+        expect(
+          rotuloCodigoOcorrencia('MODULO_DATA_FUTURA'),
+          'Módulo feito com data futura',
+        );
+        expect(
+          rotuloCodigoOcorrencia('ENTRADA_SEM_MODULO_FEITO'),
+          'Entrou fora do módulo em curso, sem módulo feito',
+        );
+        expect(rotuloCodigoOcorrencia('COISA_NOVA'), 'COISA_NOVA');
+      },
+    );
+
+    test('as dezenove entidades têm rótulo em português', () {
       for (final entidade in entidadesImportacao) {
         expect(
           rotuloEntidade(entidade),

@@ -249,6 +249,7 @@ class CertificadosFalso implements CertificadosRepositorio {
             alunoStatus: l.alunoStatus,
             metodoId: l.metodoId,
             metodoNome: l.metodoNome,
+            metodoCodigo: l.metodoCodigo,
             situacao: l.situacao,
             itensPendentes: l.itensPendentes,
             checklistId: checklist.id,

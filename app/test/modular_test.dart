@@ -284,39 +284,36 @@ void main() {
       expect(linhas.last, contains('3. Comandos elétricos'));
     });
 
-    test('sem próximo, diz que a turma passa a "terminou"', () {
+    test('sem linha seguinte no ciclo, abre o próximo do RODÍZIO', () {
+      // Card 9.2,90. Vermelho antes: a frase dizia que a turma passava a
+      // "turma terminou" — e desde o 9.2,88 a turma é cíclica, o avanço do
+      // último módulo abre o primeiro, num ciclo novo. Quem diz qual é o
+      // próximo é a view (`proximo_modulo_nome`), não uma conta feita aqui.
       final linhas = resumoAvanco(
         corrente: corrente,
         proximo: null,
         dataConclusao: DateTime(2026, 10, 10),
+        proximoDoRodizio: 'Comandos elétricos',
       );
-      expect(linhas.last, contains('turma terminou'));
+      expect(
+        linhas.last,
+        'Abre Comandos elétricos — a turma segue em rodízio.',
+      );
+      expect(linhas.join(' '), isNot(contains('terminou')));
     });
 
-    test('sem próximo MAS com módulos do curso fora do cronograma (item B2)', () {
-      // ⚠️ Vermelho antes da correção: `resumoAvanco` só olhava o cronograma e
-      // anunciava o fim da turma — medido em "Eletricista 2025.2", que tem 1
-      // módulo no cronograma e o botão "Acrescentar 2 módulos" ao lado, no
-      // mesmo cartão. A frase não pré-valida nada: o avanço continua permitido.
-      final linhas = resumoAvanco(
-        corrente: corrente,
-        proximo: null,
-        dataConclusao: DateTime(2026, 10, 10),
-        faltantes: 2,
-      );
-      expect(linhas.last, contains('2 módulos fora dele'));
-      expect(linhas.last, contains('acrescente-os antes de avançar'));
-    });
-
-    test('com um módulo só fora do cronograma, o singular', () {
-      final linhas = resumoAvanco(
-        corrente: corrente,
-        proximo: null,
-        dataConclusao: DateTime(2026, 10, 10),
-        faltantes: 1,
-      );
-      expect(linhas.last, contains('1 módulo fora dele'));
-    });
+    test(
+      'sem próximo e sem o nome do próximo, ainda assim NÃO anuncia fim',
+      () {
+        final linhas = resumoAvanco(
+          corrente: corrente,
+          proximo: null,
+          dataConclusao: DateTime(2026, 10, 10),
+        );
+        expect(linhas.last, contains('segue em rodízio'));
+        expect(linhas.join(' '), isNot(contains('terminou')));
+      },
+    );
 
     test('a frase NÃO promete a data de início do próximo', () {
       // Quem a calcula é `fn_turma_modular_avancar`, com o passo médio da turma
@@ -329,6 +326,123 @@ void main() {
       );
       expect(linhas.last, isNot(contains('11/10')));
       expect(linhas.last, isNot(contains(semDatasTexto)));
+    });
+  });
+
+  group('a sequência do aluno e a previsão calculada (card 9.2,905)', () {
+    ProgressoAlunoModular progresso(String aluno, DateTime? prev) =>
+        ProgressoAlunoModular(
+          alocacaoId: 'a-$aluno-${prev?.year}',
+          turmaId: 't',
+          alunoId: aluno,
+          modulosTotal: 6,
+          modulosFeitos: 2,
+          prevConclusao: prev,
+        );
+
+    test(
+      'previsaoCalculada: fora de turma não é o mesmo que turma sem data',
+      () {
+        final linhas = [
+          progresso('ana', DateTime(2027, 3, 20)),
+          progresso('bia', null),
+        ];
+        expect(previsaoCalculada(linhas, 'ana'), (
+          emTurma: true,
+          data: DateTime(2027, 3, 20),
+        ));
+        expect(previsaoCalculada(linhas, 'bia'), (emTurma: true, data: null));
+        expect(previsaoCalculada(linhas, 'caio'), (emTurma: false, data: null));
+      },
+    );
+
+    test('em duas turmas vale a MAIOR previsão — o curso acaba quando acaba a '
+        'última', () {
+      final linhas = [
+        progresso('ana', DateTime(2027, 3, 20)),
+        progresso('ana', DateTime(2027, 9, 1)),
+      ];
+      expect(previsaoCalculada(linhas, 'ana').data, DateTime(2027, 9, 1));
+    });
+
+    test('previsaoQueVale: em turma, a calculada — MESMO nula; fora, a '
+        'digitada', () {
+      final digitada = DateTime(2026, 12, 1);
+      // ⚠️ O caso que decide: turma sem datas. A calculada é nula, e a digitada
+      // NÃO volta a valer por isso — ela deixou de ser lida (decisão D2).
+      expect(
+        previsaoQueVale(
+          alunoId: 'bia',
+          digitada: digitada,
+          progresso: [progresso('bia', null)],
+        ),
+        (data: null, calculada: true),
+      );
+      expect(
+        previsaoQueVale(
+          alunoId: 'caio',
+          digitada: digitada,
+          progresso: const [],
+        ),
+        (data: digitada, calculada: false),
+      );
+    });
+
+    test('ModuloFeito lê o nome do módulo e do curso do embed', () {
+      final m = ModuloFeito.deLinha({
+        'modulo_id': 'mod-1',
+        'data_conclusao': '2026-08-10',
+        'origem': 'MANUAL',
+        'observacao': ' fez na turma da manhã ',
+        'modulo': {
+          'nome': 'Massas e Molhos',
+          'ordem': 2,
+          'curso': {'nome': 'Chef Profissional'},
+        },
+      });
+      expect(m.moduloNome, 'Massas e Molhos');
+      expect(m.moduloOrdem, 2);
+      expect(m.cursoNome, 'Chef Profissional');
+      expect(
+        apoioModuloFeito(m),
+        'concluído em 10/08/2026 · lançado à mão · fez na turma da manhã',
+      );
+    });
+
+    test('ModuloFeito sem embed (catálogo ilegível) não quebra a ficha', () {
+      final m = ModuloFeito.deLinha({
+        'modulo_id': 'mod-1',
+        'data_conclusao': '2026-08-10',
+        'origem': 'COISA_NOVA',
+      });
+      expect(m.moduloNome, '—');
+      // Origem que o app não conhece volta como veio.
+      expect(apoioModuloFeito(m), 'concluído em 10/08/2026 · COISA_NOVA');
+    });
+
+    test('apoioModuloAFazer: com as duas datas, com uma, e sem nenhuma', () {
+      ModuloAFazer m({DateTime? inicio, DateTime? fim, bool entrada = false}) =>
+          ModuloAFazer(
+            turmaId: 't',
+            moduloId: 'm',
+            moduloNome: 'Confeitaria',
+            moduloOrdem: 3,
+            sequencia: 1,
+            deEntrada: entrada,
+            dataPrevistaInicio: inicio,
+            dataPrevistaFim: fim,
+          );
+      expect(
+        apoioModuloAFazer(
+          m(inicio: DateTime(2026, 10, 11), fim: DateTime(2026, 11, 20)),
+        ),
+        'previsto 11/10/2026 a 20/11/2026',
+      );
+      expect(
+        apoioModuloAFazer(m(fim: DateTime(2026, 11, 20), entrada: true)),
+        'previsto 20/11/2026 · módulo de entrada',
+      );
+      expect(apoioModuloAFazer(m()), 'sem data prevista');
     });
   });
 }

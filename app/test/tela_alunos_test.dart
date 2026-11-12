@@ -13,6 +13,9 @@ import 'package:gestao_im360/telas/alunos/aba_turmas.dart';
 import 'package:gestao_im360/telas/alunos/ficha_aluno.dart';
 import 'package:gestao_im360/telas/alunos/formularios.dart';
 import 'package:gestao_im360/telas/alunos/tela_alunos.dart';
+import 'package:gestao_im360/telas/alunos/secao_modulos.dart';
+import 'package:gestao_im360/turmas/modular.dart';
+import 'package:gestao_im360/turmas/modular_provider.dart';
 import 'package:gestao_im360/turmas/turmas_widgets.dart';
 import 'package:gestao_im360/theme/tema.dart';
 import 'package:gestao_im360/turmas/turmas.dart';
@@ -27,6 +30,7 @@ import 'apoio/alunos_falso.dart';
 import 'apoio/carregar.dart';
 import 'apoio/catalogo_falso.dart';
 import 'apoio/infraestrutura_falso.dart';
+import 'apoio/modular_falso.dart';
 import 'apoio/turmas_falso.dart';
 
 /// A obrigação de teste de um card de **Tela** (card 2.8 §13): ocultação por
@@ -62,6 +66,7 @@ void main() {
     required AlunosFalso repositorio,
     CatalogoFalso? catalogo,
     TurmasFalso? turmas,
+    ModularFalso? modular,
     Set<String> permissoes = leitura,
     Size tamanho = const Size(1400, 900),
     String rotaInicial = '/alunos',
@@ -97,6 +102,11 @@ void main() {
           ),
           turmasRepositorioProvider.overrideWithValue(
             turmas ?? TurmasFalso.fixture(),
+          ),
+          // Vazio por omissão: a ficha e a matrícula leem as turmas Modular
+          // desde o card 9.2,905, e sem isto a leitura iria ao cliente real.
+          modularRepositorioProvider.overrideWithValue(
+            modular ?? ModularFalso(),
           ),
           infraestruturaRepositorioProvider.overrideWithValue(
             InfraestruturaFalso.fixture(),
@@ -1103,5 +1113,469 @@ void main() {
         );
       },
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // Card 9.2,905 — a turma em rodízio no cadastro e na ficha do aluno
+  // -------------------------------------------------------------------------
+
+  group('turma em rodízio (card 9.2,905)', () {
+    const matricula = {...secretaria, 'turmas.ler', 'turmas.alocar'};
+    const fichaLeitura = {...leitura, 'turmas.ler'};
+    const fichaEdicao = {...fichaLeitura, 'alunos.editar_trilha'};
+
+    Future<void> preencherModular(WidgetTester tester, String nome) async {
+      await tester.tap(find.text('Matricular'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nome *'),
+        nome,
+      );
+      await escolher(tester, 'Método *', 'Modular');
+    }
+
+    Future<void> tocar(WidgetTester tester, Finder alvo) async {
+      await tester.ensureVisible(alvo);
+      await carregar(tester);
+      await tester.tap(alvo);
+      await carregar(tester);
+    }
+
+    /// Eduarda (al-3005) na turma Eletricista 2026.1: fez o módulo 1, entrou
+    /// pelo 2 e faltam o 2 e o 3.
+    ModularFalso comSequencia() => ModularFalso.fixture()
+      ..feitos_['al-3005'] = [
+        ModuloFeito(
+          moduloId: 'mod-1',
+          moduloNome: 'Módulo 1 — Comandos elétricos',
+          moduloOrdem: 1,
+          cursoNome: 'Eletricista Instalador',
+          dataConclusao: DateTime(2026, 8, 10),
+          origem: 'TURMA',
+        ),
+      ]
+      ..aFazer_['al-3005'] = [
+        ModuloAFazer(
+          turmaId: 't-2026',
+          moduloId: 'mod-2',
+          moduloNome: 'Módulo 2 — Instalações prediais',
+          moduloOrdem: 2,
+          sequencia: 2,
+          deEntrada: true,
+          dataPrevistaInicio: DateTime(2026, 8, 11),
+          dataPrevistaFim: DateTime(2026, 10, 10),
+        ),
+        const ModuloAFazer(
+          turmaId: 't-2026',
+          moduloId: 'mod-3',
+          moduloNome: 'Módulo 3 — Projetos',
+          moduloOrdem: 3,
+          sequencia: 3,
+        ),
+      ]
+      ..progresso_.add(
+        ProgressoAlunoModular(
+          alocacaoId: 'tma-al-3005',
+          turmaId: 't-2026',
+          alunoId: 'al-3005',
+          moduloEntradaNome: 'Módulo 2 — Instalações prediais',
+          modulosTotal: 3,
+          modulosFeitos: 1,
+          proximoModuloNome: 'Módulo 2 — Instalações prediais',
+          prevConclusao: DateTime(2027, 3, 20),
+        ),
+      );
+
+    TurmasFalso eduardaNaModular() => TurmasFalso.fixture()
+      ..turmas_.removeWhere((t) => t.alunoId == 'al-3005')
+      ..modulares_.add(vinculoModularFalso(alunoId: 'al-3005'));
+
+    Future<ModularFalso> abrirTurmasDaEduarda(
+      WidgetTester tester, {
+      ModularFalso? modular,
+      Set<String> permissoes = fichaLeitura,
+      Size tamanho = const Size(1400, 1200),
+    }) async {
+      final falso = modular ?? comSequencia();
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        turmas: eduardaNaModular(),
+        modular: falso,
+        permissoes: permissoes,
+        tamanho: tamanho,
+        rotaInicial: '/alunos/al-3005',
+      );
+      await tester.tap(find.text('Turmas').first);
+      await carregar(tester);
+      return falso;
+    }
+
+    testWidgets('matrícula de aluno Modular já o põe na turma, no módulo '
+        'escolhido', (tester) async {
+      final repositorio = AlunosFalso.fixture();
+      final modular = ModularFalso.fixture();
+      await montar(
+        tester,
+        repositorio: repositorio,
+        modular: modular,
+        permissoes: matricula,
+      );
+      await preencherModular(tester, 'Marina Costa');
+
+      await escolher(
+        tester,
+        'Turma Modular',
+        'Eletricista 2025.2 · Eletricista Instalador · 0/15',
+      );
+      expect(
+        find.text('Módulo atual — 1. Módulo 1 — Comandos elétricos'),
+        findsOneWidget,
+      );
+      await tocar(
+        tester,
+        find.text('Próximo módulo — Módulo 2 — Instalações prediais'),
+      );
+      await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+      final nova = repositorio.alunos_.singleWhere(
+        (a) => a.nome == 'Marina Costa',
+      );
+      expect(modular.admitidos, ['t-2025|${nova.id}']);
+      expect(modular.entradas, ['mod-2']);
+      expect(find.text('Aluno matriculado.'), findsOneWidget);
+    });
+
+    testWidgets('sem escolher turma a matrícula é a de sempre — ninguém é '
+        'admitido em lugar nenhum', (tester) async {
+      final modular = ModularFalso.fixture();
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        modular: modular,
+        permissoes: matricula,
+      );
+      await preencherModular(tester, 'Marina Costa');
+      expect(find.text('Turma Modular'), findsOneWidget);
+      // Sem turma escolhida não há o que perguntar sobre o módulo de entrada.
+      expect(find.textContaining('Próximo módulo —'), findsNothing);
+      await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+      expect(modular.admitidos, isEmpty);
+      expect(find.text('Aluno matriculado.'), findsOneWidget);
+    });
+
+    testWidgets('se a turma recusa, o aluno JÁ EXISTE: o formulário fecha e um '
+        'diálogo diz o que aconteceu', (tester) async {
+      // ⚠️ O caso que o desenho tinha de fechar: a matrícula são duas chamadas.
+      // Deixar o erro da segunda subir manteria o formulário aberto, e um
+      // segundo clique em "Matricular" criaria o aluno de novo.
+      final repositorio = AlunosFalso.fixture();
+      final modular = ModularFalso.fixture()
+        ..erroAoAdmitir = const ErroApp(
+          mensagem: 'Esta turma está lotada.',
+          codigo: 'TURMA_LOTADA',
+          traduzido: true,
+        );
+      await montar(
+        tester,
+        repositorio: repositorio,
+        modular: modular,
+        permissoes: matricula,
+      );
+      await preencherModular(tester, 'Marina Costa');
+      await escolher(
+        tester,
+        'Turma Modular',
+        'Eletricista 2025.2 · Eletricista Instalador · 0/15',
+      );
+      await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+      expect(find.text('Matricular aluno'), findsNothing, reason: 'fechou');
+      expect(find.text('Aluno matriculado — sem turma'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'foi matriculado, mas não entrou em Eletricista 2025.2: Esta turma '
+          'está lotada.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        repositorio.alunos_.where((a) => a.nome == 'Marina Costa'),
+        hasLength(1),
+      );
+      expect(find.text('Aluno matriculado.'), findsNothing);
+
+      await tocar(tester, find.text('Entendi'));
+      expect(
+        find.text('Marina Costa'),
+        findsOneWidget,
+        reason: 'está na lista',
+      );
+    });
+
+    testWidgets('a turma só é oferecida para o método Modular e para quem pode '
+        'alocar', (tester) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        modular: ModularFalso.fixture(),
+        permissoes: matricula,
+      );
+      await tester.tap(find.text('Matricular'));
+      await tester.pumpAndSettle();
+      await escolher(tester, 'Método *', 'Interativo');
+      expect(find.text('Turma Modular'), findsNothing);
+
+      // Sem `turmas.alocar` a admissão seria recusada toda vez: a tela não
+      // oferece o que só pode dar errado.
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        modular: ModularFalso.fixture(),
+        permissoes: secretaria,
+      );
+      await preencherModular(tester, 'Marina Costa');
+      expect(find.text('Turma Modular'), findsNothing);
+    });
+
+    testWidgets('a ficha mostra a sequência: os feitos com a data, os que '
+        'faltam na ordem da turma e a previsão calculada', (tester) async {
+      await abrirTurmasDaEduarda(tester);
+
+      // A linha da turma ganhou o progresso.
+      expect(
+        find.textContaining(
+          'entrou em Módulo 2 — Instalações prediais · 1 de 3 módulos',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Módulos'), findsOneWidget);
+      expect(find.text('Conclusão prevista: 20/03/2027'), findsOneWidget);
+      expect(find.text(previsaoCalculadaAjuda), findsOneWidget);
+
+      expect(find.text('Feitos (1)'), findsOneWidget);
+      expect(find.text('1. Módulo 1 — Comandos elétricos'), findsOneWidget);
+      expect(
+        find.text(
+          'Eletricista Instalador · concluído em 10/08/2026 · com a turma',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('A fazer (2)'), findsOneWidget);
+      expect(
+        find.text('previsto 11/08/2026 a 10/10/2026 · módulo de entrada'),
+        findsOneWidget,
+      );
+      expect(find.text('sem data prevista'), findsOneWidget);
+
+      // E o cabeçalho da ficha mostra a previsão que VALE (decisão D2).
+      expect(find.textContaining('prev. conclusão 20/03/2027'), findsOneWidget);
+
+      // Sem `alunos.editar_trilha` a exceção à mão não é oferecida.
+      expect(find.text('Registrar módulo feito'), findsNothing);
+      expect(find.text('Remover'), findsNothing);
+    });
+
+    testWidgets('registrar um módulo feito por fora da turma', (tester) async {
+      final modular = await abrirTurmasDaEduarda(
+        tester,
+        permissoes: fichaEdicao,
+      );
+      await tocar(tester, find.text('Registrar módulo feito'));
+
+      expect(find.text(avisoRegistrarModulo), findsOneWidget);
+      // O curso já vem: é o da turma do aluno. E o módulo 1, já feito, não é
+      // oferecido.
+      await tester.tap(
+        find.widgetWithText(DropdownButtonFormField<String>, 'Módulo *'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('1. Módulo 1 — Comandos elétricos'), findsOneWidget);
+      await tester.tap(find.text('3. Módulo 3 — Projetos').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Concluído em *'),
+        '05/11/2026',
+      );
+      await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+      expect(modular.modulosRegistrados, ['al-3005|mod-3|2026-11-05|']);
+      expect(find.text('Módulo registrado.'), findsOneWidget);
+      expect(find.text('Feitos (2)'), findsOneWidget);
+      expect(find.text('A fazer (1)'), findsOneWidget);
+      expect(find.textContaining('lançado à mão'), findsOneWidget);
+    });
+
+    testWidgets('MODULO_JA_REGISTRADO do banco vira banner, e o formulário '
+        'fica aberto', (tester) async {
+      final modular = comSequencia()
+        ..erroAoRegistrarModulo = const ErroApp(
+          mensagem: 'Este módulo já está registrado para o aluno.',
+          codigo: 'MODULO_JA_REGISTRADO',
+          traduzido: true,
+        );
+      await abrirTurmasDaEduarda(
+        tester,
+        modular: modular,
+        permissoes: fichaEdicao,
+      );
+      await tocar(tester, find.text('Registrar módulo feito'));
+      await escolher(tester, 'Módulo *', '2. Módulo 2 — Instalações prediais');
+      await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+      expect(
+        find.text('Este módulo já está registrado para o aluno.'),
+        findsOneWidget,
+      );
+      expect(find.text('Registrar módulo feito'), findsWidgets);
+      expect(find.text('Feitos (1)'), findsOneWidget);
+    });
+
+    testWidgets('remover um módulo exige motivo, e o módulo sai dos feitos', (
+      tester,
+    ) async {
+      final modular = await abrirTurmasDaEduarda(
+        tester,
+        permissoes: fichaEdicao,
+      );
+      await tocar(tester, find.text('Remover'));
+      expect(find.text(avisoRemoverModulo), findsOneWidget);
+
+      // Sem motivo o formulário não envia.
+      await tocar(tester, find.byKey(chaveBotaoSalvar));
+      expect(modular.modulosTirados, isEmpty);
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Motivo *'),
+        'faltou a metade das aulas',
+      );
+      await tocar(tester, find.byKey(chaveBotaoSalvar));
+
+      expect(modular.modulosTirados, [
+        'al-3005|mod-1|faltou a metade das aulas',
+      ]);
+      expect(
+        find.text('Módulo removido do registro do aluno.'),
+        findsOneWidget,
+      );
+      expect(find.text('Feitos (1)'), findsNothing);
+    });
+
+    testWidgets('em turma Modular a previsão de conclusão não se edita — e '
+        'salvar não apaga a que estava digitada', (tester) async {
+      // Decisão D2 do card 9.2,87: vale a calculada. A coluna digitada NÃO é
+      // zerada — ela volta a valer se o aluno sair da turma.
+      final repositorio = AlunosFalso.fixture();
+      final antes = repositorio.alunos_
+          .singleWhere((a) => a.id == 'al-3005')
+          .prevConclusaoCurso;
+      await montar(
+        tester,
+        repositorio: repositorio,
+        turmas: eduardaNaModular(),
+        modular: comSequencia(),
+        permissoes: {...secretaria, 'turmas.ler'},
+        rotaInicial: '/alunos/al-3005',
+      );
+      await tocar(tester, find.text('Editar dados'));
+
+      expect(
+        find.widgetWithText(TextFormField, 'Previsão de conclusão'),
+        findsNothing,
+      );
+      // No formulário — a aba Dados, atrás, mostra a mesma data.
+      expect(
+        find.descendant(
+          of: find.byType(FormularioIm360),
+          matching: find.text('20/03/2027'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text(previsaoCalculadaAjuda), findsOneWidget);
+      expect(
+        find.text('Previsão de conclusão (calculada pela turma)'),
+        findsOneWidget,
+        reason: 'a aba Dados diz de onde vem a data',
+      );
+
+      await tocar(tester, find.byKey(chaveBotaoSalvar));
+      expect(
+        repositorio.alunos_
+            .singleWhere((a) => a.id == 'al-3005')
+            .prevConclusaoCurso,
+        antes,
+      );
+    });
+
+    testWidgets('aluno Modular fora de turma: os feitos ficam, e a tela diz '
+        'por que não lista o que falta', (tester) async {
+      final modular = ModularFalso()
+        ..feitos_['al-3005'] = [
+          ModuloFeito(
+            moduloId: 'mod-1',
+            moduloNome: 'Módulo 1 — Comandos elétricos',
+            moduloOrdem: 1,
+            cursoNome: 'Eletricista Instalador',
+            dataConclusao: DateTime(2026, 8, 10),
+            origem: 'IMPORTACAO',
+          ),
+        ];
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        turmas: TurmasFalso.fixture()
+          ..turmas_.removeWhere((t) => t.alunoId == 'al-3005'),
+        modular: modular,
+        permissoes: fichaLeitura,
+        rotaInicial: '/alunos/al-3005',
+      );
+      await tester.tap(find.text('Turmas').first);
+      await carregar(tester);
+
+      expect(find.text('Turma Modular'), findsNothing);
+      expect(find.text('Módulos'), findsOneWidget);
+      expect(find.text('Feitos (1)'), findsOneWidget);
+      expect(find.textContaining('veio da planilha'), findsOneWidget);
+      expect(find.text(semTurmaSemAgenda), findsOneWidget);
+      expect(find.textContaining('Conclusão prevista'), findsNothing);
+    });
+
+    testWidgets('aluno de outro método não tem seção de módulos', (
+      tester,
+    ) async {
+      await montar(
+        tester,
+        repositorio: AlunosFalso.fixture(),
+        permissoes: fichaLeitura,
+        rotaInicial: '/alunos/al-3001',
+      );
+      await tester.tap(find.text('Turmas').first);
+      await carregar(tester);
+      expect(find.text('Módulos'), findsNothing);
+    });
+
+    testWidgets('se a leitura dos módulos falha, a seção DIZ que falhou', (
+      tester,
+    ) async {
+      await abrirTurmasDaEduarda(tester, modular: ModularFalso.queFalha());
+      expect(find.text('Módulos'), findsOneWidget);
+      expect(find.textContaining('Não foi possível falar'), findsWidgets);
+      expect(find.text(vazioModulosDoAluno), findsNothing);
+    });
+
+    testWidgets('a sequência e a matrícula com turma cabem em 390 px', (
+      tester,
+    ) async {
+      await abrirTurmasDaEduarda(
+        tester,
+        permissoes: fichaEdicao,
+        tamanho: const Size(390, 844),
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('Feitos (1)'), findsOneWidget);
+      await tocar(tester, find.text('Registrar módulo feito'));
+      expect(tester.takeException(), isNull);
+    });
   });
 }

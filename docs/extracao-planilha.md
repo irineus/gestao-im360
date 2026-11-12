@@ -110,7 +110,7 @@ outras agora:
 | Aba | Entidades que ela alimentaria |
 |---|---|
 | `Base Modular` | `curso_material`, `modulo` |
-| abas por curso (Massagem, Manicure, Chef+Panificação, Combo Beleza, Violão, Pizzaiolo, Eletricista, Corte e Costura, Depilação) | `turma_modular`, `turma_modular_modulo`, `turma_modular_aluno` |
+| abas por curso (Massagem, Manicure, Chef+Panificação, Combo Beleza, Violão, Pizzaiolo, Eletricista, Corte e Costura, Depilação) | `turma_modular`, `turma_modular_modulo`, `turma_modular_aluno`, `aluno_modulo` |
 | `Pedidos` | `material.estoque_minimo`, `material.categoria` |
 | `PCS` | `sala` (a real), `pc`, `pc_manutencao` |
 
@@ -129,6 +129,33 @@ imprime as primeiras linhas de cada aba não mapeada com a letra e o índice de 
 coluna. Preencher `extracao/layout.mjs` e tirar a entrada de `ABAS_NAO_MAPEADAS` é
 o passo — o resto do código não muda de forma. Isso é trabalho do card **9.4**, que
 é onde a planilha e a pessoa que a conhece estão na mesma sala.
+
+### 3.2.1 A turma em rodízio: a regra está pronta, o mapa não (card 9.2,91, 11/11/2026)
+
+As abas por curso passaram a ter, **por aluno**, os módulos na ordem em que ele faz — cada um com
+`Início` (SIM/NÃO) e a previsão de conclusão. É daí que saem o **módulo de entrada** e os **módulos
+feitos** que o importador passou a aceitar (`docs/importacao.md` §3, linhas 16 e 17).
+
+A regra que transforma a linha do aluno nisso está em `extracao/rodizio.mjs`, com 16 testes:
+
+| Regra | Por quê |
+|---|---|
+| A entrada é o **primeiro** módulo da linha | a linha começa onde o aluno começou, e não no primeiro módulo do curso |
+| O **último** módulo iniciado está em curso; os iniciados antes dele estão **feitos** | a planilha marca módulo *iniciado*, não *concluído* — ter começado o seguinte é o que diz que o anterior acabou |
+| A data do módulo feito é a **previsão gravada** na linha; sem previsão ele não sai como feito | é o que a planilha tem; inventar a data faria a ficha afirmar um dia que ninguém registrou |
+| `Início = NÃO` entre dois `SIM` **não é erro** | é o módulo que o aluno perdeu — "a fazer" é a ausência do registro |
+| Nome que a `Base Modular` não conhece vira `MODULO_FORA_DO_CATALOGO` | é a pergunta 5 da proposta com nome próprio |
+
+⚠️ **O que falta para ela rodar é a posição das colunas** — das abas por curso **e** da `Base
+Modular`, que é de onde sai o catálogo `nome do módulo → ordem`. A planilha não está neste
+repositório, e a forma da linha é conhecida pelos prints do dono do produto, não por leitura do
+arquivo. Com a planilha, `--mapear` imprime as colunas; quem lê a aba monta
+`{ modulos: [{nome, inicio, previsao}] }` por aluno e chama `derivarRodizio`.
+
+⚠️ **Uma pergunta que só o Claudir responde, e que a regra vai acusar sozinha:** na `Base Modular`,
+o livro Panificação lista "Higiene e Boas Práticas" e "Conhecimentos dos Ingredientes", que não
+aparecem entre os módulos da aba Chef+Panificação. Enquanto as duas listas não baterem, cada aluno
+com um desses módulos sai com `MODULO_FORA_DO_CATALOGO` no relatório.
 
 ### 3.3 O que fica de fora e NÃO é lacuna
 
