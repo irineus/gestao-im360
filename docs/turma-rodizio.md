@@ -476,7 +476,10 @@ lock o aluno entra pelo módulo novo (sem o antigo) ou pelo antigo (e o recebe).
 feita:** com as duas funções sem o `pg_advisory_xact_lock`, as duas rodadas reprovam com o estado do
 meio — entrou pelo módulo que fechou e não o recebeu.
 
-⚠️ **NÃO feito — a ordem dos livros de quem entra pelo segundo livro.** A trilha do aluno Modular
+✅ **Feito em seguida, no card 9.2,886 item 1 (§10.8), pelo caminho (b).** O texto abaixo é o
+registro do problema como ele estava.
+
+~~**NÃO feito — a ordem dos livros de quem entra pelo segundo livro.**~~ A trilha do aluno Modular
 nasce na ordem do curso (livro 1, livro 2). Quem entra num módulo do **segundo** livro precisa dele
 primeiro, e hoje a aba Trilha mostra o livro 1 como "próximo" — e a entrega sem material escolhido
 entregaria o livro errado. A entrega oferecida **na troca de módulo** (card 9.2,86) não sofre disso:
@@ -489,6 +492,36 @@ estoque — por isso ficou para Irineu:
   do progresso de módulos. **Recomendação da sessão: (b)** — não cria uma segunda fonte da ordem.
 
 Enquanto não se decide, vale o que está: na aba Trilha do aluno Modular, escolher o livro à mão.
+
+## 10.8 O próximo livro segue os módulos do aluno (card 9.2,886, item 1 — 12/11/2026)
+
+Decisão de Irineu (12/11/2026): o caminho **(b)** do §10.7 — **não reordenar** a trilha. Migração
+`20261112120000_proximo_livro_modular.sql`, teste `109_proximo_livro_modular` (12 asserções).
+
+**A regra, em um lugar só:** `v_aluno_material_sequencia` numera (`seq`) os livros que faltam a
+cada aluno pela **primeira posição, na agenda dele, do módulo que usa o livro**; empatado ou sem
+módulo, pela `ordem` da trilha. `seq = 1` é o próximo livro. Os quatro lugares que diziam "próximo"
+passaram a ler daqui:
+
+| Quem | O que mostra |
+|---|---|
+| `fn_trilha_proximo_material` | o livro que a entrega sem material escolhido entrega |
+| `v_aluno_trilha.proximo` | o "► próxima" da aba Trilha e o "Próximo livro" da ficha e da lista |
+| `v_demanda_imediata_aluno` | a compra imediata (coluna DEMANDA) |
+| `v_projecao_aluno.k` | k = 1 é a imediata e sai da projeção — a disjunção continua valendo |
+
+**Para quem não está em turma Modular nada muda:** a agenda dele é vazia e a sequência é a
+`ordem`. O teste 109 mede os dois lados, e a contraprova é a própria versão anterior: sem a view,
+o aluno que entra pelo M3 recebia o livro do M1.
+
+⚠️ **O teste 107 mudou numa asserção, e de propósito.** Nele, o aluno já fez o M3 e a turma está
+no M1. Pela regra antiga o "próximo" era o livro do M3 — que ele não vai mais usar — e o do M1
+aparecia como **projeção**; agora o do M1 é a demanda **imediata**, que é onde um livro de que ele
+precisa hoje deve estar.
+
+O que **não** mudou: a `ordem` gravada (nada é reordenado), e o substituto que
+`fn_registrar_entrega` escolhe quando o próximo está sem estoque (continua pela `ordem`, entre os
+que têm saldo — no Modular de dois livros só há um outro).
 
 ## 11. Testes que o card 9.2,88 deve
 

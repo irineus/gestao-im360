@@ -212,9 +212,22 @@ select is(
   1, 'e o livro continua PENDENTE na trilha dela: quem o tirou foi a regra, nao a entrega');
 
 -- O aluno novo fez o M3. Falta-lhe M1 (corrente, começou em hoje+11) e M2: o
--- livro 01 passou a ser para AGORA — a data é o início do módulo corrente.
-select is(pg_temp.projecao((select novo from t_ids)), '01:MODULAR:+11',
-  'a turma chegou ao M1: o livro 01 do aluno novo passa de +85 para o inicio do modulo corrente');
+-- livro 01 passou a ser para AGORA.
+--
+-- ⚠️ Card 9.2,886 (12/11/2026): esta asserção mudou, e de propósito. Pela regra
+--    antiga o "próximo livro" era a menor `ordem` pendente — o 02, do M3, que ele
+--    já fez e não vai mais usar —, então o 01 ficava como k = 2 e aparecia aqui,
+--    projetado em +11. Pela sequência efetiva (v_aluno_material_sequencia) o 01
+--    é o PRÓXIMO dele: sai da projeção e vai para a demanda IMEDIATA, que é onde
+--    um livro de que ele precisa hoje deve estar. O 02 não tem módulo que lhe
+--    falte e não é projetado.
+select is(
+  pg_temp.projecao((select novo from t_ids)) || ' / imediata: '
+    || (select mt.codigo from public.v_demanda_imediata_aluno d
+          join public.material mt on mt.id = d.material_id
+         where d.aluno_id = (select novo from t_ids)),
+  'nada / imediata: 01',
+  'a turma chegou ao M1: o livro 01 do aluno novo vira a demanda IMEDIATA dele, e nao projecao');
 
 -- ===========================================================================
 -- 6. A rotina grava o que a view diz

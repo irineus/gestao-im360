@@ -219,6 +219,11 @@ comment on view public.v_estoque_atual is
 
 ### 5.1 `v_demanda_imediata_aluno` — card 6.4
 
+> ⚠️ **Desde o card 9.2,886 (12/11/2026)** o "próximo livro" não é mais a menor `ordem` pendente:
+> é o `seq = 1` de `v_aluno_material_sequencia`, que para o aluno em turma Modular segue os módulos
+> que lhe faltam (`docs/turma-rodizio.md` §10.8). Para os outros a regra é a mesma de antes. O SQL
+> abaixo é o da criação; a definição em vigor está na migração `20261112120000_proximo_livro_modular.sql`.
+
 Detalhe primeiro, agregado depois: a tela de projeção (7.8) pede *drill-down* por aluno, e ter duas
 consultas independentes para o total e para o detalhe é como o total e o detalhe passam a divergir.
 
