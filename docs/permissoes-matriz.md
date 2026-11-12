@@ -285,7 +285,7 @@ inicial, não uma regra.
 | `turmas.excluir` | ✔ | ✔ | ✔ | |
 | `turmas.alocar` | ✔ | ✔ | ✔ | |
 | `turmas.lancar_reposicao_retroativa` | ✔ | ✔ | ✔ | |
-| `turmas.alinhar_modulo` | ✔ | | ✔ | |
+| `turmas.alinhar_modulo` | ✔ | ✔ | | |
 | `estoque.ler` | ✔ | ✔ | ✔ | ✔ |
 | `estoque.lancar_saida` | ✔ | | ✔ | ✔ |
 | `estoque.estornar` | ✔ | | ✔ | |
