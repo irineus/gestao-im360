@@ -7,7 +7,7 @@
 /// que alguém mexesse numa só — foi o que a revisão da fase 05 encontrou.
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../theme/dimensoes.dart';
 import '../theme/tipografia.dart';

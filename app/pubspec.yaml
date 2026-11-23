@@ -12,7 +12,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 #   - MAJOR só por pedido explícito de Irineu.
 # O job "migrações (portão)" do testes.yml reprova o PR que muda código sem
 # subir a versão (portao-versao/versao.mjs, com a lista do que conta como código).
-version: 0.3.0+15
+version: 0.3.1+16
 
 environment:
   sdk: ^3.13.2
@@ -31,6 +31,13 @@ dependencies:
   # dos links gerados pelo painel. Ver lib/config/estrategia_url.dart.
   flutter_web_plugins:
     sdk: flutter
+  # Flutter 3.50.1 (22/11/2026): `package:flutter/material.dart` virou
+  # @Deprecated — o Material saiu do SDK para este pacote, que é uma CÓPIA
+  # própria das classes, não um apelido. Todo import do app vem daqui
+  # (`dart fix --apply --code=migrate_design_widgets`). Misturar os dois não é
+  # só aviso: o go_router 18 já procura o `MaterialApp` DESTE pacote, e com o
+  # legado ele não o achava e montava toda rota como `NoTransitionPage`.
+  material_ui: ^1.11.1
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

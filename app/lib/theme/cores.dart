@@ -1,7 +1,7 @@
 // Copiado do apêndice §10 de docs/design-system.md (card 2.7) — o card 3.7
 // traz o lib/theme/ inteiro como está. Alterar aqui exige alterar lá.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Tokens de cor — fonte: docs/identidade-visual.md + docs/design-system.md §2.
 /// Nenhum componente usa hex direto: sempre um papel daqui ou do ColorScheme.

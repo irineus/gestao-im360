@@ -46,7 +46,7 @@ propósito — ver §4.
 | Ferramenta | Versão fixada | Onde |
 |---|---|---|
 | CLI do Supabase | **2.116.0** | `testes.yml` e `db-migrations.yml` |
-| Flutter | **3.47.2** | `testes.yml` e `deploy-web.yml` |
+| Flutter | **3.50.1** (Dart 3.14.0, desde 22/11/2026; antes 3.47.2) | `testes.yml` e `deploy-web.yml` |
 | Wrangler | **4.128.0** | `deploy-web.yml` e `deploy-worker-vigia.yml` |
 | Node | **24.16.0** | `testes.yml` (job `vigia`) e `deploy-worker-vigia.yml` |
 
@@ -55,9 +55,23 @@ suíte que deveria estar dizendo a verdade sobre o commit. Fixar transforma a at
 commit, com PR e revisão. (Pendência técnica 2(d) das Decisões vigentes; ajuste 2 do card 2.8 §12.)
 
 A mesma versão do CLI roda a suíte e aplica a migração: testar com um CLI e aplicar com outro é
-testar outro caminho. E `3.47.2` não é escolha estética — é a versão do card 3.7, e traz o Dart
-3.13.2 que `app/pubspec.yaml` exige (`sdk: ^3.13.2`). Uma versão anterior **nem resolve as
-dependências**.
+testar outro caminho. O Flutter segue a mesma lógica: a versão do CI é **a das máquinas de
+desenvolvimento**, porque `analyze --fatal-infos` e `dart format` mudam de versão para versão. Foi
+`3.47.2` (card 3.7, o Dart 3.13.2 que `sdk: ^3.13.2` exige) até 22/11/2026, quando subiu para
+**3.50.1**: nela `package:flutter/material.dart` é `@Deprecated` e o app passou a importar
+`package:material_ui/material_ui.dart` (que exige Flutter >= 3.47.0). Uma versão anterior à 3.47
+**nem resolve as dependências**. Subir o Flutter é sempre um PR que muda os dois workflows, este
+documento e, se o plugin Gradle pedir, `app/android/` (§2.1).
+
+### 2.1 Android: os mínimos que o Flutter cobra
+
+O build Android não roda no CI, então quem descobre o mínimo errado é a primeira pessoa que gera um
+APK. O plugin Gradle do Flutter **recusa compilar** abaixo dos mínimos declarados em
+`packages/flutter_tools/gradle/src/main/kotlin/DependencyVersionChecker.kt` do SDK
+(`errorGradleVersion`, `errorAGPVersion`, `errorKGPVersion`), e avisa abaixo dos `warn*`. Na 3.50.1:
+Gradle 9.3.1, AGP 9.1.1, KGP 2.4.10 (mínimos) e 9.5.0 / 9.3.1 / 2.4.20 (recomendados, os do
+template em `lib/src/android/gradle_utils.dart`). O app usa os recomendados:
+`app/android/gradle/wrapper/gradle-wrapper.properties` e `app/android/settings.gradle.kts`.
 
 O terceiro item da mesma família já estava feito: `major_version = 17` em `supabase/config.toml`,
 igual ao dos dois projetos remotos (ajuste 3 do card 2.8 §12).
@@ -192,7 +206,9 @@ Quatro conferências ao redor do build, todas por causa de falhas que **não dã
    até seis tentativas espaçadas de 10 s, com cache-buster e `curl --compressed`. Detalhe em
    `docs/deploy-web.md` §5.9.
 
-`--no-web-resources-cdn` não é otimização, é disponibilidade (card 3.8 §1).
+`--no-web-resources-cdn` não é otimização, é disponibilidade (card 3.8 §1). `--no-tree-shake-icons`
+também, desde o Flutter 3.50.1: sem ele a fonte de ícones sai podada e todo ícone vira um quadrado. O
+`deploy-web` reprova se `MaterialIcons-Regular.otf` tiver 500 KB ou menos (`deploy-web.md` §1).
 
 ---
 
