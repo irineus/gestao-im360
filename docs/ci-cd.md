@@ -206,10 +206,7 @@ Quatro conferências ao redor do build, todas por causa de falhas que **não dã
    até seis tentativas espaçadas de 10 s, com cache-buster e `curl --compressed`. Detalhe em
    `docs/deploy-web.md` §5.9.
 
-`--no-web-resources-cdn` não é otimização, é disponibilidade (card 3.8 §1). `--no-tree-shake-icons`
-também, desde o Flutter 3.50.1: sem ele a fonte de ícones sai podada e todo ícone vira um quadrado. O
-`deploy-web` reprova se `MaterialIcons-Regular.otf` tiver 500 KB ou menos (`deploy-web.md` §1).
-
+`--no-web-resources-cdn` não é otimização, é disponibilidade (card 3.8 §1).
 ---
 
 ## 8. O que a execução ensinou (02/09/2026)

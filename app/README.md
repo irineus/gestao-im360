@@ -42,7 +42,7 @@ sobem em toda mudança que gere código novo — o job `migrações (portão)` r
 ## Empacotar para o Cloudflare Pages
 
 ```bash
-flutter build web --release --no-web-resources-cdn --no-tree-shake-icons \
+flutter build web --release --no-web-resources-cdn \
   --dart-define=SUPABASE_URL=… --dart-define=SUPABASE_ANON_KEY=… --dart-define=APP_URL_BASE=…
 ```
 
@@ -52,8 +52,9 @@ erro**. Com a opção, tudo é servido da própria origem. O resto do contrato d
 cabeçalhos, por que não existe `_redirects` e o que Irineu configura no painel do Supabase — está em
 `docs/deploy-web.md`.
 
-`--no-tree-shake-icons` também não é opcional desde o Flutter 3.50.1: sem ele a fonte de ícones sai
-podada a 3 glifos e todo ícone vira um quadrado (`docs/deploy-web.md` §1).
+Medir o bundle (tamanho, ícones, o que entrou) **só com os `--dart-define`**: sem eles
+`Ambiente.configurado` é constante `false`, o compilador descarta o app inteiro e o que se mede é
+a tela "build não configurado" (`docs/deploy-web.md` §1).
 
 O app usa **estratégia de URL por caminho** (`/alunos`, não `/#/alunos`): o fragmento pertence ao
 Auth, que devolve os tokens nele. Quem serve o build precisa devolver o `index.html` para qualquer
