@@ -70,8 +70,15 @@ APK. O plugin Gradle do Flutter **recusa compilar** abaixo dos mínimos declarad
 `packages/flutter_tools/gradle/src/main/kotlin/DependencyVersionChecker.kt` do SDK
 (`errorGradleVersion`, `errorAGPVersion`, `errorKGPVersion`), e avisa abaixo dos `warn*`. Na 3.50.1:
 Gradle 9.3.1, AGP 9.1.1, KGP 2.4.10 (mínimos) e 9.5.0 / 9.3.1 / 2.4.20 (recomendados, os do
-template em `lib/src/android/gradle_utils.dart`). O app usa os recomendados:
-`app/android/gradle/wrapper/gradle-wrapper.properties` e `app/android/settings.gradle.kts`.
+template em `lib/src/android/gradle_utils.dart`). O app usa Gradle 9.5.0, **AGP 9.3.3** e KGP
+2.4.20 (`app/android/gradle/wrapper/gradle-wrapper.properties` e `app/android/settings.gradle.kts`).
+
+O AGP fica **acima** do recomendado de propósito (23/11/2026): o 9.3.1 do template quebra o build
+**release** no `lintVitalAnalyzeRelease`, com `NoSuchMethodError` em `JavaDocParser.parseDataItem` ao
+ler o JavaDoc de certos plugins Java. Isso foi medido no Entrelares, com `in_app_purchase_android` e
+`firebase_core`. Aqui o 9.3.1 passava, porque nenhum plugin nosso tem esse JavaDoc, e a subida é
+precaução para o dia em que entrar um. O build debug **não** roda o `lintVital`, então quem confere
+uma mudança de AGP roda `flutter build appbundle --release`.
 
 O terceiro item da mesma família já estava feito: `major_version = 17` em `supabase/config.toml`,
 igual ao dos dois projetos remotos (ajuste 3 do card 2.8 §12).
