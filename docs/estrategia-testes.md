@@ -561,7 +561,7 @@ Três ajustes no que já existia, todos com motivo próprio, **os três fechados
    quebraria a suíte de teste junto, que é justamente o que deveria estar dizendo a verdade.
    Fixado em **2.116.0**, a mesma versão nos dois workflows. O Flutter foi fixado junto, em
    **3.47.2**, pelo mesmo motivo e por um segundo: é a versão que traz o Dart `^3.13.2` que o
-   `pubspec.yaml` exige.
+   `pubspec.yaml` exige. (Subiu para **3.50.1** em 22/11/2026 — `ci-cd.md` §2.)
 2. ✅ **`major_version` do Postgres em `supabase/config.toml`**, igual ao dos projetos remotos.
    Testar em 15 e aplicar em 17 é testar outro banco. Já estava em `17`.
 3. ✅ **`required reviewer` no environment `prod`** (pendência 2(c)): ligado por Irineu em

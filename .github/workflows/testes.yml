@@ -241,10 +241,13 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          # Fixa pelo mesmo motivo do CLI. 3.47.2 é a versão do card 3.7 e traz
-          # o Dart 3.13.2 que `app/pubspec.yaml` exige (`sdk: ^3.13.2`) — uma
-          # versão anterior nem resolve as dependências.
-          flutter-version: '3.47.2'
+          # Fixa pelo mesmo motivo do CLI. 3.50.1 (Dart 3.14.0) desde 22/11/2026,
+          # a versão das máquinas de desenvolvimento; antes era a 3.47.2 do card
+          # 3.7. Igual à local de propósito: o `analyze --fatal-infos` e o
+          # `dart format` mudam de versão para versão, e CI diferente da máquina
+          # reprova (ou aprova) o que a máquina não viu. O `material_ui` exige
+          # Flutter >= 3.47.0.
+          flutter-version: '3.50.1'
           channel: stable
           cache: true
 

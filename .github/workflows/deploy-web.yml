@@ -158,7 +158,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.47.2'
+          flutter-version: '3.50.1'
           channel: stable
           cache: true
 
@@ -170,6 +170,13 @@ jobs:
         # inalcançável (filtro de rede da escola, proxy), o app abre em tela
         # branca sem erro nenhum (card 3.8 §1).
         #
+        # `--no-tree-shake-icons` também é disponibilidade (22/11/2026, Flutter
+        # 3.50.1): o tree shaker de ícones novo lê a lista de ícones usados que o
+        # dart2js grava, e para ESTE app ele grava `{}` — o build sai com a fonte
+        # MaterialIcons de 3 glifos (1 KB) e todo ícone vira quadrado, sem teste
+        # nenhum reprovar. Com a flag vai a fonte inteira (~1,6 MB, em cache
+        # depois da primeira carga). O passo seguinte confere o tamanho.
+        #
         # A versão mostrada na tela (cards 9.2,82 e 9.2,83) NÃO tem define aqui:
         # é o `version:` do `app/pubspec.yaml`, que o próprio Flutter injeta
         # como `FLUTTER_BUILD_NAME`. Ela só vai para o ambiente para o passo
@@ -179,7 +186,7 @@ jobs:
           test -n "$APP_VERSAO" || { echo "::error::app/pubspec.yaml sem version MAJOR.MINOR.REVISION+BUILD"; exit 1; }
           echo "APP_VERSAO=$APP_VERSAO" >> "$GITHUB_ENV"
           echo "versão: $APP_VERSAO"
-          flutter build web --release --no-web-resources-cdn \
+          flutter build web --release --no-web-resources-cdn --no-tree-shake-icons \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --dart-define=APP_URL_BASE="$APP_URL_BASE" \
@@ -193,6 +200,9 @@ jobs:
         # embutidas literalmente no `main.dart.js`, então dá para conferir.
         shell: bash
         run: |
+          # Ícones: fonte encolhida pelo tree shaker = ícones em branco na tela.
+          ICONES=$(wc -c < build/web/assets/fonts/MaterialIcons-Regular.otf)
+          test "$ICONES" -gt 500000 || { echo "::error::MaterialIcons-Regular.otf com $ICONES bytes: os ícones foram podados (falta --no-tree-shake-icons?)"; exit 1; }
           grep -qF "$SUPABASE_URL"  build/web/main.dart.js || { echo "::error::o bundle não contém SUPABASE_URL=$SUPABASE_URL"; exit 1; }
           grep -qF "$APP_URL_BASE"  build/web/main.dart.js || { echo "::error::o bundle não contém APP_URL_BASE=$APP_URL_BASE"; exit 1; }
           # A versão não fica isolada entre aspas: o dart2js junta as constantes

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Confirmação efêmera (design-system §5.8): salvou, excluiu, registrou.
 ///

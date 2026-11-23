@@ -1,7 +1,7 @@
 // Copiado do apêndice §10 de docs/design-system.md (card 2.7) — o card 3.7
 // traz o lib/theme/ inteiro como está. Alterar aqui exige alterar lá.
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Escala tipográfica — Inter empacotada como asset (card 3.7).
 abstract final class Tipografia {

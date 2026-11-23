@@ -24,7 +24,7 @@ versionado (§4).
 
 ```bash
 cd app
-flutter build web --release --no-web-resources-cdn \
+flutter build web --release --no-web-resources-cdn --no-tree-shake-icons \
   --dart-define=SUPABASE_URL=<url do projeto> \
   --dart-define=SUPABASE_ANON_KEY=<chave publicável do projeto> \
   --dart-define=APP_URL_BASE=<url pública deste ambiente>
@@ -41,6 +41,25 @@ inalcançável, o app não desenha nada — página branca, sem erro na tela e s
 um `Failed to fetch`. Não é hipótese de laboratório: rede de escola com filtro, proxy corporativo e
 qualquer bloqueio de terceiros produzem a mesma tela. Com a opção, tudo é servido da própria origem,
 e a CSP do §5 pode fechar `script-src` em `'self'`.
+
+### `--no-tree-shake-icons` também é disponibilidade (desde o Flutter 3.50.1)
+
+**Medido em 22/11/2026:** com o Flutter 3.50.1, o build de release deste app sai com
+`assets/fonts/MaterialIcons-Regular.otf` de **1.004 bytes e 3 glifos**, e todo ícone vira um
+quadrado. O build da 3.47.2 publicado em homologação tinha 18.384 bytes e 145 glifos. Nenhum teste
+de widget pega isso, porque eles não carregam a fonte real. A causa: o tree shaker de ícones da
+3.50.1 lê a lista de ícones usados que o dart2js grava em
+`.dart_tool/flutter_build/<hash>/recorded_uses_js.json`, e para este app o arquivo sai `{}`. Não é
+da instalação nem da migração para o `material_ui`: dá o mesmo com o SDK limpo e com o código
+anterior à migração. Também não é universal: um app mínimo com três ícones, e o Entrelares na mesma
+versão, gravam a lista certa. O padrão do nosso código que zera o registro **não foi isolado**.
+
+A decisão de Irineu (22/11/2026) foi seguir na 3.50.1 com a fonte inteira: `--no-tree-shake-icons`
+publica os **~1,6 MB** do `MaterialIcons-Regular.otf`, que ficam em cache depois da primeira carga.
+O `deploy-web` **reprova** se a fonte do bundle tiver 500 KB ou menos, para que a volta do defeito
+não chegue calada à tela. Para voltar a podar a fonte é preciso descobrir por que o registro sai
+vazio; o sinal de que deu certo é `recorded_uses_js.json` com codepoints dentro e a fonte com cerca
+de 150 glifos.
 
 Um segundo pedido externo continua existindo e é inofensivo: a engine busca a **Roboto** em
 `fonts.gstatic.com` como fonte de último recurso. Falha em warning, não em tela branca — a Inter vai

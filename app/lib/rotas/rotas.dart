@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Catálogo das rotas e o **conjunto mínimo** de permissões de cada uma.
 ///
